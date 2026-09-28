@@ -104,7 +104,7 @@ def resolve_participant_coordinates(
     try:
         resp = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select("latitude, longitude")
             .eq("id", str(participant_id))
             .eq("organization_id", str(organization_id))

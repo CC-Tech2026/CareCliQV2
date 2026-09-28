@@ -65,13 +65,19 @@ def _tier_for_price(price_id: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 def create_signup_checkout_session(
-    *, plan_tier: str, success_url: str, cancel_url: str
+    *, plan_tier: str, org_abbrev: str, success_url: str, cancel_url: str
 ) -> str:
     """Public /signup flow. Collects company name via a Checkout custom field
     and email via Checkout's own built-in field — no org or user account is
     created here. handle_webhook_event() does that once checkout.session.completed
     confirms payment, so no half-signed-up org/user rows pile up from
-    abandoned checkouts."""
+    abandoned checkouts.
+
+    org_abbrev is validated and checked for availability by the caller
+    (platform_billing.create_signup_checkout) before this is ever called —
+    it rides through as Checkout metadata (not a custom_field) since it was
+    already collected and live-checked on our own /get-started page, not
+    Stripe's hosted one."""
     price_id = _price_id_for_tier(plan_tier)
     # {CHECKOUT_SESSION_ID} is Stripe's own template variable, substituted
     # into the redirect URL - lets the success screen look up which email
@@ -85,7 +91,7 @@ def create_signup_checkout_session(
         line_items=[{"price": price_id, "quantity": 1}],
         subscription_data={
             "trial_period_days": SIGNUP_TRIAL_DAYS,
-            "metadata": {"plan_tier": plan_tier, "signup": "true"},
+            "metadata": {"plan_tier": plan_tier, "signup": "true", "org_abbrev": org_abbrev},
         },
         custom_fields=[{
             "key": "organization_name",
@@ -97,7 +103,7 @@ def create_signup_checkout_session(
         # billing address to determine jurisdiction, so Checkout collects one.
         automatic_tax={"enabled": True},
         billing_address_collection="required",
-        metadata={"plan_tier": plan_tier, "signup": "true"},
+        metadata={"plan_tier": plan_tier, "signup": "true", "org_abbrev": org_abbrev},
         success_url=success_url,
         cancel_url=cancel_url,
     )
@@ -260,6 +266,15 @@ def _create_org_from_signup(session: dict[str, Any]) -> None:
                 organization_name = text
             break
 
+    # Validated + availability-checked before Checkout was ever created
+    # (platform_billing.create_signup_checkout) — a missing value here means
+    # an old/malformed session, not something to silently paper over, since
+    # every staff invite for this org depends on it existing.
+    org_abbrev = (session.get("metadata") or {}).get("org_abbrev")
+    if not org_abbrev:
+        logger.error("Signup checkout.session.completed missing org_abbrev metadata: %s", session.get("id"))
+        return
+
     subscription = stripe.Subscription.retrieve(subscription_id).to_dict()
     trial_ends_at = (
         datetime.fromtimestamp(subscription["trial_end"], tz=timezone.utc).isoformat()
@@ -295,6 +310,7 @@ def _create_org_from_signup(session: dict[str, Any]) -> None:
         "subscription_status": subscription.get("status") or "trialing",
         "trial_ends_at": trial_ends_at,
         "email": email,
+        "org_abbrev": org_abbrev,
     }).execute()
     if not org_resp.data:
         logger.error("Failed to create organization for signup checkout %s", session.get("id"))

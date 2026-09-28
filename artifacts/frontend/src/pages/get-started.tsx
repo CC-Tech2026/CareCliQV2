@@ -7,10 +7,14 @@ import { SIGNATURE, DISPLAY_FONT } from "@/components/get-started/shared";
 import { GetStartedFlow } from "@/components/get-started/GetStartedFlow";
 import { LaunchCountdown, isBeforeLaunch } from "@/components/get-started/LaunchCountdown";
 
+// TESTING: countdown gate forced open so the real signup flow is visible to
+// everyone on this deploy. Restore `isBeforeLaunch()` before the real launch.
+const COUNTDOWN_DISABLED_FOR_TESTING = true;
+
 export default function GetStarted() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [beforeLaunch, setBeforeLaunch] = useState(isBeforeLaunch);
+  const [beforeLaunch, setBeforeLaunch] = useState(() => isBeforeLaunch() && !COUNTDOWN_DISABLED_FOR_TESTING);
   const [paidSuccess, setPaidSuccess] = useState(false);
   const [signupEmail, setSignupEmail] = useState<string | null>(null);
   const [resending, setResending] = useState(false);

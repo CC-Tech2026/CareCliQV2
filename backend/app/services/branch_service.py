@@ -57,7 +57,7 @@ def list_branches(organization_id: str) -> list[dict]:
         .data
     ) or []
     participants = (
-        supabase.table("patients")
+        supabase.table("participants")
         .select("branch_id")
         .eq("organization_id", organization_id)
         .in_("branch_id", ids)
@@ -202,7 +202,7 @@ def set_participant_branch(organization_id: str, participant_id: str, branch_id:
     get_branch(organization_id, branch_id)
     rows = (
         get_supabase_admin()
-        .table("patients")
+        .table("participants")
         .update({"branch_id": branch_id})
         .eq("organization_id", organization_id)
         .eq("id", participant_id)

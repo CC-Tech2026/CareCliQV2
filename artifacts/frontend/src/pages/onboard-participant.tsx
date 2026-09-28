@@ -6,7 +6,7 @@ import {
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
   SlidersHorizontal, X, AlertTriangle,
 } from "lucide-react";
-import { writeWaitlistSnapshot, readPendingReferrals, type PendingReferral } from "@/lib/onboardingWaitlist";
+import { writeWaitlistSnapshot } from "@/lib/onboardingWaitlist";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +20,13 @@ import {
   createMeetingSession, transcribeAndResolveNames,
   type ConsentGivenBy, type ConsentMethod,
 } from "@/services/coordinatorService";
+import {
+  listParticipantIntakes, createParticipantIntake, updateParticipantIntake, uploadSignedServiceAgreement,
+  type ParticipantIntake, type IntakeStatus, type EnquirySource, type ServiceCategory, type FundingType,
+  type NextOfKinEntry, type WebIntakeForm, type ScreeningManualChecks,
+} from "@/services/participantIntakeService";
+import { SignatureCanvas, useSignatureCanvasState } from "@/components/shifts/SignatureCanvas";
+import { useBranches } from "@/hooks/useBranches";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -45,25 +52,52 @@ const NEW_BADGE_BG = "#EEF1F5";
 const NEW_BADGE_TEXT = "#3D5A6C";
 
 /**
- * UI-only build of the participant onboarding pipeline (Enquiry → Screening →
- * Meet & Greet → Service Agreement → Activate). Data lives in local component
- * state for now — there is no participant_onboarding backend yet, so nothing
- * here persists across a page reload. Wiring to a real API is a separate pass.
+ * Participant onboarding pipeline (Enquiry → Screening → Meet & Greet →
+ * Service Agreement → Activate), backed by /api/participant-intakes — see
+ * participantIntakeService.ts. Complaints (below) and the public referral
+ * form (onboardingWaitlist.ts) remain local/mock.
  */
-
-type IntakeStatus = "enquiry" | "screening" | "declined" | "withdrawn" | "meet_greet" | "awaiting_signatures" | "signed" | "active" | "inactive";
-
-type EnquirySource = "online_form" | "email" | "phone_call" | "coordinator_referral";
-
-type ServiceCategory = "aged_care" | "disability";
-
-type FundingType = "ndia_managed" | "plan_managed" | "self_managed";
 
 const FUNDING_TYPE_LABEL: Record<FundingType, string> = {
   ndia_managed: "NDIA-managed",
   plan_managed: "Plan-managed",
   self_managed: "Self-managed",
 };
+
+const GENDER_OPTIONS: { value: string; label: string }[] = [
+  { value: "male", label: "Male / Man" },
+  { value: "female", label: "Female / Woman" },
+  { value: "non_binary", label: "Non-Binary" },
+  { value: "self_describe", label: "Different term (Free-text / Self-describe)" },
+  { value: "prefer_not_to_say", label: "Prefer not to say / Do not wish to disclose" },
+];
+
+const PRONOUN_OPTIONS: { value: string; label: string }[] = [
+  { value: "she_her", label: "She / Her" },
+  { value: "he_him", label: "He / Him" },
+  { value: "they_them", label: "They / Them" },
+  { value: "name_only", label: "Use my name only" },
+  { value: "self_describe", label: "Different pronouns (Free-text / Self-describe)" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
+];
+
+const GENDER_FIXED_VALUES = new Set(GENDER_OPTIONS.map((o) => o.value).filter((v) => v !== "self_describe"));
+const PRONOUN_FIXED_VALUES = new Set(PRONOUN_OPTIONS.map((o) => o.value).filter((v) => v !== "self_describe"));
+
+/** Maps a stored value to which option should show selected — anything that
+ *  isn't one of the fixed values (including legacy free text) is treated as
+ *  "self-describe" so its actual text shows in the accompanying box. */
+function selectValueForOption(value: string | undefined, fixedValues: Set<string>): string {
+  if (!value) return "";
+  return fixedValues.has(value) ? value : "self_describe";
+}
+
+/** Read-only display label for a stored gender/pronoun value. */
+function labelForOption(value: string | undefined, options: { value: string; label: string }[]): string | undefined {
+  if (!value) return undefined;
+  if (value === "self_describe") return undefined;
+  return options.find((o) => o.value === value)?.label ?? value;
+}
 
 /** Aged Care is only available to participants aged 65 and over. */
 function calculateAge(dob?: string): number | null {
@@ -82,96 +116,11 @@ function isAgedCareEligible(dob?: string): boolean {
   return age !== null && age >= 65;
 }
 
-type Intake = {
-  id: string;
-  full_name: string;
-  service_category?: ServiceCategory;
-  /** Weekly support hours requested at enquiry — captured on the public referral form. */
-  service_hours_required?: number;
-  ndis_number: string;
-  email: string;
-  phone: string;
-  source: EnquirySource;
-  status: IntakeStatus;
-  decline_reason?: string;
-  /** Set when the MD terminates the application because the participant chose not to continue with this provider (distinct from decline, which is the provider saying no). */
-  withdrawn_reason?: string;
-  meet_greet_recording_url?: string;
-  meet_greet_notes?: string;
-  /** The physically-signed service agreement, uploaded as evidence. Local blob URL for now — no backend storage yet. */
-  signed_document_url?: string;
-  signed_document_name?: string;
-  plan_start_date?: string;
-  plan_end_date?: string;
-  total_budget?: string;
-  provider_signed_name?: string;
-  provider_signed_at?: string;
-  family_signed_name?: string;
-  family_signed_at?: string;
-  /** Free-text override for the board card's second line (e.g. "NDIS plan received", "Scheduled 9 Jul, 2:00 PM"). */
-  board_subtitle?: string;
-  activated_at?: string;
-  /** Set when the MD temporarily suspends service delivery for an active participant (status flips to "inactive"). Required comment explaining why. Cleared on reactivation. */
-  suspended_reason?: string;
-  suspended_at?: string;
-  reactivated_at?: string;
-  created_at: string;
-  /** Present when this enquiry came in through the public web referral form. */
-  web_intake?: WebIntakeForm;
-  /** Manual answers to the Screening checklist's judgment-call items (no data model exists for these elsewhere yet). */
-  screening_checks?: ScreeningManualChecks;
-};
-
-/**
- * The Screening step's judgment-call items — things that can't be computed
- * from intake data alone and need the MD (or whoever's screening) to
- * actually check and answer. Undefined = not yet reviewed.
- */
-type ScreeningManualChecks = {
-  language_support_ok?: boolean;
-  waitlist_open?: boolean;
-  resource_match_ok?: boolean;
-  environment_safe?: boolean;
-  /** true = no red flags found (i.e. safe to proceed) */
-  no_red_flags?: boolean;
-  red_flag_notes?: string;
-};
-
-type NextOfKinEntry = {
-  name: string;
-  relationship?: string;
-  phone?: string;
-  email?: string;
-};
-
-type WebIntakeForm = {
-  submitted_at: string;
-  submitted_by?: string;
-  given_name?: string;
-  surname?: string;
-  preferred_name?: string;
-  pronouns?: string;
-  gender?: string;
-  date_of_birth?: string;
-  preferred_language?: string;
-  street_address?: string;
-  suburb?: string;
-  state?: string;
-  postcode?: string;
-  funding_type?: FundingType;
-  plan_status?: string;
-  plan_start?: string;
-  plan_end?: string;
-  plan_manager_name?: string;
-  plan_manager_org?: string;
-  plan_manager_phone?: string;
-  plan_manager_email?: string;
-  next_of_kin?: NextOfKinEntry[];
-  referral_source?: string;
-  referral_date?: string;
-  presenting_needs?: string[];
-  notes?: string;
-};
+// Intake/ScreeningManualChecks/NextOfKinEntry/WebIntakeForm now live in
+// participantIntakeService.ts (the wire format returned by the backend);
+// aliased here so the rest of this file's many references don't need to
+// change one by one.
+type Intake = ParticipantIntake;
 
 const SOURCE_META: Record<EnquirySource, { label: string; icon: typeof Mail }> = {
   online_form: { label: "Web referral", icon: ClipboardCheck },
@@ -255,9 +204,9 @@ type BoardColumnId = (typeof BOARD_COLUMNS)[number]["id"];
 const TOTAL_SUPPORT_WORKERS = 5;
 const MAX_CASELOAD_PER_WORKER = 6;
 
-// Rest of the provider's screening profile — same "dummy until there's a
-// real settings/config source" treatment as the capacity numbers above.
-const PROVIDER_SERVICE_STATES = ["VIC"];
+// Rest of the provider's screening profile — service area now comes from
+// the org's real branches (Settings → Provider/Branches); language/funding
+// are still dummy until there's a real settings source for those too.
 const PROVIDER_LANGUAGES = ["English", "Mandarin", "Vietnamese", "Arabic", "Punjabi"];
 const PROVIDER_ACCEPTS_NDIA_MANAGED = true;
 
@@ -485,179 +434,6 @@ function HorizontalStepper({ status, viewedStep, onSelect }: { status: IntakeSta
     </div>
   );
 }
-
-let nextId = 4;
-
-// Seeded dummy records so the board isn't empty on first load — local
-// state only, same as everything else here, so it resets on page reload.
-/** Turns a publicly-submitted referral into an Enquiry-column card — see
- *  onboardingWaitlist.ts for the full flow this is part of. */
-function pendingReferralToIntake(r: PendingReferral): Intake {
-  return {
-    id: r.id,
-    full_name: r.full_name || "Unnamed referral",
-    service_category: r.service_category,
-    service_hours_required: r.service_hours_required,
-    ndis_number: r.ndis_number || "",
-    email: r.email || "",
-    phone: r.phone || "",
-    source: "online_form",
-    status: "enquiry",
-    created_at: r.submitted_at,
-    web_intake: {
-      submitted_at: r.submitted_at,
-      given_name: r.full_name?.split(" ")[0],
-      surname: r.full_name?.split(" ").slice(1).join(" ") || undefined,
-      presenting_needs: r.support_needs ? [r.support_needs] : undefined,
-      next_of_kin: r.referrer_name
-        ? [{ name: r.referrer_name, relationship: r.referrer_relationship, phone: r.referrer_phone, email: r.referrer_email }]
-        : undefined,
-      notes: r.primary_disability ? `Primary disability: ${r.primary_disability}` : undefined,
-    },
-  };
-}
-
-const SEED_INTAKES: Intake[] = [
-  {
-    id: "1",
-    full_name: "Sam Rivera",
-    service_category: "disability",
-    ndis_number: "430987621",
-    email: "sam.rivera@email.com",
-    phone: "0412 344 187",
-    source: "online_form",
-    status: "enquiry",
-    created_at: new Date().toISOString(),
-    web_intake: {
-      submitted_at: new Date().toISOString(),
-      submitted_by: "Family",
-      given_name: "Sam",
-      surname: "Rivera",
-      preferred_name: "Sam",
-      pronouns: "They/them",
-      gender: "Non-binary",
-      date_of_birth: "1998-03-14",
-      street_address: "42 Rosewood Drive",
-      suburb: "Ringwood",
-      state: "VIC",
-      postcode: "3134",
-      funding_type: "plan_managed",
-      plan_status: "Active plan",
-      plan_start: "2026-02-01",
-      plan_end: "2027-01-31",
-      plan_manager_name: "Rachel Owens",
-      plan_manager_org: "Compass Plan Management",
-      plan_manager_phone: "1300 889 200",
-      plan_manager_email: "rachel.owens@compasspm.com.au",
-      next_of_kin: [
-        { name: "Claire Rivera", relationship: "Mother", phone: "0413 778 291", email: "claire.rivera@email.com" },
-        { name: "Derek Rivera", relationship: "Father", phone: "0404 112 835" },
-      ],
-      referral_source: "Web referral portal",
-      referral_date: new Date().toISOString().slice(0, 10),
-      presenting_needs: ["Personal care", "Community access"],
-      notes: "Sam's family is seeking support for personal care and community access. They recently transitioned out of a school-based setting and this is their first NDIS-funded provider engagement.",
-    },
-  },
-  {
-    id: "2",
-    full_name: "Priya Nair",
-    service_category: "disability",
-    ndis_number: "430112298",
-    email: "priya.nair@email.com",
-    phone: "0423 556 710",
-    source: "coordinator_referral",
-    status: "active",
-    created_at: new Date(Date.now() - 46 * 86_400_000).toISOString(),
-    plan_start_date: "2026-01-15",
-    plan_end_date: "2027-01-14",
-    total_budget: "$62,400",
-    provider_signed_name: "Morgan Lee",
-    provider_signed_at: new Date(Date.now() - 12 * 86_400_000).toISOString(),
-    family_signed_name: "Priya Nair",
-    family_signed_at: new Date(Date.now() - 12 * 86_400_000).toISOString(),
-    activated_at: new Date(Date.now() - 10 * 86_400_000).toISOString(),
-    meet_greet_notes: "Priya prefers morning sessions and communicates well with visual schedules. Support worker continuity is a priority for the family.",
-    web_intake: {
-      submitted_at: new Date(Date.now() - 46 * 86_400_000).toISOString(),
-      submitted_by: "Support coordinator",
-      given_name: "Priya",
-      surname: "Nair",
-      preferred_name: "Priya",
-      pronouns: "She/her",
-      gender: "Female",
-      date_of_birth: "2001-07-22",
-      street_address: "18 Kestrel Court",
-      suburb: "Glen Waverley",
-      state: "VIC",
-      postcode: "3150",
-      funding_type: "ndia_managed",
-      plan_status: "Active plan",
-      plan_start: "2026-01-15",
-      plan_end: "2027-01-14",
-      plan_manager_name: "Owen Sharpe",
-      plan_manager_org: "ClearPath Plan Management",
-      plan_manager_phone: "1300 442 019",
-      plan_manager_email: "owen.sharpe@clearpathpm.com.au",
-      next_of_kin: [
-        { name: "Anita Nair", relationship: "Mother", phone: "0411 902 774", email: "anita.nair@email.com" },
-      ],
-      referral_source: "Support coordinator referral",
-      referral_date: new Date(Date.now() - 46 * 86_400_000).toISOString().slice(0, 10),
-      presenting_needs: ["Community access", "Daily living skills"],
-      notes: "Priya is transitioning to independent living and wants support building daily living skills alongside community participation.",
-    },
-  },
-  {
-    id: "3",
-    full_name: "Harold Whitfield",
-    service_category: "aged_care",
-    ndis_number: "430775410",
-    email: "harold.whitfield@email.com",
-    phone: "0398 221 043",
-    source: "phone_call",
-    status: "active",
-    created_at: new Date(Date.now() - 61 * 86_400_000).toISOString(),
-    plan_start_date: "2026-02-01",
-    plan_end_date: "2027-01-31",
-    total_budget: "$48,900",
-    provider_signed_name: "Morgan Lee",
-    provider_signed_at: new Date(Date.now() - 20 * 86_400_000).toISOString(),
-    family_signed_name: "Eleanor Whitfield",
-    family_signed_at: new Date(Date.now() - 20 * 86_400_000).toISOString(),
-    activated_at: new Date(Date.now() - 18 * 86_400_000).toISOString(),
-    meet_greet_notes: "Harold lives with his wife Eleanor, who will be his primary point of contact. He values consistency in support workers and has mobility considerations.",
-    web_intake: {
-      submitted_at: new Date(Date.now() - 61 * 86_400_000).toISOString(),
-      submitted_by: "Family",
-      given_name: "Harold",
-      surname: "Whitfield",
-      preferred_name: "Harold",
-      pronouns: "He/him",
-      gender: "Male",
-      date_of_birth: "1954-11-03",
-      street_address: "7 Magnolia Street",
-      suburb: "Camberwell",
-      state: "VIC",
-      postcode: "3124",
-      funding_type: "self_managed",
-      plan_status: "Active plan",
-      plan_start: "2026-02-01",
-      plan_end: "2027-01-31",
-      plan_manager_name: "Grace Ferreira",
-      plan_manager_org: "Sunrise Plan Management",
-      plan_manager_phone: "1300 664 512",
-      plan_manager_email: "grace.ferreira@sunrisepm.com.au",
-      next_of_kin: [
-        { name: "Eleanor Whitfield", relationship: "Spouse", phone: "0407 663 218", email: "eleanor.whitfield@email.com" },
-      ],
-      referral_source: "Phone enquiry",
-      referral_date: new Date(Date.now() - 61 * 86_400_000).toISOString().slice(0, 10),
-      presenting_needs: ["Personal care", "Home maintenance", "Mobility support"],
-      notes: "Harold requires assistance with personal care and mobility around the home. Eleanor is his primary carer and would like additional in-home respite support.",
-    },
-  },
-];
 
 // ── Participant complaints (dummy — no backend yet) ──────────────────────
 
@@ -1163,7 +939,7 @@ function ParticipantProfilePage({
     setServiceCategoryDraft(intake.service_category ?? "disability");
     setIntakeFormEditing(false);
   }
-  function saveIntakeForm() {
+  function saveIntakeForm(contact: { email: string; phone: string }) {
     if (serviceCategoryDraft === "aged_care" && !isAgedCareEligible(intakeFormDraft.date_of_birth)) {
       toast({ title: "Cannot save", description: "Aged Care requires a date of birth confirming the participant is 65 or over.", variant: "destructive" });
       return;
@@ -1173,7 +949,7 @@ function ParticipantProfilePage({
       submitted_at: intake.web_intake?.submitted_at ?? new Date().toISOString(),
       submitted_by: intakeFormDraft.submitted_by || "Provider",
     };
-    onUpdate({ web_intake: payload, service_category: serviceCategoryDraft });
+    onUpdate({ web_intake: payload, service_category: serviceCategoryDraft, email: contact.email, phone: contact.phone });
     setIntakeFormEditing(false);
     toast({ title: "Profile updated" });
   }
@@ -1302,12 +1078,18 @@ export default function ParticipantOnboardingBoard() {
   const selectedId = new URLSearchParams(urlSearch).get("intake");
   const profileId = new URLSearchParams(urlSearch).get("profile");
 
-  // Seed data plus any referrals submitted through the public form since —
-  // re-derived fresh on every mount, same as the rest of this page's state.
-  const [intakes, setIntakes] = useState<Intake[]>(() => [
-    ...SEED_INTAKES,
-    ...readPendingReferrals().map(pendingReferralToIntake),
-  ]);
+  // Loaded from the backend on mount — see participantIntakeService.ts.
+  const [intakes, setIntakes] = useState<Intake[]>([]);
+  const [loadingIntakes, setLoadingIntakes] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    listParticipantIntakes()
+      .then((rows) => { if (!cancelled) setIntakes(rows); })
+      .catch((err: Error) => toast({ title: "Couldn't load participants", description: err.message, variant: "destructive" }))
+      .finally(() => { if (!cancelled) setLoadingIntakes(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Mirrors just the enquiry-stage count and total requested hours to
   // localStorage so the Hub dashboard's "Waiting list" cards can reflect
@@ -1346,36 +1128,58 @@ export default function ParticipantOnboardingBoard() {
 
   const dobAge = calculateAge(dob);
   const agedCareBlocked = serviceCategory === "aged_care" && dob.trim().length > 0 && !isAgedCareEligible(dob);
-  const agedCareNeedsDob = serviceCategory === "aged_care" && !dob.trim();
 
-  function createIntake() {
-    const intake: Intake = {
-      id: String(nextId++),
-      full_name: fullName.trim(),
-      service_category: serviceCategory,
-      ndis_number: ndisNumber.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      source,
-      status: "enquiry",
-      created_at: new Date().toISOString(),
-      web_intake: dob.trim() || fundingType
-        ? {
-            date_of_birth: dob.trim() || undefined,
-            funding_type: fundingType || undefined,
-            submitted_by: "Provider",
-            submitted_at: new Date().toISOString(),
-          }
-        : undefined,
-    };
-    setIntakes((prev) => [intake, ...prev]);
-    setNewIntakeOpen(false);
-    setFullName(""); setServiceCategory("disability"); setDob(""); setNdisNumber(""); setFundingType(""); setEmail(""); setPhone(""); setSource("online_form");
-    navigate(`/onboard-participant?intake=${intake.id}`);
-    toast({ title: "Enquiry logged", description: `${intake.full_name} is in the Enquiry column.` });
+  const [creatingIntake, setCreatingIntake] = useState(false);
+
+  async function createIntake() {
+    if (!dob.trim()) {
+      toast({ title: "Date of birth is required", variant: "destructive" });
+      return;
+    }
+    setCreatingIntake(true);
+    try {
+      const intake = await createParticipantIntake({
+        full_name: fullName.trim(),
+        service_category: serviceCategory,
+        ndis_number: ndisNumber.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        source,
+        web_intake: {
+          date_of_birth: dob.trim(),
+          funding_type: fundingType || undefined,
+          submitted_by: "Provider",
+          submitted_at: new Date().toISOString(),
+        },
+      });
+      setIntakes((prev) => [intake, ...prev]);
+      setNewIntakeOpen(false);
+      setFullName(""); setServiceCategory("disability"); setDob(""); setNdisNumber(""); setFundingType(""); setEmail(""); setPhone(""); setSource("online_form");
+      navigate(`/onboard-participant?intake=${intake.id}`);
+      toast({ title: "Enquiry logged", description: `${intake.full_name} is in the Enquiry column.` });
+    } catch (err) {
+      toast({ title: "Couldn't log enquiry", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setCreatingIntake(false);
+    }
   }
 
-  function updateIntake(id: string, patch: Partial<Intake>) {
+  function updateIntake(id: string, patch: Partial<Intake>): Promise<Intake> {
+    return updateParticipantIntake(id, patch)
+      .then((updated) => {
+        setIntakes((prev) => prev.map((i) => (i.id === id ? updated : i)));
+        return updated;
+      })
+      .catch((err: Error) => {
+        toast({ title: "Couldn't save change", description: err.message, variant: "destructive" });
+        throw err;
+      });
+  }
+
+  // Merges into local state only — for results already persisted server-side
+  // through their own endpoint (the signed-document upload), so it doesn't
+  // also fire a redundant PATCH.
+  function applyLocalPatch(id: string, patch: Partial<Intake>) {
     setIntakes((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
   }
 
@@ -1387,12 +1191,21 @@ export default function ParticipantOnboardingBoard() {
   const currentCaseload = intakes.filter((i) => i.status === "active").length;
   const totalCapacity = TOTAL_SUPPORT_WORKERS * MAX_CASELOAD_PER_WORKER;
 
+  if (loadingIntakes) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 size={20} className="animate-spin" style={{ color: MUTED }} />
+      </div>
+    );
+  }
+
   if (selected) {
     return (
       <IntakeDetail
         intake={selected}
         onBack={() => navigate("/onboard-participant")}
         onUpdate={(patch) => updateIntake(selected.id, patch)}
+        onLocalUpdate={(patch) => applyLocalPatch(selected.id, patch)}
         currentCaseload={currentCaseload}
         totalCapacity={totalCapacity}
       />
@@ -1672,7 +1485,7 @@ export default function ParticipantOnboardingBoard() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>
-                  Date of birth {serviceCategory === "aged_care" && <span style={{ color: DANGER }}>*</span>}
+                  Date of birth <span style={{ color: DANGER }}>*</span>
                 </label>
                 <Input
                   type="date"
@@ -1755,9 +1568,9 @@ export default function ParticipantOnboardingBoard() {
             <Button
               variant="navy"
               onClick={createIntake}
-              disabled={!fullName.trim() || !ndisNumber.trim() || !isValidEmail(email) || (phone.trim().length > 0 && !isValidPhone(phone)) || agedCareBlocked || agedCareNeedsDob}
+              disabled={creatingIntake || !fullName.trim() || !ndisNumber.trim() || !dob.trim() || !isValidEmail(email) || (phone.trim().length > 0 && !isValidPhone(phone)) || agedCareBlocked}
             >
-              Log enquiry
+              {creatingIntake ? <Loader2 size={14} className="animate-spin" /> : "Log enquiry"}
             </Button>
           </SheetFooter>
         </SheetContent>
@@ -1857,10 +1670,15 @@ function ScreeningChecklist({
   const wi = intake.web_intake;
   const checks = intake.screening_checks ?? {};
 
+  // Service area = the states the org actually has an office in (Settings →
+  // Provider/Branches) — no more hardcoded state list.
+  const { branches } = useBranches();
+  const providerServiceStates = [...new Set(branches.map((b) => b.state))];
+
   // ── 1. Essential Eligibility & Demographics ──────────────────────────
   const ageOk = intake.service_category !== "aged_care" || isAgedCareEligible(wi?.date_of_birth);
   const locationKnown = !!wi?.state;
-  const locationOk = locationKnown ? PROVIDER_SERVICE_STATES.includes(wi!.state!.trim().toUpperCase()) : null;
+  const locationOk = locationKnown ? providerServiceStates.includes(wi!.state!.trim().toUpperCase()) : null;
   const language = wi?.preferred_language?.trim();
   const languageAutoOk = !language || PROVIDER_LANGUAGES.some((l) => l.toLowerCase() === language.toLowerCase());
 
@@ -1922,8 +1740,8 @@ function ScreeningChecklist({
           detail={
             locationKnown
               ? locationOk
-                ? `${wi?.state} is within the provider's service area (${PROVIDER_SERVICE_STATES.join(", ")}).`
-                : `${wi?.state} is outside the provider's service area (${PROVIDER_SERVICE_STATES.join(", ")}).`
+                ? `${wi?.state} is within the provider's service area (${providerServiceStates.join(", ")}).`
+                : `${wi?.state} is outside the provider's service area (${providerServiceStates.join(", ")}).`
               : "No address on file yet — add one to confirm this is within the service area."
           }
         />
@@ -2015,11 +1833,15 @@ function ScreeningChecklist({
 }
 
 function IntakeDetail({
-  intake, onBack, onUpdate, currentCaseload, totalCapacity,
+  intake, onBack, onUpdate, onLocalUpdate, currentCaseload, totalCapacity,
 }: {
   intake: Intake;
   onBack: () => void;
-  onUpdate: (patch: Partial<Intake>) => void;
+  onUpdate: (patch: Partial<Intake>) => Promise<Intake>;
+  /** Merges into local state only — for results of a call that already
+   *  persisted server-side through its own endpoint (the document upload),
+   *  so it doesn't also fire a redundant PATCH. */
+  onLocalUpdate: (patch: Partial<Intake>) => void;
   /** Active caseload vs. total capacity across current support workers — drives the Screening capacity check. */
   currentCaseload: number;
   totalCapacity: number;
@@ -2031,6 +1853,8 @@ function IntakeDetail({
   const [notes, setNotes] = useState(intake.meet_greet_notes ?? "");
   const [providerName, setProviderName] = useState(intake.provider_signed_name ?? "");
   const [familyName, setFamilyName] = useState(intake.family_signed_name ?? "");
+  const providerSignature = useSignatureCanvasState();
+  const familySignature = useSignatureCanvasState();
   const [activating, setActivating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [boardSubtitle, setBoardSubtitle] = useState(intake.board_subtitle ?? "");
@@ -2054,7 +1878,7 @@ function IntakeDetail({
     setServiceCategoryDraft(intake.service_category ?? "disability");
     setIntakeFormEditing(false);
   }
-  function saveIntakeForm() {
+  function saveIntakeForm(contact: { email: string; phone: string }) {
     if (serviceCategoryDraft === "aged_care" && !isAgedCareEligible(intakeFormDraft.date_of_birth)) {
       toast({ title: "Cannot save", description: "Aged Care requires a date of birth confirming the participant is 65 or over.", variant: "destructive" });
       return;
@@ -2064,7 +1888,7 @@ function IntakeDetail({
       submitted_at: intake.web_intake?.submitted_at ?? new Date().toISOString(),
       submitted_by: intakeFormDraft.submitted_by || "Provider",
     };
-    onUpdate({ web_intake: payload, service_category: serviceCategoryDraft });
+    onUpdate({ web_intake: payload, service_category: serviceCategoryDraft, email: contact.email, phone: contact.phone });
     setIntakeFormEditing(false);
     toast({ title: "Intake form saved" });
   }
@@ -2255,40 +2079,47 @@ function IntakeDetail({
     onUpdate({
       provider_signed_name: providerName.trim() || undefined,
       family_signed_name: familyName.trim() || undefined,
+      provider_signature_png: providerSignature.signaturePng || undefined,
+      family_signature_png: familySignature.signaturePng || undefined,
     });
     toast({ title: "Draft saved" });
   }
 
-  // Local blob URL for now — no document storage backend for participant
-  // onboarding yet, same constraint as the rest of this page.
-  function uploadSignedDocument(file: File) {
-    const url = URL.createObjectURL(file);
-    onUpdate({ signed_document_url: url, signed_document_name: file.name });
-    toast({ title: "Document uploaded", description: file.name });
+  async function uploadSignedDocument(file: File) {
+    try {
+      const updated = await uploadSignedServiceAgreement(intake.id, file);
+      onLocalUpdate({ signed_document_url: updated.signed_document_url, signed_document_name: updated.signed_document_name });
+      toast({ title: "Document uploaded", description: file.name });
+    } catch (err) {
+      toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" });
+    }
   }
 
   function markSigned() {
-    if (!providerName.trim() || !familyName.trim()) return;
+    if (!providerName.trim() || !familyName.trim() || !providerSignature.hasStroke || !familySignature.hasStroke) return;
     const now = new Date().toISOString();
     onUpdate({
       status: "signed",
       provider_signed_name: providerName.trim(),
       provider_signed_at: now,
+      provider_signature_png: providerSignature.signaturePng,
       family_signed_name: familyName.trim(),
       family_signed_at: now,
+      family_signature_png: familySignature.signaturePng,
     });
     toast({ title: "Service agreement" });
   }
 
-  function activate() {
+  async function activate() {
     setActivating(true);
-    // No backend yet — simulate the activation call so the flow is
-    // demonstrable end-to-end until the participant_onboarding API lands.
-    setTimeout(() => {
-      onUpdate({ status: "active", activated_at: new Date().toISOString() });
-      setActivating(false);
+    try {
+      await onUpdate({ status: "active" });
       toast({ title: "Participant activated", description: `${intake.full_name} now appears on the Coordinator's dashboard.` });
-    }, 500);
+    } catch {
+      // error already toasted by onUpdate
+    } finally {
+      setActivating(false);
+    }
   }
 
   const signLink = intake.status === "awaiting_signatures"
@@ -2526,7 +2357,7 @@ function IntakeDetail({
                         <div className="min-w-0">
                           <p className="text-xs font-black" style={{ color: TEXT }}>Signed document</p>
                           <p className="text-[11px] truncate" style={{ color: MUTED }}>
-                            {intake.signed_document_name || "Upload the physically-signed service agreement"}
+                            {intake.signed_document_name || "Generated automatically once both parties sign below — or upload your own instead"}
                           </p>
                         </div>
                       </div>
@@ -2535,7 +2366,7 @@ function IntakeDetail({
                           <a href={intake.signed_document_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline px-1.5" style={{ color: PLUM }}>View</a>
                         )}
                         <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={() => fileInputRef.current?.click()}>
-                          <Upload size={13} /> {intake.signed_document_url ? "Replace" : "Upload"}
+                          <Upload size={13} /> {intake.signed_document_url ? "Replace" : "Upload instead"}
                         </Button>
                       </div>
                     </div>
@@ -2557,10 +2388,12 @@ function IntakeDetail({
                           <div className="space-y-1.5">
                             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Provider signatory</label>
                             <Input value={providerName} onChange={(e) => setProviderName(e.target.value)} placeholder="Your full name" />
+                            <SignatureCanvas minWidth={200} minHeight={90} onChange={providerSignature.onCanvasChange} />
                           </div>
                           <div className="space-y-1.5">
                             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Participant / guardian signatory</label>
                             <Input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Their full name" />
+                            <SignatureCanvas minWidth={200} minHeight={90} onChange={familySignature.onCanvasChange} />
                           </div>
                         </div>
                         {signLink && (
@@ -2577,7 +2410,12 @@ function IntakeDetail({
                             <Button variant="outline" className="rounded-lg" onClick={saveSignatureDraft}>
                               Save Draft
                             </Button>
-                            <Button variant="navy" className="gap-2 rounded-lg" onClick={markSigned} disabled={!providerName.trim() || !familyName.trim()}>
+                            <Button
+                              variant="navy"
+                              className="gap-2 rounded-lg"
+                              onClick={markSigned}
+                              disabled={!providerName.trim() || !familyName.trim() || !providerSignature.hasStroke || !familySignature.hasStroke}
+                            >
                               Next <PenLine size={14} />
                             </Button>
                           </div>
@@ -2585,8 +2423,8 @@ function IntakeDetail({
                       </>
                     ) : (
                       <div className="grid sm:grid-cols-2 gap-3">
-                        <SignatureCard label="Provider" signedName={intake.provider_signed_name} signedAt={intake.provider_signed_at} pendingLabel="Not yet signed" />
-                        <SignatureCard label="Participant / guardian" signedName={intake.family_signed_name} signedAt={intake.family_signed_at} pendingLabel="Not yet signed" />
+                        <SignatureCard label="Provider" signedName={intake.provider_signed_name} signedAt={intake.provider_signed_at} signaturePng={intake.provider_signature_png} pendingLabel="Not yet signed" />
+                        <SignatureCard label="Participant / guardian" signedName={intake.family_signed_name} signedAt={intake.family_signed_at} signaturePng={intake.family_signature_png} pendingLabel="Not yet signed" />
                       </div>
                     )}
 
@@ -2885,7 +2723,10 @@ function IntakeFormBlock({
   editing: boolean;
   onEdit: () => void;
   onCancel: () => void;
-  onSave: () => void;
+  /** Passes back the current contact fields, since they're not part of `draft`
+   *  (they're top-level Intake fields, editable here so contact details can be
+   *  kept current after intake, not just captured once). */
+  onSave: (contact: { email: string; phone: string }) => void;
   serviceCategory: ServiceCategory;
   onServiceCategoryChange: (v: ServiceCategory) => void;
   /** Hide the "Digital intake form submitted ..." banner + "Submitted by" pill — used on the plain participant profile, where it should read as a person's record, not a pipeline/workflow status. Edit controls still show. */
@@ -2894,6 +2735,25 @@ function IntakeFormBlock({
   const kin = draft.next_of_kin ?? [];
   const hasAnyData = Object.keys(intake.web_intake ?? {}).length > 0;
   const agedCareBlocked = serviceCategory === "aged_care" && !isAgedCareEligible(draft.date_of_birth);
+
+  // Contact details live on the Intake record itself (not `web_intake`), but
+  // are edited right alongside the rest of this form so they can be kept
+  // current when someone's email or phone changes.
+  const [emailDraft, setEmailDraft] = useState(intake.email);
+  const [phoneDraft, setPhoneDraft] = useState(intake.phone);
+  useEffect(() => {
+    if (editing) {
+      setEmailDraft(intake.email);
+      setPhoneDraft(intake.phone);
+    }
+  }, [editing, intake.id, intake.email, intake.phone]);
+  const emailInvalid = emailDraft.trim().length > 0 && !isValidEmail(emailDraft);
+  const phoneInvalid = phoneDraft.trim().length > 0 && !isValidPhone(phoneDraft);
+  const saveDisabled = agedCareBlocked || emailInvalid || phoneInvalid;
+
+  function handleSave() {
+    onSave({ email: emailDraft.trim(), phone: phoneDraft.trim() });
+  }
 
   function updateKin(index: number, patch: Partial<NextOfKinEntry>) {
     const next = kin.map((k, i) => (i === index ? { ...k, ...patch } : k));
@@ -2940,7 +2800,7 @@ function IntakeFormBlock({
             ) : (
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="rounded-lg" onClick={onCancel}>Cancel</Button>
-                <Button variant="navy" size="sm" className="gap-1.5 rounded-lg" onClick={onSave} disabled={agedCareBlocked}>
+                <Button variant="navy" size="sm" className="gap-1.5 rounded-lg" onClick={handleSave} disabled={saveDisabled}>
                   <CheckCircle2 size={13} /> Save
                 </Button>
               </div>
@@ -3002,8 +2862,54 @@ function IntakeFormBlock({
               <Field editing={editing} label="Preferred name" value={draft.preferred_name} onChange={(v) => onChange({ preferred_name: v })} placeholder="Preferred name" />
             </div>
             <div className="grid sm:grid-cols-3 gap-3">
-              <Field editing={editing} label="Pronouns" value={draft.pronouns} onChange={(v) => onChange({ pronouns: v })} placeholder="e.g. She/her" />
-              <Field editing={editing} label="Gender" value={draft.gender} onChange={(v) => onChange({ gender: v })} placeholder="Gender" />
+              {editing ? (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Pronouns</label>
+                  <Select
+                    value={selectValueForOption(draft.pronouns, PRONOUN_FIXED_VALUES)}
+                    onValueChange={(v) => onChange({ pronouns: v })}
+                  >
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select pronouns" /></SelectTrigger>
+                    <SelectContent>
+                      {PRONOUN_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {selectValueForOption(draft.pronouns, PRONOUN_FIXED_VALUES) === "self_describe" && (
+                    <Input
+                      value={draft.pronouns === "self_describe" ? "" : draft.pronouns ?? ""}
+                      onChange={(e) => onChange({ pronouns: e.target.value })}
+                      placeholder="Please specify"
+                      className="h-9 text-sm mt-1.5"
+                    />
+                  )}
+                </div>
+              ) : (
+                <Field editing={false} label="Pronouns" value={labelForOption(draft.pronouns, PRONOUN_OPTIONS)} />
+              )}
+              {editing ? (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Gender</label>
+                  <Select
+                    value={selectValueForOption(draft.gender, GENDER_FIXED_VALUES)}
+                    onValueChange={(v) => onChange({ gender: v })}
+                  >
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select gender" /></SelectTrigger>
+                    <SelectContent>
+                      {GENDER_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {selectValueForOption(draft.gender, GENDER_FIXED_VALUES) === "self_describe" && (
+                    <Input
+                      value={draft.gender === "self_describe" ? "" : draft.gender ?? ""}
+                      onChange={(e) => onChange({ gender: e.target.value })}
+                      placeholder="Please specify"
+                      className="h-9 text-sm mt-1.5"
+                    />
+                  )}
+                </div>
+              ) : (
+                <Field editing={false} label="Gender" value={labelForOption(draft.gender, GENDER_OPTIONS)} />
+              )}
             </div>
             <div className="grid sm:grid-cols-3 gap-3">
               <Field
@@ -3022,8 +2928,38 @@ function IntakeFormBlock({
               />
             </div>
             <div className="grid sm:grid-cols-2 gap-3 pt-3 border-t" style={{ borderColor: BORDER }}>
-              <Field editing={false} label="Contact email" value={intake.email} icon={Mail} />
-              <Field editing={false} label="Contact phone" value={intake.phone} icon={PhoneCall} />
+              {editing ? (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Contact email</label>
+                  <Input
+                    type="email"
+                    value={emailDraft}
+                    onChange={(e) => setEmailDraft(e.target.value)}
+                    placeholder="family@example.com"
+                    aria-invalid={emailInvalid}
+                    className={`h-9 text-sm ${emailInvalid ? "border-red-400 focus-visible:ring-red-400" : ""}`}
+                  />
+                  {emailInvalid && <p className="text-[11px] font-medium" style={{ color: DANGER }}>Enter a valid email address.</p>}
+                </div>
+              ) : (
+                <Field editing={false} label="Contact email" value={intake.email} icon={Mail} />
+              )}
+              {editing ? (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Contact phone</label>
+                  <Input
+                    type="tel"
+                    value={phoneDraft}
+                    onChange={(e) => setPhoneDraft(e.target.value)}
+                    placeholder="0412 345 678"
+                    aria-invalid={phoneInvalid}
+                    className={`h-9 text-sm ${phoneInvalid ? "border-red-400 focus-visible:ring-red-400" : ""}`}
+                  />
+                  {phoneInvalid && <p className="text-[11px] font-medium" style={{ color: DANGER }}>Enter a valid phone number.</p>}
+                </div>
+              ) : (
+                <Field editing={false} label="Contact phone" value={intake.phone} icon={PhoneCall} />
+              )}
             </div>
           </IntakeFormSection>
 
@@ -3124,7 +3060,7 @@ function IntakeFormBlock({
           {!showSubmissionStatus && editing && (
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" className="rounded-lg" onClick={onCancel}>Cancel</Button>
-              <Button variant="navy" size="sm" className="gap-1.5 rounded-lg" onClick={onSave} disabled={agedCareBlocked}>
+              <Button variant="navy" size="sm" className="gap-1.5 rounded-lg" onClick={handleSave} disabled={saveDisabled}>
                 <CheckCircle2 size={13} /> Save
               </Button>
             </div>
@@ -3190,11 +3126,12 @@ function EasyCaptureBlock({
 }
 
 function SignatureCard({
-  label, signedName, signedAt, pendingLabel,
+  label, signedName, signedAt, signaturePng, pendingLabel,
 }: {
   label: string;
   signedName?: string | null;
   signedAt?: string | null;
+  signaturePng?: string | null;
   pendingLabel: string;
 }) {
   const signed = !!signedAt;
@@ -3212,6 +3149,9 @@ function SignatureCard({
           <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>
             Signed {new Date(signedAt!).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
           </p>
+          {signaturePng && (
+            <img src={signaturePng} alt={`${label} signature`} className="mt-2 h-12 rounded border bg-white" style={{ borderColor: BORDER }} />
+          )}
         </div>
       ) : (
         <p className="text-xs mt-1.5 flex items-center gap-1.5" style={{ color: MUTED }}><Clock3 size={13} /> {pendingLabel}</p>

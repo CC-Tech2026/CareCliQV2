@@ -39,7 +39,6 @@ const PARENT_MAP: Array<{ prefix: string; parentHref: string; parentKey: string 
   // Schedule children (coordinator)
   { prefix: "/coordinator/live",       parentHref: "/coordinator/rostering",  parentKey: "nav.schedule"          },
   { prefix: "/coordinator/monitor",    parentHref: "/coordinator/rostering",  parentKey: "nav.schedule"          },
-  { prefix: "/coordinator/shift-verification", parentHref: "/coordinator/rostering", parentKey: "nav.schedule"  },
   { prefix: "/coordinator/travel",     parentHref: "/coordinator/rostering",  parentKey: "nav.schedule"          },
   { prefix: "/approvals",              parentHref: "/coordinator/rostering",  parentKey: "nav.schedule"          },
 

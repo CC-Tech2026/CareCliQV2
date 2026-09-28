@@ -13,6 +13,7 @@ from ..core.access import has_active_grant
 from ..core.config import settings
 from ..core.security import get_current_user
 from ..services import stripe_service
+from ..services.employee_id_service import is_org_abbrev_available, normalize_org_abbrev
 from ..services.supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -37,10 +38,19 @@ def _require_super_admin(current_user: dict) -> None:
 
 class SignupCheckoutBody(BaseModel):
     plan_tier: str
+    org_abbrev: str
 
 
 class CheckoutBody(BaseModel):
     plan_tier: str
+
+
+@router.get("/signup/check-org-abbrev")
+async def check_signup_org_abbrev(value: str):
+    """Public — live availability check for the 4-letter org abbreviation,
+    called as the person types on the pricing step (and, separately, by an
+    existing org's MD retrofitting one — see organization_abbrev.py)."""
+    return {"available": is_org_abbrev_available(get_supabase_admin(), value)}
 
 
 @router.post("/signup/checkout")
@@ -49,10 +59,14 @@ async def create_signup_checkout(body: SignupCheckoutBody):
     to the /get-started page in this app, which calls this to start Checkout."""
     if body.plan_tier not in stripe_service.PLAN_TIERS:
         raise HTTPException(status_code=400, detail=f"Invalid plan_tier. Must be one of: {', '.join(stripe_service.PLAN_TIERS)}")
+    org_abbrev = normalize_org_abbrev(body.org_abbrev)
+    if not is_org_abbrev_available(get_supabase_admin(), org_abbrev):
+        raise HTTPException(status_code=409, detail=f'"{org_abbrev}" is already taken by another organisation.')
     base = settings.frontend_base_url.rstrip("/")
     try:
         url = stripe_service.create_signup_checkout_session(
             plan_tier=body.plan_tier,
+            org_abbrev=org_abbrev,
             success_url=f"{base}/get-started?checkout=success",
             cancel_url=f"{base}/get-started?checkout=canceled",
         )

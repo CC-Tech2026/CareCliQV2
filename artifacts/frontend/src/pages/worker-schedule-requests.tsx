@@ -79,7 +79,7 @@ function RequestCard({ request }: { request: ScheduleRequest }) {
   if (request.time_off) {
     summary = `${reasonLabel(request.time_off.reason_code)}: ${request.time_off.start_date} – ${request.time_off.end_date}`;
   } else if (request.preferred_shift) {
-    const name = request.preferred_shift.patients?.full_name ?? translate("scheduleRequests.participant");
+    const name = request.preferred_shift.participants?.full_name ?? translate("scheduleRequests.participant");
     summary = translateParams("scheduleRequests.preferredSummary", {
       name,
       days: formatPreferredDays(request.preferred_shift.preferred_days),

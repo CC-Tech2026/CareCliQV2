@@ -456,7 +456,7 @@ def _fetch_patient_name_map(
 
     try:
         result = (
-            supabase.table("patients")
+            supabase.table("participants")
             .select("id, full_name, ndis_number")
             .in_("id", patient_ids)
             .execute()

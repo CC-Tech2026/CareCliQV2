@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getStoredSignature, saveSignature, clearSignature } from "@/lib/signature-store";
-import { changePassword, requestPasswordReset } from "@/services/userService";
+import { changePassword, requestPasswordReset, getMe } from "@/services/userService";
 import { NavLayoutCard } from "@/components/settings/NavLayoutSettings";
 import {
   PenLine,
@@ -81,7 +81,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
-import { BranchesSection } from "@/components/branches/BranchesSection";
+import { BranchesSection, BranchStateSelect } from "@/components/branches/BranchesSection";
 import { useBranches, useInvalidateBranches } from "@/hooks/useBranches";
 import { useReAuth } from "@/hooks/useReAuth";
 import { Link } from "wouter";
@@ -113,6 +113,11 @@ import {
   removeOrganizationLogo,
   type OrganizationBranding,
 } from "@/services/organizationBrandingService";
+import {
+  getOrganizationAbbrevStatus,
+  checkOrganizationAbbrevAvailable,
+  setOrganizationAbbrev,
+} from "@/services/organizationAbbrevService";
 
 // ---------------------------------------------------------------------------
 // ABN validation: 11 digits only (optional field)
@@ -127,7 +132,7 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 type SectionId = "account" | "security" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "branches" | "bugReport" | "improvementFeedback" | "delegatedAccess";
 
-const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean; mdOnly?: boolean; requiredCapability?: string }[] = [
+const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOrMdOnly?: boolean; mdOnly?: boolean; requiredCapability?: string }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
   { id: "security",      labelKey: "settings.nav.security",         icon: LockKeyhole },
   { id: "provider",      labelKey: "settings.nav.provider",          icon: Building2   },
@@ -135,8 +140,8 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   { id: "compliance",    labelKey: "settings.nav.compliance",        icon: ShieldCheck },
   { id: "accessibility", labelKey: "settings.nav.accessibility",     icon: AccessibilityIcon },
   { id: "privacy",       labelKey: "settings.nav.privacy",           icon: Shield      },
-  { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOnly: true },
-  { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOnly: true },
+  { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOrMdOnly: true },
+  { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOrMdOnly: true },
   { id: "bugReport",     labelKey: "settings.nav.bugReport",         icon: Bug         },
   // improvementFeedback and delegatedAccess stay strictly MD-only — neither
   // is in the delegated-access capability catalog (product feedback to the
@@ -145,7 +150,10 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   { id: "improvementFeedback", labelKey: "settings.nav.improvementFeedback", icon: Lightbulb, mdOnly: true },
   { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true, requiredCapability: "platform_billing" },
   { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true, requiredCapability: "org_branding" },
-  { id: "branches",      labelKey: "settings.nav.branches",          icon: MapPin, mdOnly: true },
+  // "branches" intentionally left out of NAV_ITEMS for now — multi-office
+  // management is deferred; single-office providers use the "Business
+  // location" picker on the Provider tab instead. BranchesSection and the
+  // /api/branches backend are untouched, just not linked from the sidebar.
   { id: "delegatedAccess", labelKey: "settings.nav.delegatedAccess", icon: Clock, mdOnly: true },
 ];
 
@@ -1362,6 +1370,13 @@ function OrganizationBrandingSection() {
   const [uploading, setUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
+  // Pre-existing orgs (created before the employee ID scheme) have no
+  // org_abbrev yet — this is a compulsory one-time retrofit, MD-only.
+  const [orgAbbrev, setOrgAbbrev] = useState<string | null>(null);
+  const [abbrevInput, setAbbrevInput] = useState("");
+  const [abbrevCheck, setAbbrevCheck] = useState<"idle" | "checking" | "available" | "taken">("idle");
+  const [savingAbbrev, setSavingAbbrev] = useState(false);
+
   useEffect(() => {
     getOrganizationBranding()
       .then((data) => {
@@ -1374,7 +1389,44 @@ function OrganizationBrandingSection() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    getOrganizationAbbrevStatus()
+      .then((data) => setOrgAbbrev(data.org_abbrev))
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const candidate = abbrevInput.trim().toUpperCase();
+    if (!/^[A-Z]{4}$/.test(candidate)) {
+      setAbbrevCheck("idle");
+      return;
+    }
+    setAbbrevCheck("checking");
+    const timer = setTimeout(() => {
+      checkOrganizationAbbrevAvailable(candidate)
+        .then((data) => setAbbrevCheck(data.available ? "available" : "taken"))
+        .catch(() => setAbbrevCheck("idle"));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [abbrevInput]);
+
+  async function handleSaveAbbrev() {
+    const candidate = abbrevInput.trim().toUpperCase();
+    setSavingAbbrev(true);
+    try {
+      const result = await setOrganizationAbbrev(candidate);
+      setOrgAbbrev(result.org_abbrev);
+      toast({
+        title: "Organisation abbreviation set",
+        description: result.backfilled_count
+          ? `${result.backfilled_count} existing staff member${result.backfilled_count === 1 ? "" : "s"} were assigned an employee ID.`
+          : undefined,
+      });
+    } catch (e) {
+      toast({ variant: "destructive", title: translate("settings.toast.saveFailed"), description: e instanceof Error ? e.message : undefined });
+    } finally {
+      setSavingAbbrev(false);
+    }
+  }
 
   const identityDirty = displayName !== identityPristine.displayName || accentColor !== identityPristine.accentColor;
   function handleCancelIdentity() {
@@ -1514,6 +1566,38 @@ function OrganizationBrandingSection() {
 
       <StickyActionBar visible={identityDirty} saving={saving} onSave={handleSave} onCancel={handleCancelIdentity} />
 
+      {orgAbbrev === null && (user?.role === "managing_director" || brandingGrant) && (
+        <PanelCard label="Organisation abbreviation">
+          <div className="space-y-1.5">
+            <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>
+              4 letters, unique to your organisation — used in every staff member's employee ID
+              (e.g. SW003HARV). This can only be set once.
+            </p>
+            <div className="flex items-center gap-2">
+              <Input
+                value={abbrevInput}
+                onChange={(e) => setAbbrevInput(e.target.value.toUpperCase().slice(0, 4))}
+                placeholder="HARV"
+                className="max-w-[140px]"
+              />
+              <Button
+                size="sm"
+                onClick={handleSaveAbbrev}
+                disabled={abbrevCheck !== "available" || savingAbbrev}
+              >
+                {savingAbbrev ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                Save
+              </Button>
+            </div>
+            {abbrevCheck === "taken" && (
+              <p className="text-[11px] font-medium" style={{ color: "#DC2626" }}>
+                That abbreviation is already taken — try another.
+              </p>
+            )}
+          </div>
+        </PanelCard>
+      )}
+
       <NavLayoutCard />
     </Section>
   );
@@ -1540,7 +1624,7 @@ export default function Settings() {
   const isMD = user?.role === "managing_director";
   const { hasCapability: hasDelegatedCapability, grantFor: delegatedGrantFor } = useMyAccessGrants();
   const visibleNavItems = NAV_ITEMS.filter((item) =>
-    (!item.coordinatorOnly || isCoordinator) &&
+    (!item.coordinatorOrMdOnly || isCoordinator || isMD) &&
     (!item.mdOnly || isMD || (item.requiredCapability ? hasDelegatedCapability(item.requiredCapability) : false)),
   );
 
@@ -1563,6 +1647,14 @@ export default function Settings() {
   const [practCredentials, setPractCredentials] = useState("");
   const [isSavingPract, setIsSavingPract] = useState(false);
   const [practPristine, setPractPristine] = useState({ name: "", credentials: "" });
+
+  // -- Employee ID (read-only, auto-generated — see employee_id_service.py) ---
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
+  useEffect(() => {
+    getMe()
+      .then((profile) => setEmployeeId(profile.employee_id ?? null))
+      .catch(() => {});
+  }, []);
 
   // -- Provider Information state ---------------------------------------------
   const [businessName, setBusinessName] = useState("");
@@ -1600,7 +1692,7 @@ export default function Settings() {
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   const fetchTeam = useCallback(async () => {
-    if (!isCoordinator || !authToken) return;
+    if ((!isCoordinator && !isMD) || !authToken) return;
     setLoadingTeam(true);
     try {
       const [membersRes, invitesRes] = await Promise.all([
@@ -1614,7 +1706,7 @@ export default function Settings() {
     } finally {
       setLoadingTeam(false);
     }
-  }, [isCoordinator, authToken]);
+  }, [isCoordinator, isMD, authToken]);
 
   useEffect(() => {
     if (activeSection === "team") fetchTeam();
@@ -1643,8 +1735,38 @@ export default function Settings() {
     }
   };
 
-  const { branches: branchList, byId: branchById, multiBranch: branchesMulti } = useBranches();
+  const { branches: branchList, byId: branchById, multiBranch: branchesMulti, headOffice, states: branchStates, isLoading: branchesLoading } = useBranches();
   const invalidateBranches = useInvalidateBranches();
+
+  // Single-office timezone picker — sets Head Office's state (and hence its
+  // timezone) directly, so a small provider with one office never has to
+  // learn "branches" as a concept. Multi-office providers still use the full
+  // Branches screen. Kept separate from the businessName/ABN save flow below
+  // since it hits a different endpoint (branches, not settings/provider).
+  const [locationState, setLocationState] = useState("");
+  const [savingLocation, setSavingLocation] = useState(false);
+  useEffect(() => {
+    if (headOffice) setLocationState(headOffice.state);
+  }, [headOffice?.id, headOffice?.state]);
+  const locationDirty = !!headOffice && locationState !== headOffice.state;
+  const handleSaveLocation = async () => {
+    if (!headOffice || !locationState) return;
+    setSavingLocation(true);
+    try {
+      const res = await apiFetch(`/api/branches/${headOffice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state: locationState }),
+      });
+      if (!res.ok) throw new Error();
+      invalidateBranches();
+      toast({ title: "Business location updated" });
+    } catch {
+      toast({ title: "Could not update business location", variant: "destructive" });
+    } finally {
+      setSavingLocation(false);
+    }
+  };
 
   const handleChangeBranch = async (userId: string, branchId: string) => {
     if (!authToken || !branchId) return;
@@ -2115,6 +2237,15 @@ export default function Settings() {
                     <span className="shrink-0 text-[11px] font-semibold" style={{ color: "var(--cc-muted)" }}>{translate("settings.practitioner.fromAccount")}</span>
                   </div>
 
+                  {employeeId && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-3" style={{ background: "var(--cc-soft)" }}>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>Employee ID</p>
+                        <p className="mt-0.5 text-[14px] font-bold tracking-wide" style={{ color: "var(--cc-text)" }}>{employeeId}</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className={cn("grid grid-cols-1 gap-4", !isMD && "sm:grid-cols-2")}>
                     <div className={cn("space-y-1.5", isMD && "max-w-sm")}>
                       <Label htmlFor="pract-name" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>{translate("settings.practitioner.fullName")}</Label>
@@ -2376,6 +2507,34 @@ export default function Settings() {
               )}
             </PanelCard>
 
+            {/* Single-office timezone picker — hidden once a second branch
+                exists, since multi-office providers manage this from the
+                Branches screen instead (Settings → Branches). */}
+            {!branchesMulti && (
+              <PanelCard label="Business location">
+                {branchesLoading ? (
+                  <LoadingRow />
+                ) : (
+                  <div className="space-y-1.5 max-w-sm">
+                    <Label htmlFor="business-state" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>State</Label>
+                    <BranchStateSelect id="business-state" value={locationState} onChange={setLocationState} states={branchStates} />
+                    <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                      Sets the timezone your organisation runs on — shift times, billing periods, and "today" are all based on this.
+                      Setting up separate offices with different timezones comes later, in Branches.
+                    </p>
+                    {locationDirty && (
+                      <div className="flex gap-2 pt-1">
+                        <Button variant="outline" size="sm" className="rounded-lg" onClick={() => headOffice && setLocationState(headOffice.state)}>Cancel</Button>
+                        <Button size="sm" className="rounded-lg" disabled={savingLocation} onClick={handleSaveLocation}>
+                          {savingLocation ? "Saving…" : "Save"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </PanelCard>
+            )}
+
             <StickyActionBar visible={providerDirty} saving={isSavingProvider} onSave={handleSaveProvider} onCancel={handleCancelProvider} />
           </Section>
         )}
@@ -2591,12 +2750,12 @@ export default function Settings() {
           </Section>
         )}
 
-        {/* -- Notifications section (coordinator only) ----------------------- */}
-        {activeSection === "notifications" && isCoordinator && (
+        {/* -- Notifications section (coordinator + managing director) ------- */}
+        {activeSection === "notifications" && (isCoordinator || isMD) && (
           <NotificationsSection />
         )}
 
-        {activeSection === "team" && isCoordinator && (
+        {activeSection === "team" && (isCoordinator || isMD) && (
           <Section
             title={translate("settings.team.title")}
             description={translate("settings.team.subtitle")}

@@ -415,7 +415,7 @@ async def create_or_update_plan(
         payload.setdefault("status", "active")
 
         patient_resp = (
-            supabase.table("patients")
+            supabase.table("participants")
             .select("organization_id")
             .eq("id", participant_id)
             .maybe_single()
@@ -438,7 +438,7 @@ async def create_or_update_plan(
 
 
 def _sync_patient_plan_mirror(participant_id: str, plan: Dict[str, Any]) -> None:
-    """Keep patients plan mirror aligned with ndis_plans (until mirror columns drop)."""
+    """Keep participants plan mirror aligned with ndis_plans (until mirror columns drop)."""
     if not participant_id or not plan:
         return
     try:
@@ -454,7 +454,7 @@ def _sync_patient_plan_mirror(participant_id: str, plan: Dict[str, Any]) -> None
         if plan.get("status") is not None:
             mirror["plan_status"] = plan["status"]
         if len(mirror) > 1:
-            get_supabase_admin().table("patients").update(mirror).eq("id", participant_id).execute()
+            get_supabase_admin().table("participants").update(mirror).eq("id", participant_id).execute()
     except Exception as exc:
         logger.debug("patient plan mirror sync skipped for %s: %s", participant_id, exc)
 

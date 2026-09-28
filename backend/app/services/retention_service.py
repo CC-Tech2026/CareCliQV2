@@ -33,7 +33,7 @@ async def run_retention_pass() -> int:
 
     try:
         result = (
-            supabase.table("patients")
+            supabase.table("participants")
             .select("id, full_name, external_pseudonym, disposal_date, branch_id, organization_id")
             .lte("disposal_date", latest_today)
             .eq("is_purged", False)
@@ -52,7 +52,7 @@ async def run_retention_pass() -> int:
         pid = record["id"]
         try:
             deidentified = deidentify_participant(record)
-            supabase.table("patients").update(deidentified).eq("id", pid).execute()
+            supabase.table("participants").update(deidentified).eq("id", pid).execute()
             supabase.table("audit_logs").insert({
                 "action_type": "participant.auto_deidentified",
                 "action": "participant.auto_deidentified",

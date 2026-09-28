@@ -242,6 +242,59 @@ export function getShiftPayPreview(shiftId: string) {
   return jsonFetch<PayPreview>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/pay-preview`);
 }
 
+export type PayEstimate = {
+  pay_cents: number;
+  reason: string | null;
+  /** Distinct SCHADS day-type labels this shift was actually paid under
+   * (e.g. ["Weekday"], or ["Weekday", "Saturday"] if it crosses midnight
+   * into one) — read off calculate_shift_pay()'s own component breakdown,
+   * not re-derived. NDIS's day-type is priced independently and can
+   * legitimately differ. */
+  day_types: string[];
+};
+
+/** MD-only. Live SCHADS pay estimate for a shift that doesn't exist yet —
+ * for a projected margin while filling out the creation form. 403s for
+ * non-MDs; callers should only invoke this when the signed-in user is a
+ * managing_director. */
+export function getShiftPayEstimate(params: {
+  workerId: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  dutyType?: string;
+  isSleepover?: boolean;
+}) {
+  const qs = new URLSearchParams({
+    worker_id: params.workerId,
+    scheduled_start: params.scheduledStart,
+    scheduled_end: params.scheduledEnd,
+  });
+  if (params.dutyType) qs.set("duty_type", params.dutyType);
+  if (params.isSleepover) qs.set("is_sleepover", "true");
+  return jsonFetch<PayEstimate>(`/api/coordinator/shifts/pay-estimate?${qs.toString()}`);
+}
+
+export type ShiftMargin = {
+  shift_id: string;
+  billed_cents: number | null;
+  /** The NDIS price item's own day-type (e.g. "Saturday") — independent of
+   * pay_day_types below; a shift can legitimately be billed under one and
+   * paid under another. */
+  billed_day_type: string | null;
+  pay_cents: number;
+  pay_day_types: string[];
+  margin_cents: number | null;
+  pay_reason: string | null;
+};
+
+/** MD-only. NDIS billed amount vs SCHADS worker pay for a real shift, given
+ * whichever price item is currently selected at verification. 403s for
+ * non-MDs. */
+export function getShiftMargin(shiftId: string, priceItemCode: string) {
+  const qs = new URLSearchParams({ price_item_code: priceItemCode });
+  return jsonFetch<ShiftMargin>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/margin?${qs.toString()}`);
+}
+
 export function markShiftSleepover(shiftId: string, payload: { sleepover_start: string; sleepover_end: string }) {
   return jsonFetch<{ shift_id: string }>(
     `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/sleepover`,
@@ -426,6 +479,22 @@ export function getParticipantCurrentBillingPeriod(participantId: string) {
   return jsonFetch<BillingPeriodCurrent>(
     `/api/participants/${encodeURIComponent(participantId)}/billing-periods/current`,
   );
+}
+
+export type ReadyToInvoiceEntry = {
+  participant_id: string;
+  participant_name: string;
+  period_start: string;
+  period_end: string;
+  completions_count: number;
+  total_cents: number;
+};
+
+/** Verified shifts with no invoice yet, grouped by participant + month —
+ * lets the billing page surface what's waiting instead of the coordinator
+ * having to check each participant by hand. */
+export function getReadyToInvoice() {
+  return jsonFetch<ReadyToInvoiceEntry[]>("/api/billing/invoices/ready-to-invoice");
 }
 
 export function planManagementTypeLabel(
@@ -1732,6 +1801,11 @@ export type ShiftPriceItemOption = {
   unit?: string | null;
   support_purpose?: string | null;
   support_category?: string | null;
+  // The real NDIS Support Category (e.g. "01" / "Assistance with Daily
+  // Life") — finer-grained than support_category's core/capacity/capital
+  // split, for grouping a long item list by category.
+  category_number?: string | null;
+  category_label?: string | null;
   day_type?: string | null;
   time_type?: string | null;
   support_intensity?: string | null;

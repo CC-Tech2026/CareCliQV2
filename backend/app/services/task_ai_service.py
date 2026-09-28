@@ -79,7 +79,7 @@ async def _get_participant_name(participant_id: str) -> str:
     supabase = get_supabase_admin()
     try:
         result = (
-            supabase.table("patients")
+            supabase.table("participants")
             .select("full_name")
             .eq("id", participant_id)
             .single()

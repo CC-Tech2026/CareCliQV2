@@ -245,7 +245,7 @@ def participant_timezone(participant: Any, *, organization_id: Any = None, supab
     hit, tz = _cached(_participant_cache, key)
     if not hit:
         try:
-            query = _admin_client(supabase).table("patients").select("branch_id").eq("id", key)
+            query = _admin_client(supabase).table("participants").select("branch_id").eq("id", key)
             org = organization_id or row.get("organization_id")
             if org:
                 query = query.eq("organization_id", str(org))

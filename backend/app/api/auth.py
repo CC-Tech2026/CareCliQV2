@@ -19,6 +19,7 @@ PROFILE_PHOTOS_BUCKET = "profile-photos"
 from ..core.security import create_access_token, decode_access_token, get_current_user
 from ..core.timezone import request_timezone, timezone_for_state
 from ..services.branch_service import member_branch_id
+from ..services.employee_id_service import generate_employee_id
 from ..services import email_service
 from ..services import device_security_service as dss
 
@@ -504,15 +505,17 @@ async def _resolve_org_member_role(
             return existing.data[0].get("role") or fallback_role
 
         # No row yet — create it (idempotent via UNIQUE constraint)
+        member_row = {
+            "user_id": user_id,
+            "organization_id": org_id,
+            "role": fallback_role,
+            "is_active": True,
+        }
+        employee_id = await asyncio.to_thread(generate_employee_id, supabase, org_id, fallback_role)
+        if employee_id:
+            member_row["employee_id"] = employee_id
         await asyncio.to_thread(
-            lambda: supabase.table("organization_members").insert(
-                {
-                    "user_id": user_id,
-                    "organization_id": org_id,
-                    "role": fallback_role,
-                    "is_active": True,
-                }
-            ).execute()
+            lambda: supabase.table("organization_members").insert(member_row).execute()
         )
         return fallback_role
 

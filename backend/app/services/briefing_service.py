@@ -80,7 +80,7 @@ def _bump_patient_briefing_version(participant_id: str) -> None:
     try:
         resp = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select("briefing_content_version")
             .eq("id", participant_id)
             .limit(1)
@@ -88,7 +88,7 @@ def _bump_patient_briefing_version(participant_id: str) -> None:
         )
         rows = resp.data or []
         current = int((rows[0] or {}).get("briefing_content_version") or 1) if rows else 1
-        get_supabase_admin().table("patients").update({
+        get_supabase_admin().table("participants").update({
             "briefing_content_version": current + 1,
             "updated_at": _now_iso(),
         }).eq("id", participant_id).execute()
@@ -186,7 +186,7 @@ def _fetch_patient_briefing_fields(participant_id: str, organization_id: str) ->
     try:
         resp = (
             get_supabase_admin()
-            .table("patients")
+            .table("participants")
             .select(
                 "full_name, preferred_name, background_summary, background_summary_updated_at, "
                 "briefing_content_version, communication_guidance, communication_preferences, "
@@ -602,7 +602,7 @@ def update_participant_background_summary(
         "background_summary_updated_at": now if text else None,
         "updated_at": now,
     }
-    get_supabase_admin().table("patients").update(payload).eq("id", participant_id).execute()
+    get_supabase_admin().table("participants").update(payload).eq("id", participant_id).execute()
     _bump_patient_briefing_version(participant_id)
 
 

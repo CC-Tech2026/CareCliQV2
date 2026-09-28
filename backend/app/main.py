@@ -2,7 +2,7 @@ import os
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, incidents, assignments, billing, billing_periods, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, ndis_tasks, notifications, budget_ledger, privacy, worker_help, worker_scheduling, worker_performance, worker_travel, calendar_feed, tasks, ai_suggestions, shift_verification, plan_meetings, chatbox, medications, branches
+from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, incidents, assignments, billing, billing_periods, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, ndis_tasks, notifications, budget_ledger, privacy, worker_help, worker_scheduling, worker_performance, worker_travel, calendar_feed, tasks, ai_suggestions, shift_verification, plan_meetings, chatbox, medications, branches, service_agreements
 from .api import auth_mfa
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
@@ -33,7 +33,7 @@ _USERS_COLUMNS_BANNER = """
 
 _BIOLOGICAL_SEX_BANNER = """
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  MIGRATION REQUIRED — patients.biological_sex column missing             ║
+║  MIGRATION REQUIRED — participants.biological_sex column missing         ║
 ║  Run backend/supabase_setup.sql in your Supabase SQL editor.            ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 """
@@ -89,7 +89,7 @@ async def _apply_startup_migrations():
         _PROBES = [
             ("sessions_notes",       "sessions",                "activities_performed, outcomes, participant_response, progress_toward_goals", "sessions: structured note columns OK",  "sessions: structured note columns missing"),
             ("sessions_rp",          "sessions",                "restrictive_practice_detected, compliance_flags",                             None,                                    None),
-            ("biological_sex",       "patients",                "biological_sex",                                                              "patients.biological_sex column OK",     _BIOLOGICAL_SEX_BANNER),
+            ("biological_sex",       "participants",            "biological_sex",                                                              "participants.biological_sex column OK", _BIOLOGICAL_SEX_BANNER),
             ("users_onboarding",     "users",                   "account_type, onboarding_complete, organization_id",                          "users: onboarding columns OK",          _USERS_COLUMNS_BANNER),
             ("session_messages",     "session_messages",        "id, session_id, message_type, content",                                       "session_messages table OK",             _SESSION_MESSAGES_BANNER),
             ("organizations",        "organizations",           "id, owner_user_id, organization_name",                                        "organizations table OK",                "organizations table missing — run backend/supabase_patch_missing_tables.sql"),
@@ -97,7 +97,7 @@ async def _apply_startup_migrations():
             ("invitations",          "invitations",             "id, organization_id, email, token, expires_at",                               "invitations table OK",                  "invitations table missing — run backend/supabase_patch_missing_tables.sql"),
             ("ndis_goals",           "ndis_goals",              "id, participant_id, organization_id, name, status",                           "ndis_goals table OK",                   "ndis_goals table missing — run backend/supabase/migrations/044_realtime_goals_settings.sql"),
             ("practitioner_allocs",  "practitioner_allocations","id, patient_id, user_id, allocated_role",                                     "practitioner_allocations table OK",     "practitioner_allocations table missing — run backend/supabase_setup.sql"),
-            ("upcoming_review_date", "patients",                "upcoming_review_date",                                                        "patients.upcoming_review_date column OK", "patients.upcoming_review_date missing — run backend/supabase_setup.sql"),
+            ("upcoming_review_date", "participants",            "upcoming_review_date",                                                        "participants.upcoming_review_date column OK", "participants.upcoming_review_date missing — run backend/supabase_setup.sql"),
             ("progress_delta",     "sessions",                "progress_delta",                                                              "sessions.progress_delta column OK",     "sessions.progress_delta missing — run backend/supabase/migrations/028_progress_delta.sql"),
             ("shifts",             "shifts",                  "id, organization_id, worker_id, scheduled_start, duration_minutes, status", "shifts table OK",                       "shifts table missing — run backend/supabase/migrations/029_shifts.sql"),
             ("sessions_shift_id",  "sessions",                "shift_id",                                                                    "sessions.shift_id column OK",           "sessions.shift_id missing — run backend/supabase/migrations/029_shifts.sql"),
@@ -205,6 +205,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(participants.router, prefix="/api")
 app.include_router(medications.router, prefix="/api")
 app.include_router(billing_periods.router, prefix="/api")
+app.include_router(service_agreements.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 app.include_router(plans.router, prefix="/api")
@@ -248,8 +249,12 @@ from .api import employee_onboarding as employee_onboarding_api
 app.include_router(employee_onboarding_api.router, prefix="/api")
 from .api import applicants as applicants_api
 app.include_router(applicants_api.router, prefix="/api")
+from .api import participant_intake as participant_intake_api
+app.include_router(participant_intake_api.router, prefix="/api")
 from .api import organization_branding as organization_branding_api
 app.include_router(organization_branding_api.router, prefix="/api")
+from .api import organization_abbrev as organization_abbrev_api
+app.include_router(organization_abbrev_api.router, prefix="/api")
 from .api import operational_feedback as operational_feedback_api
 app.include_router(operational_feedback_api.router, prefix="/api")
 from .api import bug_reports as bug_reports_api
@@ -279,10 +284,10 @@ async def health_check():
 @app.get("/api/system/migration-status")
 async def migration_status_endpoint(current_user: dict = Depends(get_current_user)):
     """Return current migration state so operators can verify schema readiness."""
-    if current_user.get("role") != "support_coordinator":
+    if current_user.get("role") not in {"support_coordinator", "managing_director"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only support coordinators can view migration status",
+            detail="Only support coordinators and managing directors can view migration status",
         )
     return {
         "biological_sex_column_missing":              migration_state.biological_sex_column_missing,

@@ -51,7 +51,7 @@ async def test_update_shift_context_writes_valid_care_coordinator_id():
     patients_table = MagicMock()
     patients_table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[{"id": "p-1"}])
     supabase = MagicMock()
-    supabase.table.side_effect = _table_router({"users": users_table, "patients": patients_table})
+    supabase.table.side_effect = _table_router({"users": users_table, "participants": patients_table})
 
     body = participants.ShiftContextUpdate(care_coordinator_id="coord-1")
     with patch(
@@ -100,7 +100,7 @@ def test_resolve_care_coordinator_id_falls_back_to_participant_default():
         data={"care_coordinator_id": "coord-default"}
     )
     supabase = MagicMock()
-    supabase.table.side_effect = _table_router({"patients": patients_table})
+    supabase.table.side_effect = _table_router({"participants": patients_table})
 
     result = coordinator._resolve_care_coordinator_id(supabase, "p-1", "org-1", override=None)
     assert result == "coord-default"
@@ -112,7 +112,7 @@ def test_resolve_care_coordinator_id_returns_none_when_participant_has_no_defaul
         data={"care_coordinator_id": None}
     )
     supabase = MagicMock()
-    supabase.table.side_effect = _table_router({"patients": patients_table})
+    supabase.table.side_effect = _table_router({"participants": patients_table})
 
     result = coordinator._resolve_care_coordinator_id(supabase, "p-1", "org-1", override=None)
     assert result is None

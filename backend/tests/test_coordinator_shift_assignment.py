@@ -287,7 +287,7 @@ class TestAssignShiftCredentialValidation:
             call_count += 1
             if table_name == "users":
                 return worker_mock
-            elif table_name == "patients":
+            elif table_name == "participants":
                 return participant_mock
             elif table_name == "credentials":
                 return creds_mock
@@ -374,7 +374,7 @@ class TestAssignShiftCredentialValidation:
             nonlocal call_count
             if table_name == "users":
                 return worker_mock
-            elif table_name == "patients":
+            elif table_name == "participants":
                 return participant_mock
             elif table_name == "credentials":
                 return creds_mock
@@ -452,7 +452,7 @@ class TestAssignShiftCredentialValidation:
             nonlocal call_count
             if table_name == "users":
                 return worker_mock
-            elif table_name == "patients":
+            elif table_name == "participants":
                 return participant_mock
             elif table_name == "credentials":
                 return creds_mock
@@ -528,7 +528,7 @@ class TestAssignShiftCredentialValidation:
         def table_side_effect(table_name):
             if table_name == "users":
                 return worker_mock
-            if table_name == "patients":
+            if table_name == "participants":
                 return participant_mock
             if table_name == "credentials":
                 return creds_mock
@@ -622,7 +622,7 @@ class TestAssignShiftDurationCalculation:
         def table_side_effect(table_name):
             if table_name == "users":
                 return worker_mock
-            elif table_name == "patients":
+            elif table_name == "participants":
                 return participant_mock
             elif table_name == "credentials":
                 return creds_mock

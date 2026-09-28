@@ -48,7 +48,6 @@ import CoordinatorMonitorPage from "@/pages/coordinator-monitor";
 import AuditPack from "@/pages/audit-pack";
 import DesignSystem from "@/pages/design-system";
 import SessionReview from "@/pages/session-review";
-import CoordinatorShiftVerification from "@/pages/coordinator-shift-verification";
 import Toolkit from "@/pages/toolkit";
 import VerifyEmail from "@/pages/verify-email";
 import AccountDeactivated from "@/pages/account-deactivated";
@@ -564,12 +563,6 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      <Route path="/coordinator/shift-verification">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><CoordinatorShiftVerification /></AppLayout>
-        </ProtectedRoute>
-      </Route>
-
       <Route path="/patients">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
           <RoleAwareShell><Patients /></RoleAwareShell>
@@ -657,22 +650,22 @@ function Router() {
         )}
       </Route>
 
-      {/* ── Compliance — support coordinator only ────────────────────────── */}
+      {/* ── Compliance — support coordinator + managing director ─────────── */}
       <Route path="/compliance">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
           <AppLayout><Compliance /></AppLayout>
         </ProtectedRoute>
       </Route>
 
-      {/* ── Reports — support coordinator + allied health ────────────────── */}
+      {/* ── Reports — support coordinator + managing director + allied health ── */}
       <Route path="/reports">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
           <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/documents">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
           <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>

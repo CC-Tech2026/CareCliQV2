@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Service Agreement — {{ intake.full_name or "Participant" }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 9pt;
+      color: #1a1a1a;
+      background: #fff;
+    }
+
+    @page {
+      size: A4;
+      margin: 12mm 14mm 22mm 14mm;
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-size: 7pt;
+        color: #94a3b8;
+      }
+    }
+
+    #page-topbar {
+      position: fixed;
+      top: -8mm;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: {{ org.brand_accent_color }};
+    }
+
+    .header-wrap {
+      background: #f8f9fa;
+      border-bottom: 3px solid {{ org.brand_accent_color }};
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      width: 100%;
+    }
+    .header-table { width: 100%; border-collapse: collapse; }
+    .hdr-left { vertical-align: top; width: 55%; padding-right: 14px; }
+    .hdr-right { vertical-align: top; text-align: right; }
+    .logo-img { max-height: 42pt; max-width: 220pt; margin-bottom: 2px; }
+    .provider-name { font-size: 13pt; font-weight: bold; }
+    .provider-meta { font-size: 8pt; color: #475569; line-height: 1.5; margin-top: 2px; }
+
+    h1 { font-size: 15pt; margin-bottom: 4px; }
+    .subtitle { font-size: 9pt; color: #64748b; margin-bottom: 16px; }
+
+    .section { margin-bottom: 16px; }
+    .section-title {
+      font-size: 9.5pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #475569;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+    }
+    table.fields { width: 100%; border-collapse: collapse; }
+    table.fields td { padding: 3px 8px 3px 0; vertical-align: top; }
+    table.fields td.label { color: #64748b; width: 32%; }
+    table.fields td.value { font-weight: bold; }
+
+    .terms { font-size: 8.5pt; line-height: 1.6; color: #334155; }
+    .terms p { margin-bottom: 8px; }
+
+    .sig-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .sig-cell { width: 50%; padding: 0 10px 0 0; vertical-align: top; }
+    .sig-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 10px;
+      min-height: 90px;
+    }
+    .sig-img { max-height: 50pt; max-width: 100%; display: block; margin-bottom: 6px; }
+    .sig-name { font-weight: bold; font-size: 9.5pt; }
+    .sig-date { font-size: 8pt; color: #64748b; margin-top: 2px; }
+    .sig-role { font-size: 8pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+  <div id="page-topbar"></div>
+
+  <div class="header-wrap">
+    <table class="header-table">
+      <tr>
+        <td class="hdr-left">
+          {% if org.logo_url %}<img class="logo-img" src="{{ org.logo_url }}" />{% endif %}
+          <div class="provider-name">{{ org.provider_name }}</div>
+          <div class="provider-meta">
+            {% if org.abn %}ABN {{ org.abn }}<br/>{% endif %}
+            {% if org.ndis_provider_number %}NDIS Registration {{ org.ndis_provider_number }}<br/>{% endif %}
+            {% if org.address %}{{ org.address }}<br/>{% endif %}
+            {% if org.phone %}{{ org.phone }}{% endif %}{% if org.phone and org.email %} · {% endif %}{% if org.email %}{{ org.email }}{% endif %}
+          </div>
+        </td>
+        <td class="hdr-right">
+          <div class="provider-meta">Generated {{ generated_date }}</div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <h1>NDIS Service Agreement</h1>
+  <p class="subtitle">Between {{ org.provider_name }} and {{ intake.full_name }}</p>
+
+  <div class="section">
+    <div class="section-title">Participant details</div>
+    <table class="fields">
+      <tr><td class="label">Full name</td><td class="value">{{ intake.full_name }}</td></tr>
+      <tr><td class="label">NDIS number</td><td class="value">{{ intake.ndis_number or "—" }}</td></tr>
+      <tr><td class="label">Date of birth</td><td class="value">{{ intake.date_of_birth or "—" }}</td></tr>
+      <tr><td class="label">Service category</td><td class="value">{{ intake.service_category_label }}</td></tr>
+      <tr><td class="label">Funding type</td><td class="value">{{ intake.funding_type_label or "—" }}</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Agreement details</div>
+    <table class="fields">
+      <tr><td class="label">Plan start</td><td class="value">{{ intake.plan_start_date or "—" }}</td></tr>
+      <tr><td class="label">Plan end</td><td class="value">{{ intake.plan_end_date or "—" }}</td></tr>
+      <tr><td class="label">Total budget</td><td class="value">{{ intake.total_budget or "—" }}</td></tr>
+    </table>
+  </div>
+
+  <div class="section terms">
+    <div class="section-title">Terms</div>
+    <p>This agreement confirms that {{ org.provider_name }} will provide supports to {{ intake.full_name }} in
+       accordance with the participant's NDIS plan and the details recorded above. Both parties agree to communicate
+       promptly about any change in support needs, availability, or funding arrangements.</p>
+    <p>Either party may end this agreement by giving reasonable written notice to the other. Complaints or concerns
+       can be raised at any time with {{ org.provider_name }} directly.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Signatures</div>
+    <table class="sig-table">
+      <tr>
+        <td class="sig-cell">
+          <div class="sig-box">
+            <div class="sig-role">Provider signatory</div>
+            {% if provider_signature_png %}<img class="sig-img" src="{{ provider_signature_png }}" />{% endif %}
+            <div class="sig-name">{{ intake.provider_signed_name }}</div>
+            <div class="sig-date">Signed {{ intake.provider_signed_at }}</div>
+          </div>
+        </td>
+        <td class="sig-cell">
+          <div class="sig-box">
+            <div class="sig-role">Participant / guardian signatory</div>
+            {% if family_signature_png %}<img class="sig-img" src="{{ family_signature_png }}" />{% endif %}
+            <div class="sig-name">{{ intake.family_signed_name }}</div>
+            <div class="sig-date">Signed {{ intake.family_signed_at }}</div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>

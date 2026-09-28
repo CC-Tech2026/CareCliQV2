@@ -160,6 +160,17 @@ class Settings(BaseSettings):
     evidence_azure_container: str = os.environ.get("EVIDENCE_AZURE_CONTAINER", "")
     azure_storage_connection_string: str = os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "")
 
+    # Platform NDIS price catalogue grace-period auto-adopt (see
+    # price_grace_period_service.py). Stays false until the platform
+    # catalogue table, the diff-review screen, and the compliance question
+    # of whether a time-based grace period can stand in for participant
+    # consent are all resolved — flipping this on before then has no
+    # effect either way since the job it gates is not wired into the
+    # notification scheduler yet.
+    price_grace_period_auto_adopt_enabled: bool = (
+        os.environ.get("PRICE_GRACE_PERIOD_AUTO_ADOPT_ENABLED", "false").lower() == "true"
+    )
+
     class Config:
         # Mirrors the `if "pytest" not in sys.modules` guard above. Without this,
         # pydantic-settings' own env_file loading — a separate mechanism from the

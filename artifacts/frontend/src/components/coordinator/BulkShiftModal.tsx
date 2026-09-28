@@ -16,6 +16,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   bulkCreateShifts,
   getParticipantPriceItemOptions,
@@ -269,23 +270,61 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                 <label className="text-[12px] font-black" style={{ color: TEXT }}>
                   Expected NDIS item <span className="font-normal">({translate("common.optional")})</span>
                 </label>
-                <Select
+                <SearchableSelect
                   value={expectedPriceItemCode || "__none__"}
                   onValueChange={(val) => setExpectedPriceItemCode(val === "__none__" ? "" : val)}
+                  placeholder={priceItemsQuery.isLoading ? "Loading price items…" : "None recorded"}
+                  searchPlaceholder="Search by name or item code…"
+                  emptyText={translate("common.noResults")}
                   disabled={!participantId || priceItemsQuery.isLoading}
-                >
-                  <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
-                    <SelectValue placeholder={priceItemsQuery.isLoading ? "Loading price items…" : "None recorded"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">None recorded</SelectItem>
-                    {(priceItemsQuery.data ?? []).map((p) => (
-                      <SelectItem key={p.item_code} value={p.item_code}>
-                        {p.item_code}: {p.name || p.support_purpose || "Unnamed item"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={[
+                    { value: "__none__", label: "None recorded", keywords: "none recorded" },
+                    ...[...(priceItemsQuery.data ?? [])]
+                      .sort((a, b) =>
+                        (a.category_number ?? "").localeCompare(b.category_number ?? "")
+                        || a.item_code.localeCompare(b.item_code)
+                      )
+                      .map((p) => {
+                        const name = p.name || p.support_purpose || "Unnamed item";
+                        const priceSuffix = p.price_national != null
+                          ? p.unit === "E"
+                            ? ` ($${p.price_national.toFixed(2)} flat)`
+                            : ` ($${p.price_national.toFixed(2)}/hr)`
+                          : "";
+                        return {
+                          value: p.item_code,
+                          label: `${p.item_code}: ${name}${priceSuffix}`,
+                          keywords: `${p.item_code} ${name}`,
+                          group: p.category_label ?? (p.category_number ? `Category ${p.category_number}` : "Other"),
+                        };
+                      }),
+                  ]}
+                />
+                {(() => {
+                  const selected = (priceItemsQuery.data ?? []).find((p) => p.item_code === expectedPriceItemCode);
+                  if (!selected || selected.price_national == null) return null;
+                  const isFlat = selected.unit === "E";
+                  const perShift = isFlat
+                    ? selected.price_national
+                    : activeDurationHours != null
+                    ? selected.price_national * activeDurationHours
+                    : null;
+                  return (
+                    <p className="text-[12px] font-bold" style={{ color: TEXT }}>
+                      Estimated: {perShift != null ? `$${perShift.toFixed(2)}/shift` : "—"}
+                      {perShift != null && totalShifts > 0 && (
+                        <span className="ml-1 font-normal" style={{ color: MUTED }}>
+                          (${(perShift * totalShifts).toFixed(2)} across {totalShifts} shift{totalShifts === 1 ? "" : "s"})
+                        </span>
+                      )}
+                      {perShift == null && (
+                        <span className="ml-1 font-normal" style={{ color: MUTED }}>
+                          {isFlat ? "" : "(set start/end time to estimate)"}
+                        </span>
+                      )}
+                    </p>
+                  );
+                })()}
               </div>
 
               {/* Shift type */}

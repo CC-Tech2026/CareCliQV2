@@ -380,7 +380,7 @@ async def get_all_incidents(
         try:
             participant_result = (
                 supabase
-                .table("patients")
+                .table("participants")
                 .select("id, full_name")
                 .in_("id", participant_ids)
                 .execute()
@@ -488,7 +488,7 @@ async def get_incident_by_id(
 
                 participant_result = (
                     supabase
-                    .table("patients")
+                    .table("participants")
                     .select("full_name, ndis_number")
                     .eq("id", participant_id)
                     .execute()

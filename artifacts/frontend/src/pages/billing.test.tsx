@@ -139,6 +139,8 @@ it("resolves dollars for the selected date and region and clears a failed lookup
     price_very_remote: null,
     effective_price: 73.45,
     effective_price_source: "explicit",
+    day_type: null,
+    time_type: null,
   });
   render(<Billing />);
   await screen.findByText("Alex Morgan");

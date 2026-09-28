@@ -118,7 +118,7 @@ def get_completed_tasks_for_period(
             price_resp = (
                 supabase.table("ndis_price_items")
                 .select(
-                    "item_code, name, price_national, price_remote, price_very_remote, "
+                    "item_code, name, unit, price_national, price_remote, price_very_remote, "
                     "day_type, time_type, support_intensity, valid_from, valid_to"
                 )
                 .in_("item_code", price_codes)
@@ -178,22 +178,32 @@ def aggregate_line_items(
                 "day_type": price_item.get("day_type"),
                 "time_type": price_item.get("time_type"),
                 "support_intensity": price_item.get("support_intensity"),
+                "unit": price_item.get("unit"),
                 "unit_price": _safe_decimal(price_item.get("price_national", 0)),
                 "quantity": Decimal("0"),
                 "total_price": Decimal("0"),
                 "task_ids": [],
             }
-        
+
         # Add quantity (hours)
         duration_hours = Decimal(str(completion.get("duration_minutes", 0))) / Decimal("60")
         line_items[price_code]["quantity"] += duration_hours
-        
-        # Add to total
+
+        # Add to total. billed_amount should already be correct (set at
+        # completion time by record_task_completion(), which does respect
+        # unit) — this fallback only fires when it's missing or zero, e.g. a
+        # price lookup that failed silently at completion time. "E" (flat
+        # per-event) items are a fixed amount regardless of duration, same
+        # distinction as verify_shift() (67a7e945) and
+        # record_task_completion() itself — recompute the same way here,
+        # don't scale a flat fee by accumulated hours.
         billed = _safe_decimal(completion.get("billed_amount", 0))
         if billed == 0:
-            # Calculate from unit price and duration
-            billed = line_items[price_code]["unit_price"] * duration_hours
-        
+            if str(line_items[price_code].get("unit") or "").upper() == "E":
+                billed = line_items[price_code]["unit_price"]
+            else:
+                billed = line_items[price_code]["unit_price"] * duration_hours
+
         line_items[price_code]["total_price"] += billed
         
         # Track task IDs for audit trail

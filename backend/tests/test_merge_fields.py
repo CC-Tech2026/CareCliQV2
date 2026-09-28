@@ -45,7 +45,7 @@ def test_resolve_merge_context_loads_participant_and_plan_when_id_given():
 
     def table_side_effect(name):
         m = MagicMock()
-        if name == "patients":
+        if name == "participants":
             m.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
                 data=[{"full_name": "Jamie Rivers"}]
             )

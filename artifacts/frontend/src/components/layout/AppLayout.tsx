@@ -177,7 +177,6 @@ function isActive(location: string, href: string) {
   if (href === "/coordinator/rostering" &&
     (location.startsWith("/coordinator/live") ||
      location.startsWith("/coordinator/monitor") ||
-     location.startsWith("/coordinator/shift-verification") ||
      location.startsWith("/coordinator/travel") ||
      location.startsWith("/approvals"))) return true;
   // Quality & Compliance: audit-pack rolls up to /compliance
@@ -208,9 +207,9 @@ const SEARCH_CATALOGUE: SearchEntry[] = [
   { label: "Participants",        description: "Profiles, plans & NDIS goals",            href: "/patients",                        icon: UserRound,       group: "pages",    roles: ["support_coordinator"] },
   { label: "Team",                description: "Support workers & staff management",       href: "/team",                            icon: Users,           group: "pages",    roles: ["support_coordinator"] },
   { label: "Schedule",            description: "Roster, availability & shift management",  href: "/coordinator/rostering",           icon: CalendarDays,    group: "pages",    roles: ["support_coordinator"] },
-  { label: "Quality & Compliance",description: "Audit readiness & compliance tracking",    href: "/compliance",                      icon: ShieldCheck,     group: "pages",    roles: ["support_coordinator"] },
+  { label: "Quality & Compliance",description: "Audit readiness & compliance tracking",    href: "/compliance",                      icon: ShieldCheck,     group: "pages",    roles: ["support_coordinator", "managing_director"] },
   { label: "Invoices & Billing",  description: "NDIS invoicing & revenue reports",         href: "/billing",                         icon: CreditCard,      group: "pages",    roles: ["support_coordinator", "managing_director"] },
-  { label: "Reports",             description: "Session analytics & export",              href: "/reports",                         icon: FileBarChart2,   group: "pages",    roles: ["support_coordinator"] },
+  { label: "Reports",             description: "Session analytics & export",              href: "/reports",                         icon: FileBarChart2,   group: "pages",    roles: ["support_coordinator", "managing_director"] },
   { label: "My Shifts",           description: "Your scheduled & active shifts",          href: "/my-shifts",                       icon: Clock,           group: "pages",    roles: ["support_worker"] },
   { label: "My Clients",          description: "Your assigned participants",              href: "/my-clients",                      icon: UserRound,       group: "pages",    roles: ["support_worker"] },
   { label: "My Availability",     description: "Set working hours and unavailability",      href: "/worker/availability",             icon: UserCheck,       group: "pages",    roles: ["support_worker"] },
@@ -228,7 +227,6 @@ const SEARCH_CATALOGUE: SearchEntry[] = [
   { label: "Onboarding",          description: "Worker & participant onboarding flows",   href: "/md/onboarding",                   icon: GraduationCap,   group: "pages",    roles: ["managing_director"] },
   // ── Features & deep links ─────────────────────────────────────────────────
   { label: "Live Monitor",        description: "Real-time shift & clock-in monitoring",    href: "/coordinator/rostering",           icon: Radio,           group: "features", roles: ["support_coordinator"] },
-  { label: "Shift Verification",  description: "Verify completed shifts before billing",   href: "/coordinator/shift-verification",  icon: ClipboardList,   group: "features", roles: ["support_coordinator"] },
   { label: "Audit Pack",          description: "NDIS audit documentation & export",        href: "/audit-pack",                      icon: ClipboardList,   group: "features", roles: ["support_coordinator"] },
   { label: "Worker Availability", description: "Team working hours and unavailability",  href: "/coordinator/rostering",           icon: UserCheck,       group: "features", roles: ["support_coordinator"] },
   { label: "Create Shift",        description: "Assign a new shift to a worker",          href: "/coordinator/rostering",           icon: Plus,            group: "features", roles: ["support_coordinator"] },

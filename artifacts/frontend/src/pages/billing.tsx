@@ -17,7 +17,9 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   getRevenueReport,
   getParticipantCurrentBillingPeriod,
+  getReadyToInvoice,
   planManagementTypeLabel,
+  type ReadyToInvoiceEntry,
 } from "@/services/coordinatorService";
 import {
   resolveNdisPrice,
@@ -42,6 +44,7 @@ import {
 } from "@/components/ui/select";
 import { NdisPriceEditor } from "@/components/NdisPriceEditor";
 import { NdisScheduleLoader } from "@/components/NdisScheduleLoader";
+import { ShiftVerificationPanel } from "@/components/coordinator/ShiftVerificationPanel";
 
 // ── Design tokens — aligned with Dashboard ────────────────────────────────────
 const PLUM = "var(--cc-plum)";
@@ -135,7 +138,11 @@ export default function Billing() {
 
   const [form, setForm] = useState({
     participant_id: "",
-    generate_from_verified_tasks: false,
+    // Billing from verified shifts is the common path now that the pipeline
+    // works end to end — default to it so opening the form doesn't drop a
+    // coordinator into blank manual item-code/unit-amount/quantity fields
+    // they have to remember to opt out of every time.
+    generate_from_verified_tasks: true,
     period_start: "",
     period_end: "",
     service_date: "",
@@ -172,6 +179,15 @@ export default function Billing() {
     },
   );
 
+  const readyToInvoiceQuery = useOrgQuery<ReadyToInvoiceEntry[]>(
+    ["billing", "ready-to-invoice"],
+    {
+      queryFn: getReadyToInvoice,
+      enabled: canInvoice,
+      staleTime: 60_000,
+    },
+  );
+
   function routingRecipient(
     participant: Record<string, unknown>,
     lockedType?: string | null,
@@ -192,6 +208,26 @@ export default function Billing() {
     };
   }
 
+  /** Current calendar month as YYYY-MM-DD bounds — fallback period when a
+   * participant has no "ready to invoice" entry to copy dates from (e.g.
+   * their shifts haven't been verified yet, but a coordinator still wants
+   * to set up the invoice period ahead of time). */
+  function currentMonthBounds() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    return { period_start: iso(start), period_end: iso(end) };
+  }
+
+  function defaultPeriodFor(participantId: string) {
+    const ready = (readyToInvoiceQuery.data ?? []).find(
+      (entry) => entry.participant_id === participantId,
+    );
+    if (ready) return { period_start: ready.period_start, period_end: ready.period_end };
+    return currentMonthBounds();
+  }
+
   async function onParticipantChange(value: string) {
     if (value === "__none__") {
       setForm((prev) => ({
@@ -207,14 +243,16 @@ export default function Billing() {
       setForm((prev) => ({ ...prev, participant_id: value }));
       return;
     }
+    const period = form.generate_from_verified_tasks ? defaultPeriodFor(value) : {};
     try {
-      const period = await getParticipantCurrentBillingPeriod(value);
+      const currentPeriod = await getParticipantCurrentBillingPeriod(value);
       const lockedType =
-        period.open_period?.locked_plan_management_type ??
-        period.current_plan_management_type;
+        currentPeriod.open_period?.locked_plan_management_type ??
+        currentPeriod.current_plan_management_type;
       const routed = routingRecipient(participant, lockedType);
       setForm((prev) => ({
         ...prev,
+        ...period,
         participant_id: value,
         recipient_name: routed.recipient_name,
         recipient_email: routed.recipient_email,
@@ -226,11 +264,23 @@ export default function Billing() {
       );
       setForm((prev) => ({
         ...prev,
+        ...period,
         participant_id: value,
         recipient_name: routed.recipient_name,
         recipient_email: routed.recipient_email,
       }));
     }
+  }
+
+  async function prefillFromReady(entry: ReadyToInvoiceEntry) {
+    await onParticipantChange(entry.participant_id);
+    setForm((prev) => ({
+      ...prev,
+      generate_from_verified_tasks: true,
+      period_start: entry.period_start,
+      period_end: entry.period_end,
+    }));
+    setShowInvoiceForm(true);
   }
 
   const totalOutstanding = useMemo(
@@ -363,6 +413,7 @@ export default function Billing() {
         period_end: "",
       }));
       setResolvedPrice(null);
+      if (form.generate_from_verified_tasks) void readyToInvoiceQuery.refetch();
       toast({
         title: translate("billing.toast.draftCreated"),
         description: inv.invoice_number,
@@ -549,6 +600,52 @@ export default function Billing() {
           />
         </KpiGrid>
 
+        {/* ── Awaiting verification — completed shifts, one step before they
+              can be invoiced. Lives here (not a separate page) so verifying a
+              shift and seeing it become invoiceable happen in one place. ──── */}
+        {canInvoice && (
+          <Card title="Awaiting verification">
+            <div className="max-h-[420px] overflow-y-auto pr-1">
+              <ShiftVerificationPanel onVerified={() => void readyToInvoiceQuery.refetch()} />
+            </div>
+          </Card>
+        )}
+
+        {/* ── Ready to invoice — verified shifts with no invoice yet ──────────── */}
+        {canInvoice &&
+          !readyToInvoiceQuery.isLoading &&
+          (readyToInvoiceQuery.data ?? []).length > 0 && (
+            <Card title={`Ready to invoice (${readyToInvoiceQuery.data!.length})`}>
+              <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+                {readyToInvoiceQuery.data!.map((entry) => (
+                  <div
+                    key={`${entry.participant_id}-${entry.period_start}`}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cc-border px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-cc-text">
+                        {entry.participant_name}
+                      </p>
+                      <p className="text-xs text-cc-muted">
+                        {entry.completions_count} verified{" "}
+                        {entry.completions_count === 1 ? "shift" : "shifts"} ·{" "}
+                        {entry.period_start} to {entry.period_end} ·{" "}
+                        {cents(entry.total_cents)}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="shrink-0 rounded-xl"
+                      onClick={() => void prefillFromReady(entry)}
+                    >
+                      Create invoice
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
         {/* ── Main grid: form + register ─────────────────────────────────────── */}
         <div
           className={
@@ -598,13 +695,19 @@ export default function Billing() {
                       <input
                         type="checkbox"
                         checked={form.generate_from_verified_tasks}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          const autoPeriod =
+                            checked && form.participant_id && !form.period_start
+                              ? defaultPeriodFor(form.participant_id)
+                              : {};
                           setForm({
                             ...form,
-                            generate_from_verified_tasks: e.target.checked,
-                            item_code: e.target.checked ? "" : form.item_code,
-                          })
-                        }
+                            ...autoPeriod,
+                            generate_from_verified_tasks: checked,
+                            item_code: checked ? "" : form.item_code,
+                          });
+                        }}
                         className="mt-0.5"
                       />
                       <div className="space-y-1">

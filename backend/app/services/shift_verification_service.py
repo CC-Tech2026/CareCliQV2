@@ -12,6 +12,7 @@ import logging
 from datetime import date, datetime, timezone
 from typing import Any, Optional
 
+from ..core.ndis_categories import support_category_number_label
 from ..core.timezone import app_today, parse_shift_datetime, participant_timezone
 from . import ndis_pricing_service
 from .funding_service import get_plan_for_participant, record_verified_shift_budget_usage
@@ -137,26 +138,68 @@ def _upsert_task_completions_for_verified_shift(
     )
     shift_task_rows = _safe_rows(shift_task_result.data)
     task_ids = [str(row.get("task_id")) for row in shift_task_rows if row.get("task_id")]
-    if not task_ids:
-        logger.warning(
-            "shift_verification: no shift_tasks for shift %s — task_completions skipped",
-            shift.get("id"),
+
+    verified_task_ids: list[str] = []
+    if task_ids:
+        tasks_result = (
+            supabase.table("participant_tasks")
+            .select("id, participant_id")
+            .in_("id", task_ids)
+            .eq("organization_id", organization_id)
+            .eq("participant_id", participant_id)
+            .execute()
         )
-        return []
+        task_rows = _safe_rows(tasks_result.data)
+        verified_task_ids = [str(row["id"]) for row in task_rows if row.get("id")]
 
-    tasks_result = (
-        supabase.table("participant_tasks")
-        .select("id, participant_id")
-        .in_("id", task_ids)
-        .eq("organization_id", organization_id)
-        .eq("participant_id", participant_id)
-        .execute()
-    )
-    task_rows = _safe_rows(tasks_result.data)
-    if not task_rows:
-        return []
+    payload_template = {
+        "shift_id": str(shift.get("id")),
+        "participant_id": participant_id,
+        "organization_id": organization_id,
+        "completed_by": coordinator_id,
+        "completion_date": completion_date,
+        "evidence_type": "notes",
+        "evidence_verified": True,
+        "verified_by": coordinator_id,
+        "verified_at": verified_at,
+        "status": "verified",
+        "price_item_code": price_item_code,
+        "updated_at": verified_at,
+    }
 
-    verified_task_ids = [str(row["id"]) for row in task_rows if row.get("id")]
+    if not verified_task_ids:
+        # No tasks were linked to this shift — tasks are optional at creation,
+        # so this is the common case, not an error. Bill the shift itself as
+        # one completion (task_id null, migration 216) rather than silently
+        # producing nothing for the invoicing pipeline to find later.
+        existing_result = (
+            supabase.table("task_completions")
+            .select("id")
+            .eq("shift_id", str(shift.get("id")))
+            .is_("task_id", "null")
+            .execute()
+        )
+        existing_rows = _safe_rows(existing_result.data)
+        row_payload = {
+            **payload_template,
+            "duration_minutes": int(round(actual_minutes)),
+            "billed_amount": round(billed_amount, 2),
+        }
+        if existing_rows:
+            resp = (
+                supabase.table("task_completions")
+                .update(row_payload)
+                .eq("id", str(existing_rows[0]["id"]))
+                .execute()
+            )
+        else:
+            resp = (
+                supabase.table("task_completions")
+                .insert({**row_payload, "task_id": None, "created_at": verified_at})
+                .execute()
+            )
+        return _safe_rows(resp.data)
+
     existing_result = (
         supabase.table("task_completions")
         .select("id, task_id")
@@ -168,33 +211,21 @@ def _upsert_task_completions_for_verified_shift(
     existing_by_task_id = {str(row.get("task_id")): row for row in existing_rows if row.get("task_id")}
 
     task_count = len(verified_task_ids)
-    apportioned_minutes = max(1, int(round(actual_minutes / task_count))) if task_count else int(round(actual_minutes))
-    apportioned_amount = round(billed_amount / task_count, 2) if task_count else round(billed_amount, 2)
-
-    payload_template = {
-        "shift_id": str(shift.get("id")),
-        "participant_id": participant_id,
-        "organization_id": organization_id,
-        "completed_by": coordinator_id,
-        "completion_date": completion_date,
-        "duration_minutes": apportioned_minutes,
-        "evidence_type": "notes",
-        "evidence_verified": True,
-        "verified_by": coordinator_id,
-        "verified_at": verified_at,
-        "status": "verified",
-        "price_item_code": price_item_code,
-        "billed_amount": apportioned_amount,
-        "updated_at": verified_at,
-    }
+    apportioned_minutes = max(1, int(round(actual_minutes / task_count)))
+    apportioned_amount = round(billed_amount / task_count, 2)
 
     upserted: list[dict[str, Any]] = []
     for task_id in verified_task_ids:
+        row_payload = {
+            **payload_template,
+            "duration_minutes": apportioned_minutes,
+            "billed_amount": apportioned_amount,
+        }
         existing = existing_by_task_id.get(task_id)
         if existing and existing.get("id"):
             resp = (
                 supabase.table("task_completions")
-                .update(payload_template)
+                .update(row_payload)
                 .eq("id", str(existing["id"]))
                 .execute()
             )
@@ -204,7 +235,7 @@ def _upsert_task_completions_for_verified_shift(
             continue
 
         insert_payload = {
-            **payload_template,
+            **row_payload,
             "task_id": task_id,
             "created_at": verified_at,
         }
@@ -448,7 +479,7 @@ async def list_price_item_options_for_participant(participant_id: str, org_id: s
     items_result = (
         supabase.table("ndis_price_items")
         .select(
-            "item_code, name, description, unit, support_purpose, day_type, "
+            "item_code, name, description, unit, support_purpose, category_number, day_type, "
             "time_type, support_intensity, price_national, price_remote, price_very_remote"
         )
         .eq("organization_id", org_id)
@@ -462,6 +493,7 @@ async def list_price_item_options_for_participant(participant_id: str, org_id: s
         category = resolve_price_item_budget_category(item)
         if allowed_categories is not None and category not in allowed_categories:
             continue
+        category_number = item.get("category_number")
         out.append(
             {
                 "item_code": item.get("item_code"),
@@ -470,6 +502,12 @@ async def list_price_item_options_for_participant(participant_id: str, org_id: s
                 "unit": item.get("unit"),
                 "support_purpose": item.get("support_purpose"),
                 "support_category": category,
+                # The real NDIS Support Category (e.g. "01" / "Assistance with
+                # Daily Life") — finer-grained than support_category's 3-bucket
+                # split above, for grouping the picker so 357 items across 13
+                # categories aren't one flat list.
+                "category_number": category_number,
+                "category_label": support_category_number_label(category_number),
                 "day_type": item.get("day_type"),
                 "time_type": item.get("time_type"),
                 "support_intensity": item.get("support_intensity"),

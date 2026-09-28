@@ -237,7 +237,7 @@ def get_request(
     supabase = get_supabase_admin()
     select = (
         "*, worker_time_off_request_details(*), "
-        "worker_preferred_shift_request_details(*, patients(full_name)), "
+        "worker_preferred_shift_request_details(*, participants(full_name)), "
         "worker_shift_swap_request_details(shift_id, shifts(scheduled_start, scheduled_end, participant_name))"
     )
     resp = (

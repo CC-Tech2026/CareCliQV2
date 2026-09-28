@@ -730,7 +730,7 @@ async def update_restricted_clinical(
     if not update_data:
         raise HTTPException(status_code=422, detail="No fields to update.")
     try:
-        result = supabase.table("patients").update(update_data).eq("id", participant_id).execute()
+        result = supabase.table("participants").update(update_data).eq("id", participant_id).execute()
         return result.data[0] if result.data else update_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Update failed: {e}")
@@ -830,7 +830,7 @@ async def get_shift_context(
     try:
         supabase = get_supabase_admin()
         patient_resp = (
-            supabase.table("patients")
+            supabase.table("participants")
             .select("background_summary, background_summary_updated_at")
             .eq("id", participant_id)
             .limit(1)
@@ -936,7 +936,7 @@ async def update_shift_context(
 
     if patient_fields:
         try:
-            supabase.table("patients").update(patient_fields).eq("id", participant_id).execute()
+            supabase.table("participants").update(patient_fields).eq("id", participant_id).execute()
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Update failed: {e}") from e
 
@@ -963,7 +963,7 @@ async def update_shift_context(
     ctx = _fetch_participant_context(participant_id, org_id)
     try:
         patient_resp = (
-            supabase.table("patients")
+            supabase.table("participants")
             .select("background_summary, background_summary_updated_at")
             .eq("id", participant_id)
             .limit(1)
