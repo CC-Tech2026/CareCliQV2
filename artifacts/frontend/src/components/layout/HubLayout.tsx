@@ -218,10 +218,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect();
   }, [prefs?.theme_mode, resolvedTheme]);
   const [notifOpen, setNotifOpen] = useState(false);
-  const toggleTheme = () => {
-    const next = document.documentElement.classList.contains("dark") ? "light" : "dark";
-    setThemeMode(next);
-    setIsDark(next === "dark");
+  const setTheme = (mode: "light" | "dark") => {
+    setThemeMode(mode);
+    setIsDark(mode === "dark");
   };
 
   const displayName = user?.full_name || user?.email || translate("hub.role.staffFallback");
@@ -426,14 +425,36 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               </Link>
             )}
 
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)] transition-colors"
-              aria-label="Toggle Mode"
+            {/* Day / Night pill — both options always visible, active one highlighted. */}
+            <div
+              className="hidden sm:inline-flex items-center gap-0.5 rounded-full border p-0.5"
+              style={{ borderColor: "var(--cc-border)", background: "var(--cc-surface)" }}
+              role="group"
+              aria-label="Theme"
             >
-              {isDark ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
+              {([
+                { mode: "light", Icon: Sun, label: "Day theme" },
+                { mode: "dark", Icon: Moon, label: "Night theme" },
+              ] as const).map(({ mode, Icon, label }) => {
+                const selected = (mode === "dark") === isDark;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setTheme(mode)}
+                    aria-pressed={selected}
+                    aria-label={label}
+                    title={label}
+                    className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+                      selected ? "text-white" : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
+                    }`}
+                    style={selected ? { background: "var(--cc-plum)" } : undefined}
+                  >
+                    <Icon size={15} aria-hidden />
+                  </button>
+                );
+              })}
+            </div>
 
             <Link
               href="/settings"
