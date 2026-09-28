@@ -139,9 +139,13 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
   const persist = useCallback(
     async (patch: Partial<AccessibilityPreferences> & { nav_color_clear?: boolean }) => {
       const res = await saveAccessibilityPreferences(deviceId, patch);
-      setPrefs(res.preferences);
-      applyDocumentClasses(res.preferences, language);
-      return res.preferences;
+      // Theme is local-first: the user's latest click wins over whatever the
+      // server echoes back, so a stale/failed save can't flip the theme back.
+      const localTheme = getStoredThemeMode();
+      const merged = { ...res.preferences, theme_mode: localTheme };
+      setPrefs(merged);
+      applyDocumentClasses(merged, language);
+      return merged;
     },
     [deviceId, language],
   );

@@ -203,16 +203,26 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   const profileRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
 
-  // Source of truth is the saved preference (what setThemeMode writes), with
-  // next-themes / the <html> class as fallbacks. Relying on resolvedTheme alone
-  // left isDark stuck at false, so the toggle always re-applied "dark".
-  const isDark = prefs?.theme_mode
-    ? prefs.theme_mode === "dark"
-    : resolvedTheme
-      ? resolvedTheme === "dark"
-      : typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+  // Single-button day/dark toggle. The <html> "dark" class is what actually
+  // paints the page, so it is the source of truth: read it on click and keep
+  // the icon in sync by watching it (covers changes made from Settings too).
+  const [isDark, setIsDark] = useState(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setIsDark(root.classList.contains("dark"));
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [prefs?.theme_mode, resolvedTheme]);
   const [notifOpen, setNotifOpen] = useState(false);
-  const toggleTheme = () => setThemeMode(isDark ? "light" : "dark");
+  const toggleTheme = () => {
+    const next = document.documentElement.classList.contains("dark") ? "light" : "dark";
+    setThemeMode(next);
+    setIsDark(next === "dark");
+  };
 
   const displayName = user?.full_name || user?.email || translate("hub.role.staffFallback");
   const initials = getInitials(displayName);
