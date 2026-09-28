@@ -28,6 +28,8 @@ USER_A = {
     "role": "support_coordinator",
     "account_type": "small_provider",
 }
+# Revenue reports are managing director only; same org as USER_A.
+MD_A = {**USER_A, "role": "managing_director"}
 USER_B = {
     "id": str(uuid.uuid4()),
     "organization_id": ORG_B,
@@ -144,7 +146,7 @@ class TestRevenueReportIsolation:
             try:
                 import asyncio
                 result = asyncio.run(
-                    billing_service.get_revenue_report(USER_A)
+                    billing_service.get_revenue_report(MD_A)
                 )
                 total = result.get("total_billed_cents", 0)
                 assert total == INVOICE_ORG_A["total_cents"], (
@@ -169,7 +171,7 @@ class TestRevenueReportIsolation:
             try:
                 import asyncio
                 asyncio.run(
-                    billing_service.get_revenue_report(USER_A)
+                    billing_service.get_revenue_report(MD_A)
                 )
             except Exception:
                 pass

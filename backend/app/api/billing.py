@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from ..core.security import get_current_user
 from ..api.security import require_recent_reauth
-from ..services import billing_service
+from ..services import billing_service, audit_service
 
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -112,6 +112,20 @@ async def create_invoice(
 @router.get("/invoices/{invoice_id}")
 async def get_invoice(invoice_id: str, current_user: dict = Depends(get_current_user)):
     return await billing_service.get_invoice(invoice_id, current_user)
+
+
+@router.get("/invoices/{invoice_id}/activity")
+async def get_invoice_activity(invoice_id: str, current_user: dict = Depends(get_current_user)):
+    # Resolve through billing's role and organisation checks before reading activity.
+    invoice = await billing_service.get_invoice(invoice_id, current_user)
+    entries = await audit_service.get_entity_audit_trail(
+        "invoice", invoice_id, organization_id=invoice["organization_id"],
+    )
+    # The UI only needs the event and actor, not full before/after snapshots.
+    return [
+        {key: entry.get(key) for key in ("id", "action_type", "actor_name", "created_at")}
+        for entry in entries
+    ]
 
 
 @router.patch("/invoices/{invoice_id}")

@@ -8,12 +8,14 @@ of these mirror.
 Scoping note: compliance score, RP-flag counts, and goal achievement are
 team-scoped for a coordinator (matching coordinator_dashboard()'s deliberate
 team filter) because that's what the existing dashboards already show them.
-Incidents, shifts, and revenue are organisation-wide for BOTH roles, because
-that's what their existing endpoints (incidents.py, coordinator_shifts(),
-billing_service.get_revenue_report()) already do — there is no team-scoped
-version of those in the app today, so this doesn't invent one. Retention
-rate is managing_director only for the same reason: no coordinator-scoped
-version exists anywhere in the codebase.
+Incidents and shifts are organisation-wide for BOTH roles, because that's
+what their existing endpoints (incidents.py, coordinator_shifts()) already
+do — there is no team-scoped version of those in the app today, so this
+doesn't invent one. Retention rate is managing_director only for the same
+reason: no coordinator-scoped version exists anywhere in the codebase.
+Revenue is managing_director only and the tool isn't offered to anyone
+else: organisation finances aren't part of a support coordinator's role
+(billing_service.get_revenue_report()).
 """
 
 import logging
@@ -813,8 +815,8 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         THAT for any "this month" / "current" revenue question, do not sum
         or pick from monthly_breakdown yourself. Also returns all-time
         totals and a full monthly_breakdown for historical questions.
-        Organisation-wide for both coordinators and managing directors. All
-        monetary figures are in AUD dollars (already converted from cents)."""
+        Organisation-wide; managing director only. All monetary figures
+        are in AUD dollars (already converted from cents)."""
         try:
             revenue = await billing_service.get_revenue_report(current_user)
         except Exception:
@@ -916,6 +918,10 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         get_all_progress_notes_zip,
         get_session_activity,
     ]
+    if not is_managing_director(current_user):
+        # Not merely an error at call time: a coordinator's assistant
+        # shouldn't know organisation revenue is something it can look up.
+        all_tools.remove(get_revenue_summary)
 
     for t in all_tools:
         original_coroutine = t.coroutine

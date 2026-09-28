@@ -42,6 +42,9 @@ from ..core.timezone import app_today, participant_timezone, shift_local_date
 SUBSCRIPTION_STATUSES = {"trialing", "active", "past_due", "cancelled", "manual_review"}
 SUBSCRIPTION_PLANS = {"starter", "team", "pro", "enterprise"}
 INVOICE_STATUSES = {"draft", "finalized", "issued", "sent", "paid", "void", "overdue", "cancelled"}
+# Coordinators handle invoices (checking and verifying they're accurate);
+# organisation revenue and statistics are managing director only - see
+# get_revenue_report().
 BILLING_ROLES = {"support_coordinator", "managing_director"}
 
 
@@ -1072,8 +1075,10 @@ async def generate_invoice_pdf(invoice_id: str, user: dict) -> dict:
 
 
 async def get_revenue_report(user: dict) -> dict:
-    """Monthly revenue summary for the Support Coordinator."""
-    _require_billing_role(user)
+    """Organisation revenue summary - managing director only. Coordinators
+    work with invoices but not the organisation's revenue figures."""
+    if not is_managing_director(user):
+        raise HTTPException(status_code=403, detail="Revenue reports are available to the managing director only.")
     org_id = _require_org(user)
     supabase = get_supabase_admin()
 
