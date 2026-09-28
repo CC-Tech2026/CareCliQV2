@@ -2327,6 +2327,7 @@ export const en: Dict = {
   "settings.noActiveSessions": "No active sessions found.",
   "settings.renameSession": "Rename session",
   "settings.nav.account": "Account",
+  "settings.nav.security": "Security",
   "settings.nav.provider": "Provider",
   "settings.nav.defaults": "Session Defaults",
   "settings.nav.compliance": "Compliance",

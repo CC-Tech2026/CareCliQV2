@@ -105,7 +105,7 @@ const TRUST_AVATARS = [
 ];
 
 export default function Login() {
-  const { login, completeMfaLogin } = useAuth();
+  const { login, completeMfaLogin, completeMfaLoginNative } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { translate: t } = useAccessibility();
@@ -121,6 +121,11 @@ export default function Login() {
   const [mfaChallengeToken, setMfaChallengeToken] = useState<string | null>(null);
   const [mfaCode, setMfaCode]                 = useState("");
   const [trustDevice, setTrustDevice]         = useState(true);
+  // NEW Supabase-native MFA: when set, the code-entry step below submits to
+  // completeMfaLoginNative (factor_id + code) instead of the OLD flow's
+  // completeMfaLogin.
+  const [mfaNative, setMfaNative]             = useState(false);
+  const [mfaFactorId, setMfaFactorId]         = useState<string | null>(null);
 
   const mfaStep        = useMemo(() => Boolean(mfaChallengeToken), [mfaChallengeToken]);
   const identifierOk   = !validateLoginIdentifier(identifier) && identifier.trim().length > 0;
@@ -149,6 +154,8 @@ export default function Login() {
         setMfaChallengeToken(result.challengeToken);
         setMfaCode("");
         setTrustDevice(true);
+        setMfaNative(Boolean(result.native));
+        setMfaFactorId(result.factorId || null);
         return;
       }
       toast({ title: t("auth.login.toast.welcome"), description: t("auth.login.toast.ready") });
@@ -175,7 +182,9 @@ export default function Login() {
     if (!mfaCode.trim()) { setMfaCodeError(t("auth.login.error.mfaRequired")); return; }
     setBusy(true);
     try {
-      const authUser = await completeMfaLogin(mfaChallengeToken, mfaCode.trim(), trustDevice);
+      const authUser = mfaNative && mfaFactorId
+        ? await completeMfaLoginNative(mfaChallengeToken, mfaFactorId, mfaCode.trim(), trustDevice)
+        : await completeMfaLogin(mfaChallengeToken, mfaCode.trim(), trustDevice);
       toast({ title: t("auth.login.toast.welcome"), description: t("auth.login.toast.ready") });
       navigate(resolvePostLoginPath(authUser.id, authUser.role === "super_admin" ? "/admin/dashboard" : "/hub"));
     } catch (err) {

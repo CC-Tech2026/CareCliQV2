@@ -7,7 +7,7 @@ type NavigationItem<T extends string> = {
   icon: ComponentType<{ className?: string; style?: CSSProperties }>;
 };
 const GROUPS = [
-  { title: "Personal", ids: ["account", "privacy", "accessibility"] },
+  { title: "Personal", ids: ["account", "security", "privacy", "accessibility"] },
   { title: "Organisation", ids: ["provider", "branding", "billing", "team", "delegatedAccess"] },
   { title: "Preferences", ids: ["defaults", "compliance", "notifications"] },
   { title: "Help & feedback", ids: ["bugReport", "improvementFeedback"] },

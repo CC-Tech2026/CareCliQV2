@@ -67,7 +67,7 @@ export interface AuthUser {
 
 export type LoginResult =
   | { status: "authenticated"; user: AuthUser }
-  | { status: "mfa_required"; challengeToken: string; method: string };
+  | { status: "mfa_required"; challengeToken: string; method: string; native?: boolean; factorId?: string };
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -76,6 +76,10 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (identifier: string, password: string, rememberDevice?: boolean) => Promise<LoginResult>;
   completeMfaLogin: (challengeToken: string, code: string, trustDevice?: boolean) => Promise<AuthUser>;
+  /** NEW Supabase-native TOTP step-up (see /auth/login/mfa-native). Kept
+   * separate from completeMfaLogin, which drives the OLD pyotp flow's
+   * /auth/login/mfa endpoint. */
+  completeMfaLoginNative: (challengeToken: string, factorId: string, code: string, trustDevice?: boolean) => Promise<AuthUser>;
   logout: () => void;
   updateUser: (updates: Partial<AuthUser>) => void;
   updateToken: (newToken: string) => Promise<void>;
@@ -217,6 +221,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         mfa_required?: boolean;
         mfa_challenge_token?: string;
         mfa_method?: string;
+        mfa_native?: boolean;
+        mfa_factor_id?: string;
         access_token?: string;
         user?: Record<string, unknown>;
         supabase_session?: StoredSupabaseSession;
@@ -236,6 +242,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           status: "mfa_required",
           challengeToken: data.mfa_challenge_token,
           method: data.mfa_method || "totp",
+          native: Boolean(data.mfa_native),
+          factorId: data.mfa_factor_id,
         };
       }
 
@@ -277,6 +285,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           headers: authRequestHeaders(),
           body: JSON.stringify({
             mfa_challenge_token: challengeToken,
+            code,
+            trust_device: trustDevice,
+            device_id: deviceId,
+          }),
+        },
+      );
+      return finalizeLogin(data, rememberDevice);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [finalizeLogin]);
+
+  const completeMfaLoginNative = useCallback(async (
+    challengeToken: string,
+    factorId: string,
+    code: string,
+    trustDevice = false,
+  ): Promise<AuthUser> => {
+    setIsLoading(true);
+    try {
+      const rememberDevice = getRememberDevicePreference();
+      const deviceId = getDeviceId();
+      const data = await customFetch<{
+        access_token: string;
+        user: Record<string, unknown>;
+        supabase_session?: StoredSupabaseSession;
+      }>(
+        "/api/auth/login/mfa-native",
+        {
+          method: "POST",
+          headers: authRequestHeaders(),
+          body: JSON.stringify({
+            mfa_challenge_token: challengeToken,
+            factor_id: factorId,
             code,
             trust_device: trustDevice,
             device_id: deviceId,
@@ -351,6 +393,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: !!token && !!user,
         login,
         completeMfaLogin,
+        completeMfaLoginNative,
         logout,
         updateUser,
         updateToken,

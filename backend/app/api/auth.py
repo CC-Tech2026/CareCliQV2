@@ -877,6 +877,10 @@ async def login(body: LoginRequest, request: Request, background_tasks: Backgrou
 
     device_id = (body.device_id or request.headers.get("x-device-id") or "").strip() or None
     if mfa_settings.get("mfa_enabled") and not dss.is_device_trusted(str(auth_user.id), device_id):
+        # OLD, custom pyotp-based MFA flow (device_security_service). Left
+        # untouched. A user can only ever be enrolled in ONE of the two
+        # flows at a time -- see the NEW-flow check below, which only runs
+        # when this old flag is NOT set, so the two never overlap.
         challenge_payload: dict = {
             "sub": str(auth_user.id),
             "email": str(auth_user.email),
@@ -899,6 +903,46 @@ async def login(body: LoginRequest, request: Request, background_tasks: Backgrou
             "mfa_challenge_token": challenge,
             "mfa_method": mfa_settings.get("mfa_method") or "totp",
         }
+
+    if not mfa_settings.get("mfa_enabled"):
+        # NEW, Supabase-native MFA flow. Only checked for accounts that are
+        # NOT using the old flag above, so the two flows never overlap for
+        # the same user. Supabase itself tracks whether this user has a
+        # verified TOTP factor and reports it via the session's AAL: a
+        # `next_level` of aal2 while `current_level` is still aal1 means
+        # they must complete a TOTP step-up before we issue our own app JWT.
+        try:
+            aal = await asyncio.to_thread(
+                get_supabase().auth.mfa.get_authenticator_assurance_level
+            )
+        except Exception as exc:
+            logger.debug("Native MFA AAL check failed for %s: %s", login_email, exc)
+            aal = None
+        if aal and aal.next_level == "aal2" and aal.current_level != "aal2":
+            factors = await asyncio.to_thread(get_supabase().auth.mfa.list_factors)
+            verified_totp = [f for f in factors.totp if f.status == "verified"]
+            if verified_totp:
+                supabase_for_native = _serialize_supabase_session(result.session)
+                challenge_payload = {
+                    "sub": str(auth_user.id),
+                    "email": str(auth_user.email),
+                    "type": "mfa_challenge_native",
+                    "role": role,
+                    "account_type": account_type,
+                    "organization_id": organization_id,
+                    "remember_device": body.remember_device,
+                    "device_id": device_id,
+                    "supabase_access": supabase_for_native["access_token"] if supabase_for_native else None,
+                    "supabase_refresh": supabase_for_native["refresh_token"] if supabase_for_native else None,
+                }
+                challenge = create_access_token(challenge_payload, expires_delta=timedelta(minutes=5))
+                return {
+                    "mfa_required": True,
+                    "mfa_challenge_token": challenge,
+                    "mfa_method": "totp",
+                    "mfa_factor_id": verified_totp[0].id,
+                    "mfa_native": True,
+                }
 
     return await _finalize_login_response(
         auth_user=auth_user,

@@ -67,6 +67,15 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { useToast } from "@/hooks/use-toast";
 import { submitBugReport } from "@/services/bugReportService";
 import { readFileAsBase64 } from "@/lib/read-file-as-base64";
+import {
+  startNativeTotpEnrollment,
+  verifyNativeTotpEnrollment,
+  getNativeMfaStatus,
+  unenrollNativeTotp,
+  type NativeMfaStatus,
+} from "@/services/nativeMfaService";
+import { storeAndApplySupabaseSession } from "@/lib/supabase";
+import { getRememberDevicePreference } from "@/lib/auth-session";
 import { submitImprovementFeedback } from "@/services/improvementFeedbackService";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -116,10 +125,11 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "branches" | "bugReport" | "improvementFeedback" | "delegatedAccess";
+type SectionId = "account" | "security" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "branches" | "bugReport" | "improvementFeedback" | "delegatedAccess";
 
 const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean; mdOnly?: boolean; requiredCapability?: string }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
+  { id: "security",      labelKey: "settings.nav.security",         icon: LockKeyhole },
   { id: "provider",      labelKey: "settings.nav.provider",          icon: Building2   },
   { id: "defaults",      labelKey: "settings.nav.defaults",          icon: Settings2   },
   { id: "compliance",    labelKey: "settings.nav.compliance",        icon: ShieldCheck },
@@ -568,6 +578,18 @@ function SecuritySection() {
   const [disablePassword, setDisablePassword] = useState("");
   const [disableBusy, setDisableBusy] = useState(false);
 
+  // -- NEW Supabase-native MFA (kept fully separate from the OLD pyotp
+  // state above) --------------------------------------------------------
+  const [nativeMfaStatus, setNativeMfaStatus] = useState<NativeMfaStatus | null>(null);
+  const [nativeEnrolling, setNativeEnrolling] = useState(false);
+  const [nativeFactorId, setNativeFactorId] = useState<string | null>(null);
+  const [nativeQrUri, setNativeQrUri] = useState<string | null>(null);
+  const [nativeSecret, setNativeSecret] = useState<string | null>(null);
+  const [nativeCode, setNativeCode] = useState("");
+  const [nativeBusy, setNativeBusy] = useState(false);
+  const [nativeDisablePassword, setNativeDisablePassword] = useState("");
+  const [nativeDisableBusy, setNativeDisableBusy] = useState(false);
+
   const [logoutOthersPassword, setLogoutOthersPassword] = useState("");
   const [logoutOthersBusy, setLogoutOthersBusy] = useState(false);
 
@@ -586,7 +608,68 @@ function SecuritySection() {
     setTrustedDevices(devices);
     setSessions(activeSessions);
     setLoginHistory(history);
+    try {
+      const nativeStatus = await getNativeMfaStatus();
+      setNativeMfaStatus(nativeStatus);
+    } catch {
+      // Realtime/Supabase session may not be applied yet on first paint —
+      // non-fatal, the panel just shows its "not enabled" state.
+      setNativeMfaStatus({ enabled: false, factor_id: null, current_level: null, next_level: null });
+    }
   }, []);
+
+  async function handleStartNativeEnrollment() {
+    setNativeBusy(true);
+    try {
+      const payload = await startNativeTotpEnrollment();
+      setNativeFactorId(payload.factor_id);
+      setNativeQrUri(payload.uri);
+      setNativeSecret(payload.secret);
+      setNativeEnrolling(true);
+      setNativeCode("");
+    } catch (error) {
+      toast({ title: translate("security.start2faFailed"), description: error instanceof Error ? error.message : translate("toast.tryAgain"), variant: "destructive" });
+    } finally {
+      setNativeBusy(false);
+    }
+  }
+
+  async function handleVerifyNativeEnrollment(event: React.FormEvent) {
+    event.preventDefault();
+    if (!nativeFactorId || !nativeCode.trim()) return;
+    setNativeBusy(true);
+    try {
+      const result = await verifyNativeTotpEnrollment(nativeFactorId, nativeCode.trim());
+      await storeAndApplySupabaseSession(result.supabase_session, getRememberDevicePreference());
+      setNativeMfaStatus({ enabled: true, factor_id: nativeFactorId, current_level: "aal2", next_level: "aal2" });
+      setNativeEnrolling(false);
+      setNativeFactorId(null);
+      setNativeQrUri(null);
+      setNativeSecret(null);
+      setNativeCode("");
+      toast({ title: translate("security.twoFactorEnabled"), description: translate("security.twoFactorEnabledHint") });
+    } catch (error) {
+      toast({ title: translate("security.verifyFailed"), description: error instanceof Error ? error.message : translate("security.verifyFailedHint"), variant: "destructive" });
+    } finally {
+      setNativeBusy(false);
+    }
+  }
+
+  async function handleDisableNativeMfa(event: React.FormEvent) {
+    event.preventDefault();
+    if (!nativeDisablePassword || !nativeMfaStatus?.factor_id) return;
+    setNativeDisableBusy(true);
+    try {
+      await unenrollNativeTotp(nativeMfaStatus.factor_id, nativeDisablePassword);
+      setNativeMfaStatus({ enabled: false, factor_id: null, current_level: null, next_level: null });
+      setNativeDisablePassword("");
+      toast({ title: translate("security.twoFactorDisabled") });
+    } catch (error) {
+      toast({ title: translate("security.verifyFailed"), description: error instanceof Error ? error.message : translate("toast.tryAgain"), variant: "destructive" });
+    } finally {
+      setNativeDisableBusy(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -812,6 +895,68 @@ function SecuritySection() {
               </div>
               <Button type="submit" variant="outline" disabled={disableBusy || !disablePassword} className="rounded-xl border-red-200 text-red-700 hover:bg-red-50">
                 {disableBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.disableTwoFactor")}
+              </Button>
+            </form>
+          </div>
+        )}
+      </PanelCard>
+
+      {/* NEW: Supabase-native two-factor authentication. Kept as its own,
+          clearly-labeled panel rather than merged into the OLD one above,
+          per the migration plan — both can coexist in the codebase while
+          only one is ever active per user (enforced server-side). */}
+      <PanelCard label={`${translate("security.twoFactor")} (Supabase, new)`}>
+        {!nativeMfaStatus?.enabled ? (
+          nativeEnrolling && nativeFactorId ? (
+            <form onSubmit={handleVerifyNativeEnrollment} className="space-y-4">
+              <div className="rounded-xl bg-[var(--cc-soft)] p-4">
+                <p className="text-sm font-semibold" style={{ color: "var(--cc-text)" }}>{translate("security.setupAuthenticator")}</p>
+                <p className="mt-1 text-sm" style={{ color: "var(--cc-muted)" }}>{translate("security.setupAuthenticatorHint")}</p>
+                {nativeQrUri && (
+                  <div className="mt-3 flex justify-center rounded-xl bg-white p-5 ring-1 ring-[var(--cc-border)]">
+                    <QRCode value={nativeQrUri} size={180} bgColor="#FFFFFF" fgColor="#1A1A2E" />
+                  </div>
+                )}
+                {nativeSecret && (
+                  <code className="mt-3 block break-all rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[var(--cc-plum)]">{nativeSecret}</code>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sec-native-totp-code">{translate("security.totpCode")}</Label>
+                <Input id="sec-native-totp-code" value={nativeCode} onChange={(e) => setNativeCode(e.target.value)}
+                  inputMode="numeric" autoComplete="one-time-code" className="rounded-xl max-w-[200px] tracking-widest" placeholder={translate("security.totpPlaceholder")} />
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" className="rounded-xl" onClick={() => { setNativeEnrolling(false); setNativeFactorId(null); setNativeQrUri(null); setNativeSecret(null); setNativeCode(""); }}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={nativeBusy || !nativeCode.trim()} className="rounded-xl" style={{ background: "var(--cc-cta)" }}>
+                  {nativeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.verifyEnable")}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm" style={{ color: "var(--cc-muted)" }}>Add an extra layer of protection with an authenticator app, verified directly by Supabase.</p>
+              <Button type="button" onClick={() => void handleStartNativeEnrollment()} disabled={nativeBusy} className="rounded-xl gap-2" style={{ background: "var(--cc-cta)" }}>
+                {nativeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
+                {translate("security.enableAuthenticator")}
+              </Button>
+            </div>
+          )
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "#166534" }}>
+              <Check className="h-4 w-4" /> {translate("security.twoFactorActive")}
+            </div>
+            <form onSubmit={handleDisableNativeMfa} className="max-w-md space-y-3 border-t pt-4" style={{ borderColor: "var(--cc-border)" }}>
+              <p className="text-sm" style={{ color: "var(--cc-muted)" }}>{translate("security.disableTwoFactorHint")}</p>
+              <div className="space-y-1.5">
+                <Label htmlFor="sec-native-disable-mfa">{translate("profile.currentPassword")}</Label>
+                <PasswordInput id="sec-native-disable-mfa" value={nativeDisablePassword} onChange={(e) => setNativeDisablePassword(e.target.value)} className="rounded-xl max-w-sm" />
+              </div>
+              <Button type="submit" variant="outline" disabled={nativeDisableBusy || !nativeDisablePassword} className="rounded-xl border-red-200 text-red-700 hover:bg-red-50">
+                {nativeDisableBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.disableTwoFactor")}
               </Button>
             </form>
           </div>
@@ -2156,6 +2301,11 @@ export default function Settings() {
               )}
             </PanelCard>
           </Section>
+        )}
+
+        {/* -- Security section (2FA, sessions, trusted devices) -------------- */}
+        {activeSection === "security" && (
+          <SecuritySection />
         )}
 
         {/* -- Report a bug section --------------------------------------------- */}
