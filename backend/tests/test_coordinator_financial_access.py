@@ -48,3 +48,20 @@ def _tool_names(user):
 def test_assistant_offers_revenue_only_to_managing_director():
     assert "get_revenue_summary" not in _tool_names(COORDINATOR)
     assert "get_revenue_summary" in _tool_names(MD)
+
+
+def test_managing_director_can_check_participant_goals_and_tasks():
+    from backend.app.api import coordinator
+    db = MagicMock()
+    chain = db.table.return_value.select.return_value
+    chain.eq.return_value = chain
+    chain.execute.return_value = MagicMock(data=[{"id": "g1"}], count=3)
+    with patch.object(coordinator, "get_supabase_admin", return_value=db):
+        result = asyncio.run(coordinator.check_goals_and_tasks("p-1", MD))
+    assert result["has_valid"] is True
+
+
+def test_support_worker_cannot_check_participant_goals_and_tasks():
+    from backend.app.api import coordinator
+    with pytest.raises(HTTPException):
+        asyncio.run(coordinator.check_goals_and_tasks("p-1", {**MD, "role": "support_worker"}))

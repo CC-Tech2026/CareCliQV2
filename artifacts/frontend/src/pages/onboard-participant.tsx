@@ -4,7 +4,7 @@ import {
   ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users, Square, Upload,
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
-  SlidersHorizontal, X, AlertTriangle,
+  SlidersHorizontal, X, AlertTriangle, UserRound,
 } from "lucide-react";
 import { writeWaitlistSnapshot } from "@/lib/onboardingWaitlist";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -903,6 +903,7 @@ function ParticipantProfilePage({
   onUpdate: (patch: Partial<Intake>) => void;
 }) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [intakeFormEditing, setIntakeFormEditing] = useState(false);
   const [intakeFormDraft, setIntakeFormDraft] = useState<Partial<WebIntakeForm>>(intake.web_intake ?? {});
   const [serviceCategoryDraft, setServiceCategoryDraft] = useState<ServiceCategory>(intake.service_category ?? "disability");
@@ -978,6 +979,20 @@ function ParticipantProfilePage({
               {intake.phone && <p className="text-xs" style={{ color: MUTED }}>{intake.phone}</p>}
               {intake.activated_at && <p className="text-xs" style={{ color: MUTED }}>Active since {formatDate(intake.activated_at)}</p>}
             </div>
+            {/* This board holds what was captured at intake. Everything since
+                (care and medical details, medications, goals, budgets, the
+                service agreement's supports, shifts, compliance, notes) lives
+                on the participant's full profile. */}
+            {intake.participant_id && (
+              <Button
+                type="button"
+                className="mt-4 w-full gap-1.5 rounded-lg text-white"
+                style={{ background: PLUM }}
+                onClick={() => navigate(`/patients?id=${encodeURIComponent(intake.participant_id!)}&tab=overview`)}
+              >
+                <UserRound size={14} /> Open full profile
+              </Button>
+            )}
 
             {intake.status === "inactive" && intake.suspended_reason && (
               <div className="mt-4 rounded-lg p-3" style={{ background: WARNING_BG }}>
@@ -2689,12 +2704,17 @@ function Field({
 }) {
   if (!editing) {
     if (!value) return null;
+    // Date inputs store ISO ("1979-09-02"); read-only view shows "2 Sep 1979".
+    const display =
+      type === "date" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+        ? (formatDate(`${value}T00:00:00`) ?? value)
+        : value;
     return (
       <div className="min-w-0">
         <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
         <p className="text-sm font-bold flex items-center gap-1.5 mt-0.5" style={{ color: TEXT }}>
           {Icon && <Icon size={13} style={{ color: MUTED }} className="shrink-0" />}
-          {value}
+          {display}
         </p>
       </div>
     );
@@ -2819,7 +2839,7 @@ function IntakeFormBlock({
 
       {!editing && !hasAnyData ? null : (
         <>
-          <IntakeFormSection icon={User} title="Patient details" {...sectionEditProps}>
+          <IntakeFormSection icon={User} title="Participant details" {...sectionEditProps}>
             <div className="grid sm:grid-cols-2 gap-3">
               {editing ? (
                 <div className="space-y-1">

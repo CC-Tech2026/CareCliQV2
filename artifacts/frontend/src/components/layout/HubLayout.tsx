@@ -101,10 +101,15 @@ const MD_NAV_GROUPS = [
         label: "Delivery Quality",
         icon: ClipboardCheck,
       },
+      // Full participant profiles (care, medical, medications, goals,
+      // budgets, service agreement, shifts, compliance, notes). This used to
+      // open the onboarding board's active list, which only shows what was
+      // captured at intake, so the MD never reached the full record.
+      { href: "/patients", label: "Participants", icon: HeartHandshake },
       {
-        href: "/onboard-participant/active",
-        label: "Participants",
-        icon: HeartHandshake,
+        href: "/onboard-participant",
+        label: "Participant onboarding",
+        icon: UserPlus,
       },
     ],
   },

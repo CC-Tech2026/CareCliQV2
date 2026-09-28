@@ -5538,8 +5538,10 @@ async def check_goals_and_tasks(
     Check if participant has active goals with associated tasks.
     Used by shift creation form to validate prerequisites.
     Returns: { has_valid: bool, active_goals: int, tasks_count: int, message?: str }
+    Read-only goals/tasks check, so the managing director gets it too (the
+    participant profile calls it for both roles).
     """
-    org_id = _require_coordinator(current_user)
+    org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         # Get active goals for participant
