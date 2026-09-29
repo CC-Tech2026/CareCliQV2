@@ -513,12 +513,13 @@ export default function CoordinatorRosteringPage() {
       {/* Flat inline stat strip, not a repeated card grid */}
       <StatCardGroup fill>
         <StatCard label={translate("coordinator.rostering.today")} value={shiftsToday.length} icon={<CalendarDays size={16} />} />
-        <StatCard label={translate("coordinator.rostering.activeNow")} value={activeShifts.length} tone="info" icon={<Activity size={16} />} />
+        <StatCard label={translate("coordinator.rostering.activeNow")} value={activeShifts.length} tone="info" icon={<Activity size={16} />} onClick={() => setPageTab("live")} />
         <StatCard label={translate("coordinator.rostering.upcoming")} value={scheduledCount} tone="brand" icon={<Clock3 size={16} />} />
         <StatCard
           label={workersQuery.isLoading ? translate("coordinator.rostering.loadingTeam") : translate("coordinator.rostering.teamMembers")}
           value={workers.length}
           icon={<Users2 size={16} />}
+          href="/team"
         />
         {/* Only appears when something needs attention - an unassigned shift
             whose start time has already passed, possibly outside the week/
@@ -532,11 +533,7 @@ export default function CoordinatorRosteringPage() {
             value={overdueUnassignedShifts.length}
             tone="danger"
             icon={<AlertTriangle size={16} />}
-            role="button"
-            tabIndex={0}
             onClick={() => handleJumpToOverdueShift(overdueUnassignedShifts[0])}
-            onKeyDown={(e) => { if (e.key === "Enter") handleJumpToOverdueShift(overdueUnassignedShifts[0]); }}
-            className="cursor-pointer"
           />
         )}
       </StatCardGroup>

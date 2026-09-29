@@ -129,18 +129,26 @@ function KpiCard({
   icon: Icon,
   accent,
   warn,
+  onClick,
+  active,
 }: {
   label: string;
   value: number | string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
   accent?: string;
   warn?: boolean;
+  onClick?: () => void;
+  active?: boolean;
 }) {
   const color = warn ? "#B3261E" : (accent ?? PLUM);
   return (
-    <div
-      className="rounded-xl border bg-white p-4 shadow-sm"
-      style={{ borderColor: BORDER }}
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={`${label}: ${value}`}
+      className="rounded-xl border bg-white p-4 shadow-sm text-left transition hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-plum)]"
+      style={{ borderColor: active ? PLUM : BORDER }}
     >
       <div className="flex items-center justify-between mb-3">
         <span
@@ -162,9 +170,24 @@ function KpiCard({
       >
         {value}
       </p>
-    </div>
+    </button>
   );
 }
+
+/** Opens a collapsed section of the setup page and scrolls to it. */
+function openSection(id: string) {
+  const el = document.getElementById(id);
+  if (el instanceof HTMLDetailsElement) el.open = true;
+  el?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+type StarterFilter = "all" | "active" | "completed" | "overdue";
+const STARTER_FILTER_LABELS: Record<StarterFilter, string> = {
+  all: "All",
+  active: "In progress",
+  completed: "Completed",
+  overdue: "Overdue",
+};
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; bg: string; color: string }> = {
@@ -185,6 +208,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function OverviewTab() {
   const [data, setData] = useState<KpiData | null>(null);
+  const [starterFilter, setStarterFilter] = useState<StarterFilter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -269,44 +293,69 @@ function OverviewTab() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
           label="New Starters"
+          onClick={() => setStarterFilter("all")}
+          active={starterFilter === "all"}
           value={data.new_starters}
           icon={Users}
           accent={PLUM}
         />
         <KpiCard
           label="In Progress"
+          onClick={() => setStarterFilter("active")}
+          active={starterFilter === "active"}
           value={data.in_progress}
           icon={Clock}
           accent="#2A5C8A"
         />
         <KpiCard
           label="Completed"
+          onClick={() => setStarterFilter("completed")}
+          active={starterFilter === "completed"}
           value={data.completed}
           icon={CheckCircle2}
           accent={GREEN}
         />
         <KpiCard
           label="Overdue"
+          onClick={() => setStarterFilter("overdue")}
+          active={starterFilter === "overdue"}
           value={data.overdue}
           icon={AlertTriangle}
           warn={data.overdue > 0}
         />
         <KpiCard
           label="Awaiting Approval"
+          onClick={() => openSection("onboarding-section-approvals")}
           value={data.awaiting_approval}
           icon={ThumbsUp}
           accent={AMBER}
         />
       </div>
 
-      {data.new_starter_table.length > 0 && (
+      {data.new_starter_table.length > 0 && (() => {
+        const visibleStarters = data.new_starter_table.filter(
+          (row) => starterFilter === "all" || row.status === starterFilter,
+        );
+        return (
         <section
           className="rounded-2xl border bg-white p-5 shadow-sm"
           style={{ borderColor: BORDER }}
         >
-          <h2 className="mb-4 text-[14px] font-black" style={{ color: TEXT }}>
-            New Starter Progress
-          </h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-[14px] font-black" style={{ color: TEXT }}>
+              New Starter Progress
+            </h2>
+            {starterFilter !== "all" && (
+              <button
+                type="button"
+                onClick={() => setStarterFilter("all")}
+                className="rounded-full border px-3 py-1 text-[11px] font-bold transition-colors hover:bg-black/5"
+                style={{ borderColor: BORDER, color: PLUM }}
+              >
+                Showing {STARTER_FILTER_LABELS[starterFilter]} · Show all
+              </button>
+            )}
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
@@ -330,7 +379,14 @@ function OverviewTab() {
                 </tr>
               </thead>
               <tbody>
-                {data.new_starter_table.map((row) => (
+                {visibleStarters.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-6 text-center text-[12px] font-medium" style={{ color: MUTED }}>
+                      No new starters are {STARTER_FILTER_LABELS[starterFilter].toLowerCase()}.
+                    </td>
+                  </tr>
+                )}
+                {visibleStarters.map((row) => (
                   <tr
                     key={row.assignment_id}
                     className="border-b last:border-0"
@@ -395,7 +451,8 @@ function OverviewTab() {
             </table>
           </div>
         </section>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -2497,12 +2554,12 @@ export function MDOnboardingSetupPage() {
           </p>
         </div>
         {[
-          { title: "Onboarding overview", content: <OverviewTab /> },
-          { title: "Programme builder", content: <BuilderTab /> },
-          { title: "Induction checklist", content: <InductionItemsTab /> },
-          { title: "Stage completion approvals", content: <ApprovalsTab /> },
-        ].map(({ title, content }) => (
-          <details key={title} className="rounded-2xl border bg-card p-5">
+          { id: "onboarding-section-overview", title: "Onboarding overview", content: <OverviewTab /> },
+          { id: "onboarding-section-builder", title: "Programme builder", content: <BuilderTab /> },
+          { id: "onboarding-section-induction", title: "Induction checklist", content: <InductionItemsTab /> },
+          { id: "onboarding-section-approvals", title: "Stage completion approvals", content: <ApprovalsTab /> },
+        ].map(({ id, title, content }) => (
+          <details key={title} id={id} className="rounded-2xl border bg-card p-5 scroll-mt-4">
             <summary className="cursor-pointer text-sm font-bold">
               {title}
             </summary>

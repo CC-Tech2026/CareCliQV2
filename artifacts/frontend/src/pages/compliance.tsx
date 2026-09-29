@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { format, subDays } from "date-fns";
 import { useLocation, useSearch, Link } from "wouter";
 import jsPDF from "jspdf";
 import {
@@ -529,6 +530,8 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
   const { data, isLoading } = useQuery({ queryKey: ["compliance-centre", "overview"], queryFn: getComplianceCentreOverview });
 
   const bands = data?.bands ?? { compliant: 0, at_risk: 0, non_compliant: 0 };
+  // The overview counts sessions from the last 30 days; links carry the same window.
+  const overviewWindowStart = format(subDays(new Date(), 30), "yyyy-MM-dd");
   const avg = data?.kpis.overall_score ?? 0;
   const arcColor = scoreColor(avg);
   const circ = 2 * Math.PI * 42;
@@ -538,10 +541,10 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
   return (
     <div className="space-y-5">
       <KpiGrid>
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statOverallScore")} value={Math.round(avg)} sub={translate("compliance.centre.overview.statOverallScoreSub")} tone={scoreTone(avg)} icon={<BarChart3 />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statCompliantSessions")} value={bands.compliant} sub={translate("compliance.centre.overview.statCompliantSub")} tone="success" icon={<CircleCheck />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statAtRiskSessions")} value={bands.at_risk} sub={translate("compliance.centre.overview.statAtRiskSub")} tone="warning" icon={<AlertTriangle />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statOpenIncidents")} value={data?.kpis.open_incidents ?? 0} sub={translate("compliance.centre.overview.statOpenIncidentsSub")} tone="danger" icon={<ShieldAlert />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statOverallScore")} value={Math.round(avg)} sub={translate("compliance.centre.overview.statOverallScoreSub")} tone={scoreTone(avg)} icon={<BarChart3 />} onClick={() => onNavigateTab("staff")} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statCompliantSessions")} value={bands.compliant} sub={translate("compliance.centre.overview.statCompliantSub")} tone="success" icon={<CircleCheck />} href={`/sessions?band=compliant&from=${overviewWindowStart}`} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statAtRiskSessions")} value={bands.at_risk} sub={translate("compliance.centre.overview.statAtRiskSub")} tone="warning" icon={<AlertTriangle />} href={`/sessions?band=at_risk&from=${overviewWindowStart}`} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.overview.statOpenIncidents")} value={data?.kpis.open_incidents ?? 0} sub={translate("compliance.centre.overview.statOpenIncidentsSub")} tone="danger" icon={<ShieldAlert />} onClick={() => onNavigateTab("incidents")} />
       </KpiGrid>
 
       <AcknowledgementContentCard />
@@ -831,10 +834,10 @@ function StaffPanel() {
   return (
     <div className="space-y-5">
       <KpiGrid>
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statTotalWorkers")} value={data?.kpis.total_workers ?? 0} icon={<Users />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statFullyCompliant")} value={data?.kpis.fully_compliant ?? 0} tone="success" icon={<CircleCheck />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statExpiringCredentials")} value={data?.kpis.expiring_credentials ?? 0} tone="warning" icon={<AlertTriangle />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statActionRequired")} value={data?.kpis.action_required ?? 0} tone="danger" icon={<ShieldAlert />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statTotalWorkers")} value={data?.kpis.total_workers ?? 0} icon={<Users />} onClick={() => setFilter("all")} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statFullyCompliant")} value={data?.kpis.fully_compliant ?? 0} tone="success" icon={<CircleCheck />} onClick={() => setFilter("compliant")} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statExpiringCredentials")} value={data?.kpis.expiring_credentials ?? 0} tone="warning" icon={<AlertTriangle />} onClick={() => setFilter("expiring")} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.staff.statActionRequired")} value={data?.kpis.action_required ?? 0} tone="danger" icon={<ShieldAlert />} onClick={() => setFilter("action")} />
       </KpiGrid>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -983,10 +986,10 @@ function ParticipantsPanel() {
   return (
     <div className="space-y-5">
       <KpiGrid>
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statParticipants")} value={data?.kpis.total_participants ?? 0} icon={<HeartHandshake />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statAgreementsSigned")} value={data?.kpis.agreements_signed ?? 0} tone="success" icon={<FileCheck2 />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statAvgNoteQuality")} value={data?.kpis.avg_note_quality ?? 0} tone={scoreTone(data?.kpis.avg_note_quality ?? 0)} icon={<BarChart3 />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statOpenFlags")} value={data?.kpis.open_flags ?? 0} tone="danger" icon={<Flag />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statParticipants")} value={data?.kpis.total_participants ?? 0} icon={<HeartHandshake />} onClick={() => setFilter("all")} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statAgreementsSigned")} value={data?.kpis.agreements_signed ?? 0} tone="success" icon={<FileCheck2 />} onClick={() => setFilter("agreement")} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statAvgNoteQuality")} value={data?.kpis.avg_note_quality ?? 0} tone={scoreTone(data?.kpis.avg_note_quality ?? 0)} icon={<BarChart3 />} onClick={() => setFilter("lowscore")} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.participants.statOpenFlags")} value={data?.kpis.open_flags ?? 0} tone="danger" icon={<Flag />} onClick={() => setFilter("flags")} />
       </KpiGrid>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -1347,9 +1350,9 @@ function IncidentsPanel() {
       </div>
 
       <KpiGrid>
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statOpen")} value={data?.kpis.open_incidents ?? 0} tone="danger" icon={<Flag />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statRpFlags")} value={data?.kpis.rp_flags ?? 0} tone="danger" icon={<ShieldAlert />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statResolvedThisMonth")} value={data?.kpis.resolved_this_month ?? 0} tone="success" icon={<CircleCheck />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statOpen")} value={data?.kpis.open_incidents ?? 0} tone="danger" icon={<Flag />} href="/incidents?tab=open" />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statRpFlags")} value={data?.kpis.rp_flags ?? 0} tone="danger" icon={<ShieldAlert />} href="/incidents?tab=rp" />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.incidents.statResolvedThisMonth")} value={data?.kpis.resolved_this_month ?? 0} tone="success" icon={<CircleCheck />} href="/incidents?tab=resolved" />
       </KpiGrid>
 
       {triggered.length === 0 ? (

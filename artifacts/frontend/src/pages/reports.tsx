@@ -108,9 +108,9 @@ function CardHeader({ title, action }: { title: string; action?: React.ReactNode
     </div>
   );
 }
-function StatCard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: React.ElementType; color: string }) {
-  return (
-    <Card>
+function StatCard({ label, value, icon: Icon, color, href }: { label: string; value: string | number; icon: React.ElementType; color: string; href?: string }) {
+  const card = (
+    <Card className={href ? "h-full transition hover:-translate-y-px hover:shadow-md" : undefined}>
       <div className="p-5 flex items-center gap-4">
         <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
           style={{ background: `${color}14` }}>
@@ -122,6 +122,17 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: s
         </div>
       </div>
     </Card>
+  );
+  if (!href) return card;
+  // Opens the list behind this number.
+  return (
+    <Link
+      href={href}
+      aria-label={`${label}: ${value}`}
+      className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-plum)] focus-visible:ring-offset-2"
+    >
+      {card}
+    </Link>
   );
 }
 function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title: string; sub: string }) {
@@ -295,8 +306,8 @@ function HubSection() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label={translate("reports.hub.sessionsNeedingNotes")}   value={missingNotes.length}      icon={FileText}      color="#D97706"    />
         <StatCard label={translate("reports.hub.auditRisks")}      value={auditRisks.length}         icon={ShieldAlert}   color="#DC2626"   />
-        <StatCard label={translate("reports.hub.openIncidents")}            value={iStats?.open ?? (incidents.filter((i: any) => i.status !== "closed" && i.status !== "resolved").length)} icon={AlertTriangle} color="#D97706" />
-        <StatCard label={translate("reports.hub.complianceScore")}          value={ov?.average_score != null ? `${Math.round(ov.average_score)}%` : "N/A"} icon={ShieldCheck} color="#16A34A" />
+        <StatCard label={translate("reports.hub.openIncidents")}            value={iStats?.open ?? (incidents.filter((i: any) => i.status !== "closed" && i.status !== "resolved").length)} icon={AlertTriangle} color="#D97706" href="/incidents?tab=open" />
+        <StatCard label={translate("reports.hub.complianceScore")}          value={ov?.average_score != null ? `${Math.round(ov.average_score)}%` : "N/A"} icon={ShieldCheck} color="#16A34A" href="/compliance" />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
@@ -495,8 +506,8 @@ export function IncidentReportsSection() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label={translate("reports.incidents.total")}    value={stats?.total ?? incidents.length} icon={ClipboardList} color={T3}      />
-        <StatCard label={translate("reports.hub.openIncidents")}     value={stats?.open  ?? open}              icon={Clock}         color="#D97706"   />
+        <StatCard label={translate("reports.incidents.total")}    value={stats?.total ?? incidents.length} icon={ClipboardList} color={T3}      href="/incidents" />
+        <StatCard label={translate("reports.hub.openIncidents")}     value={stats?.open  ?? open}              icon={Clock}         color="#D97706"   href="/incidents?tab=open" />
         <StatCard label={translate("reports.incidents.ndisReportable")}    value={statsLoading ? "Loading..." : statsError ? "Unavailable" : stats?.ndis_pending ?? "Not recorded"}          icon={AlertTriangle} color="#EA580C"   />
         <StatCard label={translate("reports.incidents.critical")}  value={critical}                           icon={Siren}         color="#DC2626"   />
       </div>

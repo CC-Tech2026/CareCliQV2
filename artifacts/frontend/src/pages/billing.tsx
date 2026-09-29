@@ -321,6 +321,12 @@ export default function Billing() {
   const canInvoice = isCoordinator || isManagingDirector;
   const priceRequest = useRef(0);
 
+  // Set by the stat tiles: opens the revenue ledger filtered to what the tile counts.
+  const [ledgerStatus, setLedgerStatus] = useState<RevenueLedgerStatusFilter>("all");
+  const openLedger = (status: RevenueLedgerStatusFilter) => {
+    setLedgerStatus(status);
+    setWorkspace("reports");
+  };
   const [workspace, setWorkspace] = useState<
     "invoices" | "ready" | "checks" | "reports" | "pricing"
   >("invoices");
@@ -880,18 +886,21 @@ export default function Billing() {
               label={translate("billing.stat.invoices")}
               value={loadError ? "Unavailable" : invoices.length}
               icon={<FileText />}
+              onClick={() => setWorkspace("invoices")}
             />
             <KpiCard
               label={translate("billing.stat.outstanding")}
               value={loadError ? "Unavailable" : cents(totalOutstanding)}
               tone={totalOutstanding > 0 ? "warning" : "neutral"}
               icon={<Clock />}
+              onClick={() => openLedger("outstanding")}
             />
             <KpiCard
               label={translate("billing.stat.paid")}
               value={loadError ? "Unavailable" : cents(totalPaid)}
               tone="success"
               icon={<Check />}
+              onClick={() => openLedger("paid")}
             />
           </KpiGrid>
         )}
@@ -1799,7 +1808,7 @@ export default function Billing() {
         </div>
 
         {workspace === "reports" && isManagingDirector && (
-          <RevenueReportPanel />
+          <RevenueReportPanel ledgerStatus={ledgerStatus} />
         )}
         <section
           hidden={workspace !== "pricing"}
@@ -2163,7 +2172,7 @@ export function NdisCatalogueBrowser() {
   );
 }
 
-function RevenueReportPanel() {
+function RevenueReportPanel({ ledgerStatus = "all" }: { ledgerStatus?: RevenueLedgerStatusFilter } = {}) {
   const { translate, translateParams } = useAccessibility();
   const { data, isLoading, isError, refetch } = useOrgQuery(
     ["billing", "revenue-report"],
@@ -2297,7 +2306,7 @@ function RevenueReportPanel() {
             )}
           </>
         )}
-        <RevenueInvoiceLedger />
+        <RevenueInvoiceLedger key={ledgerStatus} initialStatus={ledgerStatus} />
       </div>
     </section>
   );
@@ -2312,11 +2321,13 @@ type RevenueLedgerStatusFilter = "all" | "paid" | "outstanding" | "void";
  * than only visible mixed into the full invoice list. */
 const REVENUE_LEDGER_PAGE_SIZE = 10;
 
-export function RevenueInvoiceLedger() {
+export function RevenueInvoiceLedger({
+  initialStatus = "all",
+}: { initialStatus?: RevenueLedgerStatusFilter } = {}) {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
-    useState<RevenueLedgerStatusFilter>("all");
+    useState<RevenueLedgerStatusFilter>(initialStatus);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);

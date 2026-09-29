@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { subDays, parseISO, isAfter } from "date-fns";
 import {
   Plus, Download, Flag, ShieldAlert, Hourglass, CircleCheck, Bot,
@@ -14,6 +14,13 @@ import { IncidentAccordionCard, type IncidentCardData } from "./IncidentAccordio
 import { SectionInfo } from "@/components/ui/section-info";
 
 type SubTab = "all" | "open" | "review" | "resolved" | "rp";
+const SUB_TABS: readonly SubTab[] = ["all", "open", "review", "resolved", "rp"];
+
+/** `/incidents?tab=open` etc. — lets stat tiles elsewhere link to a filtered register. */
+function tabFromSearch(search: string): SubTab {
+  const tab = new URLSearchParams(search).get("tab");
+  return SUB_TABS.includes(tab as SubTab) ? (tab as SubTab) : "all";
+}
 type TypeFilter = "all" | "restrictive_practice" | "auto" | "manual";
 const PAGE_SIZE = 15;
 
@@ -57,7 +64,11 @@ export function IncidentRegisterPanel() {
   const [, navigate] = useLocation();
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
-  const [subTab, setSubTab] = useState<SubTab>("all");
+  const search = useSearch();
+  const [subTab, setSubTab] = useState<SubTab>(() => tabFromSearch(search));
+  useEffect(() => {
+    setSubTab(tabFromSearch(search));
+  }, [search]);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [page, setPage] = useState(1);
 
@@ -242,19 +253,25 @@ export function IncidentRegisterPanel() {
 
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         {[
-          { label: translate("incidents.register.kpiOpen"), value: kpis.open, sub: translate("incidents.register.kpiOpenSub"), tone: "text-[#E24B4A]", icon: Flag },
-          { label: translate("incidents.register.kpiRp"), value: kpis.rp, sub: translate("incidents.register.kpiRpSub"), tone: "text-[#E24B4A]", icon: ShieldAlert },
-          { label: translate("incidents.register.kpiReview"), value: kpis.review, sub: translate("incidents.register.kpiReviewSub"), tone: "text-[#BA7517]", icon: Hourglass },
-          { label: translate("incidents.register.kpiResolved"), value: kpis.resolvedMonth, sub: translate("incidents.register.kpiResolvedSub"), tone: "text-[#3B9E5A]", icon: CircleCheck },
-          { label: translate("incidents.register.kpiAuto"), value: kpis.auto, sub: translate("incidents.register.kpiAutoSub"), tone: "text-[var(--cc-plum)]", icon: Bot },
-        ].map(({ label, value, sub, tone, icon: Icon }) => (
-          <div key={label} className="rounded-xl border border-[var(--cc-border)] bg-white p-3.5">
+          { label: translate("incidents.register.kpiOpen"), value: kpis.open, sub: translate("incidents.register.kpiOpenSub"), tone: "text-[#E24B4A]", icon: Flag, select: () => { setTypeFilter("all"); setSubTab("open"); } },
+          { label: translate("incidents.register.kpiRp"), value: kpis.rp, sub: translate("incidents.register.kpiRpSub"), tone: "text-[#E24B4A]", icon: ShieldAlert, select: () => { setTypeFilter("all"); setSubTab("rp"); } },
+          { label: translate("incidents.register.kpiReview"), value: kpis.review, sub: translate("incidents.register.kpiReviewSub"), tone: "text-[#BA7517]", icon: Hourglass, select: () => { setTypeFilter("all"); setSubTab("review"); } },
+          { label: translate("incidents.register.kpiResolved"), value: kpis.resolvedMonth, sub: translate("incidents.register.kpiResolvedSub"), tone: "text-[#3B9E5A]", icon: CircleCheck, select: () => { setTypeFilter("all"); setSubTab("resolved"); } },
+          { label: translate("incidents.register.kpiAuto"), value: kpis.auto, sub: translate("incidents.register.kpiAutoSub"), tone: "text-[var(--cc-plum)]", icon: Bot, select: () => { setSubTab("all"); setTypeFilter("auto"); } },
+        ].map(({ label, value, sub, tone, icon: Icon, select }) => (
+          <button
+            type="button"
+            key={label}
+            onClick={select}
+            aria-label={`${label}: ${value}`}
+            className="rounded-xl border border-[var(--cc-border)] bg-white p-3.5 text-left transition hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-plum)]"
+          >
             <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--cc-muted)] flex items-center gap-1 mb-1">
               <Icon size={12} /> {label}
             </p>
             <p className={cn("text-2xl font-black", tone)}>{value}</p>
             <p className="text-[11px] text-[var(--cc-muted)] mt-0.5">{sub}</p>
-          </div>
+          </button>
         ))}
       </div>
 

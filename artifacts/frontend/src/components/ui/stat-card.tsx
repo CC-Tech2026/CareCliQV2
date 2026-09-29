@@ -1,7 +1,49 @@
 import * as React from "react"
+import { Link } from "wouter"
 
 import { cn } from "@/lib/utils"
 import { Card } from "@/components/ui/card"
+
+/** Makes a stat tile open whatever its number counts: a link when `href` is
+ * set, a button when `onClick` is set, otherwise the tile is left as-is. */
+function Interactive({
+  href,
+  onClick,
+  label,
+  className,
+  children,
+}: {
+  href?: string
+  onClick?: () => void
+  label: string
+  className?: string
+  children: React.ReactNode
+}) {
+  const cls = cn(
+    "block w-full text-left rounded-2xl transition hover:-translate-y-px hover:shadow-md",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-plum)] focus-visible:ring-offset-2",
+    className,
+  )
+  if (href) {
+    return (
+      <Link href={href} className={cls} aria-label={label} data-stat-link="">
+        {children}
+      </Link>
+    )
+  }
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={cls} aria-label={label}>
+        {children}
+      </button>
+    )
+  }
+  return <>{children}</>
+}
+
+function interactiveLabel(label: string, value: React.ReactNode): string {
+  return typeof value === "string" || typeof value === "number" ? `${label}: ${value}` : label
+}
 
 /**
  * Shared stat display — replaces the ad-hoc StatStrip/StatCard pattern that had been
@@ -24,17 +66,21 @@ const toneColour: Record<StatTone, string> = {
   brand: "var(--cc-plum)",
 }
 
-export interface StatCardProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface StatCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "onClick"> {
   icon?: React.ReactNode
   label: string
   value: React.ReactNode
   sub?: React.ReactNode
   tone?: StatTone
+  /** Opens the list behind this number. */
+  href?: string
+  onClick?: () => void
 }
 
 const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(
-  ({ className, icon, label, value, sub, tone = "neutral", ...props }, ref) => (
-    <div ref={ref} className={cn("flex items-center gap-2", className)} {...props}>
+  ({ className, icon, label, value, sub, tone = "neutral", href, onClick, ...props }, ref) => (
+    <Interactive href={href} onClick={onClick} label={interactiveLabel(label, value)} className="rounded-lg">
+    <div ref={ref} className={cn("flex items-center gap-2", (href || onClick) && "cursor-pointer", className)} {...props}>
       {icon && (
         <span className="shrink-0" style={{ color: "var(--cc-muted)" }}>
           {icon}
@@ -63,6 +109,7 @@ const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(
         </p>
       </div>
     </div>
+    </Interactive>
   ),
 )
 StatCard.displayName = "StatCard"
@@ -116,6 +163,9 @@ export interface KpiCardProps {
   className?: string
   /** Simpler label+number tile with no icon badge — used where the reference design calls for a flatter look (e.g. Compliance Centre). */
   flat?: boolean
+  /** Opens the list behind this number. */
+  href?: string
+  onClick?: () => void
 }
 
 /**
@@ -124,8 +174,9 @@ export interface KpiCardProps {
  * in a soft-tinted rounded badge; use KpiGrid to lay several out responsively.
  */
 const KpiCard = React.forwardRef<HTMLDivElement, KpiCardProps>(
-  ({ className, icon, label, value, sub, tone = "neutral", flat = false, ...props }, ref) => (
-    <Card ref={ref} className={cn("rounded-2xl border-0 shadow-sm p-4", className)} {...props}>
+  ({ className, icon, label, value, sub, tone = "neutral", flat = false, href, onClick, ...props }, ref) => (
+    <Interactive href={href} onClick={onClick} label={interactiveLabel(label, value)} className="h-full">
+    <Card ref={ref} className={cn("rounded-2xl border-0 shadow-sm p-4", (href || onClick) && "h-full cursor-pointer", className)} {...props}>
       {flat ? (
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-wider leading-tight" style={{ color: "var(--cc-muted)" }}>
@@ -172,6 +223,7 @@ const KpiCard = React.forwardRef<HTMLDivElement, KpiCardProps>(
         </div>
       )}
     </Card>
+    </Interactive>
   ),
 )
 KpiCard.displayName = "KpiCard"

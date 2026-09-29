@@ -185,14 +185,21 @@ function Signal({
   value,
   detail,
   color,
+  href,
 }: {
   label: string;
   value: string | number;
   detail: string;
   color: string;
+  /** Opens the page behind this number. */
+  href: string;
 }) {
   return (
-    <div className="min-w-0">
+    <Link
+      href={href}
+      aria-label={`${label}: ${value}`}
+      className="block min-w-0 rounded-lg p-1 -m-1 transition-colors hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+    >
       <div className="flex items-center gap-2">
         <span
           className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -217,7 +224,7 @@ function Signal({
       <p className="mt-1 text-xs font-medium" style={{ color: MUTED }}>
         {detail}
       </p>
-    </div>
+    </Link>
   );
 }
 
@@ -654,6 +661,7 @@ export default function MDExecutivePage() {
                       value={`${data.compliance_score}%`}
                       detail={`Target ${data.compliance_target}%`}
                       color={health.color}
+                      href="/md/compliance"
                     />
 
                     <Signal
@@ -661,6 +669,7 @@ export default function MDExecutivePage() {
                       value={`${data.goal_achievement_rate}%`}
                       detail="Achievement rate"
                       color={data.goal_achievement_rate >= 85 ? GREEN : AMBER}
+                      href="/md/service-delivery"
                     />
 
                     <Signal
@@ -668,6 +677,7 @@ export default function MDExecutivePage() {
                       value={`${data.staff_retention_rate}%`}
                       detail="Staff retention"
                       color={data.staff_retention_rate >= 90 ? GREEN : AMBER}
+                      href="/md/staff"
                     />
                   </div>
                 </div>

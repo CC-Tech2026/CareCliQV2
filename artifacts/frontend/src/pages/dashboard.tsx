@@ -1126,9 +1126,7 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
       {/* KPI strip — each tile links to its source page */}
       <KpiGrid className="sm:grid-cols-2 lg:grid-cols-5">
         {metrics.map((m, i) => (
-          <Link key={i} href={m.href}>
-            <KpiCard label={m.label} value={m.value} sub={m.sub} tone={m.tone} icon={m.icon} className="cursor-pointer transition-shadow hover:shadow-md" />
-          </Link>
+          <KpiCard key={i} href={m.href} label={m.label} value={m.value} sub={m.sub} tone={m.tone} icon={m.icon} />
         ))}
       </KpiGrid>
 

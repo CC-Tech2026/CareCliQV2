@@ -384,6 +384,16 @@ export default function MDStaffPage() {
     null,
   );
 
+  /** Stat tiles jump to the staff directory with the matching filter/sort. */
+  function showDirectory(nextFilter: Filter, sort?: "compliance") {
+    setFilter(nextFilter);
+    if (sort) {
+      setSortKey(sort);
+      setSortAsc(true);
+    }
+    document.getElementById("staff-directory")?.scrollIntoView({ behavior: "smooth" });
+  }
+
   function openWorker(worker: StaffMember, tab?: WorkerDetailTab) {
     setDetailInitialTab(tab);
     setSelectedWorker(worker);
@@ -711,6 +721,7 @@ export default function MDStaffPage() {
                 color={PLUM}
                 bg={PLUM_SOFT}
                 icon={Users}
+                onClick={() => showDirectory("all")}
               />
 
               <KpiTile
@@ -719,6 +730,7 @@ export default function MDStaffPage() {
                 color={getScoreColor(stats.average)}
                 bg={bgForScore(stats.average)}
                 icon={ShieldCheck}
+                onClick={() => showDirectory("all", "compliance")}
               />
 
               <KpiTile
@@ -727,6 +739,7 @@ export default function MDStaffPage() {
                 color={getScoreColor(data.staff_retention_rate)}
                 bg={bgForScore(data.staff_retention_rate)}
                 icon={HeartHandshake}
+                onClick={() => showDirectory("all")}
               />
 
               <KpiTile
@@ -736,14 +749,7 @@ export default function MDStaffPage() {
                 bg={stats.atRisk.length > 0 ? DANGER_BG : SUCCESS_BG}
                 icon={AlertTriangle}
                 onClick={
-                  stats.atRisk.length > 0
-                    ? () => {
-                        setFilter("at_risk");
-                        document
-                          .getElementById("staff-directory")
-                          ?.scrollIntoView({ behavior: "smooth" });
-                      }
-                    : undefined
+                  stats.atRisk.length > 0 ? () => showDirectory("at_risk") : undefined
                 }
               />
             </div>

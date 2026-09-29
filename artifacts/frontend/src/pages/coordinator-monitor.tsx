@@ -113,7 +113,10 @@ export default function CoordinatorMonitorPage({ embedded = false }: { embedded?
   }, []);
 
   const summary = live?.summary;
-  const shifts = live?.active_long_shifts ?? [];
+  const allShifts = live?.active_long_shifts ?? [];
+  // Set by the stat tiles above the list.
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "GREEN" | "AMBER" | "RED">("ALL");
+  const shifts = statusFilter === "ALL" ? allShifts : allShifts.filter((s) => s.status === statusFilter);
   const dist = heatmap.data?.distribution ?? {};
 
   return (
@@ -132,10 +135,10 @@ export default function CoordinatorMonitorPage({ embedded = false }: { embedded?
 
       {summary && (
         <KpiGrid className="sm:grid-cols-4">
-          <KpiCard label="Active" value={summary.total_active} icon={<Users />} />
-          <KpiCard label="Green" value={summary.green_count} tone="success" icon={<CheckCircle2 />} />
-          <KpiCard label="Amber" value={summary.amber_count} tone="warning" icon={<AlertTriangle />} />
-          <KpiCard label="Red" value={summary.red_count} tone="danger" icon={<ShieldAlert />} />
+          <KpiCard label="Active" value={summary.total_active} icon={<Users />} onClick={() => setStatusFilter("ALL")} />
+          <KpiCard label="Green" value={summary.green_count} tone="success" icon={<CheckCircle2 />} onClick={() => setStatusFilter("GREEN")} />
+          <KpiCard label="Amber" value={summary.amber_count} tone="warning" icon={<AlertTriangle />} onClick={() => setStatusFilter("AMBER")} />
+          <KpiCard label="Red" value={summary.red_count} tone="danger" icon={<ShieldAlert />} onClick={() => setStatusFilter("RED")} />
         </KpiGrid>
       )}
 
@@ -168,11 +171,25 @@ export default function CoordinatorMonitorPage({ embedded = false }: { embedded?
       )}
 
       <section className="space-y-3">
-        <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: PLUM }}>
-          Active long shifts
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: PLUM }}>
+            Active long shifts
+          </h2>
+          {statusFilter !== "ALL" && (
+            <button
+              type="button"
+              onClick={() => setStatusFilter("ALL")}
+              className="rounded-full border px-3 py-1 text-[11px] font-bold transition-colors hover:bg-black/5"
+              style={{ borderColor: "var(--cc-border)", color: PLUM }}
+            >
+              Showing {statusFilter.toLowerCase()} · Show all
+            </button>
+          )}
+        </div>
         {shifts.length === 0 ? (
-          <p className="text-sm" style={{ color: MUTED }}>No active long shifts right now.</p>
+          <p className="text-sm" style={{ color: MUTED }}>
+            {statusFilter === "ALL" ? "No active long shifts right now." : `No ${statusFilter.toLowerCase()} long shifts right now.`}
+          </p>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {shifts.map((s) => (

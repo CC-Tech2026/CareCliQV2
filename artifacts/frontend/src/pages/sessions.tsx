@@ -23,6 +23,30 @@ import { exportBulkSessionsPDF } from "@/lib/pdf-export";
 import { useGetSessions, useGetParticipants, getGetSessionsQueryKey } from "@workspace/api-client-react";
 import type { Session as ApiSession, Participant as ApiParticipant } from "@workspace/api-client-react";
 
+// -- Compliance bands (same thresholds as the compliance centre: 85 / 60) ----
+type ComplianceBand = "compliant" | "at_risk" | "non_compliant";
+const COMPLIANCE_BANDS: readonly ComplianceBand[] = ["compliant", "at_risk", "non_compliant"];
+
+function complianceBand(score: number | string | null | undefined): ComplianceBand | null {
+  if (score == null || score === "") return null;
+  const n = Number(score);
+  if (Number.isNaN(n)) return null;
+  if (n >= 85) return "compliant";
+  if (n >= 60) return "at_risk";
+  return "non_compliant";
+}
+
+const BAND_LABEL_KEYS: Record<ComplianceBand, string> = {
+  compliant: "reports.status.compliant",
+  at_risk: "reports.status.atRisk",
+  non_compliant: "reports.status.nonCompliant",
+};
+
+function bandFromSearch(search: string): ComplianceBand | "all" {
+  const band = new URLSearchParams(search).get("band");
+  return COMPLIANCE_BANDS.includes(band as ComplianceBand) ? (band as ComplianceBand) : "all";
+}
+
 // -- Design tokens — aligned with Dashboard -------------------------------------
 const PLUM        = "#E8457A";
 const CORAL       = "var(--cc-coral)";
@@ -160,7 +184,9 @@ export default function Sessions() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [participantFilter, setParticipantFilter] = useState("all");
   const [sortBy, setSortBy]             = useState<SortKey>("date_desc");
-  const [dateFrom, setDateFrom]         = useState("");
+  // `?band=at_risk&from=2026-09-01` — stat tiles elsewhere link to a filtered list.
+  const [bandFilter, setBandFilter]     = useState<ComplianceBand | "all">(() => bandFromSearch(window.location.search));
+  const [dateFrom, setDateFrom]         = useState(() => new URLSearchParams(window.location.search).get("from") ?? "");
   const [dateTo, setDateTo]             = useState("");
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
   const [isBulkExporting, setIsBulkExporting] = useState(false);
@@ -211,6 +237,8 @@ export default function Sessions() {
         return false;
       if (participantFilter !== "all" && s.participant_id !== participantFilter)
         return false;
+      if (bandFilter !== "all" && complianceBand(s.compliance_score) !== bandFilter)
+        return false;
 
       if (dateFrom && s.session_date) {
         try {
@@ -228,7 +256,7 @@ export default function Sessions() {
       }
       return true;
     });
-  }, [sessions, search, statusFilter, participantFilter, dateFrom, dateTo]);
+  }, [sessions, search, statusFilter, participantFilter, dateFrom, dateTo, bandFilter]);
 
   // -- Sorting ------------------------------------------------------------------
   const sorted = useMemo(() => {
@@ -592,6 +620,17 @@ export default function Sessions() {
                 aria-label={translate("sessions.dateTo")}
               />
 
+              {bandFilter !== "all" && (
+                <button
+                  onClick={() => setBandFilter("all")}
+                  className="flex items-center gap-1 text-[12px] font-semibold px-2.5 py-1.5 rounded-full border transition-colors hover:bg-[#ECECEC]"
+                  style={{ color: T1, borderColor: BORDER }}
+                  aria-label={`${translate(BAND_LABEL_KEYS[bandFilter])} — ${translate("sessions.footer.clearFilters")}`}
+                >
+                  {translate(BAND_LABEL_KEYS[bandFilter])} <X size={12} />
+                </button>
+              )}
+
               {hasDateFilter && (
                 <button
                   onClick={() => { setDateFrom(""); setDateTo(""); }}
@@ -641,7 +680,7 @@ export default function Sessions() {
                   <X size={10} className="cursor-pointer" onClick={() => setParticipantFilter("all")} />
                 </span>
               )}
-              <button onClick={() => { setSearch(""); setStatusFilter("all"); setParticipantFilter("all"); setDateFrom(""); setDateTo(""); }}
+              <button onClick={() => { setSearch(""); setStatusFilter("all"); setParticipantFilter("all"); setBandFilter("all"); setDateFrom(""); setDateTo(""); }}
                 className="text-[11px] font-medium underline underline-offset-2 ml-1" style={{ color: T3 }}>
                 {translate("sessions.clearAll")}
               </button>
@@ -742,7 +781,7 @@ export default function Sessions() {
               <button
                 className="text-[11px] font-semibold"
                 style={{ color: PLUM }}
-                onClick={() => { setSearch(""); setStatusFilter("all"); setParticipantFilter("all"); setDateFrom(""); setDateTo(""); }}
+                onClick={() => { setSearch(""); setStatusFilter("all"); setParticipantFilter("all"); setBandFilter("all"); setDateFrom(""); setDateTo(""); }}
               >
                 {translate("sessions.footer.clearFilters")}
               </button>

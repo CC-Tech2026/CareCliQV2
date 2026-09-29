@@ -113,24 +113,28 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
       label: translate("auditPack.stat.teamCompliance"),
       value: compliance.data ? `${compliance.data.average_score}%` : translate("common.emDash"),
       tone: complianceTone(compliance.data?.average_score),
+      tab: "workers" as ExportTab,
     },
     {
       icon: <FileCheck2 />,
       label: translate("auditPack.stat.sessionRecords"),
       value: compliance.data?.total_sessions ?? translate("common.emDash"),
       tone: "brand" as const,
+      tab: "summary" as ExportTab,
     },
     {
       icon: <AlertTriangle />,
       label: translate("auditPack.stat.rpFlags"),
       value: flags.data?.length ?? translate("common.emDash"),
       tone: "danger" as const,
+      tab: "summary" as ExportTab,
     },
     {
       icon: <Flag />,
       label: translate("auditPack.stat.needsReview"),
       value: flagged.data?.length ?? translate("common.emDash"),
       tone: "warning" as const,
+      tab: "flagged" as ExportTab,
     },
   ], [translate, compliance.data, flags.data, flagged.data]);
 
@@ -158,8 +162,8 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
 
       {/* Stat strip */}
       <KpiGrid>
-        {statCards.map(({ icon, label, value, tone }) => (
-          <KpiCard key={label} label={label} value={value} tone={tone} icon={icon} />
+        {statCards.map(({ icon, label, value, tone, tab }) => (
+          <KpiCard key={label} label={label} value={value} tone={tone} icon={icon} onClick={() => setActiveTab(tab)} />
         ))}
       </KpiGrid>
 

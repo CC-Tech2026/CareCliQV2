@@ -50,6 +50,8 @@ const ADMIN_STATUS_STYLE: Record<MedicationAdministrationRecord["outcome"], { bg
 export function MedicationRegisterPanel() {
   const { translate, translateParams } = useAccessibility();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Set by the stat tiles: narrows the list below to what the tile counts.
+  const [listFilter, setListFilter] = useState<"all" | "active" | "prn" | "review">("all");
 
   const { data, isLoading } = useQuery({
     queryKey: ["compliance-centre", "medications"],
@@ -71,6 +73,15 @@ export function MedicationRegisterPanel() {
   const atMaxCount = reviewItems?.prn_at_max.length ?? 0;
   const triggeredFlags = (reliabilityData?.flags ?? []).filter((f) => f.triggered);
   const participantNameById = new Map(medications.map((m) => [m.participant_id, m.participant_name]));
+  const reviewIds = new Set([
+    ...(reviewItems?.ending_soon ?? []).map((m) => m.id),
+    ...(reviewItems?.prn_at_max ?? []).map((m) => m.id),
+  ]);
+  const listed =
+    listFilter === "active" ? active
+    : listFilter === "prn" ? active.filter((m) => m.is_prn)
+    : listFilter === "review" ? medications.filter((m) => reviewIds.has(m.id))
+    : medications;
 
   if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
@@ -112,16 +123,32 @@ export function MedicationRegisterPanel() {
       )}
 
       <KpiGrid>
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.medications.statActive")} value={active.length} icon={<Pill />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.medications.statPrn")} value={prnCount} tone="brand" icon={<Clock3 />} />
-        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.medications.statReview")} value={endingSoonCount + atMaxCount} tone={endingSoonCount + atMaxCount > 0 ? "warning" : "neutral"} icon={<AlertTriangle />} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.medications.statActive")} value={active.length} icon={<Pill />} onClick={() => setListFilter("active")} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.medications.statPrn")} value={prnCount} tone="brand" icon={<Clock3 />} onClick={() => setListFilter("prn")} />
+        <KpiCard flat className="border border-[var(--cc-border)]" label={translate("compliance.centre.medications.statReview")} value={endingSoonCount + atMaxCount} tone={endingSoonCount + atMaxCount > 0 ? "warning" : "neutral"} icon={<AlertTriangle />} onClick={() => setListFilter("review")} />
       </KpiGrid>
+
+      {listFilter !== "all" && medications.length > 0 && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[12px] font-semibold" style={{ color: MUTED }}>
+            {listed.length} of {medications.length}
+          </p>
+          <button
+            type="button"
+            onClick={() => setListFilter("all")}
+            className="rounded-full border px-3 py-1 text-[11px] font-bold transition-colors hover:bg-black/5"
+            style={{ borderColor: BORDER, color: "var(--cc-plum)" }}
+          >
+            Show all
+          </button>
+        </div>
+      )}
 
       {medications.length === 0 ? (
         <EmptyState label={translate("compliance.centre.medications.empty")} />
       ) : (
         <div className="rounded-2xl border overflow-hidden divide-y" style={{ borderColor: BORDER, background: "var(--cc-surface)" }}>
-          {medications.map((med) => (
+          {listed.map((med) => (
             <button
               key={med.id}
               type="button"
