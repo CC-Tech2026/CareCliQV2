@@ -1470,10 +1470,19 @@ def list_folder_documents(
     person: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    flagged_only: bool = False,
 ) -> list[VaultDocument]:
     if not category.startswith(CUSTOM_FOLDER_PREFIX) and category not in CATEGORY_META:
         raise HTTPException(status_code=404, detail="Unknown vault category.")
     docs = _load_category_docs(org_id, category)
+    if flagged_only:
+        # Same rule as the "Flagged for review" count in list_vault_stats:
+        # custom-folder uploads have no review status, so none are flagged.
+        docs = (
+            []
+            if category.startswith(CUSTOM_FOLDER_PREFIX)
+            else [d for d in docs if d["status"] in FLAGGED_STATUSES]
+        )
     return _apply_filters(docs, search=search, person=person, date_from=date_from, date_to=date_to)
 
 
@@ -1584,6 +1593,41 @@ def list_vault_stats(org_id: str) -> dict[str, Any]:
         shared = 0
 
     return {"total_documents": total, "flagged_for_review": flagged, "shared_last_30_days": shared}
+
+
+def list_share_events(org_id: str, days: int = 30) -> list[dict[str, Any]]:
+    """Who shared what with auditors, newest first — the records behind the
+    vault's "Shared with auditors" count (which sums document_count here)."""
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    supabase = get_supabase_admin()
+    rows = (
+        supabase.table("vault_share_events")
+        .select("id, created_at, shared_by, share_method, folder_keys, document_count, recipient_hint")
+        .eq("organization_id", org_id)
+        .gte("created_at", since)
+        .order("created_at", desc=True)
+        .limit(200)
+        .execute()
+    ).data or []
+    user_ids = sorted({str(r["shared_by"]) for r in rows if r.get("shared_by")})
+    names: dict[str, str] = {}
+    if user_ids:
+        users = supabase.table("users").select("id, full_name").in_("id", user_ids).execute().data or []
+        names = {str(u["id"]): u.get("full_name") or "" for u in users}
+    return [
+        {
+            "id": r.get("id"),
+            "created_at": r.get("created_at"),
+            "shared_by_name": names.get(str(r.get("shared_by") or "")) or "Unknown user",
+            "share_method": r.get("share_method"),
+            "folders": [
+                CATEGORY_META.get(key, {}).get("label", key) for key in (r.get("folder_keys") or [])
+            ],
+            "document_count": int(r.get("document_count") or 0),
+            "recipient_hint": r.get("recipient_hint"),
+        }
+        for r in rows
+    ]
 
 
 def resolve_pack_plan(org_id: str, refs: list[dict[str, str]]) -> list[dict[str, str]]:

@@ -90,9 +90,10 @@ export async function fetchCustomizableFields(): Promise<Record<string, string[]
 
 export async function fetchFolderDocuments(
   category: string,
-  filters: { search?: string; person?: string; date_from?: string; date_to?: string } = {}
+  filters: { search?: string; person?: string; date_from?: string; date_to?: string; flagged?: boolean } = {}
 ): Promise<VaultDocument[]> {
   const params = new URLSearchParams();
+  if (filters.flagged) params.set("flagged", "true");
   if (filters.search) params.set("search", filters.search);
   if (filters.person) params.set("person", filters.person);
   if (filters.date_from) params.set("date_from", filters.date_from);
@@ -429,4 +430,22 @@ export async function previewPolicyDocument(params: {
   });
   const data = await parseJson<{ html: string }>(res);
   return data.html;
+}
+
+/** Shares with auditors (ZIP downloads / emails) — behind the vault's
+ * "Shared with auditors" tile. */
+export type VaultShareEvent = {
+  id: string;
+  created_at: string;
+  shared_by_name: string;
+  share_method: "download_zip" | "email_gmail" | "email_outlook" | "email_mailto";
+  folders: string[];
+  document_count: number;
+  recipient_hint: string | null;
+};
+
+export async function fetchShareEvents(days = 30): Promise<VaultShareEvent[]> {
+  const res = await apiFetch(`/api/md-vault/share-events?days=${days}`);
+  const data = await parseJson<{ events: VaultShareEvent[] }>(res);
+  return data.events;
 }

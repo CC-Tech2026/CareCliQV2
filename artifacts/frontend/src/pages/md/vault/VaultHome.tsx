@@ -51,9 +51,19 @@ import {
   fetchVaultFolders,
   fetchPolicyAcknowledgementStatus,
   setFolderOrder,
+  fetchShareEvents,
   type VaultStats,
   type VaultFolder,
+  type VaultShareEvent,
 } from "@/services/vaultService";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import { formatAppDate } from "@/lib/datetime";
 import { ShareAuditorDialog } from "./components/ShareAuditorDialog";
 import { CreateFolderDialog } from "./components/CreateFolderDialog";
 
@@ -439,6 +449,72 @@ function FolderGroup({
   );
 }
 
+const SHARE_METHOD_LABELS: Record<VaultShareEvent["share_method"], string> = {
+  download_zip: "Downloaded as ZIP",
+  email_gmail: "Emailed (Gmail)",
+  email_outlook: "Emailed (Outlook)",
+  email_mailto: "Emailed",
+};
+
+/** Behind the "Shared with auditors" tile: every share in the last 30 days. */
+function ShareHistorySheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [events, setEvents] = useState<VaultShareEvent[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setEvents(null);
+    setFailed(false);
+    fetchShareEvents(30)
+      .then((rows) => { if (!cancelled) setEvents(rows); })
+      .catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, [open]);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Shared with auditors</SheetTitle>
+          <SheetDescription>Every share from the vault in the last 30 days.</SheetDescription>
+        </SheetHeader>
+        <div className="mt-4 space-y-2.5">
+          {failed ? (
+            <p role="alert" className="text-sm" style={{ color: "var(--cc-status-danger)" }}>
+              Couldn't load the share history. Try again shortly.
+            </p>
+          ) : events === null ? (
+            <p className="text-sm" style={{ color: "var(--cc-muted)" }}>Loading…</p>
+          ) : events.length === 0 ? (
+            <p className="text-sm" style={{ color: "var(--cc-muted)" }}>Nothing has been shared in the last 30 days.</p>
+          ) : (
+            events.map((event) => (
+              <div key={event.id} className="rounded-xl border p-3.5" style={{ borderColor: "var(--cc-border)" }}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="text-sm font-bold" style={{ color: "var(--cc-text)" }}>
+                    {event.document_count} document{event.document_count === 1 ? "" : "s"}
+                  </p>
+                  <p className="shrink-0 text-[11px]" style={{ color: "var(--cc-muted)" }}>
+                    {formatAppDate(event.created_at)}
+                  </p>
+                </div>
+                <p className="mt-0.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                  {SHARE_METHOD_LABELS[event.share_method] ?? event.share_method} by {event.shared_by_name}
+                  {event.recipient_hint ? ` · to ${event.recipient_hint}` : ""}
+                </p>
+                {event.folders.length > 0 && (
+                  <p className="mt-1 text-[12px]" style={{ color: "var(--cc-text)" }}>{event.folders.join(", ")}</p>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export default function VaultHome() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -447,6 +523,11 @@ export default function VaultHome() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [shareHistoryOpen, setShareHistoryOpen] = useState(false);
+  // With "Flagged for review" on, folders open showing only flagged documents.
+  const openFolder = (path: string) => navigate(flaggedOnly ? `${path}?flagged=1` : path);
+  const scrollToFolders = () =>
+    document.getElementById("vault-folders")?.scrollIntoView({ behavior: "smooth", block: "start" });
   const [loadError, setLoadError] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
@@ -601,12 +682,21 @@ export default function VaultHome() {
             label="Total documents"
             value={loading ? "…" : (stats?.total_documents ?? 0)}
             tone="info"
+            onClick={() => {
+              setFlaggedOnly(false);
+              setSearch("");
+              scrollToFolders();
+            }}
           />
           <StatCard
             icon={<AlertTriangle size={16} />}
             label="Flagged for review"
             value={loading ? "…" : (stats?.flagged_for_review ?? 0)}
             tone="warning"
+            onClick={() => {
+              setFlaggedOnly(true);
+              scrollToFolders();
+            }}
           />
           <StatCard
             icon={<Share2 size={16} />}
@@ -614,10 +704,13 @@ export default function VaultHome() {
             value={loading ? "…" : (stats?.shared_last_30_days ?? 0)}
             sub="last 30 days"
             tone="success"
+            onClick={() => setShareHistoryOpen(true)}
           />
         </StatCardGroup>
 
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-cc-border bg-cc-card p-3">
+        <ShareHistorySheet open={shareHistoryOpen} onOpenChange={setShareHistoryOpen} />
+
+        <div id="vault-folders" className="flex scroll-mt-4 flex-wrap items-center gap-3 rounded-xl border border-cc-border bg-cc-card p-3">
           <input
             aria-label="Search vault folders"
             type="search"
@@ -664,7 +757,7 @@ export default function VaultHome() {
           folders={recordFolders}
           mode={viewMode}
           onDragEnd={handleRecordDragEnd}
-          navigate={navigate}
+          navigate={openFolder}
           trailing={
             <NewFolderControl
               mode={viewMode}
@@ -682,7 +775,7 @@ export default function VaultHome() {
           folders={governanceFolders}
           mode={viewMode}
           onDragEnd={handleGovernanceDragEnd}
-          navigate={navigate}
+          navigate={openFolder}
           headerExtra={
             ackSummary && (
               <div

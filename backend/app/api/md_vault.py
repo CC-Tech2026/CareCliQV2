@@ -117,11 +117,13 @@ async def get_folder_documents(
     person: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    flagged: bool = False,
     current_user: dict = Depends(get_current_user),
 ):
     org_id = _require_md(current_user)
     docs = vault_service.list_folder_documents(
-        org_id, category, search=search, person=person, date_from=date_from, date_to=date_to
+        org_id, category, search=search, person=person, date_from=date_from, date_to=date_to,
+        flagged_only=flagged,
     )
     return {"documents": docs}
 
@@ -178,6 +180,12 @@ class ShareEventRequest(BaseModel):
     folder_keys: list[str] = []
     documents: list[DocRef] = []
     recipient_hint: str | None = None
+
+
+@router.get("/share-events")
+async def get_share_events(days: int = 30, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return {"events": vault_service.list_share_events(org_id, max(1, min(days, 365)))}
 
 
 @router.post("/share-events")

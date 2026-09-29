@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { FileEdit, Search, Upload, ChevronRight, Users } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { Input } from "@/components/ui/input";
@@ -60,7 +60,9 @@ function presetToDateFrom(preset: string): string | undefined {
 }
 
 export default function VaultFolderPage({ category }: { category: string }) {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  // ?flagged=1 — opened from the vault's "Flagged for review" tile/filter.
+  const flaggedOnly = new URLSearchParams(useSearch()).get("flagged") === "1";
   const { toast } = useToast();
 
   const [meta, setMeta] = useState<VaultFolderMeta | null>(null);
@@ -96,7 +98,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
     void loadDocuments();
     if (isGovernance) void loadPolicyExtras();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category]);
+  }, [category, flaggedOnly]);
 
   useEffect(() => {
     setPage(1);
@@ -137,6 +139,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
       const date_from = datePreset === "custom" ? customFrom || undefined : presetToDateFrom(datePreset);
       const date_to = datePreset === "custom" ? customTo || undefined : undefined;
       const docs = await fetchFolderDocuments(category, {
+        flagged: flaggedOnly,
         search: search || undefined,
         person: person !== "all" ? person : undefined,
         date_from,
@@ -351,6 +354,16 @@ export default function VaultFolderPage({ category }: { category: string }) {
 
         <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--cc-border)", background: "var(--cc-surface)" }}>
           <div className="flex flex-wrap items-center gap-2.5">
+            {flaggedOnly && (
+              <button
+                type="button"
+                onClick={() => navigate(location)}
+                className="rounded-full border px-3 py-1.5 text-[12px] font-bold transition-colors hover:bg-black/5"
+                style={{ borderColor: "var(--cc-border)", color: "var(--cc-plum)" }}
+              >
+                Showing flagged for review · Show all
+              </button>
+            )}
             <div className="relative flex-1 min-w-[200px]">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--cc-muted)" }} />
               <Input className="pl-8" placeholder="Search this folder" value={search} onChange={(e) => setSearch(e.target.value)} />
