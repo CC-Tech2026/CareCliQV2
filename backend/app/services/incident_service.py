@@ -18,10 +18,12 @@ from ..schemas.incident import (
     IncidentUpdate,
     WorkerIncidentCreate,
     CORRECTABLE_INCIDENT_FIELDS,
-    NDIS_NOTIFICATION_HOURS,
     PRACTICE_STANDARD_MAP,
     WORKER_REPORT_TYPE_TO_INCIDENT,
+    effective_ndis_reportable,
+    incident_follow_up_due_at,
     is_ndis_reportable,
+    ndis_notification_timeframe,
     map_worker_severity,
     worker_status_label,
 )
@@ -137,19 +139,6 @@ def _safe_row(data: Any) -> Optional[dict]:
     return data if isinstance(data, dict) else None
 
 
-def _parse_datetime(value: Any) -> Optional[datetime]:
-    """Safely parse datetime string."""
-    if not value:
-        return None
-
-    try:
-        return datetime.fromisoformat(
-            str(value).replace("Z", "+00:00")
-        )
-    except Exception:
-        return None
-
-
 def _enrich(row: dict[str, Any]) -> dict[str, Any]:
     """Add computed fields to incident row."""
 
@@ -181,45 +170,38 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
         enriched.get("status") or "reported"
     )
 
-    enriched["ndis_reportable"] = is_ndis_reportable(
+    # Engine classification: the stored flag (set at creation from the Section 5
+    # categories too) or a fresh type/severity/category check. Recomputing from
+    # type and severity alone used to drop category-only reportable incidents.
+    enriched["ndis_reportable"] = bool(enriched.get("ndis_reportable")) or is_ndis_reportable(
         incident_type,
         severity,
+        enriched.get("reportable_categories"),
     )
+    reportable = effective_ndis_reportable(enriched)
+    enriched["ndis_notification_timeframe"] = ndis_notification_timeframe(enriched)
 
     enriched["practice_standard"] = PRACTICE_STANDARD_MAP.get(
         incident_type,
         "Standard 2.3 — Incident management",
     )
 
-    # Overdue calculation
+    # Overdue calculation: Commission timeframe (by category, from identified_at
+    # when recorded) for reportable incidents, internal severity target otherwise.
     overdue = False
     notification_due_at: Optional[str] = None
 
     if status in ("reported", "under_investigation"):
-        incident_date = _parse_datetime(
-            enriched.get("incident_date")
-        )
-
-        if incident_date:
-            threshold_hours = NDIS_NOTIFICATION_HOURS.get(
-                severity,
-                240,
-            )
-
-            deadline = incident_date + timedelta(
-                hours=threshold_hours
-            )
-
-            overdue = (
-                datetime.now(timezone.utc) > deadline
-            )
+        deadline = incident_follow_up_due_at(enriched)
+        if deadline:
+            overdue = datetime.now(timezone.utc) > deadline
             notification_due_at = deadline.isoformat()
 
     enriched["overdue"] = overdue
     enriched["notification_due_at"] = notification_due_at
 
     enriched["ndis_pending"] = bool(
-        enriched["ndis_reportable"]
+        reportable
         and not enriched.get("ndis_reported_at")
         and status != "closed"
     )
@@ -615,17 +597,14 @@ async def create_incident(
         payload.get("severity") or "medium"
     )
 
+    # Section 5 self-assessment checklist: any ticked category (other than "none") also
+    # marks the incident reportable, alongside the type/severity heuristic.
+    # The Managing Director still makes the final call via the ndis_reportable_override flow.
     payload["ndis_reportable"] = is_ndis_reportable(
         incident_type,
         severity,
+        payload.get("reportable_categories"),
     )
-
-    # Section 5 self-assessment checklist: any ticked category (other than "none") also
-    # marks the incident reportable, alongside the existing type/severity heuristic above.
-    # The Managing Director still makes the final call via the ndis_reportable_override flow.
-    reportable_categories = payload.get("reportable_categories") or []
-    if any(cat != "none" for cat in reportable_categories):
-        payload["ndis_reportable"] = True
 
     payload["practice_standard"] = PRACTICE_STANDARD_MAP.get(
         incident_type,
@@ -1032,23 +1011,27 @@ async def update_incident(
             datetime.now(timezone.utc).isoformat()
         )
 
-    # Recompute NDIS flags
+    # Recompute NDIS flags — unchanged fields come from the existing row, so a
+    # severity-only edit no longer reclassifies the incident as type "other".
     if (
         "incident_type" in payload
         or "severity" in payload
+        or "reportable_categories" in payload
     ):
+        merged = {**(existing or {}), **payload}
         incident_type = str(
-            payload.get("incident_type") or "other"
+            merged.get("incident_type") or "other"
         )
 
         severity = str(
-            payload.get("severity") or "medium"
+            merged.get("severity") or "medium"
         )
 
         payload["ndis_reportable"] = (
             is_ndis_reportable(
                 incident_type,
                 severity,
+                merged.get("reportable_categories"),
             )
         )
 
@@ -1124,10 +1107,10 @@ async def get_incident_stats(
             supabase
             .table(TABLE)
             .select(
-                "id, participant_id, status, severity, "
-                "ndis_reportable, "
-                "ndis_reported_at, "
-                "incident_date"
+                "id, participant_id, status, severity, incident_type, "
+                "ndis_reportable, ndis_reportable_override, reportable_categories, "
+                "participant_harmed, ndis_reported_at, "
+                "incident_date, identified_at"
             )
         )
 
@@ -1150,10 +1133,10 @@ async def get_incident_stats(
                     supabase
                     .table(TABLE)
                     .select(
-                        "id, participant_id, status, severity, "
-                        "ndis_reportable, "
-                        "ndis_reported_at, "
-                        "incident_date"
+                        "id, participant_id, status, severity, incident_type, "
+                        "ndis_reportable, ndis_reportable_override, reportable_categories, "
+                        "participant_harmed, ndis_reported_at, "
+                        "incident_date, identified_at"
                     )
                 )
                 if org_id:
@@ -1234,25 +1217,8 @@ async def get_incident_stats(
         ):
             continue
 
-        severity = str(
-            row.get("severity") or "medium"
-        )
-
-        incident_date = _parse_datetime(
-            row.get("incident_date")
-        )
-
-        if not incident_date:
-            continue
-
-        threshold = timedelta(
-            hours=NDIS_NOTIFICATION_HOURS.get(
-                severity,
-                240,
-            )
-        )
-
-        if now > incident_date + threshold:
+        deadline = incident_follow_up_due_at(row)
+        if deadline and now > deadline:
             overdue += 1
 
     return {

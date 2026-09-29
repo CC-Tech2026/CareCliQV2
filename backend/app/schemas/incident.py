@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Optional
-from datetime import date, datetime
+from typing import Any, Optional
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+from ..core.timezone import APP_TIMEZONE
 
 WORKER_REPORT_TYPES = [
     "safety_hazard",
@@ -82,17 +85,129 @@ PRACTICE_STANDARD_MAP: dict[str, str] = {
     "other":                 "Standard 2.3 — Incident management",
 }
 
-# Notification timeframe in hours (NDIS QSC requirements)
+# Internal follow-up target by severity. Applies only to incidents that are NOT
+# NDIS reportable — reportable incidents use the Commission timeframes below,
+# which depend on what happened, not on how severe it was rated.
 NDIS_NOTIFICATION_HOURS: dict[str, int] = {
     "critical": 24,
-    "high": 120,       # 5 business days
+    "high": 120,
     "medium": 240,
     "low": 480,
 }
 
+# NDIS (Incident Management and Reportable Incidents) Rules 2018: every
+# reportable incident must be notified within 24 hours of key personnel
+# becoming aware, except unauthorised use of a restrictive practice that did
+# not harm the participant, which has 5 business days.
+NDIS_24_HOUR_CATEGORIES = frozenset({
+    "unexpected_death", "serious_injury", "abuse_neglect", "unlawful_contact", "sexual_misconduct",
+})
+NDIS_24_HOUR_TYPES = frozenset({"abuse_neglect", "assault_unlawful_contact", "unexpected_death"})
+NDIS_5_BUSINESS_DAY_CATEGORIES = frozenset({"unauthorised_restrictive_practice"})
+NDIS_5_BUSINESS_DAY_TYPES = frozenset({"restrictive_practice"})
 
-def is_ndis_reportable(incident_type: str, severity: str) -> bool:
-    return incident_type in NDIS_REPORTABLE_TYPES or severity in NDIS_REPORTABLE_SEVERITIES
+NDIS_TIMEFRAME_24_HOURS = "24_hours"
+NDIS_TIMEFRAME_5_BUSINESS_DAYS = "5_business_days"
+
+
+def _categories(reportable_categories: Any) -> set[str]:
+    return {str(c) for c in (reportable_categories or []) if c and c != "none"}
+
+
+def is_ndis_reportable(
+    incident_type: str,
+    severity: str,
+    reportable_categories: Optional[list[str]] = None,
+) -> bool:
+    return (
+        incident_type in NDIS_REPORTABLE_TYPES
+        or severity in NDIS_REPORTABLE_SEVERITIES
+        or bool(_categories(reportable_categories))
+    )
+
+
+def effective_ndis_reportable(incident: dict[str, Any]) -> bool:
+    """The coordinator/MD override wins when set; otherwise the stored engine
+    flag or a fresh classification (type, severity and Section 5 categories)."""
+    override = incident.get("ndis_reportable_override")
+    if override is not None:
+        return bool(override)
+    return bool(incident.get("ndis_reportable")) or is_ndis_reportable(
+        str(incident.get("incident_type") or "other"),
+        str(incident.get("severity") or "medium"),
+        incident.get("reportable_categories"),
+    )
+
+
+def ndis_notification_timeframe(incident: dict[str, Any]) -> Optional[str]:
+    """Which Commission timeframe applies, or None if the incident isn't reportable."""
+    if not effective_ndis_reportable(incident):
+        return None
+    categories = _categories(incident.get("reportable_categories"))
+    incident_type = str(incident.get("incident_type") or "other")
+    if categories & NDIS_24_HOUR_CATEGORIES or incident_type in NDIS_24_HOUR_TYPES:
+        return NDIS_TIMEFRAME_24_HOURS
+    restrictive = bool(categories & NDIS_5_BUSINESS_DAY_CATEGORIES) or incident_type in NDIS_5_BUSINESS_DAY_TYPES
+    if restrictive and not incident.get("participant_harmed"):
+        return NDIS_TIMEFRAME_5_BUSINESS_DAYS
+    # Harm from a restrictive practice, a critical rating, or an override with
+    # no category ticked — the default Commission timeframe.
+    return NDIS_TIMEFRAME_24_HOURS
+
+
+def _parse_dt(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _add_business_days(start: datetime, days: int, tz: ZoneInfo) -> datetime:
+    """Weekends counted on the Australian local calendar. Public holidays are
+    not excluded, so the deadline can only be earlier than the true one."""
+    local = start.astimezone(tz)
+    added = 0
+    while added < days:
+        local += timedelta(days=1)
+        if local.weekday() < 5:
+            added += 1
+    return local.astimezone(timezone.utc)
+
+
+def notification_clock_start(incident: dict[str, Any]) -> Optional[datetime]:
+    """When the clock starts: identified_at (when the incident was identified /
+    became known) if recorded, otherwise when it occurred."""
+    return _parse_dt(incident.get("identified_at")) or _parse_dt(incident.get("incident_date"))
+
+
+def ndis_notification_due_at(
+    incident: dict[str, Any], tz: Optional[ZoneInfo] = None,
+) -> Optional[datetime]:
+    """Commission notification deadline for a reportable incident, else None."""
+    timeframe = ndis_notification_timeframe(incident)
+    start = notification_clock_start(incident)
+    if not timeframe or not start:
+        return None
+    if timeframe == NDIS_TIMEFRAME_5_BUSINESS_DAYS:
+        return _add_business_days(start, 5, tz or APP_TIMEZONE)
+    return start + timedelta(hours=24)
+
+
+def incident_follow_up_due_at(incident: dict[str, Any]) -> Optional[datetime]:
+    """Commission deadline if reportable, otherwise the internal severity target."""
+    if effective_ndis_reportable(incident):
+        return ndis_notification_due_at(incident)
+    start = _parse_dt(incident.get("incident_date"))
+    if not start:
+        return None
+    hours = NDIS_NOTIFICATION_HOURS.get(str(incident.get("severity") or "medium"), 240)
+    return start + timedelta(hours=hours)
 
 
 LOCATION_TYPES = ["private_home", "supported_accommodation", "provider_premises", "community", "other"]

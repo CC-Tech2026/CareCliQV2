@@ -28,10 +28,7 @@ from ..services.funding_service import (
     normalize_goal_support_category,
     require_active_plan_for_participant,
 )
-from ..services.credential_verification_service import (
-    get_shift_credential_requirements,
-    verify_worker_credentials,
-)
+from ..services import roster_eligibility_service
 from ..services.notification_service import (
     notify_certification_expiry,
     notify_coordinator_message,
@@ -1899,28 +1896,31 @@ async def _check_worker_credentials(
     org_id: str,
     shift_type: str,
 ) -> CredentialStatus:
-    """Check if worker has any valid, non-expired credentials.
-    
-    Returns CredentialStatus with:
-    - valid: True if worker has at least one valid credential
-    - missing_credentials: List of credential types that are expired/rejected
-    - warning: Human-readable warning if credentials are expiring soon
-    """
-    required_types = await get_shift_credential_requirements(
-        org_id=org_id,
-        shift_type=shift_type,
-        supabase=get_supabase_admin(),
-    )
-    service_status = await verify_worker_credentials(
-        worker_id=worker_id,
-        org_id=org_id,
-        required_credential_types=required_types,
-        supabase=get_supabase_admin(),
+    """Credential status against the baseline requirements (NDIS worker
+    screening) plus the org's matrix for this shift type — the same check
+    ensure_worker_can_be_rostered applies when a shift is actually assigned."""
+    service_status = await roster_eligibility_service.check_worker_credentials(
+        worker_id, org_id, shift_type, supabase=get_supabase_admin(),
     )
     return CredentialStatus(
         valid=service_status.valid,
         missing_credentials=service_status.missing_credentials,
         warning=service_status.warning,
+    )
+
+
+async def _ensure_worker_can_be_rostered(worker_id: str, org_id: str, shift_type: str | None) -> CredentialStatus:
+    """Every path that writes a worker onto a shift goes through this gate."""
+    try:
+        status = await roster_eligibility_service.ensure_worker_can_be_rostered(
+            worker_id, org_id, shift_type, supabase=get_supabase_admin(),
+        )
+    except roster_eligibility_service.WorkerNotEligibleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return CredentialStatus(
+        valid=status.valid,
+        missing_credentials=status.missing_credentials,
+        warning=status.warning,
     )
 
 
@@ -2199,39 +2199,9 @@ async def assign_shift(
 
     await _ensure_participant_active_plan(body.participant_id)
     
-    # Check worker credentials
+    # Hard gate: credentials, mandatory training and mandatory induction.
     shift_type = _normalize_shift_type(body.shift_type)
-    cred_status = await _check_worker_credentials(
-        body.worker_id,
-        org_id,
-        shift_type=shift_type,
-    )
-    if not cred_status.valid:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Worker has invalid credentials: {', '.join(cred_status.missing_credentials)}. "
-                   f"Please ensure worker credentials are up to date before assigning shifts."
-        )
-
-    # Hard gate: mandatory training must also be current, not just credentials —
-    # a worker cannot be rostered until every mandatory item is green.
-    from ..services import worker_training_service as training
-    if training.is_training_overdue(body.worker_id, org_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Worker has overdue mandatory training. "
-                   "Please ensure mandatory training is completed before assigning shifts."
-        )
-
-    # Same hard gate for mandatory induction — a separate, one-time checklist
-    # from ongoing training, but equally blocking for rostering.
-    from ..services import induction_service
-    if induction_service.is_induction_incomplete(body.worker_id, org_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Worker has incomplete mandatory induction. "
-                   "Please ensure induction is completed before assigning shifts."
-        )
+    cred_status = await _ensure_worker_can_be_rostered(body.worker_id, org_id, shift_type)
 
     # Parse timestamps and calculate duration if needed
     try:
@@ -3213,6 +3183,9 @@ async def assign_existing_shift(
         if not shadow_resp.data[0].get("is_active"):
             raise HTTPException(status_code=400, detail="Cannot shadow an inactive worker")
 
+    # Same hard gate as shift creation — also covers PUT /reassign, which delegates here.
+    await _ensure_worker_can_be_rostered(body.worker_id, org_id, shift.get("shift_type"))
+
     # Conflict detection
     participant_id = str(shift.get("participant_id") or "")
     conflicts = _detect_worker_conflicts(
@@ -3757,6 +3730,9 @@ async def bulk_create_shifts(
         eh, em = (int(x) for x in body.end_time.split(":"))
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=f"Invalid date/time format: {exc}")
+
+    if body.worker_id:
+        await _ensure_worker_can_be_rostered(body.worker_id, org_id, body.shift_type)
 
     created: list[dict] = []
     skipped: list[dict] = []

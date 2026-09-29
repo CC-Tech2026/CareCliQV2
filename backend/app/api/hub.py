@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
 from ..core.timezone import app_today, shift_local_date, request_timezone
-from ..schemas.incident import NDIS_NOTIFICATION_HOURS
+from ..schemas.incident import effective_ndis_reportable, notification_clock_start
 from ..services import incident_service, onboarding_pipeline_alerts_service, participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
 
@@ -73,7 +73,7 @@ async def _incident_clock_alerts(org_id: str, current_user: dict) -> list[dict]:
     for inc in incidents:
         if inc.get("status") not in ("reported", "under_investigation"):
             continue
-        if not inc.get("ndis_reportable"):
+        if not effective_ndis_reportable(inc):
             continue
 
         due_raw = inc.get("notification_due_at")
@@ -83,14 +83,8 @@ async def _incident_clock_alerts(org_id: str, current_user: dict) -> list[dict]:
             deadline = datetime.fromisoformat(str(due_raw).replace("Z", "+00:00"))
         except Exception:
             continue
-        try:
-            incident_dt = datetime.fromisoformat(str(inc.get("incident_date")).replace("Z", "+00:00"))
-        except Exception:
-            incident_dt = now
-
-        severity_label = str(inc.get("severity") or "medium")
-        total_hours = NDIS_NOTIFICATION_HOURS.get(severity_label, 240)
-        total_days = max(1, round(total_hours / 24))
+        incident_dt = notification_clock_start(inc) or now
+        total_days = max(1, round((deadline - incident_dt).total_seconds() / 86400))
         elapsed_days = min(total_days, max(1, (now - incident_dt).days + 1))
         overdue = bool(inc.get("overdue"))
         due_label = deadline.strftime("%A") if 0 <= (deadline.date() - now.date()).days <= 6 else deadline.strftime("%d %b")

@@ -9,6 +9,25 @@ from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
 
+# Required for every rostered shift regardless of the org's per-shift-type
+# matrix. Without this, a worker holding any single valid credential (e.g. a
+# driver licence) passed the gate whenever the org hadn't configured
+# shift_credential_requirements for that shift type.
+BASELINE_REQUIRED_CREDENTIALS: tuple[str, ...] = ("ndis_screening",)
+
+# Pre-095 free-text labels that still turn up on older rows.
+_CREDENTIAL_TYPE_ALIASES = {
+    "ndis_worker_screening": "ndis_screening",
+    "working_with_children": "wwcc",
+    "driver_licence": "drivers_licence",
+}
+
+
+def canonical_credential_type(value: Any) -> str:
+    """"NDIS Screening", "ndis-screening" and "ndis_screening" all compare equal."""
+    key = "_".join(str(value or "").strip().lower().replace("-", " ").split())
+    return _CREDENTIAL_TYPE_ALIASES.get(key, key)
+
 
 @dataclass
 class WorkerCredentialStatus:
@@ -84,13 +103,11 @@ async def verify_worker_credentials(
             elif status == "expiring" or (expiry and (expiry - today).days <= 30):
                 expiring_soon_creds.append(cred_type)
 
-        required_types = [t.strip().lower() for t in (required_credential_types or []) if str(t).strip()]
-        valid_type_set = {t.strip().lower() for t in valid_creds}
-
-        required_missing: list[str] = []
-        if required_types:
-            missing_keys = [t for t in required_types if t not in valid_type_set]
-            required_missing = [t for t in (required_credential_types or []) if t.strip().lower() in missing_keys]
+        valid_type_set = {canonical_credential_type(t) for t in valid_creds}
+        required_missing = [
+            t for t in (required_credential_types or [])
+            if str(t).strip() and canonical_credential_type(t) not in valid_type_set
+        ]
 
         warning = None
         if expiring_soon_creds:
@@ -148,3 +165,20 @@ async def get_shift_credential_requirements(
             exc,
         )
         return []
+
+
+async def required_credentials_for_shift(
+    org_id: str,
+    shift_type: str,
+    supabase: Any | None = None,
+) -> list[str]:
+    """Baseline credentials plus the org's configured matrix for this shift type."""
+    configured = await get_shift_credential_requirements(org_id, shift_type, supabase=supabase)
+    required = list(BASELINE_REQUIRED_CREDENTIALS)
+    seen = {canonical_credential_type(t) for t in required}
+    for value in configured:
+        key = canonical_credential_type(value)
+        if key not in seen:
+            seen.add(key)
+            required.append(value)
+    return required

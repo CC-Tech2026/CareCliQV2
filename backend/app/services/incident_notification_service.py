@@ -8,10 +8,11 @@ medication_reminder_service.py's pattern, wired into the same notification sched
 escalates to coordinators at 12h and 4h before the deadline and again once it's overdue —
 deliberately reusing the exact same deadline math as `_enrich` rather than inventing a new one.
 
-Deliberately out of scope here (see the Incident Management spec's data-model/classification-
-engine gaps): category-specific business-day timing, `connection_to_service`, and a dedicated
-`incident_notifications` table — this reuses the existing `incidents.ndis_reportable` /
-`ndis_reported_at` columns as the source of truth rather than duplicating them.
+The deadline is the Commission timeframe for the incident's category (24 hours, or 5 business
+days for unauthorised restrictive practice without harm), counted from identified_at when
+recorded — see schemas/incident.py `ndis_notification_due_at`. Still out of scope:
+`connection_to_service` and a dedicated `incident_notifications` table — this reuses the existing
+`incidents.ndis_reportable` / `ndis_reported_at` columns as the source of truth.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from ..schemas.incident import NDIS_NOTIFICATION_HOURS
+from ..schemas.incident import ndis_notification_due_at
 from .notification_service import _org_coordinator_user_ids, notify_worker
 from .supabase_client import get_supabase_admin
 
@@ -40,26 +41,10 @@ def _is_missing_schema_error(exc: Exception) -> bool:
     return "does not exist" in err or "42703" in err or "pgrst" in err or "could not find" in err
 
 
-def _parse_dt(value: Any) -> datetime | None:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-
 def compute_notification_due_at(incident: dict[str, Any]) -> datetime | None:
-    """Same deadline math as incident_service.py's `_enrich` — kept in sync deliberately so the
-    stored/escalated deadline always matches what the UI's `overdue` badge already shows."""
-    if not incident.get("ndis_reportable"):
-        return None
-    occurred = _parse_dt(incident.get("incident_date"))
-    if not occurred:
-        return None
-    severity = str(incident.get("severity") or "medium")
-    hours = NDIS_NOTIFICATION_HOURS.get(severity, 240)
-    return occurred + timedelta(hours=hours)
+    """Same deadline as incident_service.py's `_enrich` shows for reportable incidents —
+    one shared implementation, so the escalation always matches the UI's `overdue` badge."""
+    return ndis_notification_due_at(incident)
 
 
 async def _notify_coordinators_incident_deadline(
@@ -100,8 +85,12 @@ async def run_incident_notification_pass() -> int:
         resp = (
             get_supabase_admin()
             .table("incidents")
-            .select("id, organization_id, title, incident_date, severity, status, ndis_reportable, ndis_reported_at")
-            .eq("ndis_reportable", True)
+            .select(
+                "id, organization_id, title, incident_date, identified_at, severity, status, "
+                "incident_type, reportable_categories, participant_harmed, "
+                "ndis_reportable, ndis_reportable_override, ndis_reported_at"
+            )
+            .or_("ndis_reportable.eq.true,ndis_reportable_override.eq.true")
             .is_("ndis_reported_at", "null")
             .neq("status", "closed")
             .execute()

@@ -48,6 +48,25 @@ PENDING_OFFER = {
 }
 
 
+@pytest.fixture(autouse=True)
+def eligible_by_default():
+    """Every offer path runs the shared rostering gate; the queue-mechanics
+    tests below assume every worker passes it. TestRosteringGate overrides."""
+    with patch.object(
+        svc.roster_eligibility_service, "ensure_worker_can_be_rostered", new=AsyncMock(),
+    ) as gate:
+        yield gate
+
+
+def _not_eligible_for(*worker_ids):
+    async def gate(worker_id, org_id, shift_type, supabase=None):
+        if worker_id in worker_ids:
+            raise svc.roster_eligibility_service.WorkerNotEligibleError(
+                "Worker has invalid credentials: ndis_screening."
+            )
+    return gate
+
+
 class TestSendOffer:
     def test_supersedes_existing_pending_then_creates_rank_one(self):
         supabase = _supabase({
@@ -227,3 +246,70 @@ class TestRunShiftOfferPass:
         assert stats == {"expired": 1, "advanced": 0, "exhausted": 0}
         notify_offer.assert_not_awaited()
         notify_exhausted.assert_not_awaited()
+
+
+class TestRosteringGate:
+    def test_send_offer_refuses_ineligible_worker(self, eligible_by_default):
+        eligible_by_default.side_effect = _not_eligible_for("worker-1")
+        supabase = _supabase({"shift_offers": []})
+        with patch.object(svc, "get_supabase_admin", return_value=supabase), \
+             patch.object(svc, "_fetch_shift", return_value=SHIFT), \
+             patch.object(svc, "notify_shift_offer", new=AsyncMock()) as notify:
+            import asyncio
+            with pytest.raises(svc.ShiftOfferError, match="ndis_screening"):
+                asyncio.run(svc.send_offer(
+                    shift_id="shift-1", worker_id="worker-1", candidate_queue=[],
+                    offered_by="coord-1", org_id="org-1",
+                ))
+        notify.assert_not_awaited()
+        supabase.table.assert_not_called()
+
+    def test_accept_refuses_worker_who_became_ineligible(self, eligible_by_default):
+        """A credential can lapse inside the response window — the shift must
+        not be written even though the offer is still pending."""
+        eligible_by_default.side_effect = _not_eligible_for("worker-1")
+        supabase = _supabase({"shift_offers": [MagicMock(data=[PENDING_OFFER])]})
+        with patch.object(svc, "get_supabase_admin", return_value=supabase), \
+             patch.object(svc, "get_shift_by_id", return_value=SHIFT):
+            import asyncio
+            with pytest.raises(svc.ShiftOfferError, match="ndis_screening"):
+                asyncio.run(svc.accept_offer(shift_id="shift-1", worker_id="worker-1", org_id="org-1"))
+        assert "shifts" not in [c.args[0] for c in supabase.table.call_args_list]
+
+    def test_decline_skips_ineligible_candidates_in_queue(self, eligible_by_default):
+        eligible_by_default.side_effect = _not_eligible_for("worker-2")
+        supabase = _supabase({
+            "shift_offers": [
+                MagicMock(data=[PENDING_OFFER]),
+                MagicMock(data=[{**PENDING_OFFER, "status": "declined"}]),
+                MagicMock(data=[{**PENDING_OFFER, "id": "offer-2", "worker_id": "worker-3", "rank": 2}]),
+            ],
+        })
+        with patch.object(svc, "get_supabase_admin", return_value=supabase), \
+             patch.object(svc, "get_shift_by_id", return_value=SHIFT), \
+             patch.object(svc, "notify_shift_offer", new=AsyncMock()) as notify_offer, \
+             patch.object(svc, "notify_shift_offer_exhausted", new=AsyncMock()) as notify_exhausted:
+            import asyncio
+            asyncio.run(svc.decline_offer(shift_id="shift-1", worker_id="worker-1", org_id="org-1"))
+
+        notify_offer.assert_awaited_once()
+        assert notify_offer.await_args.kwargs["worker_id"] == "worker-3"
+        notify_exhausted.assert_not_awaited()
+
+    def test_decline_exhausts_when_no_remaining_candidate_is_eligible(self, eligible_by_default):
+        eligible_by_default.side_effect = _not_eligible_for("worker-2", "worker-3")
+        supabase = _supabase({
+            "shift_offers": [
+                MagicMock(data=[PENDING_OFFER]),
+                MagicMock(data=[{**PENDING_OFFER, "status": "declined"}]),
+            ],
+        })
+        with patch.object(svc, "get_supabase_admin", return_value=supabase), \
+             patch.object(svc, "get_shift_by_id", return_value=SHIFT), \
+             patch.object(svc, "notify_shift_offer", new=AsyncMock()) as notify_offer, \
+             patch.object(svc, "notify_shift_offer_exhausted", new=AsyncMock()) as notify_exhausted:
+            import asyncio
+            asyncio.run(svc.decline_offer(shift_id="shift-1", worker_id="worker-1", org_id="org-1"))
+
+        notify_offer.assert_not_awaited()
+        notify_exhausted.assert_awaited_once()

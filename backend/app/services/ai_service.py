@@ -1548,14 +1548,25 @@ async def comply_incident(
     flags, notification requirements, and suggested follow-up actions."""
 
     from ..schemas.incident import (
-        PRACTICE_STANDARD_MAP,
         NDIS_NOTIFICATION_HOURS,
+        NDIS_TIMEFRAME_5_BUSINESS_DAYS,
+        PRACTICE_STANDARD_MAP,
         is_ndis_reportable,
+        ndis_notification_timeframe,
     )
 
     practice_standard = PRACTICE_STANDARD_MAP.get(incident_type, "Standard 2.3 — Incident management")
-    notification_hours = NDIS_NOTIFICATION_HOURS.get(severity, 480)
     ndis_reportable = is_ndis_reportable(incident_type, severity)
+    # Commission timeframe by incident type — not by severity, which used to
+    # tell a worker a high-severity abuse report had 120 hours.
+    timeframe = ndis_notification_timeframe({"incident_type": incident_type, "severity": severity})
+    if timeframe == NDIS_TIMEFRAME_5_BUSINESS_DAYS:
+        notification_hours, notification_window = 120, "5 business days"
+    elif timeframe:
+        notification_hours, notification_window = 24, "24 hours"
+    else:
+        notification_hours = NDIS_NOTIFICATION_HOURS.get(severity, 480)
+        notification_window = f"{notification_hours} hours"
 
     fallback = {
         "compliant_description": description,
@@ -1574,7 +1585,7 @@ async def comply_incident(
         "compliance_flags": ["AI rewrite unavailable — please review the report manually before submitting."],
         "reporting_requirements": (
             f"This incident must be reported to the NDIS Quality and Safeguards Commission within "
-            f"{notification_hours} hours as it meets reportable incident criteria." if ndis_reportable else None
+            f"{notification_window} as it meets reportable incident criteria." if ndis_reportable else None
         ),
         "suggested_follow_up": None,
     }
@@ -1594,7 +1605,7 @@ RAW INCIDENT DETAILS:
 
 Applicable NDIS Practice Standard: {practice_standard}
 NDIS Reportable: {ndis_reportable}
-Notification requirement: within {notification_hours} hours (if reportable)
+Notification requirement: within {notification_window} (if reportable)
 
 YOUR TASKS:
 

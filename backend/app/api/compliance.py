@@ -787,7 +787,11 @@ async def compliance_centre_incidents(current_user: dict = Depends(get_current_u
         month_start = app_today().replace(day=1).isoformat()
         inc_resp = (
             supabase.table("incidents")
-            .select("id, participant_id, user_id, incident_type, description, status, severity, incident_date, ndis_reportable")
+            .select(
+                "id, participant_id, user_id, incident_type, description, status, severity, "
+                "incident_date, identified_at, reportable_categories, participant_harmed, "
+                "ndis_reportable, ndis_reportable_override"
+            )
             .eq("organization_id", org_id)
             .order("incident_date", desc=True)
             .limit(50)

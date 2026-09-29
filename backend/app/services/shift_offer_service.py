@@ -7,7 +7,10 @@ than mutating the old one — same remind-then-escalate, append-a-row shape as
 offer_letter_reminder_service.py, so the full sequence stays auditable.
 
 Never auto-assigns: accept_offer is the only path that ever writes a
-worker_id onto the shift from this module.
+worker_id onto the shift from this module. Every offered worker must pass the
+same rostering gate as a direct assignment (roster_eligibility_service) —
+checked when the offer is sent, when the queue advances, and again on accept,
+since a credential can lapse inside the response window.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
+from . import roster_eligibility_service
 from .notification_service import (
     notify_shift_offer,
     notify_shift_offer_exhausted,
@@ -31,6 +35,15 @@ RESPONSE_WINDOW_MINUTES = 30
 
 class ShiftOfferError(Exception):
     """Raised for caller-facing offer failures (bad state, race lost, etc.)."""
+
+
+async def _ensure_eligible(*, shift: dict[str, Any], worker_id: str, org_id: str) -> None:
+    try:
+        await roster_eligibility_service.ensure_worker_can_be_rostered(
+            worker_id, org_id, shift.get("shift_type"),
+        )
+    except roster_eligibility_service.WorkerNotEligibleError as exc:
+        raise ShiftOfferError(str(exc)) from exc
 
 
 def _fetch_shift(shift_id: str) -> dict[str, Any]:
@@ -90,6 +103,7 @@ async def send_offer(
         raise ShiftOfferError("Shift not found")
     if shift.get("worker_id"):
         raise ShiftOfferError("Shift already has an assigned worker")
+    await _ensure_eligible(shift=shift, worker_id=worker_id, org_id=org_id)
 
     supabase = get_supabase_admin()
     supabase.table("shift_offers").update({"status": "superseded"}).eq(
@@ -146,6 +160,14 @@ async def _advance_or_close(
     """Shared by decline_offer and the expiry pass: pop the next candidate
     off the queue, or notify coordinators the queue is exhausted."""
     queue: list[str] = list(prior.get("candidate_queue") or [])
+    # Skip candidates who stopped being rosterable since the queue was built.
+    while queue:
+        try:
+            await _ensure_eligible(shift=shift, worker_id=queue[0], org_id=org_id)
+            break
+        except ShiftOfferError as exc:
+            logger.info("Skipping shift offer candidate %s for shift %s: %s", queue[0], shift.get("id"), exc)
+            queue.pop(0)
     if not queue:
         await notify_shift_offer_exhausted(shift=shift, reason=prior.get("decline_reason"))
         return None
@@ -208,6 +230,7 @@ async def accept_offer(*, shift_id: str, worker_id: str, org_id: str) -> dict[st
         raise ShiftOfferError("Shift not found")
     if shift.get("worker_id"):
         raise ShiftOfferError("Shift was already assigned to someone else")
+    await _ensure_eligible(shift=shift, worker_id=worker_id, org_id=org_id)
 
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
