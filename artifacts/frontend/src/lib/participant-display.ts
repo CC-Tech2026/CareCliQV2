@@ -40,7 +40,7 @@ export function emergencyContactDisplay(contact: ParticipantProfile["emergency_c
     }
   }
   if (typeof contact === "string") {
-    return { text: contact, phone: contact.match(/[\d+() -]{8,}/)?.[0], name: null, relationship: null };
+    return { text: contact, phone: contact.match(/[\d+() -]{8,}/)?.[0]?.trim(), name: null, relationship: null };
   }
   const name = contact.name?.trim() || null;
   const relationship = contact.relationship?.trim() || null;

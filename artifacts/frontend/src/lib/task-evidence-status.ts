@@ -80,8 +80,11 @@ export function applyEvidencePatch(
 ): ShiftTask {
   const merged: ShiftTask = { ...task, ...patch };
   const flags = deriveEvidenceFlags(merged);
+  // Check the task *with* the patch applied — checking the old task plus
+  // derived flags missed newly added evidence fields, so evidence_added_at
+  // was never stamped when strong evidence arrived after completion.
   const gainedStrong =
-    hasStrongTaskEvidence({ ...task, ...flags }) && !hasStrongTaskEvidence(task);
+    hasStrongTaskEvidence({ ...merged, ...flags }) && !hasStrongTaskEvidence(task);
 
   return {
     ...merged,

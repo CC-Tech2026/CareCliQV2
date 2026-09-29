@@ -10,6 +10,17 @@ vi.mock("@/hooks/use-toast", () => ({
   }),
 }));
 
+// Real English strings so assertions match what users see.
+vi.mock("@/contexts/AccessibilityContext", async () => {
+  const { t, tParams } = await import("@/lib/i18n/translations");
+  return {
+    useAccessibility: () => ({
+      translate: (key: string) => t("en", key),
+      translateParams: (key: string, params: Record<string, string>) => tParams("en", key, params),
+    }),
+  };
+});
+
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ user: { organizationId: "org-1" } }),
 }));
@@ -92,7 +103,7 @@ describe("ShiftAssignmentModal", () => {
       </QueryClientProvider>
     );
 
-    const titleElement = screen.getAllByText("Assign Shift")[0];
+    const titleElement = screen.getAllByText("Create Shift")[0];
     expect(titleElement).toBeTruthy();
   });
 
@@ -125,8 +136,9 @@ describe("ShiftAssignmentModal", () => {
       </QueryClientProvider>
     );
 
-    const assignButton = screen.getAllByRole("button", { name: /assign shift/i })[0];
-    expect(assignButton).toBeTruthy();
+    // No participant chosen yet, so the submit button can't be used.
+    const submitButton = screen.getAllByRole("button", { name: /create unassigned shift/i })[0];
+    expect((submitButton as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("displays worker selection dropdown", () => {

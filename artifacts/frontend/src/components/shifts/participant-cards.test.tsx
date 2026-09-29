@@ -1,5 +1,15 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { t, tParams } from "@/lib/i18n/translations";
+
+// The cards read copy through the accessibility context; use the real
+// English strings so assertions match what users see.
+vi.mock("@/contexts/AccessibilityContext", () => ({
+  useAccessibility: () => ({
+    translate: (key: string) => t("en", key),
+    translateParams: (key: string, params: Record<string, string>) => tParams("en", key, params),
+  }),
+}));
 import { ParticipantProfileCard } from "@/components/shifts/ParticipantProfileCard";
 import { ParticipantPreferencesCard } from "@/components/shifts/ParticipantPreferencesCard";
 

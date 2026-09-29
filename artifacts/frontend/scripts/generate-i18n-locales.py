@@ -14,7 +14,9 @@ OVERRIDES_JSON = ROOT / "src/lib/i18n/locale-overrides.json"
 
 
 def parse_en(text: str) -> dict[str, str]:
-    m = re.search(r"export const en: Dict = \{(.*)\n\};", text, re.S)
+    # Non-greedy: the greedy form ran past the end of `en` into the route maps
+    # below it (WORKER_NAV_KEYS etc.), adding their keys to every locale.
+    m = re.search(r"export const en: Dict = \{(.*?)\n\};", text, re.S)
     if not m:
         raise SystemExit("Could not parse en dict")
     return dict(re.findall(r'"([^"]+)":\s*"((?:\\.|[^"\\])*)"', m.group(1)))
