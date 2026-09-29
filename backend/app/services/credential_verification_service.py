@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
 from typing import Any
 
+from .credential_status import live_status
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -36,15 +36,6 @@ class WorkerCredentialStatus:
     warning: str | None = None
 
 
-def _parse_expiry(expiry_date: Any) -> date | None:
-    if not expiry_date:
-        return None
-    try:
-        return datetime.fromisoformat(str(expiry_date)).date()
-    except (ValueError, TypeError):
-        return None
-
-
 async def verify_worker_credentials(
     worker_id: str,
     org_id: str,
@@ -56,17 +47,12 @@ async def verify_worker_credentials(
         Rules:
     - Worker is valid if at least one credential is in `valid` status and not expired.
     - Credentials marked `expired` or `rejected` are treated as missing/invalid.
-    - Credentials expiring within 30 days trigger a warning but do not block assignment.
+    - Credentials expiring within EXPIRING_WITHIN_DAYS (credential_status) trigger a
+      warning but do not block assignment.
         - If required_credential_types is provided, worker must have all required
             credential types in valid/non-expired state.
     """
     client = supabase or get_supabase_admin()
-    # UTC, not the server's local system date — expiry_date is UTC-anchored,
-    # and comparing it against a local-timezone "today" makes a credential
-    # expiring "tomorrow" read as already-expired whenever the server's local
-    # date has rolled over ahead of UTC's (e.g. ACST is UTC+9:30).
-    today = datetime.now(timezone.utc).date()
-
     try:
         creds_resp = (
             client.table("credentials")
@@ -88,20 +74,20 @@ async def verify_worker_credentials(
         expired_creds: list[str] = []
         expiring_soon_creds: list[str] = []
 
+        # Same rules as every other screen (credential_status.live_status):
+        # valid through the expiry date, "expiring" within the shared window.
+        # This used to re-implement them with a 30-day window and treated a
+        # credential as expired on its own expiry date.
         for cred in credentials:
             cred_type = cred.get("credential_type") or "Unknown"
-            status = cred.get("status") or "pending_review"
-            expiry = _parse_expiry(cred.get("expiry_date"))
+            status = live_status(cred.get("expiry_date"), cred.get("status"))
 
-            if status == "valid":
-                if expiry is None or expiry > today:
-                    valid_creds.append(cred_type)
-                else:
-                    expired_creds.append(cred_type)
+            if status in ("valid", "expiring"):
+                valid_creds.append(cred_type)
+                if status == "expiring":
+                    expiring_soon_creds.append(cred_type)
             elif status in ("expired", "rejected"):
                 expired_creds.append(cred_type)
-            elif status == "expiring" or (expiry and (expiry - today).days <= 30):
-                expiring_soon_creds.append(cred_type)
 
         valid_type_set = {canonical_credential_type(t) for t in valid_creds}
         required_missing = [
