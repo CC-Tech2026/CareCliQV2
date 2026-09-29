@@ -6,7 +6,7 @@
 // queryClient.clear() is called on logout (see AuthContext) to purge
 // all entries regardless.
 
-import { QueryClient, hashKey } from "@tanstack/react-query";
+import { MutationCache, QueryClient, hashKey, type Query } from "@tanstack/react-query";
 
 let _currentOrgId: string | null = null;
 
@@ -18,12 +18,43 @@ export function setQueryOrgId(orgId: string | null): void {
 /** Default cache window for list/dashboard reads (reduces repeat API load while browsing). */
 export const DEFAULT_QUERY_STALE_MS = 60_000;
 
+/** Dashboard and summary queries (counts, KPI tiles, badges). Any successful
+ * save can change these numbers, so they're refreshed after every mutation
+ * instead of each form having to know which dashboards exist. Detail and
+ * list queries are left to each mutation's own invalidation so forms that
+ * are mid-edit aren't overwritten. */
+export const SUMMARY_QUERY_ROOTS = new Set<string>([
+  "dashboard",
+  "md",
+  "incident-stats",
+  "compliance-centre",
+  "care-alerts",
+  "coordinator-credential-alerts",
+  "coordinator-flagged-sessions",
+  "coordinator-notifications",
+]);
+
+export function isSummaryQuery(query: Pick<Query, "queryKey">): boolean {
+  const [first, second] = query.queryKey as unknown[];
+  // useOrgQuery keys start with the orgId; plain useQuery keys don't.
+  const root = typeof first === "string" && first === _currentOrgId ? second : first;
+  return typeof root === "string" && SUMMARY_QUERY_ROOTS.has(root);
+}
+
 export const queryClient = new QueryClient({
+  mutationCache: new MutationCache({
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ predicate: isSummaryQuery });
+    },
+  }),
   defaultOptions: {
     queries: {
       staleTime: DEFAULT_QUERY_STALE_MS,
       gcTime: 5 * 60_000,
-      refetchOnWindowFocus: false,
+      // Returning to the tab refetches anything older than staleTime, so
+      // changes made by someone else (or in another tab) show up without a
+      // manual page refresh. Fresh data (< staleTime) is not refetched.
+      refetchOnWindowFocus: true,
       refetchOnReconnect: true,
       // Prefix every cache hash with the current org_id so entries from
       // different orgs are stored under distinct keys (CCQ-113 AC).

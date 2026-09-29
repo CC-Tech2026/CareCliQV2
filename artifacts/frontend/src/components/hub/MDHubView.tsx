@@ -14,6 +14,8 @@ import {
   Zap,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { COMPLIANCE_TREND_KEY, MD_DASHBOARD_KEY } from "@/lib/query-keys";
 import { readWaitlistSnapshot, type WaitlistSnapshot } from "@/lib/onboardingWaitlist";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1338,6 +1340,8 @@ function FinancialMetric({
   );
 }
 
+const EMPTY_TREND: TrendPoint[] = [];
+
 /* -------------------------------------------------------------------------- */
 /* Main component                                                             */
 /* -------------------------------------------------------------------------- */
@@ -1346,10 +1350,28 @@ export function MDHubView() {
   const { translate } = useAccessibility();
   const [, navigate] = useLocation();
 
-  const [data, setData] = useState<MDData | null>(null);
-  const [trend, setTrend] = useState<TrendPoint[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  // Cached queries, shared with the executive page: refetched when the MD
+  // returns to the tab and whenever a change invalidates MD_DASHBOARD_KEY.
+  const overviewQuery = useOrgQuery<MDData>([...MD_DASHBOARD_KEY, "all"], {
+    queryFn: async () => {
+      const response = await apiFetch("/api/dashboard/managing-director");
+      if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+      return response.json();
+    },
+  });
+  // A missing trend shouldn't hide the rest of the hub.
+  const trendQuery = useOrgQuery<{ trend?: TrendPoint[] }>(COMPLIANCE_TREND_KEY, {
+    queryFn: async () => {
+      const response = await apiFetch("/api/dashboard/compliance-trend");
+      if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+      return response.json();
+    },
+    retry: false,
+  });
+  const data = overviewQuery.data ?? null;
+  const trend = trendQuery.data?.trend ?? EMPTY_TREND;
+  const loading = overviewQuery.isLoading;
+  const error = overviewQuery.isError;
   const [waitlist, setWaitlist] = useState<WaitlistSnapshot>({ count: 0, hours: 0 });
 
   // TEMP: always shows the UI-only placeholder numbers right now, ignoring
@@ -1359,49 +1381,6 @@ export function MDHubView() {
   // once ready to show real enquiry data again.
   useEffect(() => {
     setWaitlist(DUMMY_WAITLIST);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    setLoading(true);
-    setError(false);
-
-    Promise.all([
-      apiFetch("/api/dashboard/managing-director").then(
-        (response) =>
-          response.ok
-            ? response.json()
-            : Promise.reject()
-      ),
-
-      apiFetch("/api/dashboard/compliance-trend").then(
-        (response) =>
-          response.ok
-            ? response.json()
-            : { trend: [] }
-      ),
-    ])
-      .then(([mdData, trendData]) => {
-        if (cancelled) return;
-
-        setData(mdData);
-        setTrend(trendData.trend ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError(true);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   /* ------------------------------------------------------------------------ */

@@ -24,6 +24,8 @@ import { Link, useLocation } from "wouter";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { COMPLIANCE_TREND_KEY, MD_DASHBOARD_KEY } from "@/lib/query-keys";
 import { useBranches } from "@/hooks/useBranches";
 import { zoneAbbreviation } from "@/lib/datetime";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
@@ -44,6 +46,7 @@ const GREEN_SOFT = "#E9F5F0";
 const AMBER_SOFT = "#FBF2E6";
 const RED_SOFT = "#FBEAE9";
 const BLUE_SOFT = "#EAF1F7";
+const EMPTY_TREND: TrendPoint[] = [];
 
 interface MDData {
   timezone?: string;
@@ -325,55 +328,39 @@ export default function MDExecutivePage() {
   const { translate } = useAccessibility();
   const [, navigate] = useLocation();
 
-  const [data, setData] = useState<MDData | null>(null);
-  const [trend, setTrend] = useState<TrendPoint[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   // Branch filter: "" = whole organisation on the MD's own branch clock;
   // a branch id = that office's people, counted on that office's clock.
   const [branchId, setBranchId] = useState("");
   const { branches, multiBranch } = useBranches();
-  const [trendError, setTrendError] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-    setTrendError(false);
-
-    Promise.all([
-      apiFetch(`/api/dashboard/managing-director${branchId ? `?branch_id=${encodeURIComponent(branchId)}` : ""}`).then((response) =>
-        response.ok ? response.json() : Promise.reject()
-      ),
-      apiFetch("/api/dashboard/compliance-trend")
-        .then((response) => (response.ok ? response.json() : Promise.reject()))
-        .catch(() => {
-          if (!cancelled) setTrendError(true);
-          return { trend: [] };
-        }),
-    ])
-      .then(([md, trendResponse]) => {
-        if (cancelled) return;
-
-        setData(md);
-        setTrend(trendResponse?.trend ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError(true);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [branchId, refreshKey]);
+  // Cached queries: refetched when the MD returns to the tab and whenever a
+  // change elsewhere invalidates MD_DASHBOARD_KEY.
+  const overviewQuery = useOrgQuery<MDData>([...MD_DASHBOARD_KEY, branchId || "all"], {
+    queryFn: async () => {
+      const response = await apiFetch(
+        `/api/dashboard/managing-director${branchId ? `?branch_id=${encodeURIComponent(branchId)}` : ""}`,
+      );
+      if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+      return response.json();
+    },
+  });
+  const trendQuery = useOrgQuery<{ trend?: TrendPoint[] }>(COMPLIANCE_TREND_KEY, {
+    queryFn: async () => {
+      const response = await apiFetch("/api/dashboard/compliance-trend");
+      if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+      return response.json();
+    },
+    retry: false,
+  });
+  const data = overviewQuery.data ?? null;
+  const trend = trendQuery.data?.trend ?? EMPTY_TREND;
+  const loading = overviewQuery.isLoading;
+  const error = overviewQuery.isError;
+  const trendError = trendQuery.isError;
+  const retry = () => {
+    void overviewQuery.refetch();
+    void trendQuery.refetch();
+  };
 
   const chartData = useMemo(() => {
     return trend
@@ -444,7 +431,7 @@ export default function MDExecutivePage() {
 
             <button
               type="button"
-              onClick={() => setRefreshKey((key) => key + 1)}
+              onClick={retry}
               className="mt-5 rounded-xl px-4 py-2 text-xs font-semibold text-white"
               style={{ background: PLUM }}
             >
@@ -536,7 +523,7 @@ export default function MDExecutivePage() {
             ))}
             <button
               type="button"
-              onClick={() => setRefreshKey((key) => key + 1)}
+              onClick={retry}
               className="min-h-11 rounded-lg px-3 text-sm font-medium text-cc-plum hover:bg-cc-soft"
             >
               Refresh overview

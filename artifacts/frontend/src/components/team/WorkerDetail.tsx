@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { MD_DASHBOARD_KEY, WORKER_STATS_KEY } from "@/lib/query-keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
@@ -1763,12 +1764,13 @@ function PersonalInfoTab({
  * those, not just an assigned coordinator - see migration 144's comment on
  * worker_tags). A coordinator can also add a tag on the worker's behalf. */
 /** MD-only - who this worker's dashboard/session-review/credential-alert
- * scoping is under (users.coordinator_id). Local optimistic state rather
- * than invalidating md/staff.tsx's own worker-stats fetch (a plain useEffect
- * fetch, not react-query) so the dropdown reflects the change immediately
- * without needing that page's whole list to refetch. */
+ * scoping is under (users.coordinator_id). Local state updates the dropdown
+ * immediately; the shared worker-stats and MD dashboard queries are then
+ * refreshed so the staff list's "no coordinator" flag and counts follow. */
 function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const orgId = user?.organizationId ?? "__no_org__";
   const { toast } = useToast();
   const { hasCapability, grantFor } = useMyAccessGrants();
   const { data: coordinators = [] } = useOrgQuery(["org-coordinators"], {
@@ -1784,7 +1786,11 @@ function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
   const assignMutation = useMutation({
     mutationFn: (nextId: string | null) =>
       assignWorkerCoordinator(worker.id, nextId),
-    onSuccess: (_, nextId) => setCoordinatorId(nextId),
+    onSuccess: (_, nextId) => {
+      setCoordinatorId(nextId);
+      void queryClient.invalidateQueries({ queryKey: [orgId, ...WORKER_STATS_KEY] });
+      void queryClient.invalidateQueries({ queryKey: [orgId, ...MD_DASHBOARD_KEY] });
+    },
     onError: (err) =>
       toast({
         title: "Could not update coordinator",
@@ -1960,6 +1966,9 @@ function ClassificationLevelSection({ worker }: { worker: WorkerStats }) {
  * shown once assigned. */
 function BuddyAssignmentSection({ worker }: { worker: WorkerStats }) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const orgId = user?.organizationId ?? "__no_org__";
   const { data: currentBuddy } = useOrgQuery(["worker-buddy", worker.id], {
     queryFn: () => getWorkerBuddy(worker.id),
   });
@@ -1977,7 +1986,11 @@ function BuddyAssignmentSection({ worker }: { worker: WorkerStats }) {
 
   const assignMutation = useMutation({
     mutationFn: (nextId: string | null) => assignWorkerBuddy(worker.id, nextId),
-    onSuccess: (_, nextId) => setBuddyId(nextId),
+    onSuccess: (_, nextId) => {
+      setBuddyId(nextId);
+      void queryClient.invalidateQueries({ queryKey: [orgId, "worker-buddy", worker.id] });
+      void queryClient.invalidateQueries({ queryKey: [orgId, ...WORKER_STATS_KEY] });
+    },
     onError: (err) =>
       toast({
         title: "Could not update buddy",

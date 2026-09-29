@@ -16,6 +16,10 @@ import {
 } from "lucide-react";
 
 import { apiFetch } from "@/lib/api-fetch";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { MD_DASHBOARD_KEY, WORKER_STATS_KEY } from "@/lib/query-keys";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
@@ -319,15 +323,43 @@ export default function MDStaffPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
-  const [data, setData] = useState<MDData | null>(null);
-  const [pipeline, setPipeline] = useState<WorkerPipelineOverview | null>(null);
-  const [workerStats, setWorkerStats] = useState<WorkerStats[] | null>(null);
-  const [detailsLoading, setDetailsLoading] = useState(true);
-  const [detailsError, setDetailsError] = useState(false);
-  const [detailsAttempt, setDetailsAttempt] = useState(0);
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  // Cached queries (not one-off fetches) so a change saved anywhere — the
+  // worker panel, the team page, another tab — refreshes these numbers too.
+  const dashboardQuery = useOrgQuery<MDData>([...MD_DASHBOARD_KEY, "all"], {
+    queryFn: async () => {
+      const response = await apiFetch("/api/dashboard/managing-director");
+      if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+      return response.json();
+    },
+  });
+  const pipelineQuery = useOrgQuery<WorkerPipelineOverview>(["md", "worker-pipeline"], {
+    queryFn: getWorkerPipelineOverview,
+  });
+  // Richer per-worker record (credentials, training, availability, shift
+  // history, participants...) than the dashboard's summary directory rows -
+  // fetched once for the whole org so opening a profile is instant. Shares
+  // its key with the team and rostering pages.
+  const workerStatsQuery = useOrgQuery<WorkerStats[]>(WORKER_STATS_KEY, {
+    queryFn: getCoordinatorWorkerStats,
+  });
+
+  const data = dashboardQuery.data ?? null;
+  const pipeline = pipelineQuery.data ?? null;
+  const workerStats = workerStatsQuery.data ?? null;
+  const loading = dashboardQuery.isLoading;
+  const error = dashboardQuery.isError;
+  const detailsLoading = workerStatsQuery.isLoading;
+  const detailsError = workerStatsQuery.isError;
+
+  const refreshStaff = () => {
+    void queryClient.invalidateQueries({ queryKey: [orgId, ...MD_DASHBOARD_KEY] });
+    void queryClient.invalidateQueries({ queryKey: [orgId, ...WORKER_STATS_KEY] });
+    void queryClient.invalidateQueries({ queryKey: [orgId, "md", "worker-pipeline"] });
+  };
 
   const [filter, setFilter] = useState<Filter>("all");
   const [roleFilter, setRoleFilter] = useState<string>("all");
@@ -419,16 +451,13 @@ export default function MDStaffPage() {
       });
       setSelectedWorker(null);
       setDeactivateTarget(null);
-      setData((prev) =>
+      // Remove the row immediately, then refetch so the counts update too.
+      queryClient.setQueryData<MDData>([orgId, ...MD_DASHBOARD_KEY, "all"], (prev) =>
         prev
-          ? {
-              ...prev,
-              staff_directory: prev.staff_directory.filter(
-                (w) => w.id !== worker.id,
-              ),
-            }
+          ? { ...prev, staff_directory: prev.staff_directory.filter((w) => w.id !== worker.id) }
           : prev,
       );
+      refreshStaff();
     } catch (err) {
       toast({
         title: "Could not deactivate account",
@@ -455,6 +484,7 @@ export default function MDStaffPage() {
         description: `${worker.full_name}'s account has been queued for removal.`,
       });
       setSelectedWorker(null);
+      refreshStaff();
     } catch (err) {
       toast({
         title: "Could not queue account removal",
@@ -465,73 +495,6 @@ export default function MDStaffPage() {
       setAccountActionPending(null);
     }
   }
-
-  useEffect(() => {
-    let cancelled = false;
-
-    apiFetch("/api/dashboard/managing-director")
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((result) => {
-        if (!cancelled) {
-          setData(result);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError(true);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    getWorkerPipelineOverview()
-      .then((result) => {
-        if (!cancelled) {
-          setPipeline(result);
-        }
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    // Richer per-worker record (credentials, training, availability, shift
-    // history, participants...) than the dashboard's summary directory rows -
-    // fetched once for the whole org so opening a profile is instant, not a
-    // second round-trip per click.
-    setDetailsLoading(true);
-    setDetailsError(false);
-    getCoordinatorWorkerStats()
-      .then((result) => {
-        if (!cancelled) setWorkerStats(result);
-      })
-      .catch(() => {
-        if (!cancelled) setDetailsError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setDetailsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [detailsAttempt]);
 
   const allStaff = data?.staff_directory ?? [];
   const selectedWorkerStats = selectedWorker
@@ -1409,7 +1372,7 @@ export default function MDStaffPage() {
                   </p>
                   <Button
                     variant="outline"
-                    onClick={() => setDetailsAttempt((v) => v + 1)}
+                    onClick={() => void workerStatsQuery.refetch()}
                   >
                     Retry staff details
                   </Button>

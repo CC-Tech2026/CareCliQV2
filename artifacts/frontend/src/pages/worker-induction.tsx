@@ -31,7 +31,6 @@ export default function WorkerInductionPage() {
       toast({ title: "Induction item completed" });
       setOpenItemId(null);
       void queryClient.invalidateQueries({ queryKey: [orgId, "worker", "induction"] });
-      void queryClient.invalidateQueries({ queryKey: ["worker", "onboarding"] });
     },
     onError: (e: Error) => toast({ title: "Failed to complete item", description: e.message, variant: "destructive" }),
   });

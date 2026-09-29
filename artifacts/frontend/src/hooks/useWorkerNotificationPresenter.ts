@@ -52,10 +52,8 @@ export function useWorkerNotificationPresenter() {
 
     const invalidate = () => {
       void qc.invalidateQueries({ queryKey: [orgId, "notification-banners"] });
-      void qc.invalidateQueries({ queryKey: [orgId, "worker-notifications"] });
       void qc.invalidateQueries({ queryKey: [orgId, "worker-notifications-unread"] });
       void qc.invalidateQueries({ queryKey: [orgId, "notification-history"] });
-      void qc.invalidateQueries({ queryKey: [orgId, "worker-messages-unread"] });
       void qc.invalidateQueries({ queryKey: [orgId, "worker-messages"] });
     };
 

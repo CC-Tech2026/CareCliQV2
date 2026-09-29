@@ -626,7 +626,6 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
     mutationFn: markMessageRead,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [orgId, "worker-messages"] });
-      qc.invalidateQueries({ queryKey: [orgId, "worker-messages-unread"] });
       qc.invalidateQueries({ queryKey: [orgId, "worker-notifications-unread"] });
     },
   });
@@ -641,7 +640,6 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [orgId, "worker-messages"] });
-      qc.invalidateQueries({ queryKey: [orgId, "worker-messages-unread"] });
       qc.invalidateQueries({ queryKey: [orgId, "worker-notifications-unread"] });
     },
   });

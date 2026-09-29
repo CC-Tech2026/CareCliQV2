@@ -1,5 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render as rtlRender, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import MDCompliancePage from "./compliance";
 import MDExecutivePage from "./executive";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
@@ -15,6 +17,18 @@ vi.mock("@/contexts/AccessibilityContext", () => ({
   useAccessibility: () => ({ translate: (s: string) => s }),
 }));
 vi.mock("@/components/ui/section-info", () => ({ SectionInfo: () => null }));
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({ user: { id: "md-1", organizationId: "org-1", role: "managing_director" } }),
+}));
+vi.mock("@/hooks/useBranches", () => ({
+  useBranches: () => ({ branches: [], multiBranch: false }),
+}));
+
+// The executive page reads through react-query; each test gets a fresh cache.
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 const data = {
   active_participants: 12,
   active_staff: 8,

@@ -17,9 +17,11 @@ export function useConversationRealtime(conversationId: string | null | undefine
     const sb = getSupabaseClient();
     if (!sb) return;
 
+    // useOrgQuery keys start with the orgId — without it these matched nothing
+    // and new messages only appeared after a manual refresh.
     const invalidate = () => {
-      void qc.invalidateQueries({ queryKey: ["worker-conversations", orgId] });
-      void qc.invalidateQueries({ queryKey: ["conversation-thread", conversationId] });
+      void qc.invalidateQueries({ queryKey: [orgId, "worker-conversations"] });
+      void qc.invalidateQueries({ queryKey: [orgId, "conversation-thread", conversationId] });
     };
 
     const messagesChannel = sb
