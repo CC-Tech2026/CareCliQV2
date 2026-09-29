@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from ..core.errors import internal_error_detail
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
 from ..api.security import require_recent_reauth
@@ -203,7 +204,7 @@ async def upload_my_credential_file(
     try:
         supabase.storage.from_(CREDENTIAL_FILES_BUCKET).upload(path, raw, {"content-type": content_type, "upsert": "true"})
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Credential storage is not configured: {exc}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Credential storage is not configured", exc))
     update_payload = {"file_path": path, "file_url": None, "updated_at": datetime.now(timezone.utc).isoformat()}
     if existing.get("verified_at") and not has_org_wide_access(current_user):
         # A new document on a previously-verified credential hasn't itself been

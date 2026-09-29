@@ -51,7 +51,7 @@ function TrendIcon({ score }: { score?: number | null }) {
 type ExportTab = "summary" | "workers" | "flagged" | "engagement";
 
 /** Rendered both at the standalone /audit-pack route and as a Compliance
- * Centre sub-tab � kept as one component so the two never drift apart. */
+ * Centre sub-tab — kept as one component so the two never drift apart. */
 export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { translate, translateParams } = useAccessibility();
   const [activeTab, setActiveTab] = useState<ExportTab>("summary");
@@ -136,7 +136,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
 
   return (
     <div className="space-y-3 pb-8">
-      {/* Header � skipped when embedded as a Compliance Centre sub-tab, which already has its own title */}
+      {/* Header — skipped when embedded as a Compliance Centre sub-tab, which already has its own title */}
       <div className={embedded ? "flex justify-end" : "flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"}>
         {!embedded && (
           <div>
@@ -249,7 +249,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
                     {engagement.data.check16_compliance_row.name} ({engagement.data.check16_compliance_row.rule})
                   </p>
                   <p style={{ color: MUTED }}>
-                    Period result: {engagement.data.check16_compliance_row.period_result} �{" "}
+                    Period result: {engagement.data.check16_compliance_row.period_result} ·{" "}
                     {engagement.data.check16_compliance_row.sessions_flagged} sessions flagged
                   </p>
                 </div>
@@ -263,11 +263,11 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
                   {engagement.data.long_shift_engagement_log.map((row) => (
                     <div key={row.session_id} className="rounded-xl border p-3 text-xs" style={{ borderColor: BORDER }}>
                       <p className="font-bold" style={{ color: TEXT }}>
-                        {row.participant_name || "Participant"} � {row.worker_name || "Worker"}
+                        {row.participant_name || "Participant"} · {row.worker_name || "Worker"}
                       </p>
                       <p style={{ color: MUTED }}>
-                        {row.shift_duration_hours}h � Check-ins {row.checkins_completed}/{row.checkins_required} �
-                        Max gap {row.max_activity_gap_mins}m � Break {row.break_duration_mins}m � Score {row.engagement_score}
+                        {row.shift_duration_hours}h · Check-ins {row.checkins_completed}/{row.checkins_required} ·
+                        Max gap {row.max_activity_gap_mins}m · Break {row.break_duration_mins}m · Score {row.engagement_score}
                       </p>
                     </div>
                   ))}
@@ -290,8 +290,8 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
                     >
                       <p className="font-bold" style={{ color: TEXT }}>{row.participant_name || "Participant"}</p>
                       <p style={{ color: MUTED }}>
-                        Billed {row.billed_hours ?? "N/A"}h � Billable {row.billable_hours ?? "N/A"}h � Break {row.break_hours ?? 0}h
-                        {row.flagged ? " � discrepancy flagged" : ""}
+                        Billed {row.billed_hours ?? "N/A"}h · Billable {row.billable_hours ?? "N/A"}h · Break {row.break_hours ?? 0}h
+                        {row.flagged ? " · discrepancy flagged" : ""}
                       </p>
                     </div>
                   ))}

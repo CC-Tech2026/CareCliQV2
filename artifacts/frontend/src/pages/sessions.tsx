@@ -23,7 +23,7 @@ import { exportBulkSessionsPDF } from "@/lib/pdf-export";
 import { useGetSessions, useGetParticipants, getGetSessionsQueryKey } from "@workspace/api-client-react";
 import type { Session as ApiSession, Participant as ApiParticipant } from "@workspace/api-client-react";
 
-// -- Design tokens � aligned with Dashboard -------------------------------------
+// -- Design tokens — aligned with Dashboard -------------------------------------
 const PLUM        = "#E8457A";
 const CORAL       = "var(--cc-coral)";
 const T1          = "#1A1A2E";
@@ -113,7 +113,7 @@ function SkeletonRow() {
   );
 }
 
-// -- Session stat card � matches Dashboard DashboardStatCard --------------------
+// -- Session stat card — matches Dashboard DashboardStatCard --------------------
 function SessionStatCard({
   label, value, caption, icon: Icon, valueColor,
 }: {
@@ -380,7 +380,7 @@ export default function Sessions() {
               <span className="text-[14px] font-bold group-hover:text-[#E8457A] transition-colors truncate" style={{ color: T1 }}>
                 {session._participantName}
               </span>
-              <span className="hidden sm:inline text-slate-300 text-xs">�</span>
+              <span className="hidden sm:inline text-slate-300 text-xs">·</span>
               <span className="text-[12px] font-medium capitalize truncate" style={{ color: T2 }}>
                 {session.session_type?.replace(/_/g, " ") ?? translate("sessions.general")}
               </span>
@@ -485,7 +485,7 @@ export default function Sessions() {
   return (
     <div className="space-y-6 pb-10">
 
-      {/* Page header � matches Dashboard pattern */}
+      {/* Page header — matches Dashboard pattern */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Clinical Records</p>
@@ -508,7 +508,7 @@ export default function Sessions() {
         </Link>
       </div>
 
-      {/* Stat cards � matches Dashboard grid */}
+      {/* Stat cards — matches Dashboard grid */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SessionStatCard label={translate("sessions.stat.total")}  value={sessions.length}   caption={translate("sessions.stat.totalCaption")}        icon={Calendar}      />
         <SessionStatCard label={translate("sessions.stat.thisWeek")}        value={thisWeekCount}     caption={translate("sessions.stat.thisWeekCaption")}     icon={Clock}         />
@@ -516,7 +516,7 @@ export default function Sessions() {
         <SessionStatCard label={translate("sessions.stat.inProgress")}      value={inProgressCount}   caption={translate("sessions.stat.inProgressCaption")}    icon={AlertTriangle} valueColor={inProgressCount > 0 ? "#D97706" : T1} />
       </div>
 
-      {/* Filter + session list � dashboard card style */}
+      {/* Filter + session list — dashboard card style */}
       <section className="rounded-lg border bg-white shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
 
         {/* Filter bar */}

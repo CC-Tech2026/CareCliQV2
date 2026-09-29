@@ -22,6 +22,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from ..core.errors import internal_error_detail
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,7 @@ def upload_logo(organization_id: str, file_bytes: bytes, content_type: str) -> d
         supabase.storage.from_(BUCKET).upload(path, file_bytes, {"content-type": content_type, "upsert": "true"})
         public_url = supabase.storage.from_(BUCKET).get_public_url(path)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Logo storage is not configured: {exc}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Logo storage is not configured", exc))
 
     supabase.table("organizations").update({"logo_url": public_url}).eq(
         "organization_id", organization_id

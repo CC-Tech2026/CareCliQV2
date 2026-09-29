@@ -4,6 +4,7 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 
+from ..core.errors import internal_error_detail
 from ..core.access import (
     get_user_id,
     get_user_organization_id,
@@ -401,7 +402,7 @@ async def download_resource(resource_id: str, redirect: bool = True, current_use
         )
         signed_url = signed.get("signedURL") or signed.get("signedUrl") or signed.get("signed_url") or ""
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Could not generate signed URL: {e}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Could not generate signed URL", e))
     if not signed_url:
         raise HTTPException(status_code=502, detail="Signed URL generation returned empty result")
     if not redirect:

@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
+from ..core.errors import internal_error_detail
 from ..services import ai_service, participant_service, session_service
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
 from ..services.supabase_client import get_supabase_admin
@@ -261,7 +262,7 @@ async def generate_participant_report(
         file_url = supabase.storage.from_("report-files").get_public_url(file_path)
     except Exception as exc:
         logger.warning("Report PDF storage unavailable: %s", exc)
-        raise HTTPException(status_code=502, detail=f"Report PDF storage is not configured: {exc}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Report PDF storage is not configured", exc))
 
     payload = {
         "organization_id": get_user_organization_id(current_user),

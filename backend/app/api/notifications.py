@@ -8,6 +8,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from ..core.errors import internal_error_detail
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
 from ..services import conversation_service
@@ -175,7 +176,7 @@ async def update_shift_reminder_settings(
             on_conflict="shift_id",
         ).execute()
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not save settings: {exc}") from exc
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not save settings", exc)) from exc
     return {"ok": True, "silence_optional_reminders": body.silence_optional_reminders}
 
 

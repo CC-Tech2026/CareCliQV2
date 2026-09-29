@@ -269,6 +269,8 @@ from .api import platform_billing as platform_billing_api
 app.include_router(platform_billing_api.router, prefix="/api")
 from .api import launch_waitlist as launch_waitlist_api
 app.include_router(launch_waitlist_api.router, prefix="/api")
+from .api import client_errors as client_errors_api
+app.include_router(client_errors_api.router, prefix="/api")
 from .api import md_vault as md_vault_api
 app.include_router(md_vault_api.router, prefix="/api")
 from .api import access_grants as access_grants_api

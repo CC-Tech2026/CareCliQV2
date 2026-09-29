@@ -582,7 +582,7 @@ export default function WorkerSecurity() {
                   ) : null}
                 </div>
                 <p className="text-sm text-[#6A6A77]">
-                  {entry.location_label} · {formatWhen(entry.created_at)}
+                  {entry.location_label} Â· {formatWhen(entry.created_at)}
                 </p>
               </div>
             ))}

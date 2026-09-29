@@ -569,7 +569,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                   <User size={13} />
                   {incident.participant_name}
                   {incident.participant_ndis && (
-                    <span style={{ color: "#7A6A8A" }}>� NDIS {incident.participant_ndis}</span>
+                    <span style={{ color: "#7A6A8A" }}>· NDIS {incident.participant_ndis}</span>
                   )}
                 </p>
               )}
@@ -919,7 +919,7 @@ export default function IncidentDetail({ id }: { id: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* Similar past incidents � CARECLIQV2-32 */}
+      {/* Similar past incidents — CARECLIQV2-32 */}
       {(patternsLoading || showPatternsPanel) && (
         <div className="cc-surface-card lg:col-start-1">
           <div className="cc-card-header">

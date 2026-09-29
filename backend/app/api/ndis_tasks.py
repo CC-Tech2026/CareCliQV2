@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from ..core.errors import internal_error_detail
 from ..core.access import has_org_wide_access
 from ..core.security import get_current_user
 from ..services.supabase_client import get_supabase_admin
@@ -149,7 +150,7 @@ async def record_task_completion(
         resp = supabase.table("task_completions").insert(completion_payload).execute()
         return (resp.data or [completion_payload])[0]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to record completion: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Failed to record completion", e))
 
 
 @router.post("/task-completions/{completion_id}/verify")
@@ -224,7 +225,7 @@ async def verify_task_completion(
         )
         return (resp.data or [update_payload])[0]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Verification failed: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Verification failed", e))
 
 
 @router.get("/task-completions")
@@ -253,7 +254,7 @@ async def list_task_completions(
         resp = q.order("completion_date", desc=True).limit(limit).execute()
         return resp.data or []
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Query failed: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Query failed", e))
 
 
 # ──────────────────────────────────────────────────────────────────────────────

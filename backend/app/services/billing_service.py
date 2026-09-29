@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, status
 
+from ..core.errors import internal_error_detail
 from ..core.access import (
     can_access_participant,
     can_access_session,
@@ -1036,7 +1037,7 @@ async def generate_invoice_pdf(invoice_id: str, user: dict) -> dict:
             {"content-type": "application/pdf", "upsert": "true"},
         )
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Invoice PDF storage is not configured: {exc}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Invoice PDF storage is not configured", exc))
     result = (
         supabase.table("invoices")
         # pdf_url is intentionally not stored — invoice-files is a private bucket, so

@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from ..core.errors import internal_error_detail
 from .email_service import queue_onboarding_sign_email, queue_signing_verification_email
 from .supabase_client import get_supabase_admin
 
@@ -187,7 +188,7 @@ async def upload_document_file(
         signed = supabase.storage.from_(BUCKET).create_signed_url(path, SIGNED_URL_EXPIRY_SECONDS)
         url = signed.get("signedURL") or signed.get("signed_url")
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Onboarding document storage is not configured: {exc}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Onboarding document storage is not configured", exc))
 
     result = (
         supabase.table("employee_onboarding_documents")

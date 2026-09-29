@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from ..core.errors import internal_error_detail
 from ..schemas.participant import ParticipantCreate
 from . import participant_service
 from .html_pdf_render import HtmlPdfRenderError, render_html_to_pdf
@@ -293,7 +294,7 @@ def _generate_and_store_service_agreement(intake: dict[str, Any]) -> dict[str, A
     try:
         filename, pdf_bytes = _render_service_agreement_pdf(intake)
     except HtmlPdfRenderError as exc:
-        raise HTTPException(status_code=502, detail=f"Could not generate the service agreement: {exc}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Could not generate the service agreement", exc))
 
     supabase = get_supabase_admin()
     path = f"{intake['organization_id']}/{intake['id']}/{uuid4().hex}.pdf"
@@ -302,7 +303,7 @@ def _generate_and_store_service_agreement(intake: dict[str, Any]) -> dict[str, A
         signed = supabase.storage.from_(BUCKET).create_signed_url(path, SIGNED_URL_EXPIRY_SECONDS)
         url = signed.get("signedURL") or signed.get("signed_url")
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Participant intake storage is not configured: {exc}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Participant intake storage is not configured", exc))
 
     return {"signed_document_path": path, "signed_document_url": url, "signed_document_name": filename}
 
@@ -380,7 +381,7 @@ async def upload_signed_document(
         signed = supabase.storage.from_(BUCKET).create_signed_url(path, SIGNED_URL_EXPIRY_SECONDS)
         url = signed.get("signedURL") or signed.get("signed_url")
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Participant intake storage is not configured: {exc}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Participant intake storage is not configured", exc))
 
     result = (
         supabase.table(TABLE)

@@ -274,7 +274,7 @@ export default function SessionNew() {
             </div>
           </FormCard>
 
-          {/* -- Goals � only after participant selected -- */}
+          {/* -- Goals — only after participant selected -- */}
           {selectedParticipantId && (
             <div
               className="bg-white rounded-2xl overflow-hidden"

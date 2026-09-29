@@ -13,6 +13,7 @@ from postgrest.exceptions import APIError
 
 logger = logging.getLogger(__name__)
 
+from ..core.errors import internal_error_detail
 from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access, has_active_grant
 from ..core.config import settings
 from ..core.security import get_current_user
@@ -710,7 +711,7 @@ async def flag_session_for_review(
             except Exception as e2:
                 raise HTTPException(status_code=500, detail=f"Flag update failed: {e2}")
         else:
-            raise HTTPException(status_code=500, detail=f"Flag update failed: {e}")
+            raise HTTPException(status_code=500, detail=internal_error_detail("Flag update failed", e))
 
     if body.flagged and session_row:
         worker_id = str(
@@ -774,7 +775,7 @@ async def approve_session(
         )
         existing_rows = existing_resp.data or []
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Session lookup failed: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Session lookup failed", e))
 
     if not existing_rows:
         raise HTTPException(status_code=404, detail="Session not found.")
@@ -808,7 +809,7 @@ async def approve_session(
             # delete+insert workaround.
             persisted = {**session_row, **update_payload}
         else:
-            raise HTTPException(status_code=500, detail=f"Approve failed: {e}")
+            raise HTTPException(status_code=500, detail=internal_error_detail("Approve failed", e))
 
     logged = await audit_service.log_action(
         action_type="session.approved",
@@ -908,7 +909,7 @@ def _require_target_support_worker(supabase, worker_id: str, org_id: str) -> dic
             .execute()
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not look up worker: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not look up worker", e))
     target = row.data if row else None
     if not target:
         raise HTTPException(status_code=404, detail="Worker not found in this organization.")
@@ -948,7 +949,7 @@ async def deactivate_worker(
         }).eq("id", worker_id).eq("organization_id", org_id).execute()
         supabase.table("organization_members").update({"is_active": False}).eq("user_id", worker_id).eq("organization_id", org_id).execute()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Deactivation failed: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Deactivation failed", e))
 
     await audit_service.log_action(
         action_type="coordinator.worker.deactivated",
@@ -998,7 +999,7 @@ async def activate_worker(worker_id: str, current_user: dict = Depends(get_curre
         }).eq("id", worker_id).eq("organization_id", org_id).execute()
         supabase.table("organization_members").update({"is_active": True}).eq("user_id", worker_id).eq("organization_id", org_id).execute()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Activation failed: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Activation failed", e))
 
     try:
         # Clear any onboarding_stage_reminders rows for this worker so the
@@ -1280,7 +1281,7 @@ def _lookup_worker_email(supabase, worker_id: str, org_id: str) -> str:
             .execute()
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not look up worker: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not look up worker", e))
 
     email = ((row.data or [None])[0] or {}).get("email")
     if not email:
@@ -1300,7 +1301,7 @@ async def send_worker_password_reset(worker_id: str, current_user: dict = Depend
     try:
         _send_recovery_email(email)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not send reset email: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not send reset email", e))
 
     return {"worker_id": worker_id, "email": email, "message": "Password reset email sent."}
 
@@ -1331,7 +1332,7 @@ async def assign_worker_to_client(
                 "is_active": True,
             }).execute()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Assignment failed: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Assignment failed", e))
     return {"worker_id": worker_id, "patient_id": body.patient_id, "role": body.role}
 
 
@@ -1346,7 +1347,7 @@ async def unassign_worker_from_client(
     try:
         supabase.table("practitioner_allocations").delete().eq("user_id", worker_id).eq("patient_id", patient_id).execute()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unassignment failed: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Unassignment failed", e))
     return {"worker_id": worker_id, "patient_id": patient_id, "unassigned": True}
 
 
@@ -1426,7 +1427,7 @@ async def send_worker_message(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Worker lookup failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Worker lookup failed", exc))
 
     result = await notify_coordinator_message(
         user_id=worker_id,
@@ -1484,7 +1485,7 @@ async def update_shift_schedule(
         )
         updated = (result.data or [None])[0] or {**shift, **update_payload}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Shift update failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Shift update failed", exc))
 
     summary = " and ".join(changes) if changes else "Schedule updated"
     await notify_shift_change(
@@ -1545,7 +1546,7 @@ async def cancel_shift(
         )
         updated = (result.data or [None])[0] or {**shift, "status": "cancelled", "updated_at": now}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Shift cancel failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail=internal_error_detail("Shift cancel failed", exc)) from exc
 
     try:
         from ..services import schads_engine
@@ -1655,7 +1656,7 @@ async def coordinator_shifts(
             status_filter=status_filter,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not load shifts: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not load shifts", exc))
 
     # care_coordinator_id is fetched as its own best-effort query rather than
     # folded into the main shifts select above: that select already has a
@@ -2155,7 +2156,7 @@ async def assign_shift(
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Worker lookup failed: {exc}"
+            detail=internal_error_detail("Worker lookup failed", exc)
         )
 
     if body.is_shadow_shift:
@@ -2174,7 +2175,7 @@ async def assign_shift(
         except HTTPException:
             raise
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Shadowed worker lookup failed: {exc}")
+            raise HTTPException(status_code=500, detail=internal_error_detail("Shadowed worker lookup failed", exc))
 
     # Verify participant exists and belongs to organization
     try:
@@ -2194,7 +2195,7 @@ async def assign_shift(
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Participant lookup failed: {exc}"
+            detail=internal_error_detail("Participant lookup failed", exc)
         )
 
     await _ensure_participant_active_plan(body.participant_id)
@@ -2348,7 +2349,7 @@ async def assign_shift(
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Shift creation failed: {exc}"
+            detail=internal_error_detail("Shift creation failed", exc)
         )
 
 
@@ -3230,7 +3231,7 @@ async def assign_existing_shift(
             result = supabase.table("shifts").update(update_payload).eq("id", shift_id).execute()
         updated = (result.data or [None])[0] or {**shift, "worker_id": body.worker_id, "status": "scheduled"}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Shift update failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Shift update failed", exc))
 
     await audit_service.log_action(
         action_type="coordinator.shift.assigned",
@@ -3313,7 +3314,7 @@ async def unassign_existing_shift(
         )
         updated = (result.data or [None])[0] or {**shift, "worker_id": None, "status": "unassigned"}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Shift update failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Shift update failed", exc))
 
     await audit_service.log_action(
         action_type="coordinator.shift.unassigned",
@@ -3975,7 +3976,7 @@ async def get_worker_notifications(
         resp = q.execute()
         return resp.data or []
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Notification fetch failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Notification fetch failed", exc))
 
 
 @router.post("/workers/{worker_id}/notifications/read")
@@ -3991,7 +3992,7 @@ async def mark_notifications_read(
         supabase.table("worker_notifications").update({"read_at": now}).eq("user_id", worker_id).is_("read_at", "null").execute()
         return {"ok": True}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Mark read failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Mark read failed", exc))
 
 
 # ── Worker availability ───────────────────────────────────────────────────────
@@ -4039,7 +4040,7 @@ async def get_worker_availability(
             "blackout_dates": blackouts.data or [],
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Availability fetch failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Availability fetch failed", exc))
 
 
 @router.put("/workers/{worker_id}/availability")
@@ -4078,7 +4079,7 @@ async def update_worker_availability(
                     }).execute()
         return {"ok": True}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Availability update failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Availability update failed", exc))
 
 
 # ── Worker skills ─────────────────────────────────────────────────────────────
@@ -4101,7 +4102,7 @@ async def get_worker_skills(
         )
         return resp.data or []
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Skills fetch failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Skills fetch failed", exc))
 
 
 class WorkerSkillBody(BaseModel):
@@ -4138,7 +4139,7 @@ async def add_worker_skill(
         )
         return (resp.data or [payload])[0]
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Skill add failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Skill add failed", exc))
 
 
 @router.delete("/workers/{worker_id}/skills/{skill}")
@@ -4154,7 +4155,7 @@ async def remove_worker_skill(
         supabase.table("worker_skills").delete().eq("user_id", worker_id).eq("skill", skill).execute()
         return {"ok": True}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Skill delete failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Skill delete failed", exc))
 
 
 # ── Worker shift history & performance (read-only, coordinator/MD) ────────────
@@ -4248,7 +4249,7 @@ async def get_participant_required_skills(
         )
         return resp.data or []
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Required skills fetch failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Required skills fetch failed", exc))
 
 
 class RequiredSkillBody(BaseModel):
@@ -4279,7 +4280,7 @@ async def add_participant_required_skill(
         )
         return (resp.data or [payload])[0]
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Required skill add failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Required skill add failed", exc))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -4609,7 +4610,7 @@ async def get_live_shifts(
     try:
         shifts_raw = _fetch_live_shifts_raw(supabase, org_id, window_start)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Live shifts fetch failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Live shifts fetch failed", exc))
 
     # Fetch workers for name lookup
     worker_ids = list({s.get("worker_id") for s in shifts_raw if s.get("worker_id")})
@@ -4865,7 +4866,7 @@ async def get_shift_messages(
         conv_id = conv.data[0]["id"]
         return conversation_service.get_conversation_messages(str(conv_id), user_id)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Messages fetch failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail=internal_error_detail("Messages fetch failed", exc)) from exc
 
 
 @router.get("/shifts/{shift_id}/detail")
@@ -4913,7 +4914,7 @@ async def flag_shift_alert(
         }).execute()
         result = (resp.data or [{}])[0]
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Flag failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Flag failed", exc))
 
     logged = await audit_service.log_action(
         action_type="shift.flagged",
@@ -4960,7 +4961,7 @@ async def emergency_stop_shift(
         }).eq("id", shift_id).execute()
         updated = (result.data or [{}])[0]
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Emergency stop failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Emergency stop failed", exc))
 
     logged = await audit_service.log_action(
         action_type="shift.emergency_stopped",
@@ -5027,7 +5028,7 @@ async def get_coordinator_notifications(
         resp = q.execute()
         return resp.data or []
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Notifications fetch failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Notifications fetch failed", exc))
 
 
 @router.post("/notifications/{alert_id}/read")
@@ -5042,7 +5043,7 @@ async def mark_coordinator_notification_read(
         supabase.table("alerts").update({"is_read": True}).eq("id", alert_id).eq("organization_id", org_id).execute()
         return {"ok": True}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Mark read failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Mark read failed", exc))
 
 
 @router.post("/notifications/read-all")
@@ -5056,7 +5057,7 @@ async def mark_all_coordinator_notifications_read(
         supabase.table("alerts").update({"is_read": True}).eq("organization_id", org_id).eq("is_read", False).execute()
         return {"ok": True}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Mark all read failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Mark all read failed", exc))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -5110,7 +5111,7 @@ async def list_goals_missing_support_category(
             })
         return out
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Goal review queue failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Goal review queue failed", exc))
 
 
 @router.get("/goals")
@@ -5131,7 +5132,7 @@ async def list_coordinator_goals(
         resp = q.execute()
         return resp.data or []
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Goals fetch failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Goals fetch failed", exc))
 
 
 @router.post("/goals", status_code=201)
@@ -5171,7 +5172,7 @@ async def create_ndis_goal(
         resp = supabase.table("ndis_goals").insert(payload).execute()
         return (resp.data or [payload])[0]
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Goal create failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Goal create failed", exc))
 
 
 @router.put("/goals/{goal_id}")
@@ -5219,7 +5220,7 @@ async def update_ndis_goal(
             )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Goal update failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Goal update failed", exc))
 
 
 @router.put("/goals/{goal_id}/archive")
@@ -5248,7 +5249,7 @@ async def archive_ndis_goal(
             )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Goal archive failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Goal archive failed", exc))
 
 
 @router.put("/goals/{goal_id}/complete")
@@ -5277,7 +5278,7 @@ async def complete_ndis_goal(
             )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Goal complete failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Goal complete failed", exc))
 
 
 @router.get("/goals/{goal_id}/progress")
@@ -5317,7 +5318,7 @@ async def get_goal_progress(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Goal progress failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Goal progress failed", exc))
 
 
 # ── Task templates ────────────────────────────────────────────────────────────
@@ -5381,7 +5382,7 @@ async def list_task_templates(
             "custom_tasks": custom_resp.data or [],
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Task templates fetch failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Task templates fetch failed", exc))
 
 
 @router.post("/participants/{participant_id}/task-templates", status_code=201)
@@ -5426,7 +5427,7 @@ async def create_task_template(
         resp = supabase.table("participant_task_templates").insert(payload).execute()
         return (resp.data or [payload])[0]
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Task template create failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Task template create failed", exc))
 
 
 @router.put("/task-templates/{template_id}")
@@ -5465,7 +5466,7 @@ async def update_task_template(
         resp = supabase.table("participant_task_templates").update(update).eq("id", template_id).eq("organization_id", org_id).execute()
         return (resp.data or [update])[0]
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Task template update failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Task template update failed", exc))
 
 
 @router.delete("/task-templates/{template_id}", status_code=204)
@@ -5481,7 +5482,7 @@ async def delete_task_template(
         # from status via trigger, not the other way round, so it must be set here too.
         supabase.table("participant_task_templates").update({"status": "archived", "is_active": False}).eq("id", template_id).eq("organization_id", org_id).execute()
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Task template delete failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Task template delete failed", exc))
 
 
 # ── Participant Task Instances (CARECLIQV2-303/304/305) ─────────────────────
@@ -5557,7 +5558,7 @@ async def check_goals_and_tasks(
             "message": message,
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Validation check failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Validation check failed", exc))
 
 
 @router.get("/participants/{participant_id}/tasks")
@@ -5606,7 +5607,7 @@ async def list_participant_tasks(
         
         return formatted
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Task list failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Task list failed", exc))
 
 
 @router.post("/participants/{participant_id}/tasks", status_code=201)
@@ -5693,7 +5694,7 @@ async def create_participant_task(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Task creation failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Task creation failed", exc))
 
 
 @router.put("/tasks/{task_id}")
@@ -5772,7 +5773,7 @@ async def update_participant_task(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Task update failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Task update failed", exc))
 
 
 @router.delete("/tasks/{task_id}", status_code=204)
@@ -5791,7 +5792,7 @@ async def delete_participant_task(
         # Then delete the task itself
         supabase.table("participant_tasks").delete().eq("id", task_id).eq("organization_id", org_id).execute()
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Task deletion failed: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Task deletion failed", exc))
 
 
 # ── Check 16 — Long shift live monitor ────────────────────────────────────────

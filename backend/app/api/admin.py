@@ -32,6 +32,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from ..core.errors import internal_error_detail
 from ..core.access import get_user_id, is_super_admin
 from ..core.security import get_current_user
 from ..services import bug_report_service
@@ -114,7 +115,7 @@ async def list_organizations(current_user: dict = Depends(get_current_user)):
             for o in orgs
         ]
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not load organisations: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not load organisations", exc))
 
 
 @router.get("/organizations/{organization_id}")
@@ -150,7 +151,7 @@ async def get_organization(organization_id: str, current_user: dict = Depends(ge
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not load organisation: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not load organisation", exc))
 
 
 class OrganizationTypeUpdate(BaseModel):
@@ -178,7 +179,7 @@ async def update_organization_type(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not update organisation: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not update organisation", exc))
 
 
 @router.post("/organizations/{organization_id}/suspend")
@@ -202,7 +203,7 @@ async def suspend_organization(organization_id: str, current_user: dict = Depend
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not suspend organisation: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not suspend organisation", exc))
 
 
 @router.post("/organizations/{organization_id}/activate")
@@ -224,7 +225,7 @@ async def activate_organization(organization_id: str, current_user: dict = Depen
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not activate organisation: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not activate organisation", exc))
 
 
 # Bug reports & Improvements/Feedback — staff-submitted, via
@@ -390,7 +391,7 @@ async def create_bug_report(body: AdminBugReportCreate, current_user: dict = Dep
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not file bug report: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not file bug report", exc))
 
 
 @router.get("/bug-reports")
@@ -416,7 +417,7 @@ async def list_bug_reports(current_user: dict = Depends(get_current_user)):
                     attachment["url"] = backend.signed_url(attachment["storage_path"])
         return reports
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not load bug reports: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not load bug reports", exc))
 
 
 @router.patch("/bug-reports/{report_id}/status")
@@ -430,7 +431,7 @@ async def update_bug_report_status(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not update bug report: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not update bug report", exc))
 
 
 @router.get("/improvement-feedback")
@@ -446,7 +447,7 @@ async def list_improvement_feedback(current_user: dict = Depends(get_current_use
             include_jira=False,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not load improvement feedback: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not load improvement feedback", exc))
 
 
 @router.patch("/improvement-feedback/{feedback_id}/status")
@@ -462,4 +463,4 @@ async def update_improvement_feedback_status(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not update improvement feedback: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not update improvement feedback", exc))

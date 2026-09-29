@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import ForgotPassword from "@/pages/forgot-password";
@@ -720,6 +721,7 @@ function Router() {
 
 function App() {
   return (
+    <AppErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
@@ -737,6 +739,7 @@ function App() {
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
+    </AppErrorBoundary>
   );
 }
 

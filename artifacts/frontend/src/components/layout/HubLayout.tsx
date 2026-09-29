@@ -1,4 +1,5 @@
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
+import { PageErrorBoundary } from "@/components/ErrorBoundary";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ManagementPageSearch } from "./ManagementPageSearch";
 ﻿import { useEffect, useState, useRef } from "react";
@@ -980,14 +981,14 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           <main
             className={`min-w-0 flex-1 px-0 py-2 ${location === "/billing" ? "lg:px-3" : "lg:px-6"}`}
           >
-            {children}
+            <PageErrorBoundary>{children}</PageErrorBoundary>
           </main>
         </div>
       ) : (
         <main
           className={`mx-auto ${location === "/billing" ? "w-full px-3 py-4 sm:px-4" : "max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8"} ${bottombarMode ? "pb-32" : ""}`}
         >
-          {children}
+          <PageErrorBoundary>{children}</PageErrorBoundary>
         </main>
       )}
     </div>

@@ -11,6 +11,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from pydantic import BaseModel, Field
 
+from ..core.errors import internal_error_detail
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
 from ..core.timezone import app_today, participant_timezone, shift_local_date
@@ -2281,7 +2282,7 @@ async def get_worker_messages(
             "count": len(result.data or []),
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch messages: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Failed to fetch messages", exc))
 
 
 @router.post("/messages/{message_id}/read")
@@ -2315,7 +2316,7 @@ async def mark_worker_message_read(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to mark message as read: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Failed to mark message as read", exc))
 
 
 @router.post("/messages/{message_id}/reply")
@@ -2385,7 +2386,7 @@ async def reply_to_message(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to send reply: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Failed to send reply", exc))
 
 
 @router.post("/shifts/{shift_id}/sign")

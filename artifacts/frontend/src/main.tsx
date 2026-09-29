@@ -6,6 +6,9 @@ import { initTheme } from "@/lib/theme-apply";
 import App from "./App";
 import "./index.css";
 import { unlockPageInteraction } from "@/lib/unlock-page-interaction";
+import { installGlobalErrorReporting } from "@/lib/error-reporting";
+
+installGlobalErrorReporting();
 
 // Apply stored theme before first paint to prevent flash
 initTheme();

@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from ..core.errors import internal_error_detail
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
 from ..core.timezone import app_today, shift_local_date, request_timezone
@@ -618,7 +619,7 @@ async def create_org_event(body: OrgEventBody, current_user: dict = Depends(get_
         result = supabase.table("org_events").insert(payload).execute()
         return result.data[0] if result.data else payload
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not create event: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not create event", e))
 
 
 @router.delete("/org-events/{event_id}", status_code=204)
@@ -628,7 +629,7 @@ async def delete_org_event(event_id: str, current_user: dict = Depends(get_curre
     try:
         supabase.table("org_events").delete().eq("id", event_id).eq("organization_id", org_id).execute()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not delete event: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not delete event", e))
     return None
 
 
@@ -681,7 +682,7 @@ async def create_announcement(body: AnnouncementBody, current_user: dict = Depen
         result = supabase.table("announcements").insert(payload).execute()
         return result.data[0] if result.data else payload
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not publish announcement: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not publish announcement", e))
 
 
 @router.delete("/announcements/{announcement_id}", status_code=204)
@@ -691,7 +692,7 @@ async def delete_announcement(announcement_id: str, current_user: dict = Depends
     try:
         supabase.table("announcements").delete().eq("id", announcement_id).eq("organization_id", org_id).execute()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not delete announcement: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not delete announcement", e))
     return None
 
 

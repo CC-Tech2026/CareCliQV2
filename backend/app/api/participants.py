@@ -10,6 +10,7 @@ from typing import Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
 from pydantic import BaseModel, Field
 
+from ..core.errors import internal_error_detail
 from ..core.access import has_org_wide_access
 from ..core.security import get_current_user
 from ..api.security import require_recent_reauth
@@ -733,7 +734,7 @@ async def update_restricted_clinical(
         result = supabase.table("participants").update(update_data).eq("id", participant_id).execute()
         return result.data[0] if result.data else update_data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Update failed: {e}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("Update failed", e))
 
 
 
@@ -1030,7 +1031,7 @@ async def update_shift_context(
         try:
             supabase.table("participants").update(patient_fields).eq("id", participant_id).execute()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Update failed: {e}") from e
+            raise HTTPException(status_code=500, detail=internal_error_detail("Update failed", e)) from e
 
     if body.allergies is not None:
         try:
@@ -1047,7 +1048,7 @@ async def update_shift_context(
                     "updated_at": now,
                 }).execute()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Allergy update failed: {e}") from e
+            raise HTTPException(status_code=500, detail=internal_error_detail("Allergy update failed", e)) from e
 
     from ..services import briefing_service
     from ..services.shift_service import _fetch_participant_context

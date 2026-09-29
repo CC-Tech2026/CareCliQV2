@@ -16,6 +16,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from ..core.errors import internal_error_detail
 from . import medication_extraction_service
 from .compliance_evidence_service import record_file_evidence_metadata
 from .supabase_client import get_supabase_admin
@@ -73,7 +74,7 @@ async def upload_document(
         supabase.storage.from_(BUCKET).upload(path, file_bytes, {"content-type": resolved_type, "upsert": "true"})
         url = supabase.storage.from_(BUCKET).get_public_url(path)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Document storage is not configured: {exc}") from exc
+        raise HTTPException(status_code=502, detail=internal_error_detail("Document storage is not configured", exc)) from exc
 
     record = {
         "id": document_id,

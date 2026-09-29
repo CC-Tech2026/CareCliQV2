@@ -30,6 +30,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from ..core.errors import internal_error_detail
 from .organization_branding_service import build_pdf_letterhead, get_letterhead
 from .supabase_client import get_supabase_admin, signed_storage_url
 
@@ -225,7 +226,7 @@ def _download_stored_file(bucket_name: str, file_path: str) -> bytes:
     try:
         return get_supabase_admin().storage.from_(bucket_name).download(file_path)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Could not retrieve stored file: {exc}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Could not retrieve stored file", exc))
 
 
 # ── Lightweight per-record PDF rendering for DB-row-only categories ───────────
@@ -1338,7 +1339,7 @@ async def upload_custom_folder_document(
             path, file_bytes, {"content-type": content_type, "upsert": "true"}
         )
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Document storage is not configured: {exc}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Document storage is not configured", exc))
 
     payload = {
         "id": doc_id,
@@ -1683,7 +1684,7 @@ async def upload_governance_document(
             path, file_bytes, {"content-type": content_type, "upsert": "true"}
         )
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Governance document storage is not configured: {exc}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Governance document storage is not configured", exc))
 
     payload = {
         "id": doc_id,
@@ -2211,7 +2212,7 @@ def _render_policy_html(org_id: str, template_html: str, title: str, content_htm
     try:
         from jinja2 import Environment, select_autoescape
     except ImportError as exc:
-        raise HTTPException(status_code=500, detail=f"PDF rendering requires jinja2: {exc}")
+        raise HTTPException(status_code=500, detail=internal_error_detail("PDF rendering requires jinja2", exc))
 
     env = Environment(autoescape=select_autoescape(["html"]))
     try:
@@ -2378,7 +2379,7 @@ def generate_audit_pack(org_id: str, user_id: str, *, label: str | None = None) 
             path, body, {"content-type": "application/json", "upsert": "true"}
         )
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Audit pack storage is not configured: {exc}")
+        raise HTTPException(status_code=502, detail=internal_error_detail("Audit pack storage is not configured", exc))
 
     payload = {
         "id": pack_id,

@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel, Field
 
+from ..core.errors import internal_error_detail
 from ..api.security import require_recent_reauth
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
@@ -350,7 +351,7 @@ async def upload_my_profile_photo(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Profile photo storage is not configured: {exc}",
+            detail=internal_error_detail("Profile photo storage is not configured", exc),
         )
 
     # profile_photo_url is intentionally not stored — profile-photos is a private
