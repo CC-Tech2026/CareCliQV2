@@ -54,13 +54,13 @@ def test_fallback_tasks_shape():
 
 def test_matches_filter_today():
     shift = _sample_shift()
-    assert shift_service._matches_filter(shift, "today", date.today()) is True
+    assert shift_service._matches_filter(shift, "today", app_today()) is True
 
 
 def test_matches_filter_upcoming():
-    future = (date.today().replace(year=date.today().year + 1)).isoformat()
+    future = (app_today().replace(year=app_today().year + 1)).isoformat()
     shift = _sample_shift(scheduled_start=f"{future}T09:00:00+00:00")
-    assert shift_service._matches_filter(shift, "upcoming", date.today()) is True
+    assert shift_service._matches_filter(shift, "upcoming", app_today()) is True
 
 
 @pytest.mark.parametrize(
@@ -88,19 +88,19 @@ def test_matches_filter_upcoming():
 def test_matches_filter_combinations(filter_name, shift_overrides, expected):
     """CARECLIQV2-132 — cover all My Shifts filter buckets."""
     shift = _sample_shift(**shift_overrides)
-    assert shift_service._matches_filter(shift, filter_name, date.today()) is expected
+    assert shift_service._matches_filter(shift, filter_name, app_today()) is expected
 
 
 def test_matches_filter_without_scheduled_start_only_all():
     shift = _sample_shift(scheduled_start=None)
-    today = date.today()
+    today = app_today()
     assert shift_service._matches_filter(shift, "all", today) is True
     assert shift_service._matches_filter(shift, "today", today) is False
     assert shift_service._matches_filter(shift, "upcoming", today) is False
 
 
 def test_filter_shift_rows_returns_matching_subset():
-    today = date.today()
+    today = app_today()
     future = (today.replace(year=today.year + 1)).isoformat()
     rows = [
         _sample_shift(id="s1"),
@@ -116,7 +116,7 @@ def test_filter_shift_rows_returns_matching_subset():
 
 
 def test_count_shifts_by_filter():
-    today = date.today()
+    today = app_today()
     future = (today.replace(year=today.year + 1)).isoformat()
     rows = [
         _sample_shift(id="s1"),
@@ -133,7 +133,7 @@ def test_filter_performance_with_large_dataset():
     """CARECLIQV2-133 — filter logic stays fast on large in-memory sets."""
     import time
 
-    today = date.today()
+    today = app_today()
     future = (today.replace(year=today.year + 1)).isoformat()
     rows = [
         _sample_shift(
@@ -155,8 +155,8 @@ def test_filter_performance_with_large_dataset():
 @patch("backend.app.services.shift_service._fetch_worker_shift_rows")
 def test_count_shifts_for_worker_uses_lightweight_rows(mock_fetch):
     mock_fetch.return_value = [
-        {"status": "scheduled", "scheduled_start": f"{date.today().isoformat()}T09:00:00+00:00"},
-        {"status": "completed", "scheduled_start": f"{date.today().isoformat()}T11:00:00+00:00"},
+        {"status": "scheduled", "scheduled_start": f"{app_today().isoformat()}T09:00:00+00:00"},
+        {"status": "completed", "scheduled_start": f"{app_today().isoformat()}T11:00:00+00:00"},
     ]
     counts = shift_service.count_shifts_for_worker("worker-1", "org-1")
     mock_fetch.assert_called_once_with(
