@@ -59,6 +59,8 @@ _PUBLIC_PREFIXES: tuple[str, ...] = (
     "/api/health",
     # Crash reports: sent from the login page and the super admin portal too.
     "/api/client-errors",
+    # Public participant referral form (no login; org comes from the link).
+    "/api/participant-intakes/public/",
     "/api/admin",
     # Jira calls this one directly (Automation "Send web request"), with no
     # JWT at all — it authenticates with its own shared-secret header

@@ -16,7 +16,7 @@ import {
 import { apiFetch } from "@/lib/api-fetch";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { COMPLIANCE_TREND_KEY, MD_DASHBOARD_KEY } from "@/lib/query-keys";
-import { readWaitlistSnapshot, type WaitlistSnapshot } from "@/lib/onboardingWaitlist";
+import { getMdDemandCapacity, type MdDemandCapacity } from "@/services/dashboardService";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 // Aliased — recharts also exports a "Tooltip" (used for the chart tooltips
@@ -56,7 +56,6 @@ const CASELOAD_PER_WORKER = 6;
 
 // UI-only placeholder for the waiting-list cards until a real referral has
 // been logged through the public form — see the read effect below.
-const DUMMY_WAITLIST: WaitlistSnapshot = { count: 59, hours: 28 };
 
 interface MDData {
   active_participants: number;
@@ -405,12 +404,10 @@ function WaitlistHoursCard({ hours }: { hours: number }) {
 }
 
 /** Sits beside Hours in demand, so the two can be read against each other at
- *  a glance. Dummy numbers for now — no rostering/availability feed backs
- *  this yet; the real version needs actual worker availability + shift-offer
- *  acceptance data, which is a backend job for later. Reliable and casual
- *  capacity get their own rows (not summed into one figure) since they carry
- *  different confidence — a single blended number would overstate what's
- *  actually guaranteed. */
+ *  a glance. Spare hours this week = each active worker's stated maximum
+ *  weekly hours (less unavailability days) minus hours already rostered.
+ *  Reliable (part-time/full-time) and casual capacity get their own rings,
+ *  not one blended figure, since casual hours aren't guaranteed. */
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
   const angleRad = ((angleDeg - 90) * Math.PI) / 180;
   return { x: cx + r * Math.cos(angleRad), y: cy + r * Math.sin(angleRad) };
@@ -576,10 +573,18 @@ function DualRingGauge({
  *  capacity get their own ring (not summed into the visual encoding) since
  *  they carry different confidence — the center total is a convenience
  *  readout, and the info popover spells out the two components it hides. */
-function AvailableHoursCard() {
-  const reliable = 40;
-  const casual = 26;
-  const max = Math.ceil((Math.max(reliable, casual) * 1.25) / 10) * 10;
+function AvailableHoursCard({
+  capacity,
+  loading,
+}: {
+  capacity?: MdDemandCapacity["capacity"];
+  loading: boolean;
+}) {
+  const reliable = Math.round(capacity?.reliable_hours ?? 0);
+  const casual = Math.round(capacity?.casual_hours ?? 0);
+  const withoutAvailability = capacity?.workers_without_availability ?? 0;
+  // At least 10 so an empty week doesn't divide by zero in the gauge.
+  const max = Math.max(10, Math.ceil((Math.max(reliable, casual) * 1.25) / 10) * 10);
   return (
     <div className="flex h-full w-full flex-col rounded-2xl border px-6 py-5" style={{ borderColor: BORDER, background: SURFACE }}>
       <div className="flex items-center justify-between gap-2">
@@ -597,13 +602,15 @@ function AvailableHoursCard() {
                   </button>
                 </PopoverTrigger>
                 <PopoverContent side="top" align="start" className="w-[280px] space-y-2.5 p-3.5 text-[11px] leading-relaxed">
-                  <p><strong style={{ color: PLUM }}>Reliable extra capacity</strong> — {reliable} hrs/week from part-time staff who've opted in to extra shifts. Safe to plan against.</p>
-                  <p><strong style={{ color: SKY }}>Casual staff typical volume</strong> — ~{casual} hrs/week, based on casual staff's usual availability. Not guaranteed — don't commit new participants against this alone.</p>
-                  <p style={{ color: MUTED }}>Placeholder numbers for now — a real feed needs actual worker availability and shift-offer acceptance data.</p>
+                  <p><strong style={{ color: PLUM }}>Reliable spare capacity</strong> — {reliable} hrs this week from part-time and full-time staff: their stated maximum weekly hours, less leave, less what's already rostered. Safe to plan against.</p>
+                  <p><strong style={{ color: SKY }}>Casual spare capacity</strong> — ~{casual} hrs this week from casual staff (and anyone without an employment type set). Not guaranteed — don't commit new participants against this alone.</p>
+                  {withoutAvailability > 0 && (
+                    <p style={{ color: MUTED }}>{withoutAvailability} active worker{withoutAvailability === 1 ? " hasn't" : "s haven't"} set their availability, so {withoutAvailability === 1 ? "isn't" : "aren't"} counted.</p>
+                  )}
                 </PopoverContent>
               </Popover>
             </div>
-            <p className="text-[11px]" style={{ color: MUTED }}>Extra weekly capacity, by reliability</p>
+            <p className="text-[11px]" style={{ color: MUTED }}>{loading ? "Loading…" : "Spare hours this week, by reliability"}</p>
           </div>
         </div>
       </div>
@@ -627,7 +634,7 @@ function AvailableHoursCard() {
           outerCallout={`${reliable} hrs/wk`}
           innerCallout={`~${casual} hrs/wk`}
           centerValue={`${reliable + casual}`}
-          centerLabel="hrs/wk available"
+          centerLabel="hrs available this week"
         />
       </div>
     </div>
@@ -1372,16 +1379,11 @@ export function MDHubView() {
   const trend = trendQuery.data?.trend ?? EMPTY_TREND;
   const loading = overviewQuery.isLoading;
   const error = overviewQuery.isError;
-  const [waitlist, setWaitlist] = useState<WaitlistSnapshot>({ count: 0, hours: 0 });
-
-  // TEMP: always shows the UI-only placeholder numbers right now, ignoring
-  // any real snapshot in localStorage (e.g. leftover from testing the
-  // onboarding board/referral form) — purely for the UI per request. Swap
-  // back to `setWaitlist(snapshot.count > 0 ? snapshot : DUMMY_WAITLIST)`
-  // once ready to show real enquiry data again.
-  useEffect(() => {
-    setWaitlist(DUMMY_WAITLIST);
-  }, []);
+  // Real enquiries and this week's spare staff hours (was placeholder numbers).
+  const demandQuery = useOrgQuery<MdDemandCapacity>(["md", "demand-capacity"], {
+    queryFn: getMdDemandCapacity,
+  });
+  const waitlist = demandQuery.data?.waitlist ?? { count: 0, hours: 0 };
 
   /* ------------------------------------------------------------------------ */
   /* Loading                                                                  */
@@ -1478,7 +1480,7 @@ export function MDHubView() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <WaitlistCard count={waitlist.count} onNavigate={() => navigate("/onboard-participant")} />
             <WaitlistHoursCard hours={waitlist.hours} />
-            <AvailableHoursCard />
+            <AvailableHoursCard capacity={demandQuery.data?.capacity} loading={demandQuery.isLoading} />
           </div>
           <ParticipantOverviewCard
             total={data.active_participants}

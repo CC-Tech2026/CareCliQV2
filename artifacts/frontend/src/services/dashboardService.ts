@@ -163,3 +163,19 @@ export function getWorkerLandingTravelTime(
 export function getCoordinatorDashboard() {
   return jsonFetch<CoordinatorDashboard>("/api/dashboard/coordinator");
 }
+
+/** MD hub: waiting list and this week's spare staff hours (real data). */
+export type MdDemandCapacity = {
+  waitlist: { count: number; hours: number };
+  capacity: {
+    reliable_hours: number;
+    casual_hours: number;
+    workers_counted: number;
+    workers_without_availability: number;
+    week_start: string;
+  };
+};
+
+export function getMdDemandCapacity() {
+  return jsonFetch<MdDemandCapacity>("/api/dashboard/md-demand-capacity");
+}

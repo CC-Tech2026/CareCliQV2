@@ -1,12 +1,13 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useEffect, useState } from "react";
+import { useLocation, useSearch } from "wouter";
 import { CareCliQLogoWithText } from "@/components/CareCliQLogoSVG";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
-import { addPendingReferral } from "@/lib/onboardingWaitlist";
+import { AlertCircle, ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { getPublicReferralProvider, submitPublicReferral } from "@/services/participantIntakeService";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -57,18 +58,39 @@ function calculateAge(dob: string): number | null {
 }
 
 /**
- * Public, unauthenticated referral intake form — reached from the
- * "View public referral form" link on the MD's Participant Onboarding
- * board. No participant_onboarding backend exists yet (same constraint as
- * the rest of that page), so a submission is queued to localStorage
- * (see onboardingWaitlist.ts) rather than a real database — the Onboarding
- * board picks it up as a new Enquiry card the next time it's opened.
+ * Public, unauthenticated referral intake form. Providers share
+ * /participant-referral?org=<organisation id> (copied from the Participant
+ * Onboarding board); a submission becomes an Enquiry on that provider's
+ * board via the public participant-intakes endpoint. A signed-in MD opening
+ * it without ?org= previews their own organisation's form.
  */
 export default function ParticipantReferralPage() {
   const [, navigate] = useLocation();
+  const search = useSearch();
+  const { user } = useAuth();
+  const orgId = new URLSearchParams(search).get("org") || user?.organizationId || "";
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<ReferralForm>(EMPTY_FORM);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [website, setWebsite] = useState(""); // honeypot
+  const [provider, setProvider] = useState<{ name: string | null; status: "loading" | "ok" | "invalid" }>({
+    name: null,
+    status: orgId ? "loading" : "invalid",
+  });
+
+  useEffect(() => {
+    if (!orgId) {
+      setProvider({ name: null, status: "invalid" });
+      return;
+    }
+    let cancelled = false;
+    getPublicReferralProvider(orgId)
+      .then((p) => { if (!cancelled) setProvider({ name: p.display_name, status: "ok" }); })
+      .catch(() => { if (!cancelled) setProvider({ name: null, status: "invalid" }); });
+    return () => { cancelled = true; };
+  }, [orgId]);
 
   function update<K extends keyof ReferralForm>(key: K, value: ReferralForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -85,24 +107,55 @@ export default function ParticipantReferralPage() {
   function back() {
     setStep((s) => Math.max(s - 1, 0));
   }
-  function submit() {
-    addPendingReferral({
-      id: `referral-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      full_name: form.fullName.trim(),
-      service_category: form.serviceCategory,
-      service_hours_required: Math.max(0, parseFloat(form.serviceHoursRequired) || 0),
-      phone: form.phone.trim() || undefined,
-      email: form.email.trim() || undefined,
-      ndis_number: form.ndisNumber.trim() || undefined,
-      primary_disability: form.primaryDisability.trim() || undefined,
-      support_needs: form.supportNeeds.trim() || undefined,
-      referrer_name: form.referrerName.trim(),
-      referrer_relationship: form.referrerRelationship,
-      referrer_phone: form.referrerPhone.trim() || undefined,
-      referrer_email: form.referrerEmail.trim() || undefined,
-      submitted_at: new Date().toISOString(),
-    });
-    setSubmitted(true);
+  async function submit() {
+    if (submitting || !orgId) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    const hours = parseFloat(form.serviceHoursRequired);
+    try {
+      await submitPublicReferral(orgId, {
+        full_name: form.fullName.trim(),
+        service_category: form.serviceCategory,
+        date_of_birth: form.dob.trim(),
+        service_hours_required: Number.isFinite(hours) && hours >= 0 ? hours : null,
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        ndis_number: form.ndisNumber.trim(),
+        primary_disability: form.primaryDisability.trim(),
+        support_needs: form.supportNeeds.trim(),
+        referrer_name: form.referrerName.trim(),
+        referrer_relationship: form.referrerRelationship,
+        referrer_phone: form.referrerPhone.trim(),
+        referrer_email: form.referrerEmail.trim(),
+        website,
+      });
+      // Only confirm once the provider actually has it.
+      setSubmitted(true);
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error && err.message
+          ? err.message
+          : "We couldn't send your referral. Please check your connection and try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (provider.status === "invalid") {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 py-12" style={{ background: "#F7F5F2" }}>
+        <div role="alert" className="w-full max-w-md rounded-2xl p-8 text-center" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="mx-auto mb-4 h-14 w-14 rounded-full flex items-center justify-center" style={{ background: SOFT }}>
+            <AlertCircle size={28} style={{ color: PLUM }} />
+          </div>
+          <h1 className="text-xl font-black" style={{ color: TEXT }}>This referral link isn't complete</h1>
+          <p className="text-sm mt-2" style={{ color: MUTED }}>
+            Please ask the provider for their referral link, or contact them directly.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (submitted) {
@@ -123,20 +176,25 @@ export default function ParticipantReferralPage() {
 
   return (
     <div className="min-h-screen relative flex items-start justify-center px-4 py-12" style={{ background: "#F7F5F2" }}>
-      <button
-        type="button"
-        onClick={() => navigate("/onboard-participant")}
-        className="absolute top-15 left-10 flex items-center gap-1.5 text-[15px] font-bold hover:opacity-70"
-        style={{ color: "var(--cc-plum)" }}
-      >
-        <ArrowLeft size={20} style={{ color: "var(--cc-plum)" }} /> Back to Participant Onboarding
-      </button>
+      {/* Only for an MD previewing the form — families and referrers never see it. */}
+      {user?.role === "managing_director" && (
+        <button
+          type="button"
+          onClick={() => navigate("/onboard-participant")}
+          className="absolute top-15 left-10 flex items-center gap-1.5 text-[15px] font-bold hover:opacity-70"
+          style={{ color: "var(--cc-plum)" }}
+        >
+          <ArrowLeft size={20} style={{ color: "var(--cc-plum)" }} /> Back to Participant Onboarding
+        </button>
+      )}
       <div className="w-full max-w-lg">
         <div className="flex justify-center mb-6">
           <CareCliQLogoWithText size={40} />
         </div>
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-black tracking-tight" style={{ color: TEXT }}>Refer someone to our team</h1>
+          <h1 className="text-2xl font-black tracking-tight" style={{ color: TEXT }}>
+            {provider.name ? `Refer someone to ${provider.name}` : "Refer someone to our team"}
+          </h1>
           <p className="text-sm mt-1.5" style={{ color: MUTED }}>Takes about 3 minutes. We'll be in touch within 2 business days.</p>
         </div>
         <div className="flex items-center justify-center gap-2 mb-8">
@@ -271,6 +329,22 @@ export default function ParticipantReferralPage() {
               <p className="text-xs" style={{ color: MUTED }}>
                 By submitting, you confirm the information above is accurate to the best of your knowledge.
               </p>
+              {/* Honeypot: invisible to people and screen readers, filled by bots. */}
+              <input
+                type="text"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                style={{ position: "absolute", left: "-10000px", width: 1, height: 1, opacity: 0 }}
+              />
+              {submitError && (
+                <p role="alert" className="text-xs font-semibold" style={{ color: "var(--cc-status-danger)" }}>
+                  {submitError}
+                </p>
+              )}
             </>
           )}
 
@@ -288,7 +362,10 @@ export default function ParticipantReferralPage() {
                 Next
               </Button>
             ) : (
-              <Button variant="navy" className="rounded-lg px-8" onClick={submit}>Submit referral</Button>
+              <Button variant="navy" className="rounded-lg px-8 gap-2" onClick={submit} disabled={submitting || provider.status !== "ok"}>
+                {submitting && <Loader2 size={14} className="animate-spin" />}
+                {submitting ? "Sending…" : "Submit referral"}
+              </Button>
             )}
           </div>
         </div>

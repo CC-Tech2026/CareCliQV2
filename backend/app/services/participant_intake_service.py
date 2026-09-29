@@ -148,7 +148,7 @@ def get_intake(intake_id: str, organization_id: str) -> dict[str, Any]:
 
 def create_intake(
     organization_id: str,
-    created_by: str,
+    created_by: str | None,
     full_name: str,
     ndis_number: str,
     email: str,

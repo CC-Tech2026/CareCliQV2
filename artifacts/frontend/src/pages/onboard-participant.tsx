@@ -6,7 +6,6 @@ import {
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
   SlidersHorizontal, X, AlertTriangle,
 } from "lucide-react";
-import { writeWaitlistSnapshot } from "@/lib/onboardingWaitlist";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -56,8 +55,9 @@ const NEW_BADGE_TEXT = "#3D5A6C";
 /**
  * Participant onboarding pipeline (Enquiry → Screening → Meet & Greet →
  * Service Agreement → Activate), backed by /api/participant-intakes — see
- * participantIntakeService.ts. Complaints (below) and the public referral
- * form (onboardingWaitlist.ts) remain local/mock.
+ * participantIntakeService.ts. The public referral form (participant-
+ * referral.tsx) files Enquiries here through the public intake endpoint.
+ * Complaints (below) remain local/mock.
  */
 
 const FUNDING_TYPE_LABEL: Record<FundingType, string> = {
@@ -1083,6 +1083,7 @@ export default function ParticipantOnboardingBoard() {
   const { translate } = useAccessibility();
   const [location, navigate] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // Selected intake lives in the URL (?intake=<id>), same convention as
   // /team?workerId=...&tab=... elsewhere in the app. This also lets the
@@ -1106,17 +1107,18 @@ export default function ParticipantOnboardingBoard() {
     return () => { cancelled = true; };
   }, []);
 
-  // Mirrors just the enquiry-stage count and total requested hours to
-  // localStorage so the Hub dashboard's "Waiting list" cards can reflect
-  // them — see onboardingWaitlist.ts for why this doesn't go through a real
-  // backend.
-  useEffect(() => {
-    const enquiries = intakes.filter((i) => i.status === "enquiry");
-    writeWaitlistSnapshot({
-      count: enquiries.length,
-      hours: enquiries.reduce((sum, i) => sum + (i.service_hours_required || 0), 0),
-    });
-  }, [intakes]);
+  // The public referral form files straight onto this board; this is the
+  // link to share with families, support coordinators and referrers.
+  const referralPath = `/participant-referral?org=${encodeURIComponent(user?.organizationId ?? "")}`;
+  async function copyReferralLink() {
+    const url = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}${referralPath}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: "Referral link copied", description: "Share it with families, coordinators and other referrers." });
+    } catch {
+      toast({ title: "Couldn't copy the link", description: url });
+    }
+  }
 
   const [search, setSearch] = useState("");
   const [newIntakeOpen, setNewIntakeOpen] = useState(false);
@@ -1333,11 +1335,18 @@ export default function ParticipantOnboardingBoard() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => navigate("/participant-referral")}
+              onClick={() => navigate(referralPath)}
               className="text-[12px] font-black transition-colors hover:opacity-80 flex items-center gap-1"
               style={{ color: PLUM }}
             >
               View public referral form <ChevronRight size={13} />
+            </button>
+            <button
+              onClick={copyReferralLink}
+              className="text-[12px] font-black transition-colors hover:opacity-80"
+              style={{ color: PLUM }}
+            >
+              Copy referral link
             </button>
             <Button variant="outline" className="rounded-lg" onClick={() => comingSoon("Referral portal settings")}>
               Referral portal settings

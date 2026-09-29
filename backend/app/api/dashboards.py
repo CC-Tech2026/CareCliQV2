@@ -26,7 +26,7 @@ from ..core.timezone import (
     shift_local_date,
 )
 from ..models.billing_period import normalize_plan_management_type, plan_management_type_label
-from ..services import billing_service, incident_service, participant_service, session_service
+from ..services import billing_service, demand_capacity_service, incident_service, participant_service, session_service
 from ..services.dashboard_landing_service import build_worker_landing_dashboard
 from ..services.travel_time_service import estimate_travel_time
 from ..services import shift_service
@@ -794,6 +794,19 @@ async def _md_dashboard_payload(
             if branch else None
         ),
     }
+
+
+@router.get("/md-demand-capacity")
+async def md_demand_capacity(current_user: dict = Depends(get_current_user)):
+    """Waiting list and spare staff hours this week for the MD hub cards."""
+    if not is_managing_director(current_user) and not has_active_grant(
+        current_user, "executive_dashboard", get_supabase_admin()
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing Director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    return demand_capacity_service.get_demand_capacity(org_id)
 
 
 @router.get("/compliance-trend")

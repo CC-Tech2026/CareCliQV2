@@ -130,3 +130,35 @@ export function uploadSignedServiceAgreement(intakeId: string, file: File) {
     body: formData,
   });
 }
+
+/** Public referral form (no login). The organisation comes from the link. */
+export type PublicReferral = {
+  full_name: string;
+  service_category: ServiceCategory;
+  date_of_birth: string;
+  phone?: string;
+  email?: string;
+  ndis_number?: string;
+  primary_disability?: string;
+  support_needs?: string;
+  service_hours_required?: number | null;
+  referrer_name: string;
+  referrer_relationship?: string;
+  referrer_phone?: string;
+  referrer_email?: string;
+  /** Honeypot — always empty for real people. */
+  website?: string;
+};
+
+export function getPublicReferralProvider(orgId: string) {
+  return jsonFetch<{ display_name: string | null; logo_url: string | null }>(
+    `/api/participant-intakes/public/${encodeURIComponent(orgId)}`,
+  );
+}
+
+export function submitPublicReferral(orgId: string, referral: PublicReferral) {
+  return jsonFetch<{ received: boolean }>(`/api/participant-intakes/public/${encodeURIComponent(orgId)}`, {
+    method: "POST",
+    body: JSON.stringify(referral),
+  });
+}
