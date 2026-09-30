@@ -65,7 +65,7 @@ it("selects ready claims and totals them; claims needing fixes can't be selected
   expect((screen.getByLabelText("Select Noah Brown CS-3") as HTMLInputElement).disabled).toBe(true);
 
   fireEvent.click(screen.getByLabelText("Select all"));
-  expect(screen.getByText("2 invoices selected · $320.52")).toBeTruthy();
+  expect(screen.getByRole("region", { name: "Selected claims" }).textContent).toContain("2 invoices selected · $320.52");
   expect(screen.getByRole("button", { name: /Submit bulk claim/ })).toBeTruthy();
 });
 

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { AlertTriangle, Download, Loader2, Send, CheckCircle2, Undo2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Download, Loader2, Search, Send, CheckCircle2, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -97,7 +97,14 @@ function StatusPill({ row, tab }: { row: ClaimRow; tab: Tab }) {
 /** NDIA-managed invoices: pick the ones ready to claim, submit them as one
  * bulk payment request file for the provider portal, then record the
  * remittance when the NDIA pays. */
-export function NdiaClaimsPanel({ onChanged }: { onChanged?: () => void }) {
+export function NdiaClaimsPanel({
+  onChanged,
+  heading,
+}: {
+  onChanged?: () => void;
+  /** Shows the panel as a titled card (Financial Governance). */
+  heading?: string;
+}) {
   const { toast } = useToast();
   const { requireReAuth, modal } = useReAuth();
   const [tab, setTab] = useState<Tab>("ready");
@@ -106,11 +113,31 @@ export function NdiaClaimsPanel({ onChanged }: { onChanged?: () => void }) {
   const [paying, setPaying] = useState(false);
   const [paymentDate, setPaymentDate] = useState("");
   const [reference, setReference] = useState("");
+  const [search, setSearch] = useState("");
   const query = useOrgQuery<ClaimsResponse>(["billing", "ndia-claims"], {
     queryFn: async () => (await json<ClaimsResponse>(await apiFetch("/api/billing/claims")))!,
   });
 
-  const rows = query.data?.[tab] ?? [];
+  const q = search.trim().toLowerCase();
+  const rows = (query.data?.[tab] ?? []).filter(
+    (r) =>
+      !q ||
+      r.participant_name.toLowerCase().includes(q) ||
+      r.invoice_number.toLowerCase().includes(q) ||
+      (r.support_item ?? "").toLowerCase().includes(q),
+  );
+  const totals = useMemo(
+    () =>
+      Object.fromEntries(
+        TABS.map((t) => [
+          t.key,
+          (query.data?.[t.key] ?? [])
+            .filter((r) => t.key !== "ready" || r.problems.length === 0)
+            .reduce((sum, r) => sum + r.total_cents, 0),
+        ]),
+      ) as Record<Tab, number>,
+    [query.data],
+  );
   const selectable = useMemo(
     () => rows.filter((r) => tab === "submitted" || (tab === "ready" && r.problems.length === 0)),
     [rows, tab],
@@ -120,6 +147,7 @@ export function NdiaClaimsPanel({ onChanged }: { onChanged?: () => void }) {
 
   const switchTab = (next: Tab) => {
     setTab(next);
+    setSearch("");
     setSelected(new Set());
   };
   const toggle = (id: string) =>
@@ -129,7 +157,17 @@ export function NdiaClaimsPanel({ onChanged }: { onChanged?: () => void }) {
       else next.add(id);
       return next;
     });
+  const toFix = (query.data?.ready ?? []).filter((r) => r.problems.length > 0).length;
   const allSelected = selectable.length > 0 && selectable.every((r) => selected.has(r.invoice_id));
+  // Esc clears the selection.
+  useEffect(() => {
+    if (!selected.size) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !paying) setSelected(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected.size, paying]);
   const refresh = () => {
     setSelected(new Set());
     void query.refetch();
@@ -217,34 +255,73 @@ export function NdiaClaimsPanel({ onChanged }: { onChanged?: () => void }) {
   };
 
   return (
-    <section className="space-y-4" aria-label="NDIA claims">
+    <section
+      className={heading ? "space-y-4 rounded-3xl border border-cc-border bg-cc-surface p-4 sm:p-6" : "space-y-4"}
+      aria-label={heading ?? "NDIA claims"}
+    >
       {modal}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-xl text-sm text-cc-muted">
-          Finalised invoices for NDIA-managed participants. Submit them together as one bulk payment request, then
-          record the remittance when the NDIA pays.
-        </p>
-        <div role="tablist" className="flex rounded-xl border border-cc-border bg-cc-soft p-1">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              role="tab"
-              type="button"
-              aria-selected={tab === t.key}
-              onClick={() => switchTab(t.key)}
-              className="rounded-lg px-3 py-1.5 text-xs font-semibold"
-              style={{
-                background: tab === t.key ? "var(--cc-surface)" : "transparent",
-                color: tab === t.key ? "var(--cc-text)" : "var(--cc-muted)",
-                boxShadow: tab === t.key ? "0 1px 2px rgba(0,0,0,0.08)" : undefined,
-              }}
-            >
-              {t.label}
-              {query.data ? ` (${query.data[t.key].length})` : ""}
-            </button>
-          ))}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          {heading && <h2 className="text-lg font-bold text-cc-text">{heading}</h2>}
+          <p className="max-w-xl text-sm text-cc-muted">
+            {heading
+              ? "Create, review and claim invoices from delivered sessions."
+              : "Finalised invoices for NDIA-managed participants. Submit them together as one bulk payment request, then record the remittance when the NDIA pays."}
+          </p>
+        </div>
+        <div role="tablist" aria-label="Claim status" className="flex rounded-xl border border-cc-border bg-cc-soft p-1">
+          {TABS.map((t) => {
+            const count = query.data?.[t.key].length;
+            return (
+              <button
+                key={t.key}
+                role="tab"
+                type="button"
+                aria-selected={tab === t.key}
+                onClick={() => switchTab(t.key)}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
+                style={{
+                  background: tab === t.key ? "var(--cc-surface)" : "transparent",
+                  color: tab === t.key ? "var(--cc-text)" : "var(--cc-muted)",
+                  boxShadow: tab === t.key ? "0 1px 2px rgba(0,0,0,0.08)" : undefined,
+                }}
+              >
+                {t.label}
+                {count !== undefined && (
+                  <span
+                    className="rounded-full px-1.5 text-[10px] tabular-nums"
+                    style={{ background: tab === t.key ? "var(--cc-soft)" : "transparent" }}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
+
+      {query.data && (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-[13px] text-cc-muted">
+            <span className="font-bold tabular-nums text-cc-text">{money(totals[tab])}</span>{" "}
+            {tab === "ready" ? "ready to claim" : tab === "submitted" ? "awaiting NDIA payment" : "paid by the NDIA"}
+            {tab === "ready" && toFix > 0 && (
+              <span style={{ color: "var(--cc-status-danger)" }}> · {toFix} need{toFix === 1 ? "s" : ""} fixing first</span>
+            )}
+          </p>
+          <label className="relative ml-auto w-full sm:w-64">
+            <span className="sr-only">Search claims</span>
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-cc-muted" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Participant, invoice or item"
+              className="h-9 rounded-xl pl-8 text-[13px]"
+            />
+          </label>
+        </div>
+      )}
 
       {query.data?.registration_number_missing && (
         <p role="alert" className="flex items-center gap-2 rounded-xl p-3 text-sm" style={{ background: "var(--cc-status-danger-bg)", color: "var(--cc-status-danger)" }}>
@@ -270,7 +347,13 @@ export function NdiaClaimsPanel({ onChanged }: { onChanged?: () => void }) {
           </div>
         ) : rows.length === 0 ? (
           <p className="p-8 text-center text-sm text-cc-muted">
-            {tab === "ready" ? "Nothing ready to claim." : tab === "submitted" ? "No claims waiting on payment." : "No paid claims yet."}
+            {q
+              ? "No claims match your search."
+              : tab === "ready"
+                ? "Nothing ready to claim. Finalised NDIA-managed invoices appear here."
+                : tab === "submitted"
+                  ? "No claims waiting on payment."
+                  : "No paid claims yet."}
           </p>
         ) : (
           <table className="w-full min-w-[640px] text-sm">
@@ -280,6 +363,7 @@ export function NdiaClaimsPanel({ onChanged }: { onChanged?: () => void }) {
                   {tab !== "paid" && (
                     <input
                       type="checkbox"
+                      className="h-4 w-4 cursor-pointer accent-[#E8457A] disabled:cursor-not-allowed"
                       aria-label="Select all"
                       checked={allSelected}
                       disabled={selectable.length === 0}
@@ -301,13 +385,19 @@ export function NdiaClaimsPanel({ onChanged }: { onChanged?: () => void }) {
                 return (
                   <tr
                     key={row.invoice_id}
-                    className="border-b border-cc-border last:border-b-0 align-top"
-                    style={{ background: on ? "rgba(232,69,122,0.05)" : undefined }}
+                    className={`border-b border-cc-border last:border-b-0 align-top transition-colors ${canSelect ? "cursor-pointer hover:bg-cc-soft/60" : ""}`}
+                    style={{ background: on ? "rgba(232,69,122,0.06)" : undefined }}
+                    onClick={(e) => {
+                      // The whole row selects, except its own buttons and links.
+                      if (!canSelect || (e.target as HTMLElement).closest("button, a, input")) return;
+                      toggle(row.invoice_id);
+                    }}
                   >
                     <td className="px-4 py-3.5">
                       {tab !== "paid" && (
                         <input
                           type="checkbox"
+                          className="h-4 w-4 cursor-pointer accent-[#E8457A] disabled:cursor-not-allowed"
                           aria-label={`Select ${row.participant_name} ${row.invoice_number}`}
                           checked={on}
                           disabled={!canSelect}
@@ -331,6 +421,9 @@ export function NdiaClaimsPanel({ onChanged }: { onChanged?: () => void }) {
                           {tab === "ready" && row.problems.length > 0 && (
                             <ul className="mt-1 space-y-0.5 text-[11px]" style={{ color: "var(--cc-status-danger)" }}>
                               {row.problems.slice(0, 3).map((p) => <li key={p}>{p}</li>)}
+                              <li>
+                                <a href="/billing" className="font-semibold underline">Fix invoice</a>
+                              </li>
                             </ul>
                           )}
                           {tab === "submitted" && (
@@ -348,7 +441,13 @@ export function NdiaClaimsPanel({ onChanged }: { onChanged?: () => void }) {
                         </div>
                       </div>
                     </td>
-                    <td className="px-2 py-3.5 font-mono text-[12px] text-cc-muted">{row.support_item ?? "—"}</td>
+                    <td className="px-2 py-3.5">
+                      {row.support_item ? (
+                        <span className="rounded-md bg-cc-soft px-1.5 py-0.5 font-mono text-[11px] text-cc-muted">{row.support_item}</span>
+                      ) : (
+                        <span className="text-cc-muted">—</span>
+                      )}
+                    </td>
                     <td className="px-2 py-3.5 text-right tabular-nums text-cc-text">{row.quantity_label}</td>
                     <td className="px-2 py-3.5 text-right font-semibold tabular-nums text-cc-text">{money(row.total_cents)}</td>
                     <td className="px-4 py-3.5 text-right"><StatusPill row={row} tab={tab} /></td>
@@ -361,16 +460,33 @@ export function NdiaClaimsPanel({ onChanged }: { onChanged?: () => void }) {
       </div>
 
       {chosen.length > 0 && (
-        <div className="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-5 py-3.5 text-white shadow-xl" style={{ background: "#1E1B2E" }}>
-          <p className="text-sm font-semibold" aria-live="polite">
-            {chosen.length} invoice{chosen.length === 1 ? "" : "s"} selected · {money(chosenTotal)}
-          </p>
+        <div
+          className="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3 text-white shadow-xl sm:px-5"
+          style={{ background: "#1E1B2E" }}
+          role="region"
+          aria-label="Selected claims"
+        >
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10"
+              aria-label="Clear selection"
+              title="Clear selection (Esc)"
+            >
+              <X size={15} />
+            </button>
+            <p className="text-sm font-semibold" aria-live="polite">
+              {chosen.length} invoice{chosen.length === 1 ? "" : "s"} selected ·{" "}
+              <span className="tabular-nums">{money(chosenTotal)}</span>
+            </p>
+          </div>
           {tab === "ready" ? (
-            <Button className="gap-2 rounded-xl text-white" style={{ background: "#E8457A" }} disabled={busy} onClick={submit}>
+            <Button className="gap-2 rounded-xl text-white hover:opacity-90" style={{ background: "#E8457A" }} disabled={busy} onClick={submit}>
               {busy ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} Submit bulk claim
             </Button>
           ) : (
-            <Button className="gap-2 rounded-xl text-white" style={{ background: "#0F7B57" }} disabled={busy} onClick={() => setPaying(true)}>
+            <Button className="gap-2 rounded-xl text-white hover:opacity-90" style={{ background: "#0F7B57" }} disabled={busy} onClick={() => setPaying(true)}>
               <CheckCircle2 size={15} /> Mark paid
             </Button>
           )}

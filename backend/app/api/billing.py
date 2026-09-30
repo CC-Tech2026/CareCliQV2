@@ -230,6 +230,23 @@ async def ndia_claim_rejected(invoice_id: str, body: ClaimRejected, current_user
     return await ndia_claim_service.return_to_ready(current_user, invoice_id, body.reason)
 
 
+class FinancialSettings(BaseModel):
+    cash_on_hand: Optional[float] = Field(default=None, ge=0, le=1_000_000_000)
+    cash_as_of: Optional[date] = None
+    monthly_overheads: Optional[float] = Field(default=None, ge=0, le=100_000_000)
+
+
+@router.put("/financial-settings")
+async def put_financial_settings(body: FinancialSettings, current_user: dict = Depends(get_current_user)):
+    """Cash in the bank and monthly overheads, for net profit and runway."""
+    from ..services.financial_summary_service import save_settings
+
+    return await save_settings(
+        current_user, cash_on_hand=body.cash_on_hand, cash_as_of=body.cash_as_of,
+        monthly_overheads=body.monthly_overheads,
+    )
+
+
 @router.get("/financial-summary")
 async def financial_summary(
     period: Literal["month", "quarter", "year"] = "quarter",
