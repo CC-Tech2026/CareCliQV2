@@ -48,6 +48,31 @@ INVOICE_STATUSES = {"draft", "finalized", "issued", "sent", "paid", "void", "ove
 # get_revenue_report().
 BILLING_ROLES = {"support_coordinator", "managing_director"}
 
+# Where an invoice can go next. Money already asked for or received can't be
+# quietly rewound: a paid, cancelled or void invoice is final, and only a
+# draft can have its lines changed.
+ALLOWED_TRANSITIONS: dict[str, set[str]] = {
+    "draft": {"draft", "finalized", "issued", "sent", "cancelled"},
+    "finalized": {"finalized", "draft", "issued", "sent", "paid", "cancelled"},
+    "issued": {"issued", "sent", "paid", "overdue", "cancelled"},
+    "sent": {"sent", "paid", "overdue", "cancelled"},
+    "overdue": {"overdue", "sent", "paid", "cancelled"},
+    "paid": {"paid"},
+    "cancelled": {"cancelled"},
+    "void": {"void"},
+}
+# Once an invoice has gone out, who it's addressed to is part of the record.
+RECIPIENT_LOCKED_STATUSES = {"issued", "sent", "overdue", "paid", "cancelled", "void"}
+
+
+def check_transition(current: str, target: str) -> None:
+    allowed = ALLOWED_TRANSITIONS.get(current, {current})
+    if target not in allowed:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A {current} invoice can't be changed to {target}.",
+        )
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -112,6 +137,14 @@ def _calculate_totals(line_items: list[dict]) -> tuple[list[dict], int, int, int
             "location_type": item.get("location_type") or "national",
             "item_code": item.get("item_code"),  # Pass through, may be None
             "ndis_price_item_id": item.get("ndis_price_item_id"),
+            # Carried for claims: the unit the quantity is in, and the span of
+            # dates the supports were delivered (NDIA claims need both).
+            **{
+                key: item[key]
+                for key in ("unit", "service_date_from", "service_date_to", "catalogue_price_mismatch",
+                            "catalogue_unit_amount_cents")
+                if item.get(key) is not None
+            },
         })
     if not cleaned:
         raise HTTPException(status_code=422, detail="At least one invoice line item is required.")
@@ -253,6 +286,25 @@ async def upsert_subscription(user: dict, data: dict) -> dict:
     return result.data[0] if result.data else payload
 
 
+INVOICE_PAGE_SIZE = 1000
+INVOICE_MAX_ROWS = 20_000
+
+
+def _fetch_all(query) -> list[dict]:
+    """Every row, a page at a time. The list used to stop at 200, so an
+    organisation with more invoices saw them vanish — and every total the
+    billing page adds up from this list came out short."""
+    rows: list[dict] = []
+    start = 0
+    while start < INVOICE_MAX_ROWS:
+        page = query.range(start, start + INVOICE_PAGE_SIZE - 1).execute().data or []
+        rows.extend(page)
+        if len(page) < INVOICE_PAGE_SIZE:
+            break
+        start += INVOICE_PAGE_SIZE
+    return rows
+
+
 def _invoice_select_query(supabase, user: dict):
     org_id = _require_org(user)
     query = supabase.table("invoices").select("*").eq("organization_id", org_id)
@@ -292,8 +344,7 @@ async def list_invoices(user: dict, status_filter: str | None = None) -> list[di
         if status_filter not in INVOICE_STATUSES:
             raise HTTPException(status_code=422, detail="Invalid invoice status.")
         query = query.eq("status", status_filter)
-    result = query.order("created_at", desc=True).limit(200).execute()
-    invoices = [_with_signed_pdf_url(row) for row in (result.data or [])]
+    invoices = [_with_signed_pdf_url(row) for row in _fetch_all(query.order("created_at", desc=True))]
     return await _enrich_with_service_category(supabase, invoices)
 
 
@@ -440,6 +491,7 @@ async def create_invoice(user: dict, data: dict) -> dict:
     line_items = await _resolve_ndis_prices_for_invoice(
         [dict(item) for item in (data.get("line_items") or [])], org_id
     )
+    billed_completion_ids: list[str] = []
     if data.get("generate_from_verified_tasks"):
         participant_id = data.get("participant_id")
         period_start = data.get("period_start")
@@ -457,15 +509,20 @@ async def create_invoice(user: dict, data: dict) -> dict:
                 date.fromisoformat(str(period_start)),
                 date.fromisoformat(str(period_end)),
                 status="verified",
+                unbilled_only=True,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail="Invalid period_start or period_end.") from exc
 
         if not preview_lines:
-            raise HTTPException(status_code=422, detail="No verified task completions found for the selected period.")
+            raise HTTPException(
+                status_code=422,
+                detail="No verified task completions left to invoice for this period — they may already be on an invoice.",
+            )
 
         generated_line_items: list[dict[str, Any]] = []
         for item in invoice_service.aggregate_line_items(preview_lines).values():
+            billed_completion_ids.extend(str(i) for i in item.get("completion_ids") or [])
             total_cents = _money_to_cents(item.get("total_price") or 0)
             quantity = Decimal(str(item.get("quantity") or "0"))
             unit_amount_cents = 0
@@ -479,7 +536,15 @@ async def create_invoice(user: dict, data: dict) -> dict:
                 "unit_amount_cents": unit_amount_cents,
                 "line_total_cents": total_cents,
                 "item_code": item.get("price_item_code"),
+                "unit": item.get("unit"),
+                "service_date_from": item.get("service_date_from"),
+                "service_date_to": item.get("service_date_to"),
             })
+        if not generated_line_items:
+            raise HTTPException(
+                status_code=422,
+                detail="The verified completions in this period have no NDIS support item, so nothing can be invoiced yet.",
+            )
 
         if line_items:
             generated_line_items.extend(line_items)
@@ -495,8 +560,10 @@ async def create_invoice(user: dict, data: dict) -> dict:
     
     invoice_number = data.get("invoice_number") or f"CS-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{str(uuid4())[:8].upper()}"
     status_value = data.get("status") or "draft"
-    if status_value not in INVOICE_STATUSES:
-        raise HTTPException(status_code=422, detail="Invalid invoice status.")
+    # New invoices start as a draft (or finalised, when raised already
+    # reviewed); sending and payment are recorded as they happen.
+    if status_value not in {"draft", "finalized"}:
+        raise HTTPException(status_code=422, detail="New invoices start as a draft.")
     if data.get("session_id"):
         existing = (
             get_supabase_admin()
@@ -588,24 +655,16 @@ async def create_invoice(user: dict, data: dict) -> dict:
         raise HTTPException(status_code=500, detail="Invoice could not be created.")
     created = result.data[0]
 
-    if data.get("generate_from_verified_tasks"):
-        completion_ids = [
-            row.get("id")
-            for row in invoice_service.get_completed_tasks_for_period(
-                get_supabase_admin(),
-                str(data.get("participant_id")),
-                org_id,
-                date.fromisoformat(str(data.get("period_start"))),
-                date.fromisoformat(str(data.get("period_end"))),
-                status="verified",
-            )
-            if row.get("id")
-        ]
-        if completion_ids:
-            get_supabase_admin().table("task_completions").update({
-                "invoice_id": created.get("id"),
-                "updated_at": _now_iso(),
-            }).in_("id", completion_ids).execute()
+    if data.get("generate_from_verified_tasks") and billed_completion_ids:
+        # Link exactly the completions billed on this invoice — not a
+        # re-query, which could pick up a completion verified in between (on
+        # the invoice's record but not in its total) or ones with no support
+        # item (never billed). The null guard stops two invoices created at
+        # the same moment both claiming the same completions.
+        get_supabase_admin().table("task_completions").update({
+            "invoice_id": created.get("id"),
+            "updated_at": _now_iso(),
+        }).in_("id", billed_completion_ids).is_("invoice_id", "null").execute()
 
     await audit_service.log_action(
         action_type="invoice.created",
@@ -623,6 +682,20 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
     status_value = data.get("status", existing.get("status"))
     if status_value not in INVOICE_STATUSES:
         raise HTTPException(status_code=422, detail="Invalid invoice status.")
+    current_status = existing.get("status") or "draft"
+    check_transition(current_status, status_value)
+    if status_value == "cancelled" and current_status != "cancelled":
+        # Cancelling has its own path: it releases the invoiced shifts.
+        return await cancel_invoice(invoice_id, user)
+    if "line_items" in data and current_status != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail="Only a draft invoice's lines can be changed. Cancel it and raise a new one instead.",
+        )
+    if current_status in RECIPIENT_LOCKED_STATUSES and any(
+        key in data and data[key] != existing.get(key) for key in ("recipient_name", "recipient_email")
+    ):
+        raise HTTPException(status_code=409, detail="The recipient can't be changed after the invoice has been sent.")
     # A PDF render failure falls back to a placeholder with no line items —
     # never let that be sent to a participant or plan manager looking like a
     # real invoice. Regenerating a successful PDF clears the flag (see
@@ -715,6 +788,9 @@ async def mark_invoice_sent(invoice_id: str, user: dict) -> dict:
 
 async def cancel_invoice(invoice_id: str, user: dict) -> dict:
     existing = await get_invoice(invoice_id, user)
+    if existing.get("status") == "cancelled":
+        return existing
+    check_transition(existing.get("status") or "draft", "cancelled")
     payload = {
         "status": "cancelled",
         "cancelled_at": _now_iso(),
@@ -730,6 +806,16 @@ async def cancel_invoice(invoice_id: str, user: dict) -> dict:
         .execute()
     )
     updated = result.data[0] if result.data else {**existing, **payload}
+    # The shifts on a cancelled invoice haven't been billed any more — put
+    # them back in "ready to invoice" instead of leaving them stranded.
+    released = (
+        get_supabase_admin()
+        .table("task_completions")
+        .update({"invoice_id": None, "updated_at": _now_iso()})
+        .eq("invoice_id", invoice_id)
+        .eq("organization_id", existing["organization_id"])
+        .execute()
+    )
     await audit_service.log_action(
         action_type="invoice.cancelled",
         entity_type="invoice",
@@ -737,7 +823,7 @@ async def cancel_invoice(invoice_id: str, user: dict) -> dict:
         user_id=get_user_id(user),
         organization_id=existing.get("organization_id"),
         before_state={"status": existing.get("status")},
-        after_state={"status": "cancelled"},
+        after_state={"status": "cancelled", "released_completions": len(released.data or [])},
     )
     return updated
 
@@ -764,6 +850,24 @@ def _minimal_pdf_bytes(invoice: dict, *, render_error: str | None = None) -> byt
         "xref\n0 6\n0000000000 65535 f \ntrailer << /Root 1 0 R /Size 6 >>\nstartxref\n0\n%%EOF\n"
     )
     return pdf.encode("utf-8")
+
+
+def _quantity_label(item: dict) -> str:
+    """'1.5 hrs' for time-based items, '2' for per-item supports."""
+    qty = float(item.get("quantity") or 0)
+    text = f"{qty:.2f}".rstrip("0").rstrip(".")
+    unit = str(item.get("unit") or "H").upper()
+    if unit in {"H", "HOUR"}:
+        return f"{text} hr" if qty == 1 else f"{text} hrs"
+    return text
+
+
+def _line_date_label(item: dict) -> str:
+    start, end = item.get("service_date_from"), item.get("service_date_to")
+    if start and end and start != end:
+        return f"{_fmt_dmy(start)} – {_fmt_dmy(end)}"
+    single = start or item.get("service_date") or item.get("shift_date") or item.get("date")
+    return _fmt_dmy(single) if single else ""
 
 
 def _build_template_data(invoice: dict, supabase: Any) -> dict:
@@ -929,8 +1033,9 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
             "item_code": item.get("item_code") or "",
             "item_name": item.get("description") or "",
             "item_description": item.get("item_description") or "",
-            "shift_date": item.get("service_date") or item.get("shift_date") or item.get("date") or "",
+            "shift_date": _line_date_label(item),
             "hours": float(item.get("quantity") or 0),
+            "quantity_label": _quantity_label(item),
             "unit_price": unit_price,
             "gst_applicable": bool(item.get("gst_applicable", False)),
             "line_total": line_total,

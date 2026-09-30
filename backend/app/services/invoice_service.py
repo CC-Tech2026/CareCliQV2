@@ -48,10 +48,15 @@ def get_completed_tasks_for_period(
     organization_id: str,
     period_start: date,
     period_end: date,
-    status: str = "verified"
+    status: str = "verified",
+    unbilled_only: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Get all verified task completions for invoice period.
+
+    unbilled_only: leave out completions already on an invoice. Invoice
+    generation must pass this — otherwise invoicing the same participant
+    and period twice bills every completion twice.
     
     Args:
         participant_id: Target participant
@@ -64,12 +69,13 @@ def get_completed_tasks_for_period(
         List of task completions with pricing details
     """
     try:
-        resp = (
+        query = (
             supabase.table("task_completions")
             .select(
                 """
                 id,
                 task_id,
+                invoice_id,
                 completion_date,
                 duration_minutes,
                 evidence_type,
@@ -83,9 +89,10 @@ def get_completed_tasks_for_period(
             .eq("status", status)
             .gte("completion_date", period_start.isoformat())
             .lte("completion_date", period_end.isoformat())
-            .order("completion_date", desc=False)
-            .execute()
         )
+        if unbilled_only:
+            query = query.is_("invoice_id", "null")
+        resp = query.order("completion_date", desc=False).execute()
         completions = resp.data or []
         if not completions:
             return []
@@ -128,6 +135,27 @@ def get_completed_tasks_for_period(
             for row in price_resp.data or []:
                 if isinstance(row, dict) and row.get("item_code"):
                     versions_by_code.setdefault(str(row["item_code"]), []).append(row)
+            # Most items live only in the platform catalogue (ndis_pricing_service
+            # resolves org override -> platform -> org). Without this, those
+            # items lost their name and unit here, and an "each" item was
+            # then counted in hours.
+            missing = [code for code in price_codes if code not in versions_by_code]
+            if missing:
+                try:
+                    platform_resp = (
+                        supabase.table("platform_ndis_price_items")
+                        .select(
+                            "item_code, name, unit, price_national, price_remote, price_very_remote, "
+                            "day_type, time_type, support_intensity, valid_from, valid_to"
+                        )
+                        .in_("item_code", missing)
+                        .execute()
+                    )
+                    for row in platform_resp.data or []:
+                        if isinstance(row, dict) and row.get("item_code"):
+                            versions_by_code.setdefault(str(row["item_code"]), []).append(row)
+                except Exception as exc:  # the org rows above still stand
+                    logger.warning("Platform price lookup failed: %s", exc)
 
         def _price_as_of(item_code: str, as_of: str) -> dict[str, Any]:
             for version in versions_by_code.get(item_code, []):
@@ -183,11 +211,28 @@ def aggregate_line_items(
                 "quantity": Decimal("0"),
                 "total_price": Decimal("0"),
                 "task_ids": [],
+                "completion_ids": [],
+                "service_date_from": None,
+                "service_date_to": None,
             }
 
-        # Add quantity (hours)
-        duration_hours = Decimal(str(completion.get("duration_minutes", 0))) / Decimal("60")
-        line_items[price_code]["quantity"] += duration_hours
+        # Quantity in the item's own unit: hours for time-based items, one per
+        # completion for "each" items (a trip, a consumable). Counting an
+        # "each" item in hours gave wrong quantities and, once divided into
+        # the total, a wrong unit price.
+        duration_hours = Decimal(str(completion.get("duration_minutes") or 0)) / Decimal("60")
+        if str(line_items[price_code].get("unit") or "").upper() == "E":
+            line_items[price_code]["quantity"] += Decimal("1")
+        else:
+            line_items[price_code]["quantity"] += duration_hours
+
+        day = str(completion.get("completion_date") or "")[:10]
+        if day:
+            first, last = line_items[price_code]["service_date_from"], line_items[price_code]["service_date_to"]
+            line_items[price_code]["service_date_from"] = min(first, day) if first else day
+            line_items[price_code]["service_date_to"] = max(last, day) if last else day
+        if completion.get("id"):
+            line_items[price_code]["completion_ids"].append(completion["id"])
 
         # Add to total. billed_amount should already be correct (set at
         # completion time by record_task_completion(), which does respect

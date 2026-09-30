@@ -1722,7 +1722,8 @@ export default function Billing() {
                                 {translate("billing.action.markSent")}
                               </Button>
                             )}
-                            {!["paid", "void", "cancelled"].includes(
+                            {/* A draft is reviewed and finalised before it can be paid. */}
+                            {!["draft", "paid", "void", "cancelled"].includes(
                               invoice.status,
                             ) && (
                               <Button
