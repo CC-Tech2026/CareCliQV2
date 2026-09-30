@@ -78,6 +78,7 @@ import { storeAndApplySupabaseSession } from "@/lib/supabase";
 import { getRememberDevicePreference } from "@/lib/auth-session";
 import { submitImprovementFeedback } from "@/services/improvementFeedbackService";
 import { cn } from "@/lib/utils";
+import { OrganisationDetailsCard } from "@/components/settings/OrganisationDetailsCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
@@ -1628,7 +1629,15 @@ export default function Settings() {
     (!item.mdOnly || isMD || (item.requiredCapability ? hasDelegatedCapability(item.requiredCapability) : false)),
   );
 
-  const [activeSection, setActiveSection] = useState<SectionId>(() => isMD && new URLSearchParams(window.location.search).has("billing") ? "billing" : "account");
+  const [activeSection, setActiveSection] = useState<SectionId>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (isMD && params.has("billing")) return "billing";
+    // ?section=provider — linked from places that need organisation details
+    // filled in (e.g. NDIA claims without a registration number).
+    const requested = params.get("section");
+    if (requested && NAV_ITEMS.some((item) => item.id === requested)) return requested as SectionId;
+    return "account";
+  });
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"draw" | "upload">("draw");
 
@@ -2464,47 +2473,14 @@ export default function Settings() {
             description={translate("settings.provider.subtitle")}
             icon={Building2}
           >
-            <PanelCard label={translate("settings.provider.businessInfo")}>
-              {isLoadingSettings ? (
-                <LoadingRow />
-              ) : (
-                <div className="space-y-4">
-                  <div className="space-y-1.5 max-w-sm">
-                    <Label htmlFor="business-name" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>{translate("settings.provider.businessName")}</Label>
-                    <Input
-                      id="business-name"
-                      value={businessName}
-                      onChange={(e) => setBusinessName(e.target.value)}
-                      placeholder="e.g. Sunshine Support Services Pty Ltd"
-                      className="rounded-lg"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="abn" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>
-                      ABN <span className="font-normal" style={{ color: "var(--cc-muted)" }}>(Australian Business Number)</span>
-                    </Label>
-                    <Input
-                      id="abn"
-                      value={abn}
-                      onChange={(e) => setAbn(e.target.value)}
-                      placeholder="e.g. 51 824 753 556"
-                      className={cn("rounded-lg max-w-[220px]", abnError && "border-red-400 focus-visible:ring-red-400")}
-                      maxLength={14}
-                    />
-                    {abnError && (
-                      <p className="text-xs text-red-500">Please enter a valid 11-digit ABN.</p>
-                    )}
-                    {!abnError && abnShowValid && (
-                      <p className="text-xs text-emerald-600 flex items-center gap-1">
-                        <Check className="h-3 w-3" /> Valid ABN
-                      </p>
-                    )}
-                    {!abnError && !abnShowValid && abnDigits.length > 0 && (
-                      <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>{11 - abnDigits.length} more digit{11 - abnDigits.length !== 1 ? "s" : ""} needed</p>
-                    )}
-                  </div>
-                </div>
-              )}
+            {/* Organisation-level details — what invoices, agreements and NDIA
+                claims actually print. The old form saved ABN to the user's own
+                profile, where no document ever read it. */}
+            <PanelCard label="Organisation details">
+              <p className="-mt-2 mb-4 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                Printed on invoices and service agreements, and sent with NDIA claims.
+              </p>
+              <OrganisationDetailsCard profileAbn={providerPristine.abn} />
             </PanelCard>
 
             {/* Single-office timezone picker — hidden once a second branch
@@ -2535,7 +2511,6 @@ export default function Settings() {
               </PanelCard>
             )}
 
-            <StickyActionBar visible={providerDirty} saving={isSavingProvider} onSave={handleSaveProvider} onCancel={handleCancelProvider} />
           </Section>
         )}
 

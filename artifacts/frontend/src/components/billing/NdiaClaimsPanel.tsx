@@ -248,7 +248,8 @@ export function NdiaClaimsPanel({ onChanged }: { onChanged?: () => void }) {
 
       {query.data?.registration_number_missing && (
         <p role="alert" className="flex items-center gap-2 rounded-xl p-3 text-sm" style={{ background: "var(--cc-status-danger-bg)", color: "var(--cc-status-danger)" }}>
-          <AlertTriangle size={15} /> Add your NDIS registration number in organisation settings before claiming.
+          <AlertTriangle size={15} /> Add your NDIS registration number before claiming.
+          <a href="/settings?section=provider" className="ml-auto font-semibold underline">Organisation details</a>
         </p>
       )}
       {tab === "ready" && !!query.data?.drafts_awaiting_review && (
