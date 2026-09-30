@@ -205,7 +205,7 @@ def load_settings(org_id: str) -> dict[str, Any]:
             .select("cash_on_hand_cents, cash_as_of, monthly_overheads_cents, updated_at")
             .eq("organization_id", org_id).limit(1).execute()
         ).data or []
-    except Exception as exc:  # migration 228 not applied yet
+    except Exception as exc:  # migration 231 not applied yet
         logger.info("organization_financial_settings unavailable: %s", exc)
         return {}
     return rows[0] if rows else {}
