@@ -25,3 +25,16 @@ it("marks summary queries stale after any successful mutation, leaving others al
   expect(queryClient.getQueryState(["org-1", "md", "dashboard", "all"])?.isInvalidated).toBe(true);
   expect(queryClient.getQueryState(["org-1", "participant", "p-1"])?.isInvalidated).toBe(false);
 });
+
+it("doesn't retry requests that can't succeed", () => {
+  const retry = queryClient.getDefaultOptions().queries!.retry as (n: number, e: unknown) => boolean;
+  const withStatus = (status: number) => Object.assign(new Error("x"), { status });
+  expect(retry(0, withStatus(404))).toBe(false);
+  expect(retry(0, withStatus(403))).toBe(false);
+  expect(retry(0, new Error("Request failed with 404"))).toBe(false);
+  // Worth another try: server errors, timeouts, rate limits, network drops.
+  expect(retry(0, withStatus(500))).toBe(true);
+  expect(retry(0, withStatus(429))).toBe(true);
+  expect(retry(0, new TypeError("Failed to fetch"))).toBe(true);
+  expect(retry(2, withStatus(500))).toBe(false);
+});

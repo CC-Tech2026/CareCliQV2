@@ -1066,9 +1066,12 @@ def test_clock_in_gps_rejects_far_location(mock_get, _mock_coords, _mock_ack):
         )
 
 
+# The same-day check is covered on its own; skip it here, or the test fails
+# in the last hour before midnight, when "60 minutes from now" is tomorrow.
+@patch("backend.app.services.shift_service.validate_shift_scheduled_today")
 @patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
 @patch("backend.app.services.shift_service.get_shift_by_id")
-def test_clock_in_rejects_outside_time_window(mock_get, _mock_ack):
+def test_clock_in_rejects_outside_time_window(mock_get, _mock_ack, _same_day):
     mock_get.return_value = _sample_shift(scheduled_start=_shift_window_start(60))
     with pytest.raises(ValueError, match="Too early"):
         shift_service.clock_in_shift("shift-1", "worker-1", "org-1")

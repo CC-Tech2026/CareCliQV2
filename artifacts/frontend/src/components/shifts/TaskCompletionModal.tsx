@@ -43,7 +43,7 @@ export function TaskCompletionModal({ isOpen, onClose, instanceId, onSuccess }: 
         const formData = new FormData();
         formData.append("file", photoFile);
         try {
-          const uploadedData = await jsonFetch<{ url: string }>("/api/upload", {
+          const uploadedData = await jsonFetch<{ url: string }>("/api/worker/upload", {
             method: "POST",
             body: formData,
           });

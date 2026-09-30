@@ -41,6 +41,17 @@ export function isSummaryQuery(query: Pick<Query, "queryKey">): boolean {
   return typeof root === "string" && SUMMARY_QUERY_ROOTS.has(root);
 }
 
+/** HTTP status of a failed request: `error.status` (jsonFetch, loadErrorFrom),
+ * else the "Request failed with 404" message several query functions throw. */
+export function requestStatus(error: unknown): number | null {
+  if (error && typeof error === "object" && "status" in error) {
+    const s = Number((error as { status: unknown }).status);
+    if (Number.isFinite(s) && s > 0) return s;
+  }
+  const match = error instanceof Error ? /Request failed with (\d{3})/.exec(error.message) : null;
+  return match ? Number(match[1]) : null;
+}
+
 export const queryClient = new QueryClient({
   mutationCache: new MutationCache({
     onSuccess: () => {
@@ -60,10 +71,12 @@ export const queryClient = new QueryClient({
       // different orgs are stored under distinct keys (CCQ-113 AC).
       queryKeyHashFn: (queryKey) => hashKey([_currentOrgId ?? "__no_org__", ...queryKey]),
       retry: (failureCount, error: unknown) => {
-        if (error && typeof error === "object" && "status" in error) {
-          const s = (error as { status: number }).status;
-          if (s === 401 || s === 403) return false;
-        }
+        // A 4xx won't change on retry (not found, not allowed, bad input), so
+        // show the error now instead of sitting on a skeleton for seconds —
+        // e.g. an endpoint the deployed API doesn't have yet. Timeouts and
+        // rate limits can succeed later.
+        const status = requestStatus(error);
+        if (status && status >= 400 && status < 500 && status !== 408 && status !== 429) return false;
         return failureCount < 2;
       },
     },
