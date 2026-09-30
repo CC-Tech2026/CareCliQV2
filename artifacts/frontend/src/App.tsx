@@ -21,6 +21,7 @@ import OnboardingWorkspace from "@/pages/md/onboarding-workspace";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useAuth } from "@/contexts/AuthContext";
+import { defaultHomePathForRole } from "@/lib/auth-session";
 import { AuthSessionGuards } from "@/components/auth/AuthSessionGuards";
 import { WelcomeScreenGate } from "@/components/onboarding/WelcomeScreenGate";
 import { OnboardingCompleteGate } from "@/components/onboarding/OnboardingCompleteGate";
@@ -75,6 +76,17 @@ import AdminFeedbackPage from "@/pages/admin/feedback";
 import AdminBugReportsPage from "@/pages/admin/bug-reports";
 import AdminLayoutSettingsPage from "@/pages/admin/settings-layout";
 import AdminAccessibilitySettingsPage from "@/pages/admin/settings-accessibility";
+import ParticipantSchedulePage from "@/pages/participant-portal/schedule";
+import ParticipantDocumentsPage from "@/pages/participant-portal/documents";
+import ParticipantOverviewPage from "@/pages/participant-portal/overview";
+import ParticipantPlanPage from "@/pages/participant-portal/plan";
+import ParticipantSettingsPage from "@/pages/participant-portal/settings";
+import ParticipantInvoicesPage from "@/pages/participant-portal/invoices";
+import ParticipantChoosePage from "@/pages/participant-portal/choose";
+import ParticipantInvitePage from "@/pages/participant-invite";
+import PortalLoginPage from "@/pages/portal-login";
+import PortalForgotPasswordPage from "@/pages/portal-forgot-password";
+import { ParticipantPortalProvider } from "@/components/participant-portal/ParticipantPortalContext";
 import MDOnboardingPage from "@/pages/md/onboarding";
 import MDOnboardingTrainingPage, { MDOnboardingSetupPage } from "@/pages/md/onboarding-training";
 import TagManagementPage from "@/pages/md/tag-management";
@@ -121,6 +133,10 @@ const MD_ROLES = ["managing_director"] as const;
 // CareCliQ vendor-side only — the Super Admin portal, not scoped to any org
 const ADMIN_ROLES = ["super_admin"] as const;
 
+// Participants Portal — a participant only, scoped to their own record via
+// participant_id, never org-wide like the staff roles above.
+const PARTICIPANT_ROLES = ["participant"] as const;
+
 // Managing directors live in HubLayout everywhere (a distinct shell befitting
 // their org-wide privileges); everyone else uses the standard AppLayout
 // sidebar. Used for shared pages like Settings that both reach.
@@ -130,6 +146,13 @@ function RoleAwareShell({ children }: { children: React.ReactNode }) {
     return <HubLayout>{children}</HubLayout>;
   }
   return <AppLayout>{children}</AppLayout>;
+}
+
+// Not logged in yet (or role unknown) falls through to /dashboard, same as
+// before this existed — its own ProtectedRoute redirects to /login.
+function RootRedirect() {
+  const { user } = useAuth();
+  return <Redirect to={user ? defaultHomePathForRole(user.role) : "/dashboard"} />;
 }
 
 function Router() {
@@ -145,8 +168,11 @@ function Router() {
       <Route path="/onboarding-sign" component={OnboardingSignPage} />
       <Route path="/agreement-sign" component={AgreementSignPage} />
       <Route path="/participant-referral" component={ParticipantReferralPage} />
+      <Route path="/participant-invite" component={ParticipantInvitePage} />
+      <Route path="/portal/login" component={PortalLoginPage} />
+      <Route path="/portal/forgot-password" component={PortalForgotPasswordPage} />
       <Route path="/account/secure" component={AccountSecure} />
-      <Route path="/" component={() => <Redirect to="/dashboard" />} />
+      <Route path="/" component={RootRedirect} />
 
       <Route path="/design-system">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
@@ -237,6 +263,57 @@ function Router() {
       <Route path="/admin/settings/accessibility">
         <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
           <AdminAccessibilitySettingsPage />
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── Participants Portal — participant-only, scoped to their own record ─ */}
+      <Route path="/participant-portal/choose">
+        <ProtectedRoute allowedRoles={[...PARTICIPANT_ROLES]}>
+          <ParticipantPortalProvider><ParticipantChoosePage /></ParticipantPortalProvider>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/participant-portal/schedule">
+        <ProtectedRoute allowedRoles={[...PARTICIPANT_ROLES]}>
+          <ParticipantPortalProvider><ParticipantSchedulePage /></ParticipantPortalProvider>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/participant-portal/documents">
+        <ProtectedRoute allowedRoles={[...PARTICIPANT_ROLES]}>
+          <ParticipantPortalProvider><ParticipantDocumentsPage /></ParticipantPortalProvider>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/participant-portal/settings">
+        <ProtectedRoute allowedRoles={[...PARTICIPANT_ROLES]}>
+          <ParticipantPortalProvider><ParticipantSettingsPage /></ParticipantPortalProvider>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/participant-portal/plan">
+        <ProtectedRoute allowedRoles={[...PARTICIPANT_ROLES]}>
+          <ParticipantPortalProvider><ParticipantPlanPage /></ParticipantPortalProvider>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Earlier portal addresses — bookmarks and old links still land somewhere sensible. */}
+      <Route path="/participant-portal/service-agreement">
+        <Redirect to="/participant-portal/documents" replace />
+      </Route>
+      <Route path="/participant-portal/profile">
+        <Redirect to="/participant-portal" replace />
+      </Route>
+
+      <Route path="/participant-portal/invoices">
+        <ProtectedRoute allowedRoles={[...PARTICIPANT_ROLES]}>
+          <ParticipantPortalProvider><ParticipantInvoicesPage /></ParticipantPortalProvider>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/participant-portal">
+        <ProtectedRoute allowedRoles={[...PARTICIPANT_ROLES]}>
+          <ParticipantPortalProvider><ParticipantOverviewPage /></ParticipantPortalProvider>
         </ProtectedRoute>
       </Route>
 

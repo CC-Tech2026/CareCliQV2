@@ -13,13 +13,16 @@ import { listMyAccessGrants, type AccessGrant } from "@/services/accessGrantServ
 export function useMyAccessGrants() {
   const { user } = useAuth();
   const isMD = user?.role === "managing_director";
+  // Participants Portal logins can't call staff endpoints (the backend
+  // refuses them), and never hold staff access grants anyway.
+  const skip = isMD || user?.role === "participant";
 
   const query = useOrgQuery(["me", "access-grants"], {
     queryFn: listMyAccessGrants,
-    enabled: !isMD,
+    enabled: !skip,
   });
 
-  const grants = isMD ? [] : (query.data ?? []);
+  const grants = skip ? [] : (query.data ?? []);
 
   function hasCapability(capability: string): boolean {
     return grants.some((g) => g.capability === capability);
@@ -31,7 +34,7 @@ export function useMyAccessGrants() {
 
   return {
     grants,
-    isLoading: !isMD && query.isLoading,
+    isLoading: !skip && query.isLoading,
     hasCapability,
     grantFor,
   };

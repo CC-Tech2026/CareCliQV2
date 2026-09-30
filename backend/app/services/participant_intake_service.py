@@ -112,11 +112,13 @@ def _validate_dob(web_intake: dict | None, service_category: str | None) -> str:
 
 
 def _with_fresh_document_url(row: dict[str, Any]) -> dict[str, Any]:
-    path = row.get("signed_document_path")
+    path = row.get("service_agreement_document_path")
     if path:
         try:
             signed = get_supabase_admin().storage.from_(BUCKET).create_signed_url(path, SIGNED_URL_EXPIRY_SECONDS)
-            row["signed_document_url"] = signed.get("signedURL") or signed.get("signed_url") or row.get("signed_document_url")
+            row["service_agreement_document_url"] = (
+                signed.get("signedURL") or signed.get("signed_url") or row.get("service_agreement_document_url")
+            )
         except Exception:
             pass
     recording = row.get("meet_greet_recording_path")
@@ -347,7 +349,11 @@ def _generate_and_store_service_agreement(intake: dict[str, Any]) -> dict[str, A
     except Exception as exc:
         raise HTTPException(status_code=502, detail=internal_error_detail("Participant intake storage is not configured", exc))
 
-    return {"signed_document_path": path, "signed_document_url": url, "signed_document_name": filename}
+    return {
+        "service_agreement_document_path": path,
+        "service_agreement_document_url": url,
+        "service_agreement_document_name": filename,
+    }
 
 
 async def update_intake(
@@ -486,9 +492,9 @@ async def upload_signed_document(
     result = (
         supabase.table(TABLE)
         .update({
-            "signed_document_path": path,
-            "signed_document_url": url,
-            "signed_document_name": filename,
+            "service_agreement_document_path": path,
+            "service_agreement_document_url": url,
+            "service_agreement_document_name": filename,
             "updated_at": _now(),
         })
         .eq("id", intake_id)
@@ -496,5 +502,7 @@ async def upload_signed_document(
         .execute()
     )
     return result.data[0] if result.data else {
-        "signed_document_path": path, "signed_document_url": url, "signed_document_name": filename,
+        "service_agreement_document_path": path,
+        "service_agreement_document_url": url,
+        "service_agreement_document_name": filename,
     }

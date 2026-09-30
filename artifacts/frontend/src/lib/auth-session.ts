@@ -214,10 +214,40 @@ export function endVoluntaryLogout(): void {
   voluntaryLogoutInProgress = false;
 }
 
+/** Where a freshly-logged-in user lands absent a restore context — each
+ * portal (Super Admin, Participants) has its own home outside the staff
+ * app's /hub, everyone else lands in /hub. */
+export function defaultHomePathForRole(role: string): string {
+  if (role === "super_admin") return "/admin/dashboard";
+  if (role === "participant") return "/participant-portal";
+  return "/hub";
+}
+
+/** Participants Portal pages and sign-in live under these prefixes. */
+const PORTAL_PATH_PREFIXES = ["/participant-portal", "/portal/"];
+
+export function isPortalPath(path: string): boolean {
+  return PORTAL_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+function isSignInPath(path: string): boolean {
+  return path.startsWith("/login") || path.startsWith("/portal/login");
+}
+
+/** Which sign-in page to send someone to — participants (or anyone on a
+ * portal page) get the Participants Portal sign-in, everyone else the staff one. */
+export function signInPathFor(currentPath: string, role?: string | null): string {
+  return role === "participant" || isPortalPath(currentPath) ? "/portal/login" : "/login";
+}
+
 export function resolvePostLoginPath(userId: string, defaultPath = "/hub"): string {
   const restore = loadAuthRestoreContext();
   clearAuthRestoreContext();
-  if (!restore?.path || restore.path.startsWith("/login")) {
+  if (!restore?.path || isSignInPath(restore.path)) {
+    return defaultPath;
+  }
+  // Never restore a participant into a staff page, or staff into the portal.
+  if (isPortalPath(defaultPath) !== isPortalPath(restore.path)) {
     return defaultPath;
   }
   if (restore.userId && restore.userId !== userId) {
@@ -229,6 +259,6 @@ export function resolvePostLoginPath(userId: string, defaultPath = "/hub"): stri
 export function captureCurrentRestoreContext(userId?: string): void {
   if (typeof window === "undefined") return;
   const path = `${window.location.pathname}${window.location.search}`;
-  if (path.startsWith("/login")) return;
+  if (isSignInPath(path)) return;
   saveAuthRestoreContext(path, userId);
 }

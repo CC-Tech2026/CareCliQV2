@@ -2,12 +2,38 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from .config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _bearer_scheme = HTTPBearer(auto_error=False)
+
+# Participants Portal logins belong to an organisation, and many staff
+# endpoints only check organisation membership — so a participant (or their
+# nominee/parent) calling the API directly could otherwise reach staff data.
+# Deny by default: a participant token only works on these paths. Anything
+# else is 403 (get_current_user) or treated as anonymous (get_optional_user).
+PARTICIPANT_ALLOWED_PATH_PREFIXES = (
+    "/api/participant-portal/",
+    "/api/auth/me",
+    "/api/auth/logout",
+    "/api/auth/supabase-refresh",
+    "/api/auth/password-reset/",
+)
+# Self-only account settings (each acts on the caller's own user id): the
+# portal's Settings page. Exact paths — the rest of /api/users stays refused.
+PARTICIPANT_ALLOWED_EXACT_PATHS = frozenset({
+    "/api/users/me/accessibility",
+    "/api/users/me/language",
+    "/api/users/me/change-password",
+})
+
+
+def participant_may_call(path: str) -> bool:
+    if path in PARTICIPANT_ALLOWED_EXACT_PATHS:
+        return True
+    return any(path == p.rstrip("/") or path.startswith(p) for p in PARTICIPANT_ALLOWED_PATH_PREFIXES)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -33,6 +59,7 @@ def decode_access_token(token: str) -> Optional[dict]:
 
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
 ) -> dict:
     """FastAPI dependency — decodes JWT from Authorization header.
@@ -63,10 +90,16 @@ async def get_current_user(
             detail="Session has ended. Please sign in again.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if payload.get("role") == "participant" and not participant_may_call(request.url.path):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Participants Portal accounts can't access this.",
+        )
     return payload
 
 
 async def get_optional_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
 ) -> Optional[dict]:
     """Like get_current_user but returns None instead of raising 401.
@@ -76,7 +109,10 @@ async def get_optional_user(
     """
     if not credentials:
         return None
-    return decode_access_token(credentials.credentials)
+    payload = decode_access_token(credentials.credentials)
+    if payload and payload.get("role") == "participant" and not participant_may_call(request.url.path):
+        return None
+    return payload
 
 
 def require_role(allowed_roles: list[str]):

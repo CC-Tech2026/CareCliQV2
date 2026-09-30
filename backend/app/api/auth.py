@@ -5,7 +5,7 @@ import uuid
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Literal, Optional
 import json
 import urllib.error
 import urllib.parse
@@ -275,6 +275,10 @@ class LoginRequest(BaseModel):
     password: str
     remember_device: bool = False
     device_id: str = ""
+    # Which sign-in page was used. The web staff login sends "staff" and the
+    # Participants Portal login sends "participant"; a mismatched account is
+    # refused before any session is created. Omitted (mobile app) = no check.
+    portal: Optional[Literal["staff", "participant"]] = None
 
     @model_validator(mode="after")
     def _require_identifier(self):
@@ -319,6 +323,22 @@ class OnboardingCompleteRequest(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     email: str
+    # True when requested from the Participants Portal, so the emailed link
+    # returns the user to the portal sign-in rather than the staff one.
+    portal: bool = False
+
+
+def _check_login_door(portal: Optional[str], role: str) -> None:
+    if portal == "participant" and role != "participant":
+        raise HTTPException(
+            status_code=403,
+            detail="This sign-in is for participants and families. Staff please use the staff sign-in.",
+        )
+    if portal == "staff" and role == "participant":
+        raise HTTPException(
+            status_code=403,
+            detail="Please use the Participants Portal sign-in.",
+        )
 
 
 def _set_head_office_state(supabase, organization_id: Optional[str], state: Optional[str]) -> None:
@@ -878,6 +898,8 @@ async def login(body: LoginRequest, request: Request, background_tasks: Backgrou
     if organization_id:
         role = await _resolve_org_member_role(str(auth_user.id), organization_id, role)
 
+    _check_login_door(body.portal, role)
+
     device_id = (body.device_id or request.headers.get("x-device-id") or "").strip() or None
     if mfa_settings.get("mfa_enabled") and not dss.is_device_trusted(str(auth_user.id), device_id):
         # OLD, custom pyotp-based MFA flow (device_security_service). Left
@@ -1136,6 +1158,8 @@ async def request_password_reset(body: PasswordResetRequest):
         raise HTTPException(status_code=422, detail="Enter a valid email address.")
 
     redirect_to = f"{settings.frontend_base_url.rstrip('/')}/reset-password"
+    if body.portal:
+        redirect_to += "?portal=1"
     encoded_redirect = urllib.parse.quote(redirect_to, safe="")
     _supabase_auth_request(
         f"recover?redirect_to={encoded_redirect}",

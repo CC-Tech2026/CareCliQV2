@@ -21,6 +21,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranches } from "@/hooks/useBranches";
 import { zoneAbbreviation } from "@/lib/datetime";
+import { PortalAccessCard } from "@/components/participant-portal/PortalAccessCard";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PLUM        = "#E8457A";
@@ -404,6 +405,8 @@ export default function ParticipantEdit({ id }: { id: string }) {
           </div>
         </form>
       </Form>
+
+      <PortalAccessCard participantId={id} />
     </div>
   );
 }

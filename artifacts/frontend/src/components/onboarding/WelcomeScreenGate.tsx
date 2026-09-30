@@ -9,7 +9,7 @@ const PLUM = "var(--cc-plum)";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 
-const EXCLUDED_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password", "/accept-invite"];
+const EXCLUDED_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password", "/accept-invite", "/participant-invite", "/portal/login", "/portal/forgot-password"];
 
 /** First-login welcome screen, shown once before a new support worker sees
  * anything else, then routes into induction. Only support_workers get this —

@@ -24,6 +24,8 @@ export default function ResetPassword() {
   const { toast } = useToast();
   const { translate: t } = useAccessibility();
   const recovery = useMemo(readRecoveryParams, []);
+  // Requested from the Participants Portal → return there, not the staff sign-in.
+  const signInPath = new URLSearchParams(window.location.search).get("portal") === "1" ? "/portal/login" : "/login";
   const hasRecoveryToken = !!(recovery.access_token || recovery.token_hash);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -80,7 +82,7 @@ export default function ResetPassword() {
         <div className="w-full max-w-sm mx-auto my-auto py-8">
           <button
             type="button"
-            onClick={() => navigate("/login")}
+            onClick={() => navigate(signInPath)}
             className="inline-flex items-center gap-1.5 text-[12px] font-bold mb-6"
             style={{ color: PLUM }}
           >
@@ -102,7 +104,7 @@ export default function ResetPassword() {
               <p className="text-[15px] font-bold" style={{ color: "var(--cc-text)" }}>{t("auth.reset.updated")}</p>
               <button
                 type="button"
-                onClick={() => navigate("/login")}
+                onClick={() => navigate(signInPath)}
                 className="mt-4 h-11 px-5 rounded-2xl text-white font-bold transition-all hover:opacity-90 active:scale-[0.97]"
                 style={{ background: "var(--cc-cta)" }}
               >
