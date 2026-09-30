@@ -502,6 +502,8 @@ export const en: Dict = {
   "auth.login.submit": "Sign In",
   "auth.login.noAccount": "Are you a worker at an NDIS organisation?",
   "auth.login.createAccount": "Activate account",
+  "auth.login.participantPrompt": "Participant or family member?",
+  "auth.login.participantLink": "Sign in to the Participants Portal",
   "auth.login.footer": "NDIS Practice Standards · AHPRA aligned · Australian built",
   "auth.login.error.passwordRequired": "Enter your password",
   "auth.login.error.mfaRequired": "Enter your verification code",
@@ -2768,6 +2770,7 @@ export const en: Dict = {
   "protected.role.supportCoordinator": "Support Coordinator (CareCliQ Parent)",
   "protected.role.supportWorker": "Support Worker (CareCliQ Child)",
   "protected.role.managingDirector": "Managing Director (CareCliQ Executive)",
+  "protected.role.participant": "Participant",
 
   // Shift stage banner
   "shift.banner.arrived": "Arrived: {name}",

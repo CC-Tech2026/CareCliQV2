@@ -28,8 +28,36 @@ async def test_unfilled_shifts_use_local_portable_time_and_exclude_cancelled():
     query.execute.return_value.data = rows
     with patch.object(hub, "get_supabase_admin", return_value=db):
         alerts = await hub._unfilled_shift_alerts("org-1")
+    assert alerts[0]["shift_id"] == "shift-1"
     local = start.astimezone(hub.request_timezone())
     assert len(alerts) == 1
     assert local.strftime("%I:%M%p").lstrip("0").lower() in alerts[0]["detail"]
     assert alerts[0]["due_date"] == local.date().isoformat()
     query.eq.assert_any_call("organization_id", "org-1")
+
+@pytest.mark.asyncio
+async def test_participant_load_failure_is_not_reported_as_no_alerts():
+    from fastapi import HTTPException
+    with patch.object(hub.participant_service, "get_participants_list_light", AsyncMock(side_effect=RuntimeError("unavailable"))):
+        with pytest.raises(HTTPException) as error:
+            await hub._participant_quiet_alerts("org-1", {}, [])
+    assert error.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_shift_load_failure_is_not_reported_as_no_alerts():
+    from fastapi import HTTPException
+    db = MagicMock()
+    db.table.side_effect = RuntimeError("unavailable")
+    with patch.object(hub, "get_supabase_admin", return_value=db):
+        with pytest.raises(HTTPException) as error:
+            await hub._unfilled_shift_alerts("org-1")
+    assert error.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_note_alerts_include_matching_worker_id():
+    sessions = [{"worker_id": "worker-123", "compliance_score": 50} for _ in range(4)]
+    alerts = await hub._worker_note_specificity_alerts(sessions, {"worker-123": "Sam"})
+    assert len(alerts) == 1
+    assert alerts[0]["worker_id"] == "worker-123"

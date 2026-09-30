@@ -18,7 +18,11 @@ EXECUTIVE_ROLES = {"managing_director"}
 # Super Admin portal. Not scoped to any single organization_id (that column
 # is NULL for these users), unlike every other role above.
 SUPER_ADMIN_ROLES = {"super_admin"}
-VALID_ROLES = COORDINATOR_ROLES | SCOPED_ROLES | EXECUTIVE_ROLES | SUPER_ADMIN_ROLES
+# Participant-facing role for the Participants Portal. Never org-wide: each
+# portal request is checked against an active participant_portal_access row
+# (participant_portal_access_service.assert_active_access).
+PARTICIPANT_ROLES = {"participant"}
+VALID_ROLES = COORDINATOR_ROLES | SCOPED_ROLES | EXECUTIVE_ROLES | SUPER_ADMIN_ROLES | PARTICIPANT_ROLES
 
 SUPPORT_WORKER_PARTICIPANT_FIELDS = (
     "assigned_worker_id",
@@ -120,6 +124,10 @@ def is_managing_director(user: Optional[dict]) -> bool:
 
 def is_super_admin(user: Optional[dict]) -> bool:
     return get_user_role(user) == "super_admin"
+
+
+def is_participant(user: Optional[dict]) -> bool:
+    return get_user_role(user) == "participant"
 
 
 def record_belongs_to_user_org(row: dict, user: Optional[dict]) -> bool:

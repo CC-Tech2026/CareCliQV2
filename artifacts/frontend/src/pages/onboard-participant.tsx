@@ -20,11 +20,19 @@ import {
   listParticipantIntakes, createParticipantIntake, updateParticipantIntake, uploadSignedServiceAgreement,
   type ParticipantIntake, type IntakeStatus, type EnquirySource, type ServiceCategory, type FundingType,
   type NextOfKinEntry, type WebIntakeForm, type ScreeningManualChecks,
+  GENDER_OPTIONS, PRONOUN_OPTIONS,
 } from "@/services/participantIntakeService";
 import { SignatureCanvas, useSignatureCanvasState } from "@/components/shifts/SignatureCanvas";
 import { useBranches } from "@/hooks/useBranches";
 import { ParticipantRecordCards } from "@/components/participants/ParticipantRecordCards";
 import { ParticipantServiceAgreementSection } from "@/components/participants/ParticipantServiceAgreementSection";
+import { GrantResultNotice, PortalAccessCard } from "@/components/participant-portal/PortalAccessCard";
+import {
+  IDENTITY_METHOD_OPTIONS,
+  grantPortalAccess,
+  type GrantResult,
+  type PortalIdentityMethod,
+} from "@/services/participantPortalAccessService";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -62,23 +70,6 @@ const FUNDING_TYPE_LABEL: Record<FundingType, string> = {
   plan_managed: "Plan-managed",
   self_managed: "Self-managed",
 };
-
-const GENDER_OPTIONS: { value: string; label: string }[] = [
-  { value: "male", label: "Male / Man" },
-  { value: "female", label: "Female / Woman" },
-  { value: "non_binary", label: "Non-Binary" },
-  { value: "self_describe", label: "Different term (Free-text / Self-describe)" },
-  { value: "prefer_not_to_say", label: "Prefer not to say / Do not wish to disclose" },
-];
-
-const PRONOUN_OPTIONS: { value: string; label: string }[] = [
-  { value: "she_her", label: "She / Her" },
-  { value: "he_him", label: "He / Him" },
-  { value: "they_them", label: "They / Them" },
-  { value: "name_only", label: "Use my name only" },
-  { value: "self_describe", label: "Different pronouns (Free-text / Self-describe)" },
-  { value: "prefer_not_to_say", label: "Prefer not to say" },
-];
 
 const GENDER_FIXED_VALUES = new Set(GENDER_OPTIONS.map((o) => o.value).filter((v) => v !== "self_describe"));
 const PRONOUN_FIXED_VALUES = new Set(PRONOUN_OPTIONS.map((o) => o.value).filter((v) => v !== "self_describe"));
@@ -1877,6 +1868,12 @@ function IntakeDetail({
   const providerSignature = useSignatureCanvasState();
   const familySignature = useSignatureCanvasState();
   const [activating, setActivating] = useState(false);
+  // Portal invite sent straight after activation — the participant's own
+  // login only. Representatives need recorded authority, so they're invited
+  // from the Portal access card on the Active step instead.
+  const [invitePortal, setInvitePortal] = useState(Boolean(intake.email));
+  const [portalIdentityMethod, setPortalIdentityMethod] = useState<PortalIdentityMethod>("participant_dob");
+  const [portalGrant, setPortalGrant] = useState<GrantResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [boardSubtitle, setBoardSubtitle] = useState(intake.board_subtitle ?? "");
 
@@ -1997,7 +1994,10 @@ function IntakeDetail({
   async function uploadSignedDocument(file: File) {
     try {
       const updated = await uploadSignedServiceAgreement(intake.id, file);
-      onLocalUpdate({ signed_document_url: updated.signed_document_url, signed_document_name: updated.signed_document_name });
+      onLocalUpdate({
+        service_agreement_document_url: updated.service_agreement_document_url,
+        service_agreement_document_name: updated.service_agreement_document_name,
+      });
       toast({ title: "Document uploaded", description: file.name });
     } catch (err) {
       toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" });
@@ -2021,14 +2021,34 @@ function IntakeDetail({
 
   async function activate() {
     setActivating(true);
+    let updated: Intake;
     try {
-      await onUpdate({ status: "active" });
+      updated = await onUpdate({ status: "active" });
       toast({ title: "Participant activated", description: `${intake.full_name} now appears on the Coordinator's dashboard.` });
     } catch {
       // error already toasted by onUpdate
-    } finally {
       setActivating(false);
+      return;
     }
+    if (invitePortal && intake.email && updated.participant_id) {
+      try {
+        setPortalGrant(
+          await grantPortalAccess(updated.participant_id, {
+            full_name: intake.full_name,
+            email: intake.email,
+            relationship: "self",
+            identity_method: portalIdentityMethod,
+          }),
+        );
+      } catch (err) {
+        toast({
+          title: "Activated, but the portal invite wasn't sent",
+          description: `${(err as Error).message} You can send it from Portal access.`,
+          variant: "destructive",
+        });
+      }
+    }
+    setActivating(false);
   }
 
   const signLink = intake.status === "awaiting_signatures"
@@ -2232,16 +2252,16 @@ function IntakeDetail({
                         <div className="min-w-0">
                           <p className="text-xs font-black" style={{ color: TEXT }}>Signed document</p>
                           <p className="text-[11px] truncate" style={{ color: MUTED }}>
-                            {intake.signed_document_name || "Generated automatically once both parties sign below — or upload your own instead"}
+                            {intake.service_agreement_document_name || "Generated automatically once both parties sign below — or upload your own instead"}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {intake.signed_document_url && (
-                          <a href={intake.signed_document_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline px-1.5" style={{ color: PLUM }}>View</a>
+                        {intake.service_agreement_document_url && (
+                          <a href={intake.service_agreement_document_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline px-1.5" style={{ color: PLUM }}>View</a>
                         )}
                         <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={() => fileInputRef.current?.click()}>
-                          <Upload size={13} /> {intake.signed_document_url ? "Replace" : "Upload instead"}
+                          <Upload size={13} /> {intake.service_agreement_document_url ? "Replace" : "Upload instead"}
                         </Button>
                       </div>
                     </div>
@@ -2304,6 +2324,35 @@ function IntakeDetail({
                     )}
 
                     {intake.status === "signed" && (
+                      <div className="space-y-2 rounded-lg border p-3" style={{ borderColor: BORDER }}>
+                        <label className="flex items-start gap-2 text-xs" style={{ color: TEXT }}>
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={invitePortal && Boolean(intake.email)}
+                            disabled={!intake.email}
+                            onChange={(e) => setInvitePortal(e.target.checked)}
+                          />
+                          <span>
+                            {intake.email
+                              ? <>Invite {intake.full_name.split(" ")[0]} to the Participants Portal ({intake.email})</>
+                              : <>No email on file — portal access can be set up later from Portal access.</>}
+                          </span>
+                        </label>
+                        {invitePortal && intake.email && (
+                          <Select value={portalIdentityMethod} onValueChange={(v) => setPortalIdentityMethod(v as PortalIdentityMethod)}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {IDENTITY_METHOD_OPTIONS.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>Identity check: {o.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                    )}
+
+                    {intake.status === "signed" && (
                       <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={activate} disabled={activating}>
                         {activating ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />} Activate participant
                       </Button>
@@ -2326,6 +2375,9 @@ function IntakeDetail({
                         {intake.full_name.split(" ")[0]} is active and now appears on the Coordinator's dashboard for scheduling and support planning.
                       </p>
                     </div>
+
+                    {portalGrant && <GrantResultNotice result={portalGrant} onClose={() => setPortalGrant(null)} />}
+                    {intake.participant_id && <PortalAccessCard key={portalGrant?.access.id ?? "portal"} participantId={intake.participant_id} />}
 
                     {/* Full intake profile — everything captured across the pipeline
                         (patient details, address, NDIS, plan manager, next of kin,

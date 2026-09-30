@@ -4656,7 +4656,10 @@
     "worker.composer.translateToEn": "Dịch → Tiếng Anh",
     "worker.notification.collapse": "Thu gọn",
     "worker.notification.groupNeedsAck": "Nhấn để xem và xác nhận từng cập nhật.",
-    "worker.notification.groupTapToView": "Nhấn để xem tất cả cập nhật."
+    "worker.notification.groupTapToView": "Nhấn để xem tất cả cập nhật.",
+    "auth.login.participantPrompt": "Người tham gia hoặc thành viên gia đình?",
+    "auth.login.participantLink": "Đăng nhập Cổng thông tin Người tham gia",
+    "protected.role.participant": "Người tham gia"
   },
   "ar": {
     "nav.dashboard": "لوحة التحكم",
@@ -9317,7 +9320,10 @@
     "worker.composer.translateToEn": "ترجمة ← الإنجليزية",
     "worker.notification.collapse": "طيّ",
     "worker.notification.groupNeedsAck": "اضغط لمراجعة كل تحديث والإقرار به.",
-    "worker.notification.groupTapToView": "اضغط لعرض جميع التحديثات."
+    "worker.notification.groupTapToView": "اضغط لعرض جميع التحديثات.",
+    "auth.login.participantPrompt": "هل أنت مشارك أو أحد أفراد العائلة؟",
+    "auth.login.participantLink": "تسجيل الدخول إلى بوابة المشاركين",
+    "protected.role.participant": "مشارك"
   },
   "zh-Hans": {
     "nav.dashboard": "仪表板",
@@ -13978,6 +13984,9 @@
     "worker.composer.translateToEn": "翻译 → 英文",
     "worker.notification.collapse": "收起",
     "worker.notification.groupNeedsAck": "点击查看并确认每条更新。",
-    "worker.notification.groupTapToView": "点击查看所有更新。"
+    "worker.notification.groupTapToView": "点击查看所有更新。",
+    "auth.login.participantPrompt": "参与者或家庭成员？",
+    "auth.login.participantLink": "登录参与者门户",
+    "protected.role.participant": "参与者"
   }
 }

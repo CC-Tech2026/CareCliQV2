@@ -277,6 +277,10 @@ from .api import audit_readiness as audit_readiness_api
 app.include_router(audit_readiness_api.router, prefix="/api")
 from .api import access_grants as access_grants_api
 app.include_router(access_grants_api.router, prefix="/api")
+from .api import participant_portal as participant_portal_api
+app.include_router(participant_portal_api.router, prefix="/api")
+from .api import participant_portal_access as participant_portal_access_api
+app.include_router(participant_portal_access_api.router, prefix="/api")
 app.include_router(plan_meetings.router, prefix="/api")
 from .api import agreement_sign as agreement_sign_api
 app.include_router(agreement_sign_api.router, prefix="/api")

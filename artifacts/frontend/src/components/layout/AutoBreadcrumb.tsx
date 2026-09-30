@@ -70,7 +70,7 @@ const TOP_LEVEL_PATHS = [
   "/reports", "/settings", "/toolkit",
   "/coordinator/rostering", "/hub", "/accessibility",
   "/login", "/signup", "/forgot-password", "/reset-password",
-  "/verify-email", "/accept-invite", "/account-secure", "/profile-completion",
+  "/verify-email", "/accept-invite", "/participant-invite", "/portal/login", "/portal/forgot-password", "/account-secure", "/profile-completion",
   "/my-shifts", "/my-clients", "/my-compliance",
 ];
 

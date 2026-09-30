@@ -17,6 +17,30 @@ export type NextOfKinEntry = {
   email?: string;
 };
 
+// Intake form choices — shared with the Participants Portal so it shows the
+// same labels the form used. A self-described answer is stored as free text.
+export const GENDER_OPTIONS: { value: string; label: string }[] = [
+  { value: "male", label: "Male / Man" },
+  { value: "female", label: "Female / Woman" },
+  { value: "non_binary", label: "Non-Binary" },
+  { value: "self_describe", label: "Different term (Free-text / Self-describe)" },
+  { value: "prefer_not_to_say", label: "Prefer not to say / Do not wish to disclose" },
+];
+
+export const PRONOUN_OPTIONS: { value: string; label: string }[] = [
+  { value: "she_her", label: "She / Her" },
+  { value: "he_him", label: "He / Him" },
+  { value: "they_them", label: "They / Them" },
+  { value: "name_only", label: "Use my name only" },
+  { value: "self_describe", label: "Different pronouns (Free-text / Self-describe)" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
+];
+
+export function intakeOptionLabel(options: { value: string; label: string }[], value?: string | null): string | undefined {
+  if (!value) return undefined;
+  return options.find((o) => o.value === value)?.label ?? value;
+}
+
 export type WebIntakeForm = {
   submitted_at: string;
   submitted_by?: string;
@@ -73,8 +97,8 @@ export type ParticipantIntake = {
   meet_greet_recording_url?: string | null;
   meet_greet_session_id?: string | null;
   meet_greet_notes?: string;
-  signed_document_url?: string;
-  signed_document_name?: string;
+  service_agreement_document_url?: string;
+  service_agreement_document_name?: string;
   plan_start_date?: string;
   plan_end_date?: string;
   total_budget?: string;

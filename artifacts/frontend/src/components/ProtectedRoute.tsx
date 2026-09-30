@@ -2,7 +2,7 @@ import { Lock } from "lucide-react";
 import { Redirect, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import type { UserRole } from "@/contexts/AuthContext";
-import { isVoluntaryLogoutInProgress, saveAuthRestoreContext } from "@/lib/auth-session";
+import { isVoluntaryLogoutInProgress, saveAuthRestoreContext, signInPathFor } from "@/lib/auth-session";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
 import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
@@ -38,6 +38,7 @@ const ROLE_LABEL_KEYS: Record<UserRole, string> = {
   support_worker: "protected.role.supportWorker",
   managing_director: "protected.role.managingDirector",
   super_admin: "protected.role.superAdmin",
+  participant: "protected.role.participant",
 };
 
 /**
@@ -71,7 +72,7 @@ export function ProtectedRoute({
     if (!isVoluntaryLogoutInProgress()) {
       saveAuthRestoreContext(`${location}${window.location.search || ""}`);
     }
-    return <Redirect to="/login" />;
+    return <Redirect to={signInPathFor(location)} />;
   }
 
   if (user.email_verified === false && location !== "/verify-email") {

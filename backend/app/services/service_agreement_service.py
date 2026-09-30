@@ -187,7 +187,7 @@ def list_service_agreements_for_profile(participant_id: str, organization_id: st
         intake = (
             supabase.table("participant_intakes")
             .select(
-                "signed_document_path, signed_document_name, provider_signed_name, provider_signed_at, "
+                "service_agreement_document_path, service_agreement_document_name, provider_signed_name, provider_signed_at, "
                 "family_signed_name, family_signed_at"
             )
             .eq("organization_id", organization_id)
@@ -198,13 +198,13 @@ def list_service_agreements_for_profile(participant_id: str, organization_id: st
             .data
             or []
         )
-        if intake and intake[0].get("signed_document_path"):
+        if intake and intake[0].get("service_agreement_document_path"):
             row = intake[0]
             signed = supabase.storage.from_(INTAKE_BUCKET).create_signed_url(
-                row["signed_document_path"], SIGNED_DOCUMENT_URL_SECONDS
+                row["service_agreement_document_path"], SIGNED_DOCUMENT_URL_SECONDS
             )
             signed_document = {
-                "name": row.get("signed_document_name"),
+                "name": row.get("service_agreement_document_name"),
                 "url": signed.get("signedURL") or signed.get("signed_url"),
                 "provider_signed_name": row.get("provider_signed_name"),
                 "provider_signed_at": row.get("provider_signed_at"),

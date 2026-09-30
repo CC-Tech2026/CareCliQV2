@@ -11,6 +11,8 @@ export type HubComplianceAlert = {
   action_label: string;
   source?: string;
   participant_id?: string;
+  shift_id?: string;
+  worker_id?: string;
   /** "urgent" = needs action today/this week. "exposure" = builds into a future finding if ignored. */
   category?: "urgent" | "exposure";
 };

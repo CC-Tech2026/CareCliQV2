@@ -188,7 +188,7 @@ async def test_sign_generates_and_stores_the_service_agreement_pdf():
         "family_signed_name": "Sam Rivera", "family_signed_at": "2026-09-23T00:00:00Z",
         "provider_signature_png": "data:image/png;base64,AAA", "family_signature_png": "data:image/png;base64,BBB",
     }
-    updated_row = {**existing, **patch_body, "signed_document_url": "https://example.com/agreement.pdf"}
+    updated_row = {**existing, **patch_body, "service_agreement_document_url": "https://example.com/agreement.pdf"}
     table = MagicMock()
     table.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[updated_row])
     supabase = MagicMock()
@@ -200,9 +200,9 @@ async def test_sign_generates_and_stores_the_service_agreement_pdf():
         result = await svc.update_intake("i-1", "org-1", patch_body, MD_USER)
 
     render_mock.assert_called_once()
-    assert result["signed_document_url"] == "https://example.com/agreement.pdf"
+    assert result["service_agreement_document_url"] == "https://example.com/agreement.pdf"
     stored_update = table.update.call_args.args[0]
-    assert stored_update["signed_document_name"] == "agreement.pdf"
+    assert stored_update["service_agreement_document_name"] == "agreement.pdf"
 
 
 @pytest.mark.asyncio

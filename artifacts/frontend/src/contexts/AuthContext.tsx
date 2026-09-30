@@ -13,6 +13,7 @@ import {
   readStoredSession,
   type StoredSupabaseSession,
   updateStoredUserJson,
+  signInPathFor,
 } from "@/lib/auth-session";
 import { clearPresentedNotifications } from "@/lib/worker-notification-presenter";
 import { clearAppliedSupabaseSession, storeAndApplySupabaseSession } from "@/lib/supabase";
@@ -39,7 +40,12 @@ function clearDeviceLocalCaches(): void {
   void deleteShiftOfflineDb();
 }
 
-export type UserRole = "support_coordinator" | "support_worker" | "managing_director" | "super_admin";
+export type UserRole =
+  | "support_coordinator"
+  | "support_worker"
+  | "managing_director"
+  | "super_admin"
+  | "participant";
 export type AccountType = "independent_worker" | "small_provider";
 
 export type DeactivationReason = "credentials" | "training" | "credentials_training" | "manual";
@@ -74,7 +80,13 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (identifier: string, password: string, rememberDevice?: boolean) => Promise<LoginResult>;
+  /** `portal` names the sign-in page used; the backend refuses an account that belongs at the other one. */
+  login: (
+    identifier: string,
+    password: string,
+    rememberDevice?: boolean,
+    portal?: "staff" | "participant",
+  ) => Promise<LoginResult>;
   completeMfaLogin: (challengeToken: string, code: string, trustDevice?: boolean) => Promise<AuthUser>;
   /** NEW Supabase-native TOTP step-up (see /auth/login/mfa-native). Kept
    * separate from completeMfaLogin, which drives the OLD pyotp flow's
@@ -213,6 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     identifier: string,
     password: string,
     rememberDevice = getRememberDevicePreference(),
+    portal?: "staff" | "participant",
   ): Promise<LoginResult> => {
     setIsLoading(true);
     try {
@@ -234,6 +247,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           password,
           remember_device: rememberDevice,
           device_id: deviceId,
+          portal,
         }),
       });
 
@@ -376,13 +390,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const handleUnauthorized = () => {
       captureCurrentRestoreContext(user?.id);
       clearSession();
-      if (!window.location.pathname.startsWith("/login")) {
-        window.location.assign("/login");
+      const signInPath = signInPathFor(window.location.pathname, user?.role);
+      if (!window.location.pathname.startsWith(signInPath)) {
+        window.location.assign(signInPath);
       }
     };
     window.addEventListener(CCQ_UNAUTHORIZED_EVENT, handleUnauthorized);
     return () => window.removeEventListener(CCQ_UNAUTHORIZED_EVENT, handleUnauthorized);
-  }, [clearSession, user?.id]);
+  }, [clearSession, user?.id, user?.role]);
 
   return (
     <AuthContext.Provider

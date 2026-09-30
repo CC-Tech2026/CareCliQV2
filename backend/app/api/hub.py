@@ -338,8 +338,8 @@ async def _unfilled_shift_alerts(org_id: str) -> list[dict]:
             .execute()
         )
         rows: list[dict] = result.data or []
-    except Exception:
-        return []
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Care alerts could not be loaded. Please try again.") from exc
 
     alerts: list[dict] = []
     for row in rows:
@@ -360,6 +360,7 @@ async def _unfilled_shift_alerts(org_id: str) -> list[dict]:
         participant = row.get("participant_name") or "Unnamed participant"
         alerts.append({
             "id": f"unfilled-shift-{row.get('id')}",
+            "shift_id": str(row["id"]),
             "title": f"Unfilled shift: {participant}",
             "detail": f"No worker assigned. Starts {local_start.strftime('%A')} at {start_label}.",
             "severity": "critical" if hours_until <= 24 else "high",
@@ -429,6 +430,7 @@ async def _worker_note_specificity_alerts(sessions: list[dict], names_by_id: dic
         name = names_by_id[wid]
         alerts.append({
             "id": f"note-specificity-{wid}",
+            "worker_id": wid,
             "title": f"{name}: {round(avg)}% note specificity",
             "detail": f"Average compliance score across the last {len(scores)} sessions.",
             "severity": "critical" if avg < 55 else "high",
@@ -448,8 +450,8 @@ async def _participant_quiet_alerts(
     """Participants with no session recorded in threshold_days."""
     try:
         participants = await participant_service.get_participants_list_light(current_user)
-    except Exception:
-        return []
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Care alerts could not be loaded. Please try again.") from exc
 
     last_session_by_participant: dict[str, str] = {}
     for s in sessions:

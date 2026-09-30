@@ -15,7 +15,7 @@ const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
 
-const EXCLUDED_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password", "/accept-invite"];
+const EXCLUDED_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password", "/accept-invite", "/participant-invite", "/portal/login", "/portal/forgot-password"];
 
 /** Shown once when a support worker reaches Active (cleared Credentials and
  * Training), closing the loop on the onboarding pipeline. A different moment

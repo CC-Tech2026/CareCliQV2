@@ -13,6 +13,7 @@ import { validateLoginIdentifier } from "@/lib/auth-login-validation";
 import {
   getRememberDevicePreference,
   resolvePostLoginPath,
+  defaultHomePathForRole,
   setRememberDevicePreference,
 } from "@/lib/auth-session";
 
@@ -148,7 +149,7 @@ export default function Login() {
     try {
       setRememberDevicePreference(rememberDevice);
       const result = await withNetworkRetry(() =>
-        login(identifier.trim(), password, rememberDevice),
+        login(identifier.trim(), password, rememberDevice, "staff"),
       );
       if (result.status === "mfa_required") {
         setMfaChallengeToken(result.challengeToken);
@@ -159,7 +160,7 @@ export default function Login() {
         return;
       }
       toast({ title: t("auth.login.toast.welcome"), description: t("auth.login.toast.ready") });
-      navigate(resolvePostLoginPath(result.user.id, result.user.role === "super_admin" ? "/admin/dashboard" : "/hub"));
+      navigate(resolvePostLoginPath(result.user.id, defaultHomePathForRole(result.user.role)));
     } catch (err) {
       if (isNetworkLoginError(err)) {
         toast({
@@ -186,7 +187,7 @@ export default function Login() {
         ? await completeMfaLoginNative(mfaChallengeToken, mfaFactorId, mfaCode.trim(), trustDevice)
         : await completeMfaLogin(mfaChallengeToken, mfaCode.trim(), trustDevice);
       toast({ title: t("auth.login.toast.welcome"), description: t("auth.login.toast.ready") });
-      navigate(resolvePostLoginPath(authUser.id, authUser.role === "super_admin" ? "/admin/dashboard" : "/hub"));
+      navigate(resolvePostLoginPath(authUser.id, defaultHomePathForRole(authUser.role)));
     } catch (err) {
       setMfaCodeError(err instanceof Error ? err.message : t("auth.login.error.invalidMfa"));
     } finally {
@@ -479,6 +480,19 @@ export default function Login() {
                   style={{ color: CORAL }}
                 >
                   {t("auth.login.createAccount")}
+                </button>
+              </p>
+            )}
+
+            {!mfaStep && (
+              <p className="text-center text-[13px] font-medium mt-3" style={{ color: "var(--cc-muted)" }}>
+                {t("auth.login.participantPrompt")}{" "}
+                <button
+                  onClick={() => navigate("/portal/login")}
+                  className="font-black transition-opacity hover:opacity-75"
+                  style={{ color: CORAL }}
+                >
+                  {t("auth.login.participantLink")}
                 </button>
               </p>
             )}

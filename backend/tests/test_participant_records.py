@@ -137,7 +137,7 @@ def test_profile_agreements_add_item_names_and_signed_document():
     prices = db.table.return_value.select.return_value.in_.return_value.order.return_value.execute.return_value
     prices.data = [{"item_code": "01_011_0107_1_1", "name": "Self-Care Weekday", "unit": "H", "price_national": 73.58}]
     intake = db.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value
-    intake.data = [{"signed_document_path": "org/i/doc.pdf", "signed_document_name": "doc.pdf", "provider_signed_name": "Patience MD", "family_signed_name": "Mia"}]
+    intake.data = [{"service_agreement_document_path": "org/i/doc.pdf", "service_agreement_document_name": "doc.pdf", "provider_signed_name": "Patience MD", "family_signed_name": "Mia"}]
     db.storage.from_.return_value.create_signed_url.return_value = {"signedURL": "https://signed/doc.pdf"}
     with patch.object(sas, "list_service_agreements", return_value=agreements), patch.object(sas, "get_supabase_admin", return_value=db):
         result = sas.list_service_agreements_for_profile("p-1", "org-1")
