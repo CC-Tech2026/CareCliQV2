@@ -931,8 +931,50 @@ def _list_open_hire_offers(org_id: str) -> list[VaultDocument]:
 AGREEMENT_STATUS = {"signed": "signed", "expired": "expired", "unsigned": "pending"}
 
 
+SERVICE_AGREEMENT_VAULT_STATUS = {"pending_signature": "pending", "active": "signed", "expired": "expired", "ended": "expired"}
+
+
 def _list_participant_agreements(org_id: str, patients: dict[str, str]) -> list[VaultDocument]:
-    """Each NDIS plan's service agreement, with its signing status."""
+    """Service agreements with their signing status: the agreement records
+    themselves, and — for participants who don't have one yet — the
+    agreement status kept on their NDIS plan."""
+    from .service_agreement_document_service import effective_status
+
+    docs: list[VaultDocument] = []
+    covered: set[str] = set()
+    try:
+        agreements = (
+            get_supabase_admin().table("service_agreements")
+            .select("id, participant_id, agreement_number, status, start_date, end_date, signed_date, sent_at, created_at")
+            .eq("organization_id", org_id)
+            .neq("status", "draft")
+            .limit(500)
+            .execute()
+        ).data or []
+    except Exception:
+        agreements = []
+    for row in agreements:
+        covered.add(str(row.get("participant_id")))
+        status = SERVICE_AGREEMENT_VAULT_STATUS.get(effective_status(row), "pending")
+        docs.append(VaultDocument(
+            id=f"sa-{row['id']}",
+            category="consent_onboarding",
+            folder_label=CATEGORY_META["consent_onboarding"]["label"],
+            title=f"Service agreement {row['agreement_number']}" if row.get("agreement_number") else "Service agreement",
+            person_name=patients.get(str(row.get("participant_id") or ""), "Unknown participant"),
+            person_type="Participant",
+            date=str(row.get("signed_date") or row.get("sent_at") or row.get("created_at") or ""),
+            status=status,
+            source_table="service_agreements",
+            source_id=str(row["id"]),
+            has_stored_file=True,
+        ))
+    return docs + _list_plan_agreements(org_id, patients, covered)
+
+
+def _list_plan_agreements(org_id: str, patients: dict[str, str], covered: set[str]) -> list[VaultDocument]:
+    """Agreement status recorded on each NDIS plan (094), for participants
+    with no service agreement record."""
     try:
         rows = (
             get_supabase_admin().table("ndis_plans")
@@ -960,6 +1002,7 @@ def _list_participant_agreements(org_id: str, patients: dict[str, str]) -> list[
         )
         for row in rows
         if str(row.get("status") or "").lower() not in ("draft", "cancelled")
+        and str(row.get("patient_id")) not in covered
     ]
 
 
@@ -1074,6 +1117,9 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
 
 
 def _render_consent_onboarding(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
+    if document_id.startswith("sa-"):
+        from .service_agreement_document_service import agreement_document
+        return agreement_document(org_id, document_id.removeprefix("sa-"))
     if document_id.startswith("agreement-"):
         return _render_plan_agreement(org_id, document_id.removeprefix("agreement-"), exclude_fields)
 

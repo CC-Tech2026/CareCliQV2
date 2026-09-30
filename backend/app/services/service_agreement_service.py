@@ -140,10 +140,14 @@ def list_service_agreements_for_profile(participant_id: str, organization_id: st
         except Exception:
             logger.warning("Support item lookup failed for participant %s", participant_id, exc_info=True)
     for agreement in agreements:
-        for support in agreement.get("service_agreement_supports") or []:
+        agreement["service_agreement_supports"] = sorted(
+            agreement.get("service_agreement_supports") or [], key=lambda sup: sup.get("sort_order") or 0,
+        )
+        for support in agreement["service_agreement_supports"]:
             item = items.get(str(support.get("support_item_code")))
-            support["item_name"] = item.get("name") if item else None
-            support["unit"] = item.get("unit") if item else None
+            # Lines built in CareCliQ keep the name/unit printed on the document.
+            support["item_name"] = support.get("item_name") or (item.get("name") if item else None)
+            support["unit"] = support.get("unit") or (item.get("unit") if item else None)
             support["standard_rate"] = item.get("price_national") if item else None
 
     signed_document = None
@@ -180,10 +184,38 @@ def list_service_agreements_for_profile(participant_id: str, organization_id: st
     except Exception:
         logger.warning("Signed agreement lookup failed for participant %s", participant_id, exc_info=True)
 
-    # list_service_agreements() orders newest start_date first.
+    from .service_agreement_document_service import effective_status
+
+    # list_service_agreements() orders newest start_date first. An agreement
+    # with its own stored document (signed in CareCliQ, or recorded from
+    # onboarding) links to that; the intake PDF remains the fallback for
+    # the latest agreement.
     for index, agreement in enumerate(agreements):
-        agreement["signed_document"] = signed_document if index == 0 else None
+        agreement["status"] = effective_status(agreement)
+        agreement.pop("provider_signature_png", None)
+        agreement.pop("participant_signature_png", None)
+        own = _own_document(agreement)
+        agreement["signed_document"] = own or (signed_document if index == 0 else None)
     return agreements
+
+
+def _own_document(agreement: dict[str, Any]) -> Optional[dict[str, Any]]:
+    bucket, path = agreement.get("document_bucket"), agreement.get("document_path")
+    if not (bucket and path):
+        return None
+    try:
+        signed = get_supabase_admin().storage.from_(bucket).create_signed_url(path, SIGNED_DOCUMENT_URL_SECONDS)
+        url = signed.get("signedURL") or signed.get("signed_url")
+    except Exception:
+        url = None
+    return {
+        "name": f"service-agreement-{agreement.get('agreement_number') or agreement['id'][:8]}.pdf",
+        "url": url,
+        "provider_signed_name": agreement.get("provider_signed_name"),
+        "provider_signed_at": agreement.get("provider_signed_at"),
+        "family_signed_name": agreement.get("participant_signed_name"),
+        "family_signed_at": agreement.get("participant_signed_at"),
+    }
 
 
 def get_active_service_agreement(

@@ -242,6 +242,10 @@ async def _activate_side_effects(existing: dict[str, Any], merged: dict[str, Any
     if not participant:
         raise HTTPException(status_code=502, detail="Could not create the participant record.")
     _attach_meeting_sessions(existing["id"], existing["organization_id"], participant["id"])
+    # The agreement signed on the onboarding board becomes the participant's
+    # service agreement of record (not just a PDF left on the intake).
+    from .service_agreement_document_service import from_intake
+    from_intake({**merged, "id": existing["id"], "organization_id": existing["organization_id"]}, participant["id"])
     return {"participant_id": participant["id"], "activated_at": _now()}
 
 

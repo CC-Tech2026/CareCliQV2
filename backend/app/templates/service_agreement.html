@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>NDIS Service Agreement {{ agreement.agreement_number or "" }} — {{ participant.full_name }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 9pt; color: #1f2430; background: #fff; }
+    @page {
+      size: A4;
+      margin: 14mm 15mm 20mm 15mm;
+      @bottom-left { content: "NDIS Service Agreement {{ agreement.agreement_number or 'draft' }}"; font-size: 7pt; color: #94a3b8; }
+      @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 7pt; color: #94a3b8; }
+    }
+    {% if draft %}
+    .watermark {
+      position: fixed; top: 38%; left: 0; right: 0; text-align: center;
+      font-size: 90pt; font-weight: bold; color: rgba(148, 163, 184, 0.16);
+      transform: rotate(-24deg);
+    }
+    {% endif %}
+
+    .letterhead { width: 100%; border-collapse: collapse; }
+    .letterhead td { vertical-align: top; }
+    .logo { max-height: 30pt; max-width: 120pt; margin-right: 8pt; }
+    .provider { font-size: 10pt; font-weight: bold; }
+    .provider-meta { font-size: 7.5pt; color: #64748b; margin-top: 2pt; }
+    .agreement-no { text-align: right; font-size: 7.5pt; color: #64748b; }
+    .agreement-no strong { display: block; font-size: 9.5pt; color: #1f2430; margin-top: 1pt; }
+    .rule { height: 2px; background: {{ org.brand_accent_color }}; margin: 8pt 0 16pt; }
+
+    h1 { font-size: 17pt; font-weight: bold; letter-spacing: -0.01em; }
+    .between { font-size: 8.5pt; color: #64748b; margin: 3pt 0 16pt; }
+
+    .section-title { font-size: 9.5pt; font-weight: bold; margin: 14pt 0 6pt; padding-bottom: 4pt; border-bottom: 1px solid #1f2430; }
+    .section-title .n { color: {{ org.brand_accent_color }}; margin-right: 5pt; }
+
+    table.facts { width: 100%; border-collapse: collapse; }
+    table.facts td { width: 33.3%; padding: 3pt 8pt 6pt 0; vertical-align: top; }
+    .label { font-size: 6.5pt; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
+    .value { font-size: 8.5pt; margin-top: 1pt; }
+
+    table.supports { width: 100%; border-collapse: collapse; }
+    table.supports th {
+      font-size: 6.5pt; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;
+      text-align: left; padding: 4pt 0; border-bottom: 1px solid #cbd5e1; font-weight: normal;
+    }
+    table.supports th.num, table.supports td.num { text-align: right; white-space: nowrap; }
+    table.supports td { padding: 6pt 0; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+    table.supports td.num { padding-left: 10pt; }
+    .item { font-weight: bold; font-size: 8.5pt; }
+    .item-detail { font-size: 7pt; color: #64748b; margin-top: 1pt; }
+    tr.total td { background: #f4efe3; font-weight: bold; padding: 7pt 8pt; border-bottom: none; }
+
+    .terms p { font-size: 8pt; line-height: 1.55; color: #334155; margin-bottom: 5pt; }
+
+    table.sigs { width: 100%; border-collapse: collapse; margin-top: 4pt; }
+    table.sigs td { width: 50%; vertical-align: top; padding-right: 10pt; }
+    .sig-box { border: 1px solid #e2e8f0; border-radius: 4pt; padding: 8pt; min-height: 70pt; }
+    .sig-img { max-height: 40pt; max-width: 100%; display: block; margin: 4pt 0; }
+    .sig-name { font-weight: bold; font-size: 8.5pt; }
+    .sig-date { font-size: 7.5pt; color: #64748b; }
+    .unsigned { font-size: 7.5pt; color: #94a3b8; margin-top: 18pt; border-top: 1px solid #cbd5e1; padding-top: 3pt; }
+  </style>
+</head>
+<body>
+  {% if draft %}<div class="watermark">DRAFT</div>{% endif %}
+
+  <table class="letterhead">
+    <tr>
+      <td>
+        <table><tr>
+          {% if org.logo_url %}<td><img class="logo" src="{{ org.logo_url }}" /></td>{% endif %}
+          <td>
+            <div class="provider">{{ org.provider_name }}</div>
+            <div class="provider-meta">
+              {% if org.abn %}ABN {{ org.abn }}{% endif %}{% if org.abn and org.ndis_provider_number %} · {% endif %}{% if org.ndis_provider_number %}NDIS registered provider {{ org.ndis_provider_number }}{% endif %}
+            </div>
+          </td>
+        </tr></table>
+      </td>
+      <td class="agreement-no">Agreement no.<strong>{{ agreement.agreement_number or "Draft" }}</strong></td>
+    </tr>
+  </table>
+  <div class="rule"></div>
+
+  <h1>NDIS Service Agreement</h1>
+  <p class="between">Between {{ org.provider_name }} and {{ participant.full_name }}</p>
+
+  <div class="section-title"><span class="n">1</span>Parties and plan</div>
+  <table class="facts">
+    <tr>
+      <td><div class="label">Participant</div><div class="value">{{ participant.full_name }}</div></td>
+      <td><div class="label">NDIS number</div><div class="value">{{ participant.ndis_number or "—" }}</div></td>
+      <td><div class="label">Date of birth</div><div class="value">{{ participant.date_of_birth or "—" }}</div></td>
+    </tr>
+    <tr>
+      <td><div class="label">Plan management</div><div class="value">{{ plan_management_label }}</div></td>
+      <td><div class="label">Plan manager</div><div class="value">{{ agreement.plan_manager_name or "—" }}</div></td>
+      <td><div class="label">Agreement period</div><div class="value">{{ period }}</div></td>
+    </tr>
+  </table>
+
+  <div class="section-title"><span class="n">2</span>Schedule of supports</div>
+  <table class="supports">
+    <thead>
+      <tr><th>Support item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Total</th></tr>
+    </thead>
+    <tbody>
+      {% for line in supports %}
+      <tr>
+        <td>
+          <div class="item">{{ line.name }}</div>
+          <div class="item-detail">{{ line.detail }}</div>
+        </td>
+        <td class="num">{{ line.quantity_label }}</td>
+        <td class="num">{{ line.rate_label }}</td>
+        <td class="num"><strong>{{ line.total_label }}</strong></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="item-detail">No supports listed.</td></tr>
+      {% endfor %}
+      <tr class="total"><td colspan="3">Total agreed funding</td><td class="num">{{ total_label }}</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title"><span class="n">3</span>Terms</div>
+  <div class="terms">
+    <p>{{ org.provider_name }} will provide the supports above to {{ participant.full_name }} in line with their NDIS plan and the NDIS Code of Conduct, and will charge no more than the agreed rate or the NDIS Pricing Arrangements limit, whichever is lower.</p>
+    <p><strong>Changes to prices.</strong> {% if agreement.includes_price_adjustment_clause %}If the NDIS Pricing Arrangements change during this agreement, rates will follow the new limits after written notice.{% else %}Rates are fixed for the agreement period.{% endif %}</p>
+    <p><strong>Cancellations.</strong> {% if agreement.cancellation_notice_hours %}Please give at least {{ agreement.cancellation_notice_hours }} hours' notice. Later cancellations may be charged at {{ (agreement.cancellation_fee_percentage or 100) | round | int }}% of the agreed rate, as the NDIS Pricing Arrangements allow.{% else %}Short-notice cancellations are handled as the NDIS Pricing Arrangements allow.{% endif %}</p>
+    {% if agreement.gst_treatment_basis %}<p><strong>GST.</strong> {{ agreement.gst_treatment_basis }}</p>{% endif %}
+    <p><strong>Ending or changing this agreement.</strong> Either party can change or end this agreement with reasonable written notice. Feedback and complaints can be raised with {{ org.provider_name }} at any time, or with the NDIS Quality and Safeguards Commission.</p>
+  </div>
+
+  <div class="section-title"><span class="n">4</span>Signatures</div>
+  <table class="sigs">
+    <tr>
+      <td>
+        <div class="sig-box">
+          <div class="label">For {{ org.provider_name }}</div>
+          {% if agreement.provider_signed_at %}
+            {% if agreement.provider_signature_png %}<img class="sig-img" src="{{ agreement.provider_signature_png }}" />{% endif %}
+            <div class="sig-name">{{ agreement.provider_signed_name }}</div>
+            <div class="sig-date">Signed {{ provider_signed_on }}</div>
+          {% else %}<div class="unsigned">Signature</div>{% endif %}
+        </div>
+      </td>
+      <td>
+        <div class="sig-box">
+          <div class="label">Participant or representative</div>
+          {% if agreement.participant_signed_at %}
+            {% if agreement.participant_signature_png %}<img class="sig-img" src="{{ agreement.participant_signature_png }}" />{% endif %}
+            <div class="sig-name">{{ agreement.participant_signed_name }}</div>
+            <div class="sig-date">Signed {{ participant_signed_on }}</div>
+          {% else %}<div class="unsigned">Signature</div>{% endif %}
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

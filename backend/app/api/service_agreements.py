@@ -5,12 +5,13 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
 from ..services import participant_service, service_agreement_service
+from ..services import service_agreement_document_service as documents
 
 router = APIRouter(tags=["service-agreements"])
 
@@ -93,4 +94,100 @@ async def add_service_agreement_support(
         raise HTTPException(status_code=403, detail="User must belong to an organization.")
     return await service_agreement_service.add_service_agreement_support(
         service_agreement_id, org_id, current_user, body.model_dump(exclude_none=True)
+    )
+
+
+# ── Build, sign and download ────────────────────────────────────────────────
+
+
+class SupportLine(BaseModel):
+    support_item_code: str = Field(min_length=1, max_length=40)
+    quantity: float = Field(gt=0, le=100_000)
+    rate: Optional[float] = Field(default=None, ge=0, le=100_000)
+    location: Optional[str] = None
+    frequency: Optional[str] = None
+
+
+class AgreementDraft(BaseModel):
+    plan_management_type: str
+    plan_manager_name: Optional[str] = Field(default=None, max_length=200)
+    plan_manager_email: Optional[str] = Field(default=None, max_length=200)
+    start_date: str
+    end_date: str
+    includes_price_adjustment_clause: bool = True
+    gst_treatment_basis: Optional[str] = Field(default=None, max_length=500)
+    cancellation_notice_hours: Optional[int] = Field(default=None, ge=0, le=24 * 30)
+    cancellation_fee_percentage: Optional[float] = Field(default=None, ge=0, le=100)
+    supports: list[SupportLine] = Field(min_length=1, max_length=60)
+
+
+class SignBody(BaseModel):
+    provider_name: str = Field(min_length=1, max_length=200)
+    provider_signature_png: str
+    participant_name: str = Field(min_length=1, max_length=200)
+    participant_signature_png: str
+
+
+def _org_access(current_user: dict) -> str:
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only support coordinators can manage service agreements.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="User must belong to an organization.")
+    return org_id
+
+
+async def _agreement_access(agreement_id: str, current_user: dict) -> str:
+    """Org match plus access to the agreement's participant (a coordinator
+    only sees their own participants)."""
+    org_id = _org_access(current_user)
+    agreement = documents.get_agreement(org_id, agreement_id)
+    await _require_coordinator_participant(str(agreement["participant_id"]), current_user)
+    return org_id
+
+
+@router.post("/participants/{participant_id}/service-agreements/drafts", status_code=201)
+async def create_agreement_draft(participant_id: str, body: AgreementDraft, current_user: dict = Depends(get_current_user)):
+    participant = await _require_coordinator_participant(participant_id, current_user)
+    org_id = get_user_organization_id(current_user) or str(participant.get("organization_id") or "")
+    return await documents.create_draft(participant_id, org_id, get_user_id(current_user), body.model_dump(mode="json"))
+
+
+@router.put("/service-agreements/{agreement_id}")
+async def update_agreement_draft(agreement_id: str, body: AgreementDraft, current_user: dict = Depends(get_current_user)):
+    org_id = await _agreement_access(agreement_id, current_user)
+    return await documents.update_draft(org_id, agreement_id, get_user_id(current_user), body.model_dump(mode="json"))
+
+
+@router.delete("/service-agreements/{agreement_id}", status_code=204)
+async def delete_agreement_draft(agreement_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = await _agreement_access(agreement_id, current_user)
+    await documents.delete_draft(org_id, agreement_id, get_user_id(current_user))
+    return Response(status_code=204)
+
+
+@router.post("/service-agreements/{agreement_id}/send")
+async def send_agreement(agreement_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = await _agreement_access(agreement_id, current_user)
+    return await documents.send_for_signature(org_id, agreement_id, get_user_id(current_user))
+
+
+@router.post("/service-agreements/{agreement_id}/sign")
+async def sign_agreement(agreement_id: str, body: SignBody, current_user: dict = Depends(get_current_user)):
+    org_id = await _agreement_access(agreement_id, current_user)
+    return await documents.sign(
+        org_id, agreement_id, get_user_id(current_user),
+        provider_name=body.provider_name, provider_signature_png=body.provider_signature_png,
+        participant_name=body.participant_name, participant_signature_png=body.participant_signature_png,
+    )
+
+
+@router.get("/service-agreements/{agreement_id}/document")
+async def agreement_document(agreement_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = await _agreement_access(agreement_id, current_user)
+    filename, pdf = documents.agreement_document(org_id, agreement_id)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"', "Cache-Control": "no-store"},
     )

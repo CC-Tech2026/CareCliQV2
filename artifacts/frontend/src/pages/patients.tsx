@@ -1591,7 +1591,15 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
               <details open className="rounded-xl border border-cc-border p-4">
                 <summary className="cursor-pointer py-2 text-sm font-semibold text-cc-text">Service agreement</summary>
                 <div className="pt-2">
-                  <ParticipantServiceAgreementSection participantId={id} />
+                  <ParticipantServiceAgreementSection
+                    participantId={id}
+                    participantName={participant.full_name}
+                    defaults={{
+                      plan_management_type: participant.plan_management_type,
+                      start_date: participant.plan_start_date,
+                      end_date: participant.plan_end_date,
+                    }}
+                  />
                 </div>
               </details>
             )}

@@ -1,8 +1,19 @@
-import { FileText, ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { FileText, ExternalLink, Pencil, PenLine, Plus, Send, Trash2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { jsonFetch } from "@/services/http";
+import {
+  deleteAgreementDraft,
+  openAgreementDocument,
+  sendAgreementForSignature,
+} from "@/services/serviceAgreementService";
+import { ServiceAgreementBuilder, type BuilderDefaults } from "./ServiceAgreementBuilder";
+import { SignAgreementDialog } from "./SignAgreementDialog";
 
 type AgreementSupport = {
   id: string;
@@ -15,6 +26,8 @@ type AgreementSupport = {
   total_hours_allocated: number | null;
   total_funding: number | null;
   location: string | null;
+  quantity?: number | null;
+  rate?: number | null;
 };
 
 type SignedDocument = {
@@ -28,6 +41,8 @@ type SignedDocument = {
 
 type ServiceAgreement = {
   id: string;
+  agreement_number?: string | null;
+  sent_at?: string | null;
   status: string;
   plan_management_type: string;
   plan_manager_name: string | null;
@@ -48,6 +63,17 @@ const PLAN_MANAGEMENT_LABELS: Record<string, string> = {
   "NDIA-managed": "NDIA-managed",
   "plan-managed": "Plan-managed",
   "self-managed": "Self-managed",
+};
+const STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  pending_signature: "Awaiting signature",
+  active: "Signed",
+  expired: "Expired",
+  ended: "Ended",
+};
+const UNIT_WORDS: Record<string, [string, string]> = {
+  H: ["hour", "hours"], HOUR: ["hour", "hours"], D: ["day", "days"], WK: ["week", "weeks"],
+  MON: ["month", "months"], YR: ["year", "years"],
 };
 const LOCATION_LABELS: Record<string, string> = {
   home: "At home",
@@ -111,15 +137,30 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-/** The participant's signed service agreement on their profile: the schedule
- * of supports (hours, rate, funding), the terms, who signed and when, and the
- * signed PDF. Previously this was only reachable from the MD's onboarding
- * board, so coordinators couldn't see what had been agreed. */
+/** The participant's service agreements: build one from the NDIS price
+ * catalogue, send it for signature, sign it on screen, and see the signed
+ * schedule of supports, terms and PDF. Agreements signed through onboarding
+ * are recorded here too. */
 export function ParticipantServiceAgreementSection({
   participantId,
+  participantName = "the participant",
+  defaults = {},
 }: {
   participantId: string;
+  participantName?: string;
+  /** Prefills a new agreement (plan dates, plan management). */
+  defaults?: BuilderDefaults;
 }) {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const orgId = user?.organizationId ?? "__no_org__";
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [builder, setBuilder] = useState<{ open: boolean; agreementId: string | null; defaults: BuilderDefaults }>({
+    open: false, agreementId: null, defaults: {},
+  });
+  const [signing, setSigning] = useState(false);
+  const [busy, setBusy] = useState(false);
   const { data, isLoading, isError, refetch } = useOrgQuery<ServiceAgreement[]>(
     ["participant", participantId, "service-agreements"],
     {
@@ -129,6 +170,29 @@ export function ParticipantServiceAgreementSection({
         ),
     },
   );
+
+  const changed = () => {
+    void refetch();
+    // The vault and audit readiness both read agreement status.
+    void queryClient.invalidateQueries({ queryKey: [orgId, "audit-readiness"] });
+    void queryClient.invalidateQueries({ queryKey: [orgId, "md-vault"] });
+  };
+  const run = async (action: () => Promise<unknown>, success: string) => {
+    setBusy(true);
+    try {
+      await action();
+      toast({ title: success });
+      changed();
+    } catch (err) {
+      toast({ title: "Something went wrong", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const openDoc = (id: string) =>
+    openAgreementDocument(id).catch((err) =>
+      toast({ title: "Couldn't open the agreement", description: err instanceof Error ? err.message : undefined, variant: "destructive" }),
+    );
 
   if (isLoading) return <Skeleton className="h-40 w-full rounded-xl" />;
   if (isError) {
@@ -143,13 +207,35 @@ export function ParticipantServiceAgreementSection({
   }
   const agreements = data ?? [];
   const agreement =
-    agreements.find((a) => a.status === "active") ?? agreements[0];
+    agreements.find((a) => a.id === selectedId) ??
+    agreements.find((a) => a.status === "active") ??
+    agreements[0];
+
+  const builderSheet = (
+    <ServiceAgreementBuilder
+      open={builder.open}
+      onOpenChange={(open) => setBuilder((b) => ({ ...b, open }))}
+      participantId={participantId}
+      participantName={participantName}
+      agreementId={builder.agreementId}
+      defaults={builder.defaults}
+      onSaved={changed}
+    />
+  );
+  const newAgreement = () => setBuilder({ open: true, agreementId: null, defaults });
+
   if (!agreement) {
     return (
-      <p className="text-sm text-cc-muted">
-        No service agreement recorded yet. Agreements signed through participant
-        onboarding appear here.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-cc-muted">
+          No service agreement recorded yet. Build one here, or agreements signed
+          through participant onboarding appear automatically.
+        </p>
+        <Button className="gap-1.5" onClick={newAgreement}>
+          <Plus size={15} /> New agreement
+        </Button>
+        {builderSheet}
+      </div>
     );
   }
 
@@ -160,6 +246,8 @@ export function ParticipantServiceAgreementSection({
   );
   const doc = agreement.signed_document;
   const active = agreement.status === "active";
+  const isDraft = agreement.status === "draft";
+  const signable = isDraft || agreement.status === "pending_signature";
 
   return (
     <div className="space-y-4">
@@ -177,26 +265,117 @@ export function ParticipantServiceAgreementSection({
                 color: active ? "var(--cc-status-success)" : "var(--cc-muted)",
               }}
             >
-              {agreement.status.replace(/_/g, " ")}
+              {STATUS_LABELS[agreement.status] ?? agreement.status.replace(/_/g, " ")}
             </span>
           </p>
           <p className="mt-0.5 text-xs text-cc-muted">
-            Signed{" "}
-            {formatDate(agreement.signed_date) ??
-              formatDate(doc?.family_signed_at) ??
-              "date not recorded"}
-            {agreement.signed_by ? ` by ${agreement.signed_by}` : ""}
+            {agreement.agreement_number ? `${agreement.agreement_number} · ` : ""}
+            {signable
+              ? agreement.sent_at
+                ? `Ready for signature since ${formatDate(agreement.sent_at)}`
+                : "Draft — not yet sent"
+              : <>
+                  Signed{" "}
+                  {formatDate(agreement.signed_date) ??
+                    formatDate(doc?.family_signed_at) ??
+                    "date not recorded"}
+                  {agreement.signed_by ? ` by ${agreement.signed_by}` : ""}
+                </>}
           </p>
         </div>
-        {doc?.url && (
-          <Button asChild variant="outline" className="min-h-10 gap-1.5">
-            <a href={doc.url} target="_blank" rel="noreferrer">
-              <FileText size={15} /> View signed agreement
-              <ExternalLink size={13} className="text-cc-muted" />
-            </a>
+        <div className="flex flex-wrap gap-2">
+          {doc?.url ? (
+            <Button asChild variant="outline" className="min-h-10 gap-1.5">
+              <a href={doc.url} target="_blank" rel="noreferrer">
+                <FileText size={15} /> View signed agreement
+                <ExternalLink size={13} className="text-cc-muted" />
+              </a>
+            </Button>
+          ) : (
+            <Button variant="outline" className="min-h-10 gap-1.5" onClick={() => void openDoc(agreement.id)}>
+              <FileText size={15} /> {signable ? "Preview" : "View agreement"}
+            </Button>
+          )}
+          {isDraft && (
+            <Button
+              variant="outline"
+              className="min-h-10 gap-1.5"
+              onClick={() =>
+                setBuilder({
+                  open: true,
+                  agreementId: agreement.id,
+                  defaults: {
+                    ...agreement,
+                    supports: supports.map((s) => ({
+                      support_item_code: s.support_item_code,
+                      quantity: s.quantity ?? s.total_hours_allocated,
+                      rate: s.rate ?? null,
+                      location: s.location,
+                      frequency: s.frequency,
+                    })),
+                  },
+                })
+              }
+            >
+              <Pencil size={15} /> Edit
+            </Button>
+          )}
+          {isDraft && (
+            <Button
+              variant="outline"
+              className="min-h-10 gap-1.5"
+              disabled={busy}
+              onClick={() => run(() => sendAgreementForSignature(agreement.id), "Ready for signature")}
+            >
+              <Send size={15} /> Ready for signature
+            </Button>
+          )}
+          {signable && (
+            <Button className="min-h-10 gap-1.5" onClick={() => setSigning(true)}>
+              <PenLine size={15} /> Sign now
+            </Button>
+          )}
+          {isDraft && (
+            <Button
+              variant="ghost"
+              className="min-h-10 gap-1.5"
+              disabled={busy}
+              aria-label="Delete draft"
+              onClick={() => {
+                if (window.confirm("Delete this draft agreement?")) {
+                  void run(() => deleteAgreementDraft(agreement.id), "Draft deleted");
+                  setSelectedId(null);
+                }
+              }}
+            >
+              <Trash2 size={15} />
+            </Button>
+          )}
+          <Button variant="ghost" className="min-h-10 gap-1.5" onClick={newAgreement}>
+            <Plus size={15} /> New
           </Button>
-        )}
+        </div>
       </div>
+
+      {agreements.length > 1 && (
+        <div className="flex flex-wrap gap-1.5" aria-label="Agreements">
+          {agreements.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => setSelectedId(a.id)}
+              aria-pressed={a.id === agreement.id}
+              className="rounded-full border px-2.5 py-1 text-xs"
+              style={{
+                borderColor: a.id === agreement.id ? "var(--cc-plum)" : "var(--cc-border)",
+                color: a.id === agreement.id ? "var(--cc-plum)" : "var(--cc-muted)",
+              }}
+            >
+              {a.agreement_number ?? formatDate(a.start_date)} · {STATUS_LABELS[a.status] ?? a.status}
+            </button>
+          ))}
+        </div>
+      )}
 
       <dl className="grid gap-3 rounded-lg border border-cc-border p-3 sm:grid-cols-3">
         <Fact
@@ -247,7 +426,8 @@ export function ParticipantServiceAgreementSection({
         ) : (
           <div className="overflow-hidden rounded-lg border border-cc-border">
             {supports.map((s) => {
-              const rate = s.negotiated_rate ?? s.standard_rate;
+              const rate = s.rate ?? s.negotiated_rate ?? s.standard_rate;
+              const unit = UNIT_WORDS[(s.unit ?? "").toUpperCase()];
               return (
                 <div
                   key={s.id}
@@ -262,7 +442,7 @@ export function ParticipantServiceAgreementSection({
                         hoursPerPeriod(s, agreement),
                         s.location ? LOCATION_LABELS[s.location] : null,
                         rate != null
-                          ? `${money(rate)} per hour${s.negotiated_rate != null ? " (negotiated)" : ""}`
+                          ? `${money(rate)}${unit ? ` per ${unit[0]}` : " each"}${s.negotiated_rate != null ? " (negotiated)" : ""}`
                           : null,
                         s.support_item_code,
                       ]
@@ -274,12 +454,12 @@ export function ParticipantServiceAgreementSection({
                     <p className="text-sm font-semibold tabular-nums text-cc-text">
                       {money(s.total_funding)}
                     </p>
-                    {s.total_hours_allocated != null && (
+                    {(s.quantity ?? s.total_hours_allocated) != null && (
                       <p className="text-xs tabular-nums text-cc-muted">
-                        {Number(s.total_hours_allocated).toLocaleString(
+                        {Number(s.quantity ?? s.total_hours_allocated).toLocaleString(
                           "en-AU",
                         )}{" "}
-                        hours
+                        {unit ? unit[1] : s.quantity != null ? "units" : "hours"}
                       </p>
                     )}
                   </div>
@@ -321,6 +501,19 @@ export function ParticipantServiceAgreementSection({
           </div>
         )}
       </dl>
+
+      {builderSheet}
+      {signable && (
+        <SignAgreementDialog
+          open={signing}
+          onOpenChange={setSigning}
+          agreementId={agreement.id}
+          agreementNumber={agreement.agreement_number}
+          participantName={participantName}
+          providerName={user?.full_name}
+          onSigned={changed}
+        />
+      )}
     </div>
   );
 }

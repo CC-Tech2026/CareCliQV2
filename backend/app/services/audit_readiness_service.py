@@ -852,7 +852,7 @@ def load_org_data(org_id: str) -> OrgData:
     )
     data.service_agreements = _rows(
         sb.table("service_agreements")
-        .select("id, participant_id, status, start_date, end_date, signed_date")
+        .select("id, participant_id, agreement_number, status, start_date, end_date, signed_date")
         .eq("organization_id", org_id)
     )
     data.consents = _rows(
@@ -953,8 +953,9 @@ def _auto_evidence(
                 else:
                     status, detail = "missing", "Not signed yet."
                 out.append(Evidence(
-                    source_table="service_agreements", source_id=str(sa["id"]), title="Service agreement",
-                    kind="auto", status=status, detail=detail,
+                    source_table="service_agreements", source_id=str(sa["id"]),
+                    title=f"Service agreement {sa['agreement_number']}" if sa.get("agreement_number") else "Service agreement",
+                    kind="auto", status=status, detail=detail, vault_category="consent_onboarding",
                     date=str(sa.get("signed_date") or sa.get("start_date") or "") or None,
                     due_date=end.isoformat() if end else None,
                 ))
