@@ -12,6 +12,7 @@ from ..core.access import get_user_id, get_user_organization_id, has_org_wide_ac
 from ..core.security import get_current_user
 from ..services import participant_service, service_agreement_service
 from ..services import service_agreement_document_service as documents
+from ..services import service_agreement_esign_service as esign
 
 router = APIRouter(tags=["service-agreements"])
 
@@ -137,6 +138,16 @@ def _org_access(current_user: dict) -> str:
     return org_id
 
 
+_HIDDEN = ("provider_signature_png", "participant_signature_png", "sign_token_hash", "signing_code_hash")
+
+
+def _clean(agreement: dict) -> dict:
+    """Signature images and e-sign hashes stay on the server."""
+    for key in _HIDDEN:
+        agreement.pop(key, None)
+    return agreement
+
+
 async def _agreement_access(agreement_id: str, current_user: dict) -> str:
     """Org match plus access to the agreement's participant (a coordinator
     only sees their own participants)."""
@@ -150,13 +161,13 @@ async def _agreement_access(agreement_id: str, current_user: dict) -> str:
 async def create_agreement_draft(participant_id: str, body: AgreementDraft, current_user: dict = Depends(get_current_user)):
     participant = await _require_coordinator_participant(participant_id, current_user)
     org_id = get_user_organization_id(current_user) or str(participant.get("organization_id") or "")
-    return await documents.create_draft(participant_id, org_id, get_user_id(current_user), body.model_dump(mode="json"))
+    return _clean(await documents.create_draft(participant_id, org_id, get_user_id(current_user), body.model_dump(mode="json")))
 
 
 @router.put("/service-agreements/{agreement_id}")
 async def update_agreement_draft(agreement_id: str, body: AgreementDraft, current_user: dict = Depends(get_current_user)):
     org_id = await _agreement_access(agreement_id, current_user)
-    return await documents.update_draft(org_id, agreement_id, get_user_id(current_user), body.model_dump(mode="json"))
+    return _clean(await documents.update_draft(org_id, agreement_id, get_user_id(current_user), body.model_dump(mode="json")))
 
 
 @router.delete("/service-agreements/{agreement_id}", status_code=204)
@@ -169,17 +180,43 @@ async def delete_agreement_draft(agreement_id: str, current_user: dict = Depends
 @router.post("/service-agreements/{agreement_id}/send")
 async def send_agreement(agreement_id: str, current_user: dict = Depends(get_current_user)):
     org_id = await _agreement_access(agreement_id, current_user)
-    return await documents.send_for_signature(org_id, agreement_id, get_user_id(current_user))
+    return _clean(await documents.send_for_signature(org_id, agreement_id, get_user_id(current_user)))
 
 
 @router.post("/service-agreements/{agreement_id}/sign")
 async def sign_agreement(agreement_id: str, body: SignBody, current_user: dict = Depends(get_current_user)):
     org_id = await _agreement_access(agreement_id, current_user)
-    return await documents.sign(
+    return _clean(await documents.sign(
         org_id, agreement_id, get_user_id(current_user),
         provider_name=body.provider_name, provider_signature_png=body.provider_signature_png,
         participant_name=body.participant_name, participant_signature_png=body.participant_signature_png,
+    ))
+
+
+class EsignBody(BaseModel):
+    provider_name: str = Field(min_length=1, max_length=200)
+    provider_signature_png: str
+    signer_name: str = Field(min_length=1, max_length=200)
+    signer_email: str = Field(min_length=3, max_length=254)
+    relationship: str = "participant"
+
+
+@router.post("/service-agreements/{agreement_id}/esign")
+async def send_agreement_for_esign(agreement_id: str, body: EsignBody, current_user: dict = Depends(get_current_user)):
+    """Provider signs, then the participant (or nominee) is emailed a link."""
+    org_id = await _agreement_access(agreement_id, current_user)
+    return await esign.send_for_esign(
+        org_id, agreement_id, get_user_id(current_user),
+        provider_name=body.provider_name, provider_signature_png=body.provider_signature_png,
+        signer_name=body.signer_name, signer_email=body.signer_email, relationship=body.relationship,
     )
+
+
+@router.delete("/service-agreements/{agreement_id}/esign", status_code=204)
+async def cancel_agreement_esign(agreement_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = await _agreement_access(agreement_id, current_user)
+    await esign.cancel_esign(org_id, agreement_id, get_user_id(current_user))
+    return Response(status_code=204)
 
 
 @router.get("/service-agreements/{agreement_id}/document")

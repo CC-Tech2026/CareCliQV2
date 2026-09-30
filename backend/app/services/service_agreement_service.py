@@ -12,7 +12,7 @@ any of those claim types.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 import logging
 from typing import Any, Optional
 
@@ -105,6 +105,36 @@ def list_service_agreements(participant_id: str, organization_id: str) -> list[d
 SIGNED_DOCUMENT_URL_SECONDS = 60 * 60
 
 
+_ESIGN_SECRETS = ("sign_token_hash", "signing_code_hash", "signing_code_expires_at", "signing_code_sent_at", "signing_code_attempts")
+
+
+def _esign_summary(agreement: dict[str, Any]) -> None:
+    """Replace the e-sign columns with what the profile shows. The link and
+    code hashes never leave the server."""
+    has_link = bool(agreement.get("sign_token_hash"))
+    for key in _ESIGN_SECRETS:
+        agreement.pop(key, None)
+    email = agreement.pop("signer_email", None)
+    agreement["esign"] = None
+    if not email or not has_link or agreement.get("status") != "pending_signature":
+        return
+    from .service_agreement_esign_service import mask_email
+
+    expires = agreement.get("sign_token_expires_at")
+    try:
+        expired = bool(expires) and datetime.fromisoformat(str(expires).replace("Z", "+00:00")) < datetime.now(timezone.utc)
+    except ValueError:
+        expired = False
+    agreement["esign"] = {
+        "signer_name": agreement.get("signer_name"),
+        "signer_email": mask_email(email),
+        "relationship": agreement.get("signer_relationship"),
+        "expires_at": expires,
+        "expired": expired,
+        "email_verified": bool(agreement.get("signing_email_verified_at")),
+    }
+
+
 def list_service_agreements_for_profile(participant_id: str, organization_id: str) -> list[dict[str, Any]]:
     """list_service_agreements() plus what the participant profile shows:
     each support line's NDIS item name, unit and standard (platform) rate,
@@ -194,6 +224,7 @@ def list_service_agreements_for_profile(participant_id: str, organization_id: st
         agreement["status"] = effective_status(agreement)
         agreement.pop("provider_signature_png", None)
         agreement.pop("participant_signature_png", None)
+        _esign_summary(agreement)
         own = _own_document(agreement)
         agreement["signed_document"] = own or (signed_document if index == 0 else None)
     return agreements

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, ExternalLink, Pencil, PenLine, Plus, Send, Trash2 } from "lucide-react";
+import { Clock, FileText, ExternalLink, Mail, MailCheck, Pencil, PenLine, Plus, Send, Trash2, XCircle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,10 +8,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { jsonFetch } from "@/services/http";
 import {
+  cancelAgreementEsign,
   deleteAgreementDraft,
   openAgreementDocument,
-  sendAgreementForSignature,
+  type AgreementEsignStatus,
 } from "@/services/serviceAgreementService";
+import { EmailAgreementDialog } from "./EmailAgreementDialog";
 import { ServiceAgreementBuilder, type BuilderDefaults } from "./ServiceAgreementBuilder";
 import { SignAgreementDialog } from "./SignAgreementDialog";
 
@@ -57,6 +59,7 @@ type ServiceAgreement = {
   signed_date: string | null;
   service_agreement_supports: AgreementSupport[];
   signed_document: SignedDocument | null;
+  esign?: AgreementEsignStatus | null;
 };
 
 const PLAN_MANAGEMENT_LABELS: Record<string, string> = {
@@ -144,10 +147,13 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
 export function ParticipantServiceAgreementSection({
   participantId,
   participantName = "the participant",
+  participantEmail,
   defaults = {},
 }: {
   participantId: string;
   participantName?: string;
+  /** Pre-fills the address when emailing an agreement for signature. */
+  participantEmail?: string | null;
   /** Prefills a new agreement (plan dates, plan management). */
   defaults?: BuilderDefaults;
 }) {
@@ -160,6 +166,7 @@ export function ParticipantServiceAgreementSection({
     open: false, agreementId: null, defaults: {},
   });
   const [signing, setSigning] = useState(false);
+  const [emailing, setEmailing] = useState(false);
   const [busy, setBusy] = useState(false);
   const { data, isLoading, isError, refetch } = useOrgQuery<ServiceAgreement[]>(
     ["participant", participantId, "service-agreements"],
@@ -248,6 +255,7 @@ export function ParticipantServiceAgreementSection({
   const active = agreement.status === "active";
   const isDraft = agreement.status === "draft";
   const signable = isDraft || agreement.status === "pending_signature";
+  const esign = signable ? agreement.esign ?? null : null;
 
   return (
     <div className="space-y-4">
@@ -270,7 +278,9 @@ export function ParticipantServiceAgreementSection({
           </p>
           <p className="mt-0.5 text-xs text-cc-muted">
             {agreement.agreement_number ? `${agreement.agreement_number} · ` : ""}
-            {signable
+            {esign
+              ? `Emailed to ${esign.signer_name ?? "the signer"} ${formatDate(agreement.sent_at) ? `on ${formatDate(agreement.sent_at)}` : ""}`.trim()
+              : signable
               ? agreement.sent_at
                 ? `Ready for signature since ${formatDate(agreement.sent_at)}`
                 : "Draft — not yet sent"
@@ -320,19 +330,14 @@ export function ParticipantServiceAgreementSection({
               <Pencil size={15} /> Edit
             </Button>
           )}
-          {isDraft && (
-            <Button
-              variant="outline"
-              className="min-h-10 gap-1.5"
-              disabled={busy}
-              onClick={() => run(() => sendAgreementForSignature(agreement.id), "Ready for signature")}
-            >
-              <Send size={15} /> Ready for signature
+          {signable && !esign && (
+            <Button className="min-h-10 gap-1.5" onClick={() => setEmailing(true)}>
+              <Mail size={15} /> Email for signature
             </Button>
           )}
           {signable && (
-            <Button className="min-h-10 gap-1.5" onClick={() => setSigning(true)}>
-              <PenLine size={15} /> Sign now
+            <Button variant={esign ? "default" : "outline"} className="min-h-10 gap-1.5" onClick={() => setSigning(true)}>
+              <PenLine size={15} /> Sign in person
             </Button>
           )}
           {isDraft && (
@@ -356,6 +361,60 @@ export function ParticipantServiceAgreementSection({
           </Button>
         </div>
       </div>
+
+      {esign && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+          style={{
+            borderColor: esign.expired ? "var(--cc-status-warning)" : "var(--cc-border)",
+            background: esign.expired ? "var(--cc-status-warning-bg)" : "var(--cc-soft)",
+          }}
+          role="status"
+        >
+          <div className="flex min-w-0 items-start gap-2.5">
+            {esign.expired ? (
+              <Clock size={16} className="mt-0.5 shrink-0" style={{ color: "var(--cc-status-warning)" }} />
+            ) : esign.email_verified ? (
+              <MailCheck size={16} className="mt-0.5 shrink-0" style={{ color: "var(--cc-status-success)" }} />
+            ) : (
+              <Mail size={16} className="mt-0.5 shrink-0" style={{ color: "var(--cc-plum)" }} />
+            )}
+            <div className="min-w-0 text-sm">
+              <p className="font-semibold text-cc-text">
+                {esign.expired
+                  ? "Signing link expired"
+                  : esign.email_verified
+                    ? `${esign.signer_name ?? "The signer"} has opened the agreement`
+                    : `Waiting for ${esign.signer_name ?? "the signer"} to sign`}
+              </p>
+              <p className="text-xs text-cc-muted">
+                {esign.signer_email}
+                {esign.relationship && esign.relationship !== "participant" ? ` · ${esign.relationship}` : ""}
+                {esign.expires_at && !esign.expired ? ` · link works until ${formatDate(esign.expires_at)}` : ""}
+                {esign.expired ? " · send a new link to carry on" : ""}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5" disabled={busy} onClick={() => setEmailing(true)}>
+              <Send size={14} /> {esign.expired ? "Send new link" : "Resend"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="gap-1.5"
+              disabled={busy}
+              onClick={() => {
+                if (window.confirm("Cancel the signing link? It will stop working straight away.")) {
+                  void run(() => cancelAgreementEsign(agreement.id), "Signing link cancelled");
+                }
+              }}
+            >
+              <XCircle size={14} /> Cancel link
+            </Button>
+          </div>
+        </div>
+      )}
 
       {agreements.length > 1 && (
         <div className="flex flex-wrap gap-1.5" aria-label="Agreements">
@@ -512,6 +571,19 @@ export function ParticipantServiceAgreementSection({
           participantName={participantName}
           providerName={user?.full_name}
           onSigned={changed}
+        />
+      )}
+      {signable && (
+        <EmailAgreementDialog
+          open={emailing}
+          onOpenChange={setEmailing}
+          agreementId={agreement.id}
+          agreementNumber={agreement.agreement_number}
+          participantName={participantName}
+          participantEmail={participantEmail}
+          providerName={user?.full_name}
+          resend={esign ? { signer_name: esign.signer_name, relationship: esign.relationship } : null}
+          onSent={changed}
         />
       )}
     </div>

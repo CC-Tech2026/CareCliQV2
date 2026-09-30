@@ -95,7 +95,7 @@ it("offers a retry when the agreement can't be loaded", () => {
   );
 });
 
-it("offers edit, send and sign on a draft, and labels it plainly", () => {
+it("offers edit, email and in-person signing on a draft, and labels it plainly", () => {
   state.data = [
     {
       ...agreement,
@@ -113,7 +113,7 @@ it("offers edit, send and sign on a draft, and labels it plainly", () => {
   render(<ParticipantServiceAgreementSection participantId="p-1" participantName="Liam Carter" />);
   expect(screen.getByText("Draft")).toBeTruthy();
   expect(screen.getByText(/SA-2026-0148 · Draft — not yet sent/)).toBeTruthy();
-  for (const name of [/Preview/, /Edit/, /Ready for signature/, /Sign now/]) {
+  for (const name of [/Preview/, /Edit/, /Email for signature/, /Sign in person/]) {
     expect(screen.getByRole("button", { name })).toBeTruthy();
   }
   // A per-trip item isn't described in hours.
@@ -124,4 +124,56 @@ it("offers edit, send and sign on a draft, and labels it plainly", () => {
 it("offers to build an agreement when there isn't one", () => {
   render(<ParticipantServiceAgreementSection participantId="p-1" />);
   expect(screen.getByRole("button", { name: /New agreement/ })).toBeTruthy();
+});
+
+it("shows who an emailed agreement is waiting on, with resend and cancel", () => {
+  state.data = [
+    {
+      ...agreement,
+      id: "sa-3",
+      agreement_number: "SA-2026-0150",
+      status: "pending_signature",
+      sent_at: "2026-09-28T02:00:00Z",
+      signed_by: null,
+      signed_date: null,
+      signed_document: null,
+      esign: {
+        signer_name: "Priya Carter",
+        signer_email: "pr•••@example.com",
+        relationship: "nominee",
+        expires_at: "2026-10-12T02:00:00Z",
+        expired: false,
+        email_verified: false,
+      },
+    },
+  ];
+  render(<ParticipantServiceAgreementSection participantId="p-1" participantName="Liam Carter" />);
+  expect(screen.getByText("Waiting for Priya Carter to sign")).toBeTruthy();
+  expect(screen.getByText(/pr•••@example\.com · nominee · link works until 12 Oct 2026/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Resend/ })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Cancel link/ })).toBeTruthy();
+  // Already emailed: no second "Email for signature" button.
+  expect(screen.queryByRole("button", { name: /Email for signature/ })).toBeNull();
+  expect(screen.getByRole("button", { name: /Sign in person/ })).toBeTruthy();
+});
+
+it("flags an expired signing link", () => {
+  state.data = [
+    {
+      ...agreement,
+      status: "pending_signature",
+      signed_document: null,
+      esign: {
+        signer_name: "Priya Carter",
+        signer_email: "pr•••@example.com",
+        relationship: "participant",
+        expires_at: "2026-09-01T02:00:00Z",
+        expired: true,
+        email_verified: true,
+      },
+    },
+  ];
+  render(<ParticipantServiceAgreementSection participantId="p-1" />);
+  expect(screen.getByText("Signing link expired")).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Send new link/ })).toBeTruthy();
 });

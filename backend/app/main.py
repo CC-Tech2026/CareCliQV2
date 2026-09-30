@@ -278,6 +278,8 @@ app.include_router(audit_readiness_api.router, prefix="/api")
 from .api import access_grants as access_grants_api
 app.include_router(access_grants_api.router, prefix="/api")
 app.include_router(plan_meetings.router, prefix="/api")
+from .api import agreement_sign as agreement_sign_api
+app.include_router(agreement_sign_api.router, prefix="/api")
 
 
 @app.get("/api/health")

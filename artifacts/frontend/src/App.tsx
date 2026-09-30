@@ -15,6 +15,7 @@ import GetStarted from "@/pages/get-started";
 import PlatformBilling from "@/pages/platform-billing";
 import AcceptInvite from "@/pages/accept-invite";
 import OnboardingSignPage from "@/pages/onboarding-sign";
+import AgreementSignPage from "@/pages/agreement-sign";
 import ParticipantReferralPage from "@/pages/participant-referral";
 import OnboardingWorkspace from "@/pages/md/onboarding-workspace";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -142,6 +143,7 @@ function Router() {
       <Route path="/get-started" component={GetStarted} />
       <Route path="/accept-invite" component={AcceptInvite} />
       <Route path="/onboarding-sign" component={OnboardingSignPage} />
+      <Route path="/agreement-sign" component={AgreementSignPage} />
       <Route path="/participant-referral" component={ParticipantReferralPage} />
       <Route path="/account/secure" component={AccountSecure} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />

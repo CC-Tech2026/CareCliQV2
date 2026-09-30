@@ -1594,6 +1594,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                   <ParticipantServiceAgreementSection
                     participantId={id}
                     participantName={participant.full_name}
+                    participantEmail={participant.email ? String(participant.email) : null}
                     defaults={{
                       plan_management_type: participant.plan_management_type,
                       start_date: participant.plan_start_date,

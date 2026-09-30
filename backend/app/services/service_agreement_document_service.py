@@ -312,6 +312,63 @@ def mark_plan_agreement_signed(org_id: str, participant_id: str, start: str, end
         logger.warning("Couldn't update NDIS plan agreement status for %s: %s", participant_id, exc)
 
 
+async def finalise_signature(
+    org_id: str,
+    existing: dict[str, Any],
+    user_id: Optional[str],
+    *,
+    provider: dict[str, Any],
+    participant: dict[str, Any],
+    method: str,
+    extra: Optional[dict[str, Any]] = None,
+) -> str:
+    """Both parties have signed: render and store the signed PDF, make the
+    agreement active, mark the NDIS plan signed and log it. Any outstanding
+    e-sign link stops working. Returns the stored PDF's SHA-256."""
+    import hashlib
+
+    agreement_id = str(existing["id"])
+    signed = {
+        **existing,
+        "provider_signed_name": provider["name"], "provider_signed_at": provider["at"],
+        "provider_signature_png": provider["png"],
+        "participant_signed_name": participant["name"], "participant_signed_at": participant["at"],
+        "participant_signature_png": participant["png"],
+        "status": "active",
+    }
+    pdf = render_agreement_pdf(org_id, signed)
+    digest = hashlib.sha256(pdf).hexdigest()
+    path = f"{org_id}/{agreement_id}/{existing.get('agreement_number') or agreement_id}-signed.pdf"
+    try:
+        get_supabase_admin().storage.from_(BUCKET).upload(path, pdf, {"content-type": "application/pdf", "upsert": "true"})
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=internal_error_detail("Couldn't store the signed agreement", exc))
+
+    now = _now()
+    get_supabase_admin().table("service_agreements").update({
+        "status": "active",
+        "provider_signed_name": provider["name"], "provider_signed_at": provider["at"],
+        "provider_signature_png": provider["png"],
+        "participant_signed_name": participant["name"], "participant_signed_at": participant["at"],
+        "participant_signature_png": participant["png"],
+        "signed_by": participant["name"], "signed_date": app_today().isoformat(),
+        "document_bucket": BUCKET, "document_path": path,
+        "signed_document_sha256": digest,
+        "sign_token_hash": None, "sign_token_expires_at": None,
+        "signing_code_hash": None, "signing_code_expires_at": None,
+        "updated_at": now,
+        **(extra or {}),
+    }).eq("id", agreement_id).eq("organization_id", org_id).execute()
+    mark_plan_agreement_signed(org_id, str(existing["participant_id"]), str(existing["start_date"]), existing.get("end_date"), participant["at"])
+    await audit_service.log_action(
+        action_type="service_agreement.signed", entity_type="service_agreement", entity_id=agreement_id,
+        user_id=user_id, organization_id=org_id,
+        after_state={"provider_signed_name": provider["name"], "participant_signed_name": participant["name"],
+                     "method": method, "document_path": path, "document_sha256": digest},
+    )
+    return digest
+
+
 async def sign(
     org_id: str,
     agreement_id: str,
@@ -335,37 +392,11 @@ async def sign(
             raise HTTPException(status_code=422, detail=f"{label} signature is missing.")
 
     now = _now()
-    signed = {
-        **existing,
-        "provider_signed_name": provider_name.strip(), "provider_signed_at": now,
-        "provider_signature_png": provider_signature_png,
-        "participant_signed_name": participant_name.strip(), "participant_signed_at": now,
-        "participant_signature_png": participant_signature_png,
-        "status": "active",
-    }
-    pdf = render_agreement_pdf(org_id, signed)
-    path = f"{org_id}/{agreement_id}/{existing.get('agreement_number') or agreement_id}-signed.pdf"
-    try:
-        get_supabase_admin().storage.from_(BUCKET).upload(path, pdf, {"content-type": "application/pdf", "upsert": "true"})
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=internal_error_detail("Couldn't store the signed agreement", exc))
-
-    get_supabase_admin().table("service_agreements").update({
-        "status": "active",
-        "provider_signed_name": signed["provider_signed_name"], "provider_signed_at": now,
-        "provider_signature_png": provider_signature_png,
-        "participant_signed_name": signed["participant_signed_name"], "participant_signed_at": now,
-        "participant_signature_png": participant_signature_png,
-        "signed_by": signed["participant_signed_name"], "signed_date": app_today().isoformat(),
-        "document_bucket": BUCKET, "document_path": path,
-        "updated_at": now,
-    }).eq("id", agreement_id).eq("organization_id", org_id).execute()
-    mark_plan_agreement_signed(org_id, str(existing["participant_id"]), str(existing["start_date"]), existing.get("end_date"), now)
-    await audit_service.log_action(
-        action_type="service_agreement.signed", entity_type="service_agreement", entity_id=agreement_id,
-        user_id=user_id, organization_id=org_id,
-        after_state={"provider_signed_name": signed["provider_signed_name"],
-                     "participant_signed_name": signed["participant_signed_name"], "document_path": path},
+    await finalise_signature(
+        org_id, existing, user_id,
+        provider={"name": provider_name.strip(), "png": provider_signature_png, "at": now},
+        participant={"name": participant_name.strip(), "png": participant_signature_png, "at": now},
+        method="in_person",
     )
     return get_agreement(org_id, agreement_id)
 
