@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
   ArrowRight,
   RefreshCw,
@@ -46,6 +45,16 @@ function destination(alert: HubComplianceAlert) {
       href: `/patients?id=${encodeURIComponent(alert.participant_id)}&tab=overview`,
       label: "View participant",
     };
+  if (alert.source === "shifts" && alert.shift_id)
+    return {
+      href: `/md/schedule?shiftId=${encodeURIComponent(alert.shift_id)}`,
+      label: "View shift",
+    };
+  if (alert.source === "worker-notes" && alert.worker_id)
+    return {
+      href: `/md/staff?workerId=${encodeURIComponent(alert.worker_id)}`,
+      label: "View staff profile",
+    };
   if (alert.source === "shifts")
     return { href: "/md/schedule", label: "Review schedule" };
   if (alert.source === "participants")
@@ -67,11 +76,36 @@ function dueDate(value: string) {
 
 export default function MDServiceDeliveryPage() {
   const query = useOrgQuery(["care-alerts"], { queryFn: getCareAlerts });
-  const [area, setArea] = useState("all");
-  const [priority, setPriority] = useState("all");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  useEffect(() => setPage(1), [area, priority, search]);
+  const [location, navigate] = useLocation();
+  const params = new URLSearchParams(useSearch());
+  const requestedArea = params.get("area") ?? "all";
+  const area = areas.some((item) => item.id === requestedArea)
+    ? requestedArea
+    : "all";
+  const priority = params.get("priority") === "urgent" ? "urgent" : "all";
+  const search = params.get("search") ?? "";
+  const requestedPage = Number(params.get("page") ?? 1);
+  const page =
+    Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? requestedPage
+      : 1;
+  function updateFilters(values: Record<string, string>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(values)) {
+      if (!value || value === "all" || (key === "page" && value === "1"))
+        next.delete(key);
+      else next.set(key, value);
+    }
+    navigate(location + (next.size ? "?" + next.toString() : ""), {
+      replace: true,
+    });
+  }
+  const setArea = (value: string) => updateFilters({ area: value, page: "1" });
+  const setPriority = (value: string) =>
+    updateFilters({ priority: value, page: "1" });
+  const setSearch = (value: string) =>
+    updateFilters({ search: value, page: "1" });
+  const setPage = (value: number) => updateFilters({ page: String(value) });
   const alerts = query.data ?? [];
   const known = !query.isLoading && !query.isError && query.data !== undefined;
   const filtered = alerts
@@ -101,9 +135,7 @@ export default function MDServiceDeliveryPage() {
   const currentPage = Math.min(page, pageCount);
   const visible = filtered.slice((currentPage - 1) * 10, currentPage * 10);
   function clearFilters() {
-    setArea("all");
-    setPriority("all");
-    setSearch("");
+    updateFilters({ area: "all", priority: "all", search: "", page: "1" });
   }
   return (
     <HubLayout>
@@ -194,7 +226,7 @@ export default function MDServiceDeliveryPage() {
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search names, participant IDs or concerns"
+                    placeholder="Name, ID or concern"
                     className="min-h-11 w-full rounded-lg border border-cc-border bg-cc-surface py-2 pl-9 pr-3 text-sm text-cc-text"
                   />
                 </span>

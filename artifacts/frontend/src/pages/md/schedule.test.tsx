@@ -4,6 +4,7 @@ import MDSchedulePage from "./schedule";
 const state = vi.hoisted(() => ({
   error: false,
   refetch: vi.fn(),
+  detailId: null as string | null,
   rows: [
     {
       id: "one",
@@ -50,7 +51,7 @@ vi.mock("@/hooks/useOrgQuery", () => ({
     key[1] === "worker-stats"
       ? { data: [] }
       : key[0] === "md-schedule-shift-detail"
-        ? { data: null }
+        ? (state.detailId = key[1], { data: null })
         : {
             data: state.rows,
             isError: state.error,
@@ -61,6 +62,7 @@ vi.mock("@/hooks/useOrgQuery", () => ({
 }));
 afterEach(() => {
   cleanup();
+  window.history.replaceState(null, "", "/md/schedule");
   state.error = false;
   vi.clearAllMocks();
 });
@@ -88,4 +90,12 @@ it("applies the status filter in Month and exposes refresh failures", () => {
   expect(screen.getByRole("alert")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
   expect(state.refetch).toHaveBeenCalledOnce();
+});
+
+it("opens a linked shift directly without finding it in the schedule", () => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: true });
+  window.history.replaceState(null, "", "/md/schedule?shiftId=linked-shift");
+  render(<MDSchedulePage />);
+  expect(state.detailId).toBe("linked-shift");
+  expect(screen.getByRole("dialog")).toBeTruthy();
 });

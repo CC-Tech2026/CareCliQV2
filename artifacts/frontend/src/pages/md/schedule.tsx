@@ -1,3 +1,4 @@
+import { useSearch } from "wouter";
 import { useEffect, useMemo, useState } from "react";
 import {
   addDays,
@@ -256,6 +257,10 @@ export default function MDSchedulePage() {
   const [filter, setFilter] = useState<Bucket | "all">("all");
   const [search, setSearch] = useState("");
   const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
+  const deepLinkShiftId = new URLSearchParams(useSearch()).get("shiftId");
+  useEffect(() => {
+    if (deepLinkShiftId) setActiveShiftId(deepLinkShiftId);
+  }, [deepLinkShiftId]);
   const [availMap, setAvailMap] = useState<AvailabilityMap>({});
   const [loadingAvail, setLoadingAvail] = useState(false);
 

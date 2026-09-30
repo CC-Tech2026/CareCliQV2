@@ -20,6 +20,7 @@ vi.mock("@/hooks/useOrgQuery", () => ({
 }));
 afterEach(() => {
   cleanup();
+  window.history.replaceState(null, "", "/md/service-delivery");
   mocks.error = false;
   mocks.data = [];
   vi.clearAllMocks();
@@ -110,4 +111,58 @@ it("paginates alerts and resets the page after filtering", () => {
   expect(
     screen.queryByRole("navigation", { name: "Care alert pages" }),
   ).toBeNull();
+});
+
+it("links to the matching staff profile and shift", () => {
+  mocks.data = [
+    {
+      id: "s",
+      shift_id: "shift-123",
+      title: "Shift needs cover",
+      source: "shifts",
+      severity: "high",
+    },
+    {
+      id: "w",
+      worker_id: "worker-123",
+      title: "Review notes",
+      source: "worker-notes",
+      severity: "high",
+    },
+  ];
+  render(<MDServiceDeliveryPage />);
+  expect(
+    screen.getByRole("link", { name: "View shift" }).getAttribute("href"),
+  ).toBe("/md/schedule?shiftId=shift-123");
+  expect(
+    screen
+      .getByRole("link", { name: "View staff profile" })
+      .getAttribute("href"),
+  ).toBe("/md/staff?workerId=worker-123");
+});
+it("restores filters and pagination on return", () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/md/service-delivery?area=participants&priority=urgent&search=Concern&page=2",
+  );
+  mocks.data = Array.from({ length: 12 }, (_, i) => ({
+    id: String(i),
+    title: "Concern " + i,
+    source: "participants",
+    severity: "high",
+  }));
+  const first = render(<MDServiceDeliveryPage />);
+  expect(screen.getByText("Page 2 of 2")).toBeTruthy();
+  expect(
+    (
+      screen.getByRole("textbox", {
+        name: "Search care alerts",
+      }) as HTMLInputElement
+    ).value,
+  ).toBe("Concern");
+  first.unmount();
+  render(<MDServiceDeliveryPage />);
+  expect(screen.getByText("Concern 11")).toBeTruthy();
+  expect(screen.queryByText("Concern 0")).toBeNull();
 });
