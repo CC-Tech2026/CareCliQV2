@@ -1187,40 +1187,43 @@ async def generate_invoice_pdf(invoice_id: str, user: dict) -> dict:
 
 async def get_revenue_report(user: dict) -> dict:
     """Organisation revenue summary - managing director only. Coordinators
-    work with invoices but not the organisation's revenue figures."""
+    work with invoices but not the organisation's revenue figures.
+
+    Billed and outstanding leave out drafts (nothing has been asked for yet)
+    and cancelled/void invoices. Cost is wages from the pay engine for
+    completed shifts — it used to be participant plan spending
+    (budget_usage), which is revenue, so the "margin" it produced was
+    meaningless."""
     if not is_managing_director(user):
         raise HTTPException(status_code=403, detail="Revenue reports are available to the managing director only.")
     org_id = _require_org(user)
     supabase = get_supabase_admin()
+    from . import financial_summary_service as fin
 
     try:
-        result = supabase.table("invoices").select(
-            "id, total_cents, currency, status, created_at, due_date, recipient_name"
-        ).eq("organization_id", org_id).order("created_at", desc=True).execute()
-        invoices = result.data or []
+        invoices = _fetch_all(
+            supabase.table("invoices")
+            .select("id, total_cents, currency, status, created_at, issued_at, finalized_at, due_date, recipient_name")
+            .eq("organization_id", org_id).order("created_at", desc=True)
+        )
     except Exception:
         invoices = []
 
     from collections import defaultdict
     monthly: dict[str, dict] = defaultdict(lambda: {"billed": 0, "paid": 0, "outstanding": 0, "count": 0})
-
-    total_billed = 0
-    total_paid = 0
-    total_outstanding = 0
-
-    for inv in invoices:
-        month_day = shift_local_date(inv.get("created_at"))
-        month_key = month_day.isoformat()[:7] if month_day else str(inv.get("created_at") or "")[:7]
+    total_billed = total_paid = total_outstanding = 0
+    raised = [inv for inv in invoices if inv.get("status") not in fin.RAISED_EXCLUDED]
+    for inv in raised:
+        day = fin.raised_day(inv, None) or shift_local_date(inv.get("created_at"))
+        month_key = day.isoformat()[:7] if day else str(inv.get("created_at") or "")[:7]
         amount = int(inv.get("total_cents") or 0)
         total_billed += amount
         monthly[month_key]["billed"] += amount
         monthly[month_key]["count"] += 1
-
-        s = inv.get("status", "")
-        if s == "paid":
+        if inv.get("status") == "paid":
             total_paid += amount
             monthly[month_key]["paid"] += amount
-        elif s not in ("void", "cancelled"):
+        else:
             total_outstanding += amount
             monthly[month_key]["outstanding"] += amount
 
@@ -1230,61 +1233,33 @@ async def get_revenue_report(user: dict) -> dict:
         reverse=True,
     )
 
-    # --- Real cost and margin figures from budget_usage records ---
-    total_session_costs_cents: int | None = None
     session_count: int | None = None
+    wages_cents: int | None = None
     cost_per_session_cents: int | None = None
     gross_margin_pct: float | None = None
-    # net_margin_pct is omitted until real overhead cost data is available
-
     try:
-        # Step 1: get all session IDs for this org
-        sessions_result = (
-            supabase.table("sessions")
-            .select("id")
-            .eq("organization_id", org_id)
-            .execute()
+        shift_rows = _fetch_all(
+            supabase.table("shifts").select("id").eq("organization_id", org_id).eq("status", "completed").order("id")
         )
-        session_ids = [r["id"] for r in (sessions_result.data or []) if r.get("id")]
-        session_count = len(session_ids)
-
-        if session_ids:
-            # Step 2: sum budget_usage.amount for those sessions
-            # budget_usage.amount is stored in dollars; convert to cents
-            usage_result = (
-                supabase.table("budget_usage")
-                .select("session_id, amount")
-                .in_("session_id", session_ids)
-                .execute()
-            )
-            usage_rows = usage_result.data or []
-
-            raw_cost_sum = 0.0
-            for row in usage_rows:
-                raw_cost_sum += float(row.get("amount") or 0)
-
-            total_session_costs_cents = int(raw_cost_sum * 100)
-
-            # Cost-per-session: total budget_usage cost / total session count for org
-            # (per task spec: total session cost from budget_usage / session count)
-            if session_count > 0 and total_session_costs_cents > 0:
-                cost_per_session_cents = int(total_session_costs_cents / session_count)
-
-            # Gross margin only when we have real invoice revenue AND real cost records
-            if total_billed > 0 and total_session_costs_cents > 0:
-                gross = (total_billed - total_session_costs_cents) / total_billed * 100
-                gross_margin_pct = round(gross, 1)
+        shift_ids = [str(r["id"]) for r in shift_rows if r.get("id")]
+        session_count = len(shift_ids)
+        wages, costed = fin.labour_cost(org_id, shift_ids)
+        if costed:
+            wages_cents = wages
+            cost_per_session_cents = round(wages / costed)
+            if total_billed > 0:
+                gross_margin_pct = round((total_billed - wages) / total_billed * 100, 1)
     except Exception:
-        pass
+        logger.warning("Revenue report cost figures unavailable for org %s", org_id, exc_info=True)
 
     return {
         "monthly": monthly_list,
         "total_billed_cents": total_billed,
         "total_paid_cents": total_paid,
         "total_outstanding_cents": total_outstanding,
-        "invoice_count": len(invoices),
+        "invoice_count": len(raised),
         "session_count": session_count,
-        "total_session_costs_cents": total_session_costs_cents,
+        "total_session_costs_cents": wages_cents,
         "cost_per_session_cents": cost_per_session_cents,
         "gross_margin_pct": gross_margin_pct,
     }

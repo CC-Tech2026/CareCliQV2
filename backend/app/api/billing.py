@@ -228,3 +228,14 @@ async def mark_ndia_claims_paid(body: ClaimsPaid, request: Request, current_user
 @router.post("/claims/{invoice_id}/rejected")
 async def ndia_claim_rejected(invoice_id: str, body: ClaimRejected, current_user: dict = Depends(get_current_user)):
     return await ndia_claim_service.return_to_ready(current_user, invoice_id, body.reason)
+
+
+@router.get("/financial-summary")
+async def financial_summary(
+    period: Literal["month", "quarter", "year"] = "quarter",
+    current_user: dict = Depends(get_current_user),
+):
+    """Managing director's Financial Governance figures for a period."""
+    from ..services.financial_summary_service import get_financial_summary
+
+    return get_financial_summary(current_user, period)
