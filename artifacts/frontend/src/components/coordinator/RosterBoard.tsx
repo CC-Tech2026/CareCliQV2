@@ -87,9 +87,14 @@ function parseStart(s: CoordinatorShiftRecord): Date | null {
   if (!s.scheduled_start) return null;
   try { return parseISO(s.scheduled_start); } catch { return null; }
 }
-function ccDayIndex(date: Date): number {
+/** ISO weekday (1 = Monday … 7 = Sunday) — the numbering worker
+ * availability is saved in (WorkerAvailabilityPanel, the matching and
+ * capacity services). This used to be 0 = Monday, which shifted every
+ * worker's availability by a day: Mondays showed as unavailable (no way to
+ * add a shift, and any shift already there hidden) and Saturdays as open. */
+export function isoWeekday(date: Date): number {
   const js = getDay(date); // 0=Sun..6=Sat
-  return js === 0 ? 6 : js - 1; // 0=Mon..6=Sun
+  return js === 0 ? 7 : js;
 }
 function isBlackout(date: Date, blackouts: BlackoutDate[] = []): boolean {
   const key = format(date, "yyyy-MM-dd");
@@ -590,17 +595,20 @@ export function RosterBoard({
                     {days.map((d) => {
                       const dayKey = format(d, "yyyy-MM-dd");
                       const dayShifts = byWorkerDay.get(`${worker.id}|${dayKey}`) ?? [];
-                      const dayIdx = ccDayIndex(d);
-                      const onBlackout = avail ? isBlackout(d, avail.blackout_dates) : false;
-                      const isWorkDay = avail ? avail.available_days.includes(dayIdx) : true;
+                      const onBlackout = avail ? isBlackout(d, avail.blackout_dates ?? []) : false;
+                      // No availability recorded (or no days listed) = don't restrict.
+                      const days = Array.isArray(avail?.available_days) ? avail!.available_days : null;
+                      const isWorkDay = days && days.length > 0 ? days.map(Number).includes(isoWeekday(d)) : true;
                       const hasShift = dayShifts.length > 0;
 
                       let cellBg = "var(--cc-bg)";
                       let cellState: "available" | "assigned" | "blackout" | "unavailable" | "loading" = "available";
-                      if (!avail && loadingAvail) cellState = "loading";
+                      // A rostered shift always shows, even on a day off or leave —
+                      // hiding it hid a real conflict.
+                      if (hasShift) { cellState = "assigned"; cellBg = onBlackout ? "#FFFBEB" : isToday(d) ? "#FAFAFE" : "var(--cc-bg)"; }
+                      else if (!avail && loadingAvail) cellState = "loading";
                       else if (onBlackout) { cellState = "blackout"; cellBg = "#FFFBEB"; }
                       else if (!isWorkDay) { cellState = "unavailable"; cellBg = "#F8FAFC"; }
-                      else if (hasShift) { cellState = "assigned"; cellBg = isToday(d) ? "#FAFAFE" : "var(--cc-bg)"; }
                       else { cellState = "available"; cellBg = isToday(d) ? "#F0FFF4" : "#F7FEF9"; }
                       // Read-only boards don't need "free slot" green; keep today's column visible instead.
                       if (!allowCreate && (cellState === "available" || cellState === "assigned")) {
@@ -622,10 +630,23 @@ export function RosterBoard({
                               <span className="text-[9px] font-bold text-amber-700">{translate("coordinator.rostering.onLeave")}</span>
                             </div>
                           )}
-                          {cellState === "unavailable" && (
+                          {cellState === "unavailable" && !allowCreate && (
                             <div className="flex h-10 items-center justify-center">
                               <MinusCircle size={12} className="opacity-25" style={{ color: MUTED }} />
                             </div>
+                          )}
+                          {cellState === "unavailable" && allowCreate && (
+                            // Outside the worker's usual days — still possible to roster
+                            // (they may have agreed to it); the shift form checks conflicts.
+                            <button
+                              type="button"
+                              title={`${translateParams("coordinator.rostering.assignShiftTo", { worker: worker.full_name, date: format(d, "d MMM") })} (outside usual availability)`}
+                              onClick={() => onCellClick(worker, dayKey)}
+                              className="group flex h-10 w-full items-center justify-center rounded-lg border border-dashed border-transparent transition-all hover:border-slate-300 hover:bg-slate-50"
+                            >
+                              <MinusCircle size={12} className="opacity-25 group-hover:hidden" style={{ color: MUTED }} />
+                              <Plus size={13} className="hidden text-slate-400 group-hover:block" />
+                            </button>
                           )}
                           {cellState === "available" && !allowCreate && <div className="h-10" />}
                           {cellState === "available" && allowCreate && (
