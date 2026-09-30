@@ -1,3 +1,4 @@
+import { loadErrorFrom } from "@/lib/load-error";
 import { apiFetch } from "@/lib/api-fetch";
 
 export type ItemStatus =
@@ -105,17 +106,7 @@ export interface AuditProfileOptions {
 export const AUDIT_READINESS_KEY = ["audit-readiness"] as const;
 
 async function parseJson<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    const detail = body?.detail;
-    throw new Error(
-      typeof detail === "string"
-        ? detail
-        : Array.isArray(detail) && detail[0]?.msg
-          ? String(detail[0].msg)
-          : "Request failed.",
-    );
-  }
+  if (!res.ok) throw await loadErrorFrom(res);
   return res.json();
 }
 

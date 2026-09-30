@@ -1,3 +1,4 @@
+import { loadErrorHint } from "@/lib/load-error";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1065,11 +1066,12 @@ export default function AuditReadinessPage() {
         {checklist.isError ? (
           <div
             role="alert"
-            className="flex items-center gap-2 rounded-xl border p-4 text-sm"
+            className="flex flex-wrap items-center gap-2 rounded-xl border p-4 text-sm"
             style={{ borderColor: "var(--cc-status-danger)", color: "var(--cc-status-danger)" }}
           >
             <XCircle size={16} />
             Couldn't load the checklist.
+            {loadErrorHint(checklist.error) && <span className="font-normal">{loadErrorHint(checklist.error)}</span>}
             <button type="button" className="font-bold underline" onClick={() => checklist.refetch()}>
               Try again
             </button>

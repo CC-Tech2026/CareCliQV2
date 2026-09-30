@@ -13,6 +13,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { loadErrorFrom, loadErrorHint } from "@/lib/load-error";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -446,7 +447,7 @@ export default function MDFinancialPage() {
   const summary = useOrgQuery<FinancialSummary>(["md", "financial-summary", period], {
     queryFn: async () => {
       const res = await apiFetch(`/api/billing/financial-summary?period=${period}`);
-      if (!res.ok) throw new Error("Couldn't load financial figures.");
+      if (!res.ok) throw await loadErrorFrom(res);
       return res.json();
     },
     placeholderData: (previous) => previous,
@@ -491,8 +492,9 @@ export default function MDFinancialPage() {
         </div>
 
         {summary.isError && !data ? (
-          <div role="alert" className="flex items-center gap-2 rounded-2xl border p-4 text-sm" style={{ borderColor: RED, color: RED }}>
+          <div role="alert" className="flex flex-wrap items-center gap-2 rounded-2xl border p-4 text-sm" style={{ borderColor: RED, color: RED }}>
             <AlertTriangle size={15} /> Financial figures couldn't be loaded.
+            {loadErrorHint(summary.error) && <span>{loadErrorHint(summary.error)}</span>}
             <button type="button" className="font-bold underline" onClick={() => void summary.refetch()}>Try again</button>
           </div>
         ) : !data ? (
