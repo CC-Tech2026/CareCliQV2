@@ -290,14 +290,19 @@ INVOICE_PAGE_SIZE = 1000
 INVOICE_MAX_ROWS = 20_000
 
 
-def _fetch_all(query) -> list[dict]:
+def _fetch_all(make_query) -> list[dict]:
     """Every row, a page at a time. The list used to stop at 200, so an
     organisation with more invoices saw them vanish — and every total the
-    billing page adds up from this list came out short."""
+    billing page adds up from this list came out short.
+
+    ``make_query`` builds a fresh query for each page: the client's
+    ``.range()`` appends offset/limit to the builder rather than replacing
+    them, so reusing one builder sent page 2 as ``offset=0&offset=1000`` —
+    past 1,000 rows the figures were wrong or failed to load."""
     rows: list[dict] = []
     start = 0
     while start < INVOICE_MAX_ROWS:
-        page = query.range(start, start + INVOICE_PAGE_SIZE - 1).execute().data or []
+        page = make_query().range(start, start + INVOICE_PAGE_SIZE - 1).execute().data or []
         rows.extend(page)
         if len(page) < INVOICE_PAGE_SIZE:
             break
@@ -339,12 +344,16 @@ async def _enrich_with_service_category(supabase, invoices: list[dict]) -> list[
 async def list_invoices(user: dict, status_filter: str | None = None) -> list[dict]:
     _require_billing_role(user)
     supabase = get_supabase_admin()
-    query = _invoice_select_query(supabase, user)
-    if status_filter:
-        if status_filter not in INVOICE_STATUSES:
-            raise HTTPException(status_code=422, detail="Invalid invoice status.")
-        query = query.eq("status", status_filter)
-    invoices = [_with_signed_pdf_url(row) for row in _fetch_all(query.order("created_at", desc=True))]
+    if status_filter and status_filter not in INVOICE_STATUSES:
+        raise HTTPException(status_code=422, detail="Invalid invoice status.")
+
+    def query():
+        q = _invoice_select_query(supabase, user)
+        if status_filter:
+            q = q.eq("status", status_filter)
+        return q.order("created_at", desc=True).order("id")
+
+    invoices = [_with_signed_pdf_url(row) for row in _fetch_all(query)]
     return await _enrich_with_service_category(supabase, invoices)
 
 
@@ -1202,12 +1211,14 @@ async def get_revenue_report(user: dict) -> dict:
 
     try:
         invoices = _fetch_all(
-            supabase.table("invoices")
+            lambda: supabase.table("invoices")
             .select("id, total_cents, currency, status, created_at, issued_at, finalized_at, due_date, recipient_name")
-            .eq("organization_id", org_id).order("created_at", desc=True)
+            .eq("organization_id", org_id).order("created_at", desc=True).order("id")
         )
-    except Exception:
-        invoices = []
+    except Exception as exc:
+        # Say so, rather than report $0 billed as if it were true.
+        logger.error("Revenue report invoices unavailable for org %s: %s", org_id, exc)
+        raise HTTPException(status_code=502, detail="Billing figures couldn't be loaded. Try again shortly.")
 
     from collections import defaultdict
     monthly: dict[str, dict] = defaultdict(lambda: {"billed": 0, "paid": 0, "outstanding": 0, "count": 0})
@@ -1239,7 +1250,7 @@ async def get_revenue_report(user: dict) -> dict:
     gross_margin_pct: float | None = None
     try:
         shift_rows = _fetch_all(
-            supabase.table("shifts").select("id").eq("organization_id", org_id).eq("status", "completed").order("id")
+            lambda: supabase.table("shifts").select("id").eq("organization_id", org_id).eq("status", "completed").order("id")
         )
         shift_ids = [str(r["id"]) for r in shift_rows if r.get("id")]
         session_count = len(shift_ids)

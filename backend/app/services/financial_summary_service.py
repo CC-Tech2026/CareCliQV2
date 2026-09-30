@@ -146,10 +146,10 @@ def _completed_shift_ids(org_id: str, start: date, end: date, tz) -> list[str]:
     start_at = datetime.combine(start, time.min, tzinfo=tz).isoformat()
     end_at = datetime.combine(end + timedelta(days=1), time.min, tzinfo=tz).isoformat()
     rows = _fetch_all(
-        get_supabase_admin().table("shifts").select("id")
+        lambda: get_supabase_admin().table("shifts").select("id")
         .eq("organization_id", org_id).eq("status", "completed")
         .gte("scheduled_start", start_at).lt("scheduled_start", end_at)
-        .order("scheduled_start")
+        .order("scheduled_start").order("id")
     )
     return [str(r["id"]) for r in rows if r.get("id")]
 
@@ -197,11 +197,11 @@ def get_financial_summary(user: dict, period: Period) -> dict[str, Any]:
     months = month_keys(end if period == "year" else today, 12 if period == "year" else 6)
 
     invoices = _fetch_all(
-        get_supabase_admin().table("invoices")
+        lambda: get_supabase_admin().table("invoices")
         .select("id, invoice_number, participant_id, recipient_name, total_cents, status, created_at, "
                 "issued_at, finalized_at, paid_at, payment_date, due_date")
         .eq("organization_id", org_id)
-        .order("created_at", desc=True)
+        .order("created_at", desc=True).order("id")
     )
     summary = summarise_invoices(invoices, start, end, today, tz, months)
 

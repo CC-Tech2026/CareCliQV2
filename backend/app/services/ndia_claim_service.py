@@ -250,12 +250,12 @@ def list_claims(user: dict) -> dict[str, Any]:
 
     supabase = get_supabase_admin()
     invoices = _fetch_all(
-        supabase.table("invoices")
+        lambda: supabase.table("invoices")
         .select("id, invoice_number, participant_id, billing_period_id, recipient_name, line_items, total_cents, "
                 "status, claim_batch_id, claim_submitted_at, paid_at, payment_reference, created_at")
         .eq("organization_id", org_id)
         .not_.in_("status", ["cancelled", "void"])
-        .order("created_at", desc=True)
+        .order("created_at", desc=True).order("id")
     )
     participants = _participants(org_id, list({str(i["participant_id"]) for i in invoices if i.get("participant_id")}))
     periods = _periods(list({str(i["billing_period_id"]) for i in invoices if i.get("billing_period_id")}))

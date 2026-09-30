@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { useLocation } from "wouter";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -14,6 +14,7 @@ import {
   Zap,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { appLocalDateKey } from "@/lib/datetime";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { COMPLIANCE_TREND_KEY, MD_DASHBOARD_KEY } from "@/lib/query-keys";
 import { getMdDemandCapacity, type MdDemandCapacity } from "@/services/dashboardService";
@@ -1034,41 +1035,70 @@ const REVENUE_PERIOD_META: Record<RevenuePeriod, { label: string; window: string
   yearly: { label: "Yearly", window: "last 5 years" },
 };
 
-/** Re-buckets the same monthly report into quarters/years — no new endpoint,
- *  just a different grouping of data already on the page. */
-function bucketRevenue(monthly: RevenueMonth[], period: RevenuePeriod): Array<{ key: string; billed: number; paid: number }> {
-  if (period === "monthly") {
-    return monthly.slice(-12).map((m) => ({
-      key: m.month.slice(5), // "2026-08" -> "08"; recent months only, so this stays unambiguous
-      billed: Math.round(m.billed / 100),
-      paid: Math.round(m.paid / 100),
-    }));
-  }
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** Months to cover so the chart starts on a whole quarter / year:
+ *  12 months, the last 8 quarters, or the last 5 calendar years. */
+function periodMonths(period: RevenuePeriod, currentMonth: string): number {
+  const monthNum = Number(currentMonth.slice(5, 7));
+  if (period === "monthly") return 12;
+  if (period === "quarterly") return 7 * 3 + ((monthNum - 1) % 3) + 1;
+  return 4 * 12 + monthNum;
+}
 
+/** "YYYY-MM" keys for the `count` months ending with `current`, oldest first. */
+export function monthKeysEnding(current: string, count: number): string[] {
+  let year = Number(current.slice(0, 4));
+  let month = Number(current.slice(5, 7));
+  const keys: string[] = [];
+  for (let i = 0; i < count; i++) {
+    keys.push(`${year}-${String(month).padStart(2, "0")}`);
+    month -= 1;
+    if (month === 0) {
+      month = 12;
+      year -= 1;
+    }
+  }
+  return keys.reverse();
+}
+
+/** Re-buckets the monthly report into the chart's months, quarters or years,
+ *  ending with the current one, oldest on the left. The report lists months
+ *  newest first and skips months with no invoices; both used to show here as
+ *  the oldest months, drawn backwards, with gaps closed up. */
+export function bucketRevenue(
+  monthly: RevenueMonth[],
+  period: RevenuePeriod,
+  currentMonth: string,
+): Array<{ key: string; billed: number; paid: number }> {
+  const byMonth = new Map(monthly.map((m) => [m.month.slice(0, 7), m]));
   const buckets = new Map<string, { label: string; billed: number; paid: number }>();
-  for (const m of monthly) {
-    const [yearStr, monthStr] = m.month.split("-");
+  for (const key of monthKeysEnding(currentMonth, periodMonths(period, currentMonth))) {
+    const [yearStr, monthStr] = key.split("-");
     const monthNum = Number(monthStr);
-    let sortKey: string;
+    let bucketKey: string;
     let label: string;
-    if (period === "quarterly") {
+    if (period === "monthly") {
+      bucketKey = key;
+      label = monthNum === 1 || buckets.size === 0 ? `${MONTH_ABBR[monthNum - 1]} ${yearStr.slice(2)}` : MONTH_ABBR[monthNum - 1];
+    } else if (period === "quarterly") {
       const quarter = Math.floor((monthNum - 1) / 3) + 1;
-      sortKey = `${yearStr}-Q${quarter}`;
+      bucketKey = `${yearStr}-Q${quarter}`;
       label = `Q${quarter} ${yearStr}`;
     } else {
-      sortKey = yearStr;
+      bucketKey = yearStr;
       label = yearStr;
     }
-    const existing = buckets.get(sortKey) ?? { label, billed: 0, paid: 0 };
-    existing.billed += m.billed;
-    existing.paid += m.paid;
-    buckets.set(sortKey, existing);
+    const bucket = buckets.get(bucketKey) ?? { label, billed: 0, paid: 0 };
+    const m = byMonth.get(key);
+    bucket.billed += m?.billed ?? 0;
+    bucket.paid += m?.paid ?? 0;
+    buckets.set(bucketKey, bucket);
   }
-
-  return Array.from(buckets.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(period === "quarterly" ? -8 : -5)
-    .map(([, v]) => ({ key: v.label, billed: Math.round(v.billed / 100), paid: Math.round(v.paid / 100) }));
+  return Array.from(buckets.values()).map((v) => ({
+    key: v.label,
+    billed: Math.round(v.billed / 100),
+    paid: Math.round(v.paid / 100),
+  }));
 }
 
 interface RevenueReport {
@@ -1090,18 +1120,36 @@ function BillingStat({ label, value, color }: { label: string; value: string; co
   );
 }
 
+function useRevenueReport() {
+  return useOrgQuery<RevenueReport>([...MD_DASHBOARD_KEY, "revenue-report"], {
+    queryFn: async () => {
+      const response = await apiFetch("/api/billing/revenue-report");
+      if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+      return response.json();
+    },
+  });
+}
+
+function RevenueUnavailable({ onRetry }: { onRetry: () => void }) {
+  return (
+    <p role="alert" className="flex flex-wrap items-center gap-2 px-5 py-6 text-[12px] sm:px-6" style={{ color: MUTED }}>
+      <AlertTriangle size={14} style={{ color: AMBER }} />
+      Billing figures couldn't be loaded.
+      <button type="button" className="font-bold underline" style={{ color: PLUM }} onClick={onRetry}>
+        Try again
+      </button>
+    </p>
+  );
+}
+
 function RevenueChart() {
-  const [report, setReport] = useState<RevenueReport | null>(null);
+  const revenue = useRevenueReport();
+  const report = revenue.data ?? null;
   const [period, setPeriod] = useState<RevenuePeriod>("monthly");
 
-  useEffect(() => {
-    apiFetch("/api/billing/revenue-report")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => setReport(data ?? {}))
-      .catch(() => setReport({}));
-  }, []);
-
-  const chartData = bucketRevenue(report?.monthly ?? [], period);
+  const currentMonth = appLocalDateKey(new Date().toISOString()).slice(0, 7);
+  const chartData = bucketRevenue(report?.monthly ?? [], period, currentMonth);
+  const hasHistory = (report?.monthly ?? []).some((m) => m.billed > 0);
   const totalBilled = (report?.total_billed_cents ?? 0) / 100;
   const totalPaid = (report?.total_paid_cents ?? 0) / 100;
   const totalOutstanding = (report?.total_outstanding_cents ?? 0) / 100;
@@ -1132,6 +1180,10 @@ function RevenueChart() {
         </div>
       </div>
 
+      {revenue.isError ? (
+        <RevenueUnavailable onRetry={() => void revenue.refetch()} />
+      ) : (
+      <>
       {/* Current-to-the-day totals — always the live report totals, not
           re-bucketed by the period selector above (that only reshapes the
           chart below). */}
@@ -1145,7 +1197,7 @@ function RevenueChart() {
       <div className="flex-1 px-2 pb-4 pt-4 sm:px-5">
         {report === null ? (
           <div className="flex h-[220px] items-center justify-center text-[11px]" style={{ color: MUTED }}>Loading…</div>
-        ) : chartData.length < 2 ? (
+        ) : !hasHistory ? (
           <div className="flex h-[220px] items-center justify-center text-[11px]" style={{ color: MUTED }}>Not enough billing history yet.</div>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
@@ -1163,6 +1215,8 @@ function RevenueChart() {
           </ResponsiveContainer>
         )}
       </div>
+      </>
+      )}
     </section>
   );
 }
@@ -1176,21 +1230,8 @@ function FinancialSummary({
 }: {
   onNavigate: () => void;
 }) {
-  const [rev, setRev] = useState<{
-    total_billed_cents?: number;
-    total_paid_cents?: number;
-    invoice_count?: number;
-    monthly?: RevenueMonth[];
-  } | null>(null);
-
-  useEffect(() => {
-    apiFetch("/api/billing/revenue-report")
-      .then((response) =>
-        response.ok ? response.json() : null
-      )
-      .then((data) => setRev(data))
-      .catch(() => {});
-  }, []);
+  const revenue = useRevenueReport();
+  const rev = revenue.data ?? null;
 
   const totalRevenue =
     (rev?.total_billed_cents ?? 0) / 100;
@@ -1270,6 +1311,9 @@ function FinancialSummary({
         </button>
       </div>
 
+      {revenue.isError ? (
+        <RevenueUnavailable onRetry={() => void revenue.refetch()} />
+      ) : (
       <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <FinancialMetric
           label="Billed"
@@ -1287,16 +1331,17 @@ function FinancialSummary({
 
         <FinancialMetric
           label="Collection"
-          value={`${collectionRate}%`}
+          value={totalRevenue > 0 ? `${collectionRate}%` : "—"}
           detail={
             collectionDelta === null
               ? `${formatNumber(invoices)} invoices`
               : `${collectionDelta >= 0 ? "+" : ""}${collectionDelta} pts vs last month`
           }
-          warning={collectionRate < 90}
+          warning={totalRevenue > 0 && collectionRate < 90}
           trend={collectionDelta}
         />
       </div>
+      )}
     </section>
   );
 }

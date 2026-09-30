@@ -112,10 +112,33 @@ async def test_new_invoices_cant_be_created_as_paid():
     assert err.value.status_code == 422
 
 
+class _Builder:
+    """Like the real client: .range() appends offset/limit to the builder,
+    and PostgREST honours the first of each."""
+
+    def __init__(self, rows):
+        self.rows, self.params = rows, []
+
+    def range(self, start, end):
+        self.params += [("offset", start), ("limit", end - start + 1)]
+        return self
+
+    def execute(self):
+        offset = next(v for k, v in self.params if k == "offset")
+        limit = next(v for k, v in self.params if k == "limit")
+        return MagicMock(data=self.rows[offset:offset + limit])
+
+
 def test_invoice_list_is_not_capped():
-    query = MagicMock()
-    pages = [[{"id": i} for i in range(1000)], [{"id": i} for i in range(1000, 1500)]]
-    query.range.return_value.execute.side_effect = [MagicMock(data=p) for p in pages]
-    rows = billing_service._fetch_all(query)
-    assert len(rows) == 1500
-    assert query.range.call_args_list[1].args == (1000, 1999)
+    rows = [{"id": i} for i in range(2500)]
+    fetched = billing_service._fetch_all(lambda: _Builder(rows))
+    assert [r["id"] for r in fetched] == list(range(2500))
+
+
+def test_reusing_one_builder_is_what_went_wrong():
+    # The old call shape re-read page one: 20 x 1,000 copies of the first
+    # rows, so every total past 1,000 invoices or shifts was inflated.
+    rows = [{"id": i} for i in range(1500)]
+    shared = _Builder(rows)
+    fetched = billing_service._fetch_all(lambda: shared)
+    assert len(fetched) != 1500
