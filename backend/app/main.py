@@ -273,6 +273,8 @@ from .api import client_errors as client_errors_api
 app.include_router(client_errors_api.router, prefix="/api")
 from .api import md_vault as md_vault_api
 app.include_router(md_vault_api.router, prefix="/api")
+from .api import audit_readiness as audit_readiness_api
+app.include_router(audit_readiness_api.router, prefix="/api")
 from .api import access_grants as access_grants_api
 app.include_router(access_grants_api.router, prefix="/api")
 app.include_router(plan_meetings.router, prefix="/api")

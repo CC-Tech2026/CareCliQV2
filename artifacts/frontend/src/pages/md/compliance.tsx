@@ -396,6 +396,12 @@ export default function MDCompliancePage() {
           </div>
           <nav aria-label="Compliance actions" className="flex flex-wrap gap-2">
             <Link
+              href="/md/audit-readiness"
+              className="inline-flex min-h-11 items-center rounded-lg border border-cc-border px-3 text-sm font-medium"
+            >
+              Audit readiness
+            </Link>
+            <Link
               href="/md/vault"
               className="inline-flex min-h-11 items-center rounded-lg border border-cc-border px-3 text-sm font-medium"
             >

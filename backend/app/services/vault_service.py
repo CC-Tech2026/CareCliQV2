@@ -1450,6 +1450,17 @@ def _load_category_docs(org_id: str, category: str) -> list[VaultDocument]:
     return _cached(f"docs:{org_id}:{category}", compute)
 
 
+def find_document(org_id: str, category: str, document_id: str) -> VaultDocument | None:
+    """One vault document by folder + id, or None — used to check that a
+    document someone is linking as audit evidence really is in this org's
+    vault (the lists are already org-scoped)."""
+    try:
+        docs = _load_category_docs(org_id, category)
+    except HTTPException:
+        return None
+    return next((d for d in docs if d["id"] == document_id), None)
+
+
 def _load_all_category_docs(org_id: str) -> dict[str, list[VaultDocument]]:
     """Every built-in + custom category's docs, fetched concurrently. Cheap
     on a warm cache (each _load_category_docs call is then just a dict

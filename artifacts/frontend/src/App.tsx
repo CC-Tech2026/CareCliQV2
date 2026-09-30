@@ -61,6 +61,7 @@ import MDSchedulePage from "@/pages/md/schedule";
 import MDServiceDeliveryPage from "@/pages/md/service-delivery";
 import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage from "@/pages/md/compliance";
+import MDAuditReadinessPage from "@/pages/md/audit-readiness";
 import MDVaultHomePage from "@/pages/md/vault/VaultHome";
 import MDVaultFolderPage from "@/pages/md/vault/VaultFolder";
 import MDFinancialPage from "@/pages/md/financial";
@@ -265,6 +266,12 @@ function Router() {
       <Route path="/md/compliance">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <MDCompliancePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/audit-readiness">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Audit readiness">
+          <MDAuditReadinessPage />
         </ProtectedRoute>
       </Route>
 

@@ -131,6 +131,7 @@ const MD_NAV_GROUPS = [
         label: "Audit & Compliance",
         icon: ShieldCheck,
       },
+      { href: "/md/audit-readiness", label: "Audit readiness", icon: ClipboardCheck },
       { href: "/md/vault", label: "Documents & Audit Vault", icon: FolderLock },
       { href: "/incidents", label: "Incident reporting", icon: AlertTriangle },
       {
