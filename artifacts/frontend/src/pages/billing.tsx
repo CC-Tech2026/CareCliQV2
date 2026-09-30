@@ -1564,7 +1564,7 @@ export default function Billing() {
                   <Button
                     variant="outline"
                     className="ml-3"
-                    onClick={loadBilling}
+                    onClick={() => void loadBilling()}
                   >
                     Retry
                   </Button>
