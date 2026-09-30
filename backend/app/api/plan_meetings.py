@@ -29,6 +29,10 @@ class CreateMeetingSessionRequest(BaseModel):
     meeting_type: str = "check_in"
     conversation_context: Optional[dict[str, Any]] = None  # {participant_priorities, coordinator_observations, agreed_outcomes}
     participant_id: Optional[str] = None  # Optional: if participant already selected in UI (e.g., from participant details page)
+    # Meet & Greet during onboarding: the person isn't a participant yet, so
+    # the session is filed against their intake and moved onto the
+    # participant when the intake is activated.
+    intake_id: Optional[str] = None
     # Required: a recording cannot start without explicit, auditable consent. The
     # person consenting may not be the participant themselves (a nominee or
     # guardian can consent on their behalf) — see `consent_given_by`.
@@ -138,6 +142,11 @@ async def create_meeting_session(
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc).isoformat()
 
+    if body.intake_id:
+        from ..services.participant_intake_service import get_intake_for_session
+        if not get_intake_for_session(body.intake_id, organization_id):
+            raise HTTPException(status_code=404, detail="Participant intake not found.")
+
     payload = {
         "organization_id": organization_id,
         "coordinator_id": coordinator_id,
@@ -155,6 +164,9 @@ async def create_meeting_session(
         # an auditable consent record.
         "consent_confirmed_at": now,
     }
+
+    if body.intake_id:
+        payload["intake_id"] = body.intake_id
 
     try:
         resp = supabase.table("plan_meeting_sessions").insert(payload).execute()
@@ -774,7 +786,10 @@ async def transcribe_and_resolve_names(
     participant_id = session.get("participant_id")  # Use already-set participant_id if available
     resolved_speakers = stage_1_result.get("resolved_speakers", [])
     
-    if not participant_id:
+    # A Meet & Greet is with someone who isn't a participant yet — matching
+    # names would risk filing it on an existing participant who happens to
+    # share part of their name. Activation attaches it to the right record.
+    if not participant_id and not session.get("intake_id"):
         # Only attempt name matching if participant_id wasn't provided at session creation
         for speaker in resolved_speakers:
             if speaker.get("confidence") in ("confirmed", "likely"):

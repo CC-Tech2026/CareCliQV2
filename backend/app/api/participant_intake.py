@@ -12,7 +12,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from ..core.access import is_managing_director
@@ -175,6 +175,18 @@ async def create_intake(body: IntakeCreateBody, current_user: dict = Depends(get
 async def update_intake(intake_id: str, body: dict[str, Any], current_user: dict = Depends(get_current_user)):
     org_id = _require_md(current_user)
     return await svc.update_intake(intake_id, org_id, body, current_user)
+
+
+@router.post("/{intake_id}/meet-greet/recording", status_code=201)
+async def upload_meet_greet_recording(
+    intake_id: str,
+    session_id: str = Form(...),
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_md(current_user)
+    raw = await file.read()
+    return svc.upload_meet_greet_recording(intake_id, org_id, session_id, raw, file.content_type or "")
 
 
 @router.post("/{intake_id}/signed-document", status_code=201)

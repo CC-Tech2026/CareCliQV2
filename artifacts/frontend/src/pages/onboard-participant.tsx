@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
-  Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users, Square, Upload,
+  Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users, Upload,
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
   SlidersHorizontal, X, AlertTriangle,
 } from "lucide-react";
@@ -15,10 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { SectionInfo } from "@/components/ui/section-info";
-import {
-  createMeetingSession, transcribeAndResolveNames,
-  type ConsentGivenBy, type ConsentMethod,
-} from "@/services/coordinatorService";
+import { MeetGreetCapture } from "@/components/onboarding/MeetGreetCapture";
 import {
   listParticipantIntakes, createParticipantIntake, updateParticipantIntake, uploadSignedServiceAgreement,
   type ParticipantIntake, type IntakeStatus, type EnquirySource, type ServiceCategory, type FundingType,
@@ -1927,117 +1924,6 @@ function IntakeDetail({
 
   const { user } = useAuth();
 
-  // ── Easy Capture — shared by Screening and Meet & Greet, one mic session
-  // at a time, writing into whichever field is passed to startRecording.
-  // Meet & Greet only — uses the same real, AI-backed pipeline as the
-  // coordinator's Easy Capture elsewhere in the app (createMeetingSession +
-  // transcribeAndResolveNames) — this intake isn't a real participant yet,
-  // so the session is created "unassigned" (participant_id omitted), which
-  // the backend already supports. Goal/task auto-extraction is
-  // intentionally skipped — that writes to a real participant's plan,
-  // which doesn't exist pre-activation.
-  const [recording, setRecording] = useState(false);
-  const [elapsedSec, setElapsedSec] = useState(0);
-  const [transcribing, setTranscribing] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const timerRef = useRef<number | null>(null);
-  const meetingSessionIdRef = useRef<string | null>(null);
-
-  // Consent selection for the real, AI-transcribed Meet & Greet recording —
-  // mirrors the coordinator's Easy Capture, which cannot start recording
-  // without it. The confirmation checkbox itself lives in ConsentPanel,
-  // which only mounts between recordings, so it resets on its own —
-  // "each new recording attempt needs its own consent confirmation".
-  const [consentGivenBy, setConsentGivenBy] = useState<ConsentGivenBy>("participant");
-  const [consentMethod, setConsentMethod] = useState<ConsentMethod>("verbal");
-
-  useEffect(() => {
-    // Stop the mic and timer if the detail view unmounts mid-recording.
-    return () => {
-      if (timerRef.current) window.clearInterval(timerRef.current);
-      mediaRecorderRef.current?.stream.getTracks().forEach((t) => t.stop());
-    };
-  }, []);
-
-  async function transcribeMeetGreet(sessionId: string, audioBlob: Blob) {
-    setTranscribing(true);
-    try {
-      const result = await transcribeAndResolveNames(sessionId, audioBlob, user?.full_name, intake.full_name, []);
-      const transcriptText = result.clean_transcript
-        .map((seg) => (seg.speaker_name ? `${seg.speaker_name}: ${seg.text}` : seg.text))
-        .join("\n");
-      if (transcriptText.trim()) {
-        setNotes((prev) => (prev ? `${prev}\n\n${transcriptText}` : transcriptText));
-        toast({ title: "Transcribed", description: "The conversation has been added to your notes." });
-      } else {
-        toast({ title: "Nothing transcribed", description: "No speech was detected in the recording." });
-      }
-    } catch (err: any) {
-      toast({ title: "Transcription failed", description: err?.message ?? "The recording was saved, but couldn't be transcribed.", variant: "destructive" });
-    } finally {
-      setTranscribing(false);
-    }
-  }
-
-  async function startRecording() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      toast({ title: "Voice recording not supported", description: "Please use a different browser or device.", variant: "destructive" });
-      return;
-    }
-    try {
-      const session = await createMeetingSession(
-        "check_in",
-        new Date().toISOString().slice(0, 10),
-        undefined,
-        undefined, // no participant_id — this intake isn't a real participant yet
-        consentGivenBy,
-        consentMethod,
-      );
-      meetingSessionIdRef.current = session.session_id;
-    } catch (err: any) {
-      toast({ title: "Could not start Easy Capture", description: err?.message ?? "Check the backend is reachable.", variant: "destructive" });
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      let mimeType = "audio/webm;codecs=opus";
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = "audio/mp4";
-        if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = "audio/webm";
-      }
-      const recorder = new MediaRecorder(stream, { mimeType });
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-      recorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunks, { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        onUpdate({ meet_greet_recording_url: url });
-        if (meetingSessionIdRef.current) {
-          transcribeMeetGreet(meetingSessionIdRef.current, blob);
-        }
-      };
-      recorder.start();
-      mediaRecorderRef.current = recorder;
-      setElapsedSec(0);
-      setRecording(true);
-      timerRef.current = window.setInterval(() => setElapsedSec((s) => s + 1), 1000);
-    } catch (err: any) {
-      if (err?.name === "NotAllowedError") {
-        toast({ title: "Microphone access denied", description: "Allow microphone access to record.", variant: "destructive" });
-      } else if (err?.name === "NotFoundError") {
-        toast({ title: "No microphone found", description: "Connect a microphone to record.", variant: "destructive" });
-      } else {
-        toast({ title: "Failed to start recording", description: err?.message ?? "", variant: "destructive" });
-      }
-    }
-  }
-
-  function stopRecording() {
-    mediaRecorderRef.current?.stop();
-    setRecording(false);
-    if (timerRef.current) { window.clearInterval(timerRef.current); timerRef.current = null; }
-  }
 
   function saveEnquiryDraft() {
     onUpdate({ decline_reason: declineReason.trim() || undefined });
@@ -2083,7 +1969,6 @@ function IntakeDetail({
   // in-progress step, not just Enquiry/Screening.
   function terminate() {
     if (!terminateReason.trim()) return;
-    if (recording) stopRecording(); // don't leave the mic hot if terminated mid-recording
     onUpdate({ status: "withdrawn", withdrawn_reason: terminateReason.trim() });
     setTerminateOpen(false);
     toast({ title: "Application terminated", description: `${intake.full_name} chose not to continue with this provider.` });
@@ -2303,48 +2188,14 @@ function IntakeDetail({
                     <p className="text-sm font-black" style={{ color: TEXT }}>Meet &amp; Greet</p>
                   </div>
                   <div className="p-5 space-y-3">
-                    {intake.status === "meet_greet" ? (
-                      recording ? (
-                        <EasyCaptureBlock
-                          label="Meet & greet"
-                          recordingUrl={intake.meet_greet_recording_url}
-                          isRecording
-                          elapsedSec={elapsedSec}
-                          onStart={() => {}}
-                          onStop={stopRecording}
-                          transcribesToNotes
-                        />
-                      ) : (
-                        <>
-                          <ConsentPanel
-                            consentGivenBy={consentGivenBy}
-                            onConsentGivenByChange={setConsentGivenBy}
-                            consentMethod={consentMethod}
-                            onConsentMethodChange={setConsentMethod}
-                            onConfirm={startRecording}
-                          />
-                          {intake.meet_greet_recording_url && (
-                            <audio controls src={intake.meet_greet_recording_url} className="w-full h-9" />
-                          )}
-                          {transcribing && (
-                            <div className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
-                              <Loader2 size={13} className="animate-spin" /> Transcribing the conversation…
-                            </div>
-                          )}
-                        </>
-                      )
-                    ) : (
-                      intake.meet_greet_recording_url && (
-                        <audio controls src={intake.meet_greet_recording_url} className="w-full h-9" />
-                      )
-                    )}
-                    <p className="text-xs" style={{ color: MUTED }}>Key notes from the meet &amp; greet.</p>
-                    <Textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Key notes from the meet & greet…"
-                      className="min-h-[100px]"
-                      disabled={intake.status !== "meet_greet"}
+                    <MeetGreetCapture
+                      intake={intake}
+                      notes={notes}
+                      onNotesChange={setNotes}
+                      onSaveNotes={(value) => onUpdate({ meet_greet_notes: value.trim() })}
+                      onRecordingSaved={onLocalUpdate}
+                      coordinatorName={user?.full_name}
+                      editable={intake.status === "meet_greet"}
                     />
                     {intake.status === "meet_greet" && (
                       <div className="flex justify-between gap-2">
@@ -2579,85 +2430,6 @@ function IntakeDetail({
 
         </div>
       </div>
-    </div>
-  );
-}
-
-function formatElapsed(sec: number): string {
-  return `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
-}
-
-/** Radio-button option row — used for the Meet & Greet consent gate's "Consent given by" and "Method" choices. */
-function ConsentRadio({ name, label, checked, onChange }: { name: string; label: string; checked: boolean; onChange: () => void }) {
-  return (
-    <label
-      className="flex flex-1 items-center gap-2.5 rounded-lg px-3 py-2.5 cursor-pointer transition-colors"
-      style={{ background: SURFACE, border: `1px solid ${checked ? PLUM : BORDER}` }}
-    >
-      <input
-        type="radio"
-        name={name}
-        checked={checked}
-        onChange={onChange}
-        className="h-4 w-4 shrink-0 accent-[var(--cc-plum)]"
-      />
-      <span className="text-[12px] font-bold" style={{ color: checked ? PLUM : TEXT }}>{label}</span>
-    </label>
-  );
-}
-
-/**
- * Consent gate before the real, AI-transcribed Meet & Greet recording —
- * same requirement as the coordinator's Easy Capture: recording cannot
- * start without explicit, confirmed consent.
- */
-function ConsentPanel({
-  consentGivenBy, onConsentGivenByChange, consentMethod, onConsentMethodChange, onConfirm,
-}: {
-  consentGivenBy: ConsentGivenBy;
-  onConsentGivenByChange: (v: ConsentGivenBy) => void;
-  consentMethod: ConsentMethod;
-  onConsentMethodChange: (v: ConsentMethod) => void;
-  onConfirm: () => void;
-}) {
-  // Local, not lifted to the parent — this panel only mounts between
-  // recording attempts, so remounting it naturally resets the checkbox,
-  // which is exactly "each new attempt needs its own consent confirmation".
-  const [checked, setChecked] = useState(false);
-  const consentGivenByLabel = consentGivenBy === "participant" ? "the participant" : consentGivenBy === "nominee" ? "their nominee" : "their guardian";
-  return (
-    <div className="rounded-lg p-4 space-y-3" style={{ background: SOFT }}>
-      <div className="flex items-start gap-2.5">
-        <ShieldCheck size={16} style={{ color: PLUM }} className="shrink-0 mt-0.5" />
-        <div>
-          <p className="text-xs font-black" style={{ color: TEXT }}>Consent required</p>
-          <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>Recording cannot start without explicit consent.</p>
-        </div>
-      </div>
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: MUTED }}>Consent given by</p>
-        <div className="flex gap-1.5">
-          <ConsentRadio name="consent-given-by" label="Participant" checked={consentGivenBy === "participant"} onChange={() => onConsentGivenByChange("participant")} />
-          <ConsentRadio name="consent-given-by" label="Nominee" checked={consentGivenBy === "nominee"} onChange={() => onConsentGivenByChange("nominee")} />
-          <ConsentRadio name="consent-given-by" label="Guardian" checked={consentGivenBy === "guardian"} onChange={() => onConsentGivenByChange("guardian")} />
-        </div>
-      </div>
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: MUTED }}>Method</p>
-        <div className="flex gap-1.5">
-          <ConsentRadio name="consent-method" label="Verbal" checked={consentMethod === "verbal"} onChange={() => onConsentMethodChange("verbal")} />
-          <ConsentRadio name="consent-method" label="Written" checked={consentMethod === "written"} onChange={() => onConsentMethodChange("written")} />
-        </div>
-      </div>
-      <label className="flex items-start gap-2 rounded-lg p-3 cursor-pointer" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-        <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 h-3.5 w-3.5 rounded shrink-0" />
-        <span className="text-[11px]" style={{ color: TEXT }}>
-          I confirm <strong>{consentGivenByLabel}</strong> has been informed the conversation will be recorded and has given {consentMethod} consent.
-        </span>
-      </label>
-      <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={onConfirm} disabled={!checked}>
-        <Mic size={14} /> Confirm consent &amp; record
-      </Button>
     </div>
   );
 }
@@ -3097,60 +2869,6 @@ function IntakeFormBlock({
         </>
       )}
     </div>
-  );
-}
-
-/**
- * Easy Capture record/stop/playback control, shared by the Screening and
- * Meet & Greet steps — each records into its own field on the intake, but
- * only one recording can be in progress at a time (single mic session).
- */
-function EasyCaptureBlock({
-  label, recordingUrl, isRecording, elapsedSec, onStart, onStop, transcribesToNotes,
-}: {
-  label: string;
-  recordingUrl?: string;
-  isRecording: boolean;
-  elapsedSec: number;
-  onStart: () => void;
-  onStop: () => void;
-  /** When true, shows that speech is being converted into the notes field live while recording. */
-  transcribesToNotes?: boolean;
-}) {
-  return (
-    <>
-      <div className="rounded-lg p-3 flex items-center justify-between gap-3" style={{ background: SOFT }}>
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className="h-8 w-8 rounded-lg shrink-0 flex items-center justify-center"
-            style={{ background: isRecording ? DANGER_BG : "var(--cc-bg)", color: isRecording ? DANGER : PLUM }}
-          >
-            <Mic size={15} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-black" style={{ color: TEXT }}>Easy Capture</p>
-            <p className="text-[11px] flex items-center gap-1.5" style={{ color: MUTED }}>
-              {isRecording && <span className="h-1.5 w-1.5 rounded-full animate-pulse shrink-0" style={{ background: DANGER }} />}
-              {isRecording
-                ? `${transcribesToNotes ? "Recording & converting to notes" : "Recording"}… ${formatElapsed(elapsedSec)}`
-                : recordingUrl ? `${label} recorded` : `Record the ${label.toLowerCase()}`}
-            </p>
-          </div>
-        </div>
-        {!isRecording ? (
-          <Button variant="outline" size="sm" className="gap-1.5 rounded-lg shrink-0" onClick={onStart}>
-            <Mic size={13} /> {recordingUrl ? "Re-record" : "Record"}
-          </Button>
-        ) : (
-          <Button variant="outline" size="sm" className="gap-1.5 rounded-lg shrink-0" style={{ color: DANGER }} onClick={onStop}>
-            <Square size={13} /> Stop
-          </Button>
-        )}
-      </div>
-      {recordingUrl && !isRecording && (
-        <audio controls src={recordingUrl} className="w-full h-9" />
-      )}
-    </>
   );
 }
 

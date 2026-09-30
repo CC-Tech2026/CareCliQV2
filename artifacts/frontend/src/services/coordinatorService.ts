@@ -1860,7 +1860,8 @@ export type PlanMeetingType =
   | "initial_setup"
   | "check_in"
   | "incident_followup"
-  | "goal_review";
+  | "goal_review"
+  | "meet_greet";
 
 export type PlanMeetingSuggestionsStatus = "pending_review" | "reviewed" | "applied";
 
@@ -2027,6 +2028,8 @@ export function createMeetingSession(
   participantId: string | undefined,
   consentGivenBy: ConsentGivenBy,
   consentMethod: ConsentMethod,
+  /** Meet & Greet during onboarding: filed against the intake until activation. */
+  intakeId?: string,
 ): Promise<MeetingSessionResponse> {
   return jsonFetch<MeetingSessionResponse>("/api/coordinator/plan-meetings/sessions", {
     method: "POST",
@@ -2038,6 +2041,7 @@ export function createMeetingSession(
       participant_id: participantId, // Optional: if participant already selected in UI
       consent_given_by: consentGivenBy,
       consent_method: consentMethod,
+      ...(intakeId ? { intake_id: intakeId } : {}),
     }),
   });
 }

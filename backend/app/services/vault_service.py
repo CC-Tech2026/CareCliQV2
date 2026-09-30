@@ -204,6 +204,19 @@ def _applicant_name_map(org_id: str) -> dict[str, str]:
     return _cached(f"applicants:{org_id}", compute)
 
 
+def _intake_name_map(org_id: str, intake_ids: list[str]) -> dict[str, str]:
+    if not intake_ids:
+        return {}
+    try:
+        rows = (
+            get_supabase_admin().table("participant_intakes").select("id, full_name")
+            .eq("organization_id", org_id).in_("id", intake_ids).execute()
+        ).data or []
+    except Exception:
+        return {}
+    return {str(r["id"]): r.get("full_name") or "Prospective participant" for r in rows}
+
+
 def _org_name(org_id: str) -> str:
     def compute() -> str:
         try:
@@ -1023,21 +1036,29 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
         resp = (
             get_supabase_admin()
             .table("plan_meeting_sessions")
-            .select("id, participant_id, consent_given_by, consent_method, consent_confirmed_at")
+            .select("id, participant_id, intake_id, consent_given_by, consent_method, consent_confirmed_at")
             .eq("organization_id", org_id)
             .not_.is_("consent_confirmed_at", "null")
             .order("consent_confirmed_at", desc=True)
             .limit(300)
             .execute()
         )
-        for row in resp.data or []:
+        rows = resp.data or []
+        # Meet & Greet consent given before the person became a participant
+        # is filed against their intake until activation.
+        intake_names = _intake_name_map(
+            org_id, [str(r["intake_id"]) for r in rows if r.get("intake_id") and not r.get("participant_id")]
+        )
+        for row in rows:
             docs.append(
                 VaultDocument(
                     id=row["id"],
                     category="consent_onboarding",
                     folder_label=CATEGORY_META["consent_onboarding"]["label"],
                     title="Consent to record",
-                    person_name=patients.get(row.get("participant_id") or "", "Unknown participant"),
+                    person_name=patients.get(row.get("participant_id") or "")
+                    or intake_names.get(str(row.get("intake_id") or ""))
+                    or "Unknown participant",
                     person_type="Participant",
                     date=str(row.get("consent_confirmed_at") or ""),
                     status="signed",

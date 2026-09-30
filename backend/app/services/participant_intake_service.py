@@ -12,6 +12,7 @@ since it's also written by the post-activation profile-edit form.
 
 from __future__ import annotations
 
+import logging
 import pathlib
 from datetime import date, datetime, timezone
 from typing import Any
@@ -26,8 +27,17 @@ from .html_pdf_render import HtmlPdfRenderError, render_html_to_pdf
 from .organization_branding_service import get_letterhead
 from .supabase_client import get_supabase_admin
 
+logger = logging.getLogger(__name__)
+
 TABLE = "participant_intakes"
 BUCKET = "participant-intake-files"
+RECORDINGS_BUCKET = "meeting-recordings"
+RECORDING_TYPES = {
+    "audio/webm": ".webm", "audio/mp4": ".m4a", "audio/x-m4a": ".m4a",
+    "audio/ogg": ".ogg", "audio/mpeg": ".mp3", "audio/wav": ".wav",
+}
+MAX_RECORDING_BYTES = 25 * 1024 * 1024
+RECORDING_URL_EXPIRY_SECONDS = 60 * 60
 _TEMPLATES_DIR = pathlib.Path(__file__).parent.parent / "templates"
 
 SERVICE_CATEGORY_LABELS = {"aged_care": "Aged Care", "disability": "Disability"}
@@ -58,7 +68,7 @@ SIGNED_URL_EXPIRY_SECONDS = 7 * 24 * 60 * 60
 _PATCHABLE_FIELDS = {
     "full_name", "service_category", "service_hours_required", "ndis_number", "email", "phone",
     "source", "status", "decline_reason", "withdrawn_reason", "board_subtitle", "screening_checks",
-    "meet_greet_recording_url", "meet_greet_notes", "plan_start_date", "plan_end_date", "total_budget",
+    "meet_greet_notes", "plan_start_date", "plan_end_date", "total_budget",
     "provider_signed_name", "provider_signed_at", "family_signed_name", "family_signed_at",
     "provider_signature_png", "family_signature_png",
     "suspended_reason", "web_intake",
@@ -103,13 +113,23 @@ def _validate_dob(web_intake: dict | None, service_category: str | None) -> str:
 
 def _with_fresh_document_url(row: dict[str, Any]) -> dict[str, Any]:
     path = row.get("signed_document_path")
-    if not path:
-        return row
-    try:
-        signed = get_supabase_admin().storage.from_(BUCKET).create_signed_url(path, SIGNED_URL_EXPIRY_SECONDS)
-        row["signed_document_url"] = signed.get("signedURL") or signed.get("signed_url") or row.get("signed_document_url")
-    except Exception:
-        pass
+    if path:
+        try:
+            signed = get_supabase_admin().storage.from_(BUCKET).create_signed_url(path, SIGNED_URL_EXPIRY_SECONDS)
+            row["signed_document_url"] = signed.get("signedURL") or signed.get("signed_url") or row.get("signed_document_url")
+        except Exception:
+            pass
+    recording = row.get("meet_greet_recording_path")
+    if recording:
+        # Short-lived: a participant's voice recording shouldn't sit behind a
+        # week-long link.
+        try:
+            signed = get_supabase_admin().storage.from_(RECORDINGS_BUCKET).create_signed_url(
+                recording, RECORDING_URL_EXPIRY_SECONDS,
+            )
+            row["meet_greet_recording_url"] = signed.get("signedURL") or signed.get("signed_url")
+        except Exception:
+            row["meet_greet_recording_url"] = None
     return row
 
 
@@ -221,7 +241,25 @@ async def _activate_side_effects(existing: dict[str, Any], merged: dict[str, Any
         raise HTTPException(status_code=403, detail=str(exc))
     if not participant:
         raise HTTPException(status_code=502, detail="Could not create the participant record.")
+    _attach_meeting_sessions(existing["id"], existing["organization_id"], participant["id"])
     return {"participant_id": participant["id"], "activated_at": _now()}
+
+
+def _attach_meeting_sessions(intake_id: str, organization_id: str, participant_id: str) -> None:
+    """The Meet & Greet was recorded before this person was a participant.
+    Now they are one, file it (and the consent given for it) on their record
+    so it shows in their plan meetings and counts as consent evidence."""
+    try:
+        (
+            get_supabase_admin().table("plan_meeting_sessions")
+            .update({"participant_id": participant_id})
+            .eq("intake_id", intake_id)
+            .eq("organization_id", organization_id)
+            .is_("participant_id", "null")
+            .execute()
+        )
+    except Exception as exc:  # never block activation on this
+        logger.warning("Could not attach Meet & Greet sessions for intake %s: %s", intake_id, exc)
 
 
 def _format_display_date(value: str | None) -> str | None:
@@ -358,6 +396,64 @@ async def update_intake(
         .execute()
     )
     return _with_fresh_document_url((resp.data or [{**existing, **update}])[0])
+
+
+def get_intake_for_session(intake_id: str, organization_id: str) -> dict[str, Any] | None:
+    rows = (
+        get_supabase_admin().table(TABLE).select("id, full_name, status")
+        .eq("id", intake_id).eq("organization_id", organization_id).limit(1).execute()
+    ).data or []
+    return rows[0] if rows else None
+
+
+def upload_meet_greet_recording(
+    intake_id: str,
+    organization_id: str,
+    session_id: str,
+    file_bytes: bytes,
+    content_type: str,
+) -> dict[str, Any]:
+    """Store the Meet & Greet audio against the intake and its consented
+    recording session."""
+    get_intake(intake_id, organization_id)
+    base_type = (content_type or "").split(";")[0].strip().lower()
+    if base_type not in RECORDING_TYPES:
+        raise HTTPException(status_code=422, detail="Recording must be an audio file.")
+    if not file_bytes:
+        raise HTTPException(status_code=422, detail="The recording is empty.")
+    if len(file_bytes) > MAX_RECORDING_BYTES:
+        raise HTTPException(status_code=413, detail="Recording must be 25MB or smaller.")
+
+    supabase = get_supabase_admin()
+    session = (
+        supabase.table("plan_meeting_sessions").select("id, intake_id, consent_confirmed_at")
+        .eq("id", session_id).eq("organization_id", organization_id).limit(1).execute()
+    ).data or []
+    # Only a session started for this intake, with consent recorded, can
+    # have audio attached — the consent gate is what makes storing it OK.
+    if not session or str(session[0].get("intake_id")) != intake_id or not session[0].get("consent_confirmed_at"):
+        raise HTTPException(status_code=409, detail="Start the recording from this intake's Meet & Greet first.")
+
+    path = f"{organization_id}/{intake_id}/{uuid4().hex}{RECORDING_TYPES[base_type]}"
+    try:
+        supabase.storage.from_(RECORDINGS_BUCKET).upload(path, file_bytes, {"content-type": base_type, "upsert": "true"})
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=internal_error_detail("Recording storage is not configured", exc))
+
+    supabase.table("plan_meeting_sessions").update({"recording_path": path}).eq("id", session_id).execute()
+    result = (
+        supabase.table(TABLE)
+        .update({
+            "meet_greet_recording_path": path,
+            "meet_greet_session_id": session_id,
+            "meet_greet_recording_url": None,
+            "updated_at": _now(),
+        })
+        .eq("id", intake_id)
+        .eq("organization_id", organization_id)
+        .execute()
+    )
+    return _with_fresh_document_url((result.data or [{}])[0])
 
 
 async def upload_signed_document(

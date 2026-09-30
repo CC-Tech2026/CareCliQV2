@@ -41,6 +41,7 @@ const MEETING_TYPE_META: Record<PlanMeetingType, { label: string; abbr: string; 
   check_in:          { label: "Check-In",           abbr: "CI", color: "#0369A1", bg: "rgba(3,105,161,0.08)"  },
   incident_followup: { label: "Incident Follow-Up", abbr: "IF", color: CORAL,     bg: "rgba(190,24,93,0.08)"  },
   goal_review:       { label: "Goal Review",        abbr: "GR", color: "#B45309", bg: "rgba(180,83,9,0.08)"   },
+  meet_greet:        { label: "Meet & Greet",       abbr: "MG", color: "#0369A1", bg: "rgba(3,105,161,0.08)"  },
 };
 
 const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {

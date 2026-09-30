@@ -69,7 +69,9 @@ export type ParticipantIntake = {
   status: IntakeStatus;
   decline_reason?: string;
   withdrawn_reason?: string;
-  meet_greet_recording_url?: string;
+  /** Short-lived signed URL for the stored recording (refreshed on every fetch). */
+  meet_greet_recording_url?: string | null;
+  meet_greet_session_id?: string | null;
   meet_greet_notes?: string;
   signed_document_url?: string;
   signed_document_name?: string;
@@ -129,6 +131,18 @@ export function uploadSignedServiceAgreement(intakeId: string, file: File) {
     method: "POST",
     body: formData,
   });
+}
+
+/** Stores the Meet & Greet audio against the intake's consented recording session. */
+export function uploadMeetGreetRecording(intakeId: string, sessionId: string, audio: Blob) {
+  const formData = new FormData();
+  const ext = audio.type.includes("mp4") ? "m4a" : "webm";
+  formData.append("file", audio, `meet-greet.${ext}`);
+  formData.append("session_id", sessionId);
+  return jsonFetch<ParticipantIntake>(
+    `/api/participant-intakes/${encodeURIComponent(intakeId)}/meet-greet/recording`,
+    { method: "POST", body: formData },
+  );
 }
 
 /** Public referral form (no login). The organisation comes from the link. */
