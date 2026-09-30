@@ -139,6 +139,7 @@ class Requirement:
     credential_types: tuple[str, ...] = ()
     training_keywords: tuple[str, ...] = ()
     induction: bool = False
+    onboarding_doc_types: tuple[str, ...] = ()  # worker_onboarding_documents.document_type
     governance_folders: tuple[str, ...] = ()
     participant_sources: tuple[str, ...] = ()  # "agreement" | "ndis_plan" | "consent"
     # Applicability. None = every audit type.
@@ -200,6 +201,7 @@ REQUIREMENTS: tuple[Requirement, ...] = (
         description="A signed employment contract or offer letter and the position description for the role.",
         source="NDIS Practice Standards — Human resource management",
         evidence_hint="The signed offer letter or contract in the worker's onboarding documents.",
+        onboarding_doc_types=("offer_letter", "service_agreement"),
     ),
     Requirement(
         code="STAFF-INDUCTION", area="staff", scope="worker",
@@ -789,6 +791,7 @@ class OrgData:
     training_completions: list[dict] = field(default_factory=list)
     mandatory_induction_items: set[str] = field(default_factory=set)
     induction_completions: list[dict] = field(default_factory=list)
+    onboarding_documents: list[dict] = field(default_factory=list)
     ndis_plans: list[dict] = field(default_factory=list)  # keyed by patient_id (pre-rename column)
     service_agreements: list[dict] = field(default_factory=list)
     consents: list[dict] = field(default_factory=list)
@@ -835,6 +838,11 @@ def load_org_data(org_id: str) -> OrgData:
     data.induction_completions = _rows(
         sb.table("worker_induction_completions")
         .select("id, worker_id, item_id, completed_at")
+        .eq("organization_id", org_id)
+    )
+    data.onboarding_documents = _rows(
+        sb.table("worker_onboarding_documents")
+        .select("id, worker_id, document_type, title, created_at, signed_at")
         .eq("organization_id", org_id)
     )
     data.ndis_plans = _rows(
@@ -901,6 +909,22 @@ def _auto_evidence(
             for comp in data.training_completions:
                 if str(comp.get("worker_id")) == subject_id and str(comp.get("module_id")) in modules:
                     out.append(training_evidence(comp, modules[str(comp["module_id"])], review_days, today))
+        if req.onboarding_doc_types:
+            for doc in data.onboarding_documents:
+                if str(doc.get("worker_id")) != subject_id or doc.get("document_type") not in req.onboarding_doc_types:
+                    continue
+                signed = doc.get("signed_at")
+                out.append(Evidence(
+                    source_table="worker_onboarding_documents", source_id=str(doc["id"]),
+                    title=doc.get("title") or "Onboarding document", kind="auto",
+                    # Signed through the hiring flow counts; an upload with no
+                    # signing record needs someone to check it.
+                    status="current" if signed else "awaiting_review",
+                    reviewable=not signed,
+                    detail="Signed through CareCliQ onboarding." if signed else "",
+                    date=str(signed or doc.get("created_at") or "")[:10] or None,
+                    vault_category="consent_onboarding",
+                ))
         if req.induction and data.mandatory_induction_items:
             done = [c for c in data.induction_completions
                     if str(c.get("worker_id")) == subject_id and str(c.get("item_id")) in data.mandatory_induction_items]
@@ -1188,6 +1212,20 @@ def governance_doc_in_folders(org_id: str, doc_id: str, folders: tuple[str, ...]
         .is_("deleted_at", "null").limit(1)
     )
     return rows[0] if rows and rows[0].get("folder_key") in folders else None
+
+
+def onboarding_doc_for_worker(
+    org_id: str, doc_id: str, worker_id: Optional[str], types: tuple[str, ...],
+) -> Optional[dict]:
+    if not types or not worker_id:
+        return None
+    rows = _rows(
+        get_supabase_admin().table("worker_onboarding_documents").select("id, title, worker_id, document_type")
+        .eq("organization_id", org_id).eq("id", doc_id).limit(1)
+    )
+    if rows and str(rows[0].get("worker_id")) == str(worker_id) and rows[0].get("document_type") in types:
+        return rows[0]
+    return None
 
 
 def create_link(

@@ -182,15 +182,21 @@ async def post_evidence_review(body: ReviewBody, current_user: dict = Depends(ge
 
     link = ar.find_live_link(org_id, req.code, body.subject_type, body.subject_id, body.source_table, body.source_id)
     if not link:
-        # Only auto-found governance documents can be reviewed without a link.
-        doc = None
+        # Auto-found evidence that needs a person's check can be reviewed
+        # without linking it first: governance documents, and onboarding
+        # documents uploaded without a signing record.
+        doc, category = None, None
         if body.source_table == "governance_documents":
             doc = ar.governance_doc_in_folders(org_id, body.source_id, req.governance_folders)
+            category = (doc or {}).get("folder_key")
+        elif body.source_table == "worker_onboarding_documents":
+            doc = ar.onboarding_doc_for_worker(org_id, body.source_id, body.subject_id, req.onboarding_doc_types)
+            category = "consent_onboarding"
         if not doc:
             raise HTTPException(status_code=404, detail="That evidence isn't linked to this item.")
         link = ar.create_link(
             org_id, user_id, req.code, body.subject_type, body.subject_id,
-            "governance_documents", body.source_id, doc.get("title"), doc.get("folder_key"),
+            body.source_table, body.source_id, doc.get("title"), category,
         )
 
     before = {k: link.get(k) for k in ("review_status", "review_note", "expiry_date")}

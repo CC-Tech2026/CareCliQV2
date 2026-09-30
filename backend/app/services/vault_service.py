@@ -859,6 +859,97 @@ def _render_invoice(org_id: str, document_id: str, exclude_fields: set[str] | No
     return f"{safe}.pdf", pdf
 
 
+HIRE_OFFER_STATUSES = ("awaiting_signatures", "signed", "invited", "expired")
+
+
+def hire_offer_status(hire: dict) -> str:
+    """Offer documents for a hire that hasn't started yet. Drafts aren't
+    listed — nothing has been sent."""
+    if hire.get("status") == "expired":
+        return "expired"
+    return "signed" if hire.get("worker_signed_at") else "pending"
+
+
+def _list_open_hire_offers(org_id: str) -> list[VaultDocument]:
+    """Offer letters and agreements still with a new hire. Once they accept
+    their invite the documents move onto their worker profile (listed from
+    worker_onboarding_documents), so completed hires are skipped here."""
+    try:
+        hires = (
+            get_supabase_admin().table("employee_onboarding")
+            .select("id, full_name, status, worker_signed_at, created_at")
+            .eq("organization_id", org_id)
+            .in_("status", list(HIRE_OFFER_STATUSES))
+            .limit(300)
+            .execute()
+        ).data or []
+        if not hires:
+            return []
+        by_id = {h["id"]: h for h in hires}
+        rows = (
+            get_supabase_admin().table("employee_onboarding_documents")
+            .select("id, onboarding_id, title, created_at, file_path")
+            .in_("onboarding_id", list(by_id))
+            .execute()
+        ).data or []
+    except Exception:
+        return []
+    out: list[VaultDocument] = []
+    for row in rows:
+        hire = by_id.get(row.get("onboarding_id"))
+        if not hire:
+            continue
+        out.append(VaultDocument(
+            id=row["id"],
+            category="consent_onboarding",
+            folder_label=CATEGORY_META["consent_onboarding"]["label"],
+            title=row.get("title") or "Offer letter",
+            person_name=hire.get("full_name") or "New hire",
+            person_type="Worker",
+            date=str(hire.get("worker_signed_at") or row.get("created_at") or ""),
+            status=hire_offer_status(hire),
+            source_table="employee_onboarding_documents",
+            source_id=row["id"],
+            has_stored_file=bool(row.get("file_path")),
+        ))
+    return out
+
+
+AGREEMENT_STATUS = {"signed": "signed", "expired": "expired", "unsigned": "pending"}
+
+
+def _list_participant_agreements(org_id: str, patients: dict[str, str]) -> list[VaultDocument]:
+    """Each NDIS plan's service agreement, with its signing status."""
+    try:
+        rows = (
+            get_supabase_admin().table("ndis_plans")
+            .select("id, patient_id, plan_number, plan_start, status, agreement_status, agreement_signed_at")
+            .eq("organization_id", org_id)
+            .order("plan_start", desc=True)
+            .limit(500)
+            .execute()
+        ).data or []
+    except Exception:
+        return []
+    return [
+        VaultDocument(
+            id=f"agreement-{row['id']}",
+            category="consent_onboarding",
+            folder_label=CATEGORY_META["consent_onboarding"]["label"],
+            title="Service agreement",
+            person_name=patients.get(row.get("patient_id") or "", "Unknown participant"),
+            person_type="Participant",
+            date=str(row.get("agreement_signed_at") or row.get("plan_start") or ""),
+            status=AGREEMENT_STATUS.get(row.get("agreement_status") or "unsigned", "pending"),
+            source_table="ndis_plans",
+            source_id=row["id"],
+            has_stored_file=False,
+        )
+        for row in rows
+        if str(row.get("status") or "").lower() not in ("draft", "cancelled")
+    ]
+
+
 def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
     docs: list[VaultDocument] = []
     workers = _user_name_map(org_id)
@@ -869,7 +960,7 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
         resp = (
             get_supabase_admin()
             .table("worker_onboarding_documents")
-            .select("id, worker_id, document_type, title, created_at")
+            .select("id, worker_id, document_type, title, created_at, signed_at")
             .eq("organization_id", org_id)
             .order("created_at", desc=True)
             .limit(300)
@@ -884,8 +975,10 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
                     title=row.get("title") or "Onboarding document",
                     person_name=workers.get(row.get("worker_id") or "", "Unknown worker"),
                     person_type="Worker",
-                    date=str(row.get("created_at") or ""),
-                    status="on_file",
+                    date=str(row.get("signed_at") or row.get("created_at") or ""),
+                    # Signed through the hiring flow, or uploaded with no
+                    # signing record (we can't claim it was signed).
+                    status="signed" if row.get("signed_at") else "on_file",
                     source_table="worker_onboarding_documents",
                     source_id=row["id"],
                     has_stored_file=True,
@@ -893,6 +986,9 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
             )
     except Exception:
         pass
+
+    docs.extend(_list_open_hire_offers(org_id))
+    docs.extend(_list_participant_agreements(org_id, patients))
 
     try:
         resp = (
@@ -940,11 +1036,11 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
                     id=row["id"],
                     category="consent_onboarding",
                     folder_label=CATEGORY_META["consent_onboarding"]["label"],
-                    title="Plan meeting consent",
+                    title="Consent to record",
                     person_name=patients.get(row.get("participant_id") or "", "Unknown participant"),
                     person_type="Participant",
                     date=str(row.get("consent_confirmed_at") or ""),
-                    status="on_file",
+                    status="signed",
                     source_table="plan_meeting_sessions",
                     source_id=row["id"],
                     has_stored_file=False,
@@ -957,6 +1053,27 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
 
 
 def _render_consent_onboarding(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
+    if document_id.startswith("agreement-"):
+        return _render_plan_agreement(org_id, document_id.removeprefix("agreement-"), exclude_fields)
+
+    hire_doc = (
+        get_supabase_admin().table("employee_onboarding_documents")
+        .select("id, onboarding_id, title, file_path")
+        .eq("id", document_id).limit(1).execute()
+    ).data or []
+    if hire_doc and hire_doc[0].get("file_path"):
+        # employee_onboarding_documents has no organization_id — check the hire's.
+        hire = (
+            get_supabase_admin().table("employee_onboarding").select("organization_id")
+            .eq("id", hire_doc[0]["onboarding_id"]).limit(1).execute()
+        ).data or []
+        if hire and hire[0].get("organization_id") == org_id:
+            row = hire_doc[0]
+            data = _download_stored_file("worker-onboarding-files", row["file_path"])
+            ext = row["file_path"].rsplit(".", 1)[-1] if "." in row["file_path"] else "pdf"
+            safe = re.sub(r"[^A-Za-z0-9._-]+", "-", row.get("title") or "offer-document").strip("-")
+            return f"{safe}.{ext}", data
+
     resp = (
         get_supabase_admin()
         .table("worker_onboarding_documents")
@@ -1010,6 +1127,27 @@ def _render_consent_onboarding(org_id: str, document_id: str, exclude_fields: se
     ]
     pdf = _render_record_pdf(org_id, "Plan Meeting Consent Record", meta, exclude=exclude_fields)
     return f"consent-{document_id[:8]}.pdf", pdf
+
+
+def _render_plan_agreement(org_id: str, plan_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
+    rows = (
+        get_supabase_admin().table("ndis_plans")
+        .select("id, patient_id, plan_number, plan_start, plan_end, agreement_status, agreement_signed_at")
+        .eq("id", plan_id).eq("organization_id", org_id).limit(1).execute()
+    ).data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Service agreement not found.")
+    row = rows[0]
+    patients = _patient_name_map(org_id)
+    meta = [
+        ("Participant", patients.get(row.get("patient_id") or "", "Unknown participant")),
+        ("NDIS plan", row.get("plan_number") or "—"),
+        ("Plan period", f"{row.get('plan_start') or '—'} to {row.get('plan_end') or '—'}"),
+        ("Agreement status", (row.get("agreement_status") or "unsigned").capitalize()),
+        ("Signed", str(row.get("agreement_signed_at") or "")[:10] or "—"),
+    ]
+    pdf = _render_record_pdf(org_id, "Service Agreement Record", meta, exclude=exclude_fields)
+    return f"service-agreement-{plan_id[:8]}.pdf", pdf
 
 
 def _list_audit_packs(org_id: str) -> list[VaultDocument]:

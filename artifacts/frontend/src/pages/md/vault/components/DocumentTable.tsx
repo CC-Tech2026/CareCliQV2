@@ -17,6 +17,8 @@ const STATUS_TONE: Record<string, { bg: string; fg: string }> = {
   withheld: { bg: "var(--cc-status-danger-bg)", fg: "var(--cc-status-danger)" },
   administration_error: { bg: "var(--cc-status-danger-bg)", fg: "var(--cc-status-danger)" },
   cancelled: { bg: "var(--cc-status-danger-bg)", fg: "var(--cc-status-danger)" },
+  // Stored, but with no signing record — neutral rather than a green "all good".
+  on_file: { bg: "var(--cc-soft)", fg: "var(--cc-muted)" },
 };
 
 function statusTone(status: string) {

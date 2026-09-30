@@ -474,6 +474,13 @@ def migrate_documents_to_worker(onboarding_id: str, worker_id: str, organization
         if _is_missing_schema(exc):
             return
         raise
+    # Carry the worker's signature across, so the vault can show these as
+    # signed rather than just "on file".
+    hire_rows = (
+        supabase.table("employee_onboarding").select("worker_signed_at")
+        .eq("id", onboarding_id).limit(1).execute()
+    ).data or []
+    signed_at = (hire_rows[0] if hire_rows else {}).get("worker_signed_at")
     for doc in docs.data or []:
         supabase.table("worker_onboarding_documents").insert({
             "id": str(uuid4()),
@@ -484,6 +491,8 @@ def migrate_documents_to_worker(onboarding_id: str, worker_id: str, organization
             "notes": doc.get("notes"),
             "file_path": doc.get("file_path"),
             "file_url": doc.get("file_url"),
+            "onboarding_id": onboarding_id,
+            "signed_at": signed_at,
         }).execute()
     supabase.table("employee_onboarding").update({
         "status": "completed",
