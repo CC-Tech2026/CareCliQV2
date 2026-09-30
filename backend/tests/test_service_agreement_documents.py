@@ -157,7 +157,7 @@ def test_onboarding_agreement_is_recorded_once():
         "id": "i1", "organization_id": ORG, "provider_signed_at": "2026-09-30T01:00:00Z",
         "family_signed_at": "2026-09-30T01:05:00Z", "family_signed_name": "Liam Carter",
         "provider_signed_name": "Maria", "plan_start_date": "2026-10-01", "plan_end_date": "2027-09-30",
-        "signed_document_path": "org-1/i1/x.pdf", "web_intake": {"funding_type": "plan_managed", "plan_manager_org": "Clearview"},
+        "service_agreement_document_path": "org-1/i1/x.pdf", "web_intake": {"funding_type": "plan_managed", "plan_manager_org": "Clearview"},
     }
     client = MagicMock()
     client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[])

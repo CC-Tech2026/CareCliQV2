@@ -66,7 +66,9 @@ def _fmt_date(value: Any) -> Optional[str]:
     if not value:
         return None
     try:
-        return date.fromisoformat(str(value)[:10]).strftime("%-d %b %Y")
+        # %-d is glibc-only (Windows raises on it), so build the day by hand.
+        parsed = date.fromisoformat(str(value)[:10])
+        return f"{parsed.day} {parsed:%b %Y}"
     except ValueError:
         return str(value)
 
@@ -451,8 +453,8 @@ def from_intake(intake: dict[str, Any], participant_id: str) -> Optional[dict[st
             "participant_signed_name": intake.get("family_signed_name"),
             "participant_signed_at": intake.get("family_signed_at"),
             "participant_signature_png": intake.get("family_signature_png"),
-            "document_bucket": "participant-intake-files" if intake.get("signed_document_path") else None,
-            "document_path": intake.get("signed_document_path"),
+            "document_bucket": "participant-intake-files" if intake.get("service_agreement_document_path") else None,
+            "document_path": intake.get("service_agreement_document_path"),
         }, org_id)
         if intake.get("family_signed_at"):
             mark_plan_agreement_signed(org_id, participant_id, start, intake.get("plan_end_date"), intake["family_signed_at"])
