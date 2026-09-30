@@ -791,6 +791,11 @@ async def cancel_invoice(invoice_id: str, user: dict) -> dict:
     if existing.get("status") == "cancelled":
         return existing
     check_transition(existing.get("status") or "draft", "cancelled")
+    if existing.get("claim_batch_id"):
+        raise HTTPException(
+            status_code=409,
+            detail="This invoice has been claimed from the NDIA. If the claim was rejected, mark it rejected in NDIA claims first.",
+        )
     payload = {
         "status": "cancelled",
         "cancelled_at": _now_iso(),

@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import Optional, Literal
 from datetime import date
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 
 from ..core.security import get_current_user
 from ..api.security import require_recent_reauth
-from ..services import billing_service, audit_service
+from ..services import billing_service, audit_service, ndia_claim_service
 
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -178,3 +178,53 @@ async def cancel_invoice(invoice_id: str, request: Request, current_user: dict =
 async def revenue_report(current_user: dict = Depends(get_current_user)):
     """Monthly revenue summary for the Support Coordinator invoicing dashboard."""
     return await billing_service.get_revenue_report(current_user)
+
+
+# ── NDIA bulk claims ─────────────────────────────────────────────────────
+
+
+class ClaimBatchCreate(BaseModel):
+    invoice_ids: list[str] = Field(min_length=1, max_length=500)
+
+
+class ClaimsPaid(BaseModel):
+    invoice_ids: list[str] = Field(min_length=1, max_length=500)
+    payment_date: Optional[date] = None
+    reference: Optional[str] = Field(default=None, max_length=100)
+
+
+class ClaimRejected(BaseModel):
+    reason: str = Field(min_length=5, max_length=500)
+
+
+@router.get("/claims")
+async def list_ndia_claims(current_user: dict = Depends(get_current_user)):
+    return ndia_claim_service.list_claims(current_user)
+
+
+@router.post("/claims/batches", status_code=201)
+async def submit_ndia_claim_batch(body: ClaimBatchCreate, request: Request, current_user: dict = Depends(get_current_user)):
+    require_recent_reauth(request, current_user)
+    return await ndia_claim_service.submit_batch(current_user, body.invoice_ids)
+
+
+@router.get("/claims/batches/{batch_id}/file")
+async def download_ndia_claim_file(batch_id: str, current_user: dict = Depends(get_current_user)):
+    name, data = ndia_claim_service.batch_file(current_user, batch_id)
+    return Response(
+        content=data, media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"},
+    )
+
+
+@router.post("/claims/paid")
+async def mark_ndia_claims_paid(body: ClaimsPaid, request: Request, current_user: dict = Depends(get_current_user)):
+    require_recent_reauth(request, current_user)
+    return await ndia_claim_service.mark_paid(
+        current_user, body.invoice_ids, body.payment_date.isoformat() if body.payment_date else None, body.reference,
+    )
+
+
+@router.post("/claims/{invoice_id}/rejected")
+async def ndia_claim_rejected(invoice_id: str, body: ClaimRejected, current_user: dict = Depends(get_current_user)):
+    return await ndia_claim_service.return_to_ready(current_user, invoice_id, body.reason)

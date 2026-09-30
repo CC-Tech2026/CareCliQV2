@@ -34,6 +34,7 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { SectionInfo } from "@/components/ui/section-info";
 import { useReAuth } from "@/hooks/useReAuth";
+import { NdiaClaimsPanel } from "@/components/billing/NdiaClaimsPanel";
 import { Button } from "@/components/ui/button";
 import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import { Input } from "@/components/ui/input";
@@ -328,8 +329,13 @@ export default function Billing() {
     setWorkspace("reports");
   };
   const [workspace, setWorkspace] = useState<
-    "invoices" | "ready" | "checks" | "reports" | "pricing"
-  >("invoices");
+    "invoices" | "claims" | "ready" | "checks" | "reports" | "pricing"
+  >(() =>
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("workspace") === "claims"
+      ? "claims"
+      : "invoices",
+  );
   const [readySearch, setReadySearch] = useState("");
   const [preparingDraft, setPreparingDraft] = useState(false);
   const [invoicePage, setInvoicePage] = useState(1);
@@ -519,8 +525,10 @@ export default function Billing() {
     [invoices],
   );
 
-  async function loadBilling() {
-    setLoading(true);
+  /** silent: refresh the list without swapping the page for a spinner
+   * (used after actions taken inside a workspace, so it keeps its state). */
+  async function loadBilling({ silent = false }: { silent?: boolean } = {}) {
+    if (!silent) setLoading(true);
     setLoadError(null);
     try {
       const r = await apiFetch("/api/billing/invoices");
@@ -911,6 +919,7 @@ export default function Billing() {
           {(
             [
               ["invoices", "Invoices"],
+              ["claims", "NDIA claims"],
               ["ready", "Ready to invoice"],
               ["checks", "Check completed shifts"],
               ["reports", "Revenue report"],
@@ -937,6 +946,7 @@ export default function Billing() {
               </button>
             ))}
         </nav>
+        {workspace === "claims" && <NdiaClaimsPanel onChanged={() => void loadBilling({ silent: true })} />}
         {workspace === "ready" && readyToInvoiceQuery.isLoading && (
           <p role="status" className="py-6 text-sm text-cc-muted">
             Loading completed shifts...
