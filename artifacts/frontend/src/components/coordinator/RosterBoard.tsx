@@ -40,6 +40,7 @@ import { useToast } from "@/hooks/use-toast";
 import { UnassignedShiftPanel } from "@/components/coordinator/UnassignedShiftPanel";
 import { ConflictModal, type PendingDrop } from "@/components/coordinator/ConflictModal";
 import { ZoneLabel } from "@/components/branches/ZoneLabel";
+import { ShiftHoverCard, shiftLiveStatus } from "./ShiftHoverCard";
 import { appLocalDateKey, formatAppTime } from "@/lib/datetime";
 
 const PLUM   = "var(--cc-plum)";
@@ -96,7 +97,9 @@ function isBlackout(date: Date, blackouts: BlackoutDate[] = []): boolean {
 }
 
 // ── Draggable shift chip (unassigned tray + assigned cells) ──────────────────
-function ShiftCard({ shift, dimmed = false, onClick }: { shift: CoordinatorShiftRecord; dimmed?: boolean; onClick?: () => void }) {
+function ShiftCard({
+  shift, dimmed = false, onClick, colorBy = "status",
+}: { shift: CoordinatorShiftRecord; dimmed?: boolean; onClick?: () => void; colorBy?: "status" | "worker" }) {
   const { translate } = useAccessibility();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: shift.id,
@@ -105,7 +108,48 @@ function ShiftCard({ shift, dimmed = false, onClick }: { shift: CoordinatorShift
   const clrs = statusColors(shift.status);
   const start = parseStart(shift);
   const end = shift.scheduled_end ? parseISO(shift.scheduled_end) : null;
+
+  if (colorBy === "worker") {
+    // One colour per worker so a row reads as that person's week; status is
+    // a dot (on shift / not clocked in) and the hover card has the detail.
+    const tint = avatarColor(shift.worker_name || "Worker");
+    const live = shiftLiveStatus(shift);
+    const dot = live === "on_shift" ? "var(--cc-status-success)" : live === "late" ? "var(--cc-status-danger)" : null;
+    return (
+      <ShiftHoverCard shift={shift}>
+        <div
+          ref={setNodeRef}
+          style={{
+            transform: CSS.Translate.toString(transform),
+            opacity: isDragging ? 0.25 : dimmed || live === "cancelled" ? 0.5 : 1,
+            background: tint.bg,
+            boxShadow: live === "on_shift" ? `inset 0 0 0 1.5px ${tint.fg}` : undefined,
+            cursor: onClick ? "pointer" : "grab",
+          }}
+          {...listeners}
+          {...attributes}
+          onClick={onClick}
+          className="select-none rounded-lg px-2.5 py-2 transition-shadow hover:shadow-md"
+        >
+          <p
+            className="flex items-center gap-1.5 text-[11.5px] font-bold leading-tight"
+            style={{ color: "var(--cc-text)", textDecoration: live === "cancelled" ? "line-through" : undefined }}
+          >
+            {dot && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: dot }} />}
+            {start ? `${formatAppTime(shift.scheduled_start!, shift.timezone)}${end ? ` – ${formatAppTime(shift.scheduled_end!, shift.timezone)}` : ""}` : ""}
+            {start && <ZoneLabel tz={shift.timezone} at={shift.scheduled_start!} />}
+          </p>
+          <p className="mt-0.5 flex items-center gap-1 truncate text-[11px]" style={{ color: tint.fg }}>
+            {shift.is_shadow_shift && <Users size={10} aria-label="Shadow shift" className="shrink-0" />}
+            <span className="truncate">{shift.participant_name || translate("common.participant")}</span>
+          </p>
+        </div>
+      </ShiftHoverCard>
+    );
+  }
+
   return (
+    <ShiftHoverCard shift={shift}>
     <div
       ref={setNodeRef}
       style={{
@@ -141,6 +185,7 @@ function ShiftCard({ shift, dimmed = false, onClick }: { shift: CoordinatorShift
         )}
       </div>
     </div>
+    </ShiftHoverCard>
   );
 }
 
@@ -255,9 +300,16 @@ interface RosterBoardProps {
   loadingAvail: boolean;
   onCellClick: (worker: WorkerStats, dateKey: string) => void;
   onRefresh: () => void;
+  /** "worker" gives each worker's shifts their own colour (Master Schedule). */
+  colorBy?: "status" | "worker";
+  /** False hides the "+" add-shift buttons, for viewers who can't create shifts. */
+  allowCreate?: boolean;
 }
 
-export function RosterBoard({ weekStart, shifts, workers, availMap, loadingAvail, onCellClick, onRefresh }: RosterBoardProps) {
+export function RosterBoard({
+  weekStart, shifts, workers, availMap, loadingAvail, onCellClick, onRefresh,
+  colorBy = "status", allowCreate = true,
+}: RosterBoardProps) {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -468,7 +520,7 @@ export function RosterBoard({ weekStart, shifts, workers, availMap, loadingAvail
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {unassigned.map((s) => <div key={s.id} className="w-52"><ShiftCard shift={s} onClick={() => setDetailShift(s)} /></div>)}
+              {unassigned.map((s) => <div key={s.id} className="w-52"><ShiftCard shift={s} colorBy={colorBy} onClick={() => setDetailShift(s)} /></div>)}
             </div>
           )}
         </div>
@@ -550,6 +602,10 @@ export function RosterBoard({ weekStart, shifts, workers, availMap, loadingAvail
                       else if (!isWorkDay) { cellState = "unavailable"; cellBg = "#F8FAFC"; }
                       else if (hasShift) { cellState = "assigned"; cellBg = isToday(d) ? "#FAFAFE" : "var(--cc-bg)"; }
                       else { cellState = "available"; cellBg = isToday(d) ? "#F0FFF4" : "#F7FEF9"; }
+                      // Read-only boards don't need "free slot" green; keep today's column visible instead.
+                      if (!allowCreate && (cellState === "available" || cellState === "assigned")) {
+                        cellBg = isToday(d) ? "rgba(232,69,122,0.05)" : "var(--cc-bg)";
+                      }
 
                       const dropDisabled = activeDayIso != null && activeDayIso !== dayKey;
 
@@ -571,7 +627,8 @@ export function RosterBoard({ weekStart, shifts, workers, availMap, loadingAvail
                               <MinusCircle size={12} className="opacity-25" style={{ color: MUTED }} />
                             </div>
                           )}
-                          {cellState === "available" && (
+                          {cellState === "available" && !allowCreate && <div className="h-10" />}
+                          {cellState === "available" && allowCreate && (
                             <button
                               type="button"
                               title={translateParams("coordinator.rostering.assignShiftTo", { worker: worker.full_name, date: format(d, "d MMM") })}
@@ -585,7 +642,7 @@ export function RosterBoard({ weekStart, shifts, workers, availMap, loadingAvail
                             <div className="space-y-1">
                               {dayShifts.map((s) => (
                                 <div key={s.id} className="relative group/card">
-                                  <ShiftCard shift={s} />
+                                  <ShiftCard shift={s} colorBy={colorBy} />
                                   <button
                                     onClick={() => handleUnassignClick(s)}
                                     className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full border bg-white shadow group-hover/card:flex"
@@ -597,14 +654,14 @@ export function RosterBoard({ weekStart, shifts, workers, availMap, loadingAvail
                                   </button>
                                 </div>
                               ))}
-                              <button
+                              {allowCreate && <button
                                 type="button"
                                 title={translateParams("coordinator.rostering.addAnotherShift", { worker: worker.full_name, date: format(d, "d MMM") })}
                                 onClick={() => onCellClick(worker, dayKey)}
                                 className="flex h-5 w-full items-center justify-center rounded border border-dashed border-violet-200 hover:border-violet-400 hover:bg-violet-50 transition-all opacity-0 hover:opacity-100 focus:opacity-100"
                               >
                                 <Plus size={9} style={{ color: PLUM }} />
-                              </button>
+                              </button>}
                             </div>
                           )}
                         </DayCell>

@@ -142,6 +142,14 @@ export function appLocalDateKey(iso: string, tz?: string | null): string {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
+/** Minutes since local midnight in the branch zone — for placing a shift on a
+ * day timeline without the viewer's own zone shifting it. */
+export function appMinutesOfDay(iso: string, tz?: string | null): number {
+  const p = tzParts(iso, resolveZone(tz));
+  // hour12:false renders midnight as "24" in some engines.
+  return (Number(p.hour) % 24) * 60 + Number(p.minute);
+}
+
 /** UTC ISO → value for `<input type="datetime-local">` (branch local) */
 export function utcIsoToDatetimeLocalValue(iso: string, tz?: string | null): string {
   const p = tzParts(iso, resolveZone(tz));

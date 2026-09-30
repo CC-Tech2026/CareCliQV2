@@ -34,6 +34,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import CoordinatorLivePage from "@/pages/coordinator-live";
 import { MonthGrid } from "@/pages/coordinator-rostering";
 import { RosterBoard } from "@/components/coordinator/RosterBoard";
+import { DayTimeline } from "@/components/coordinator/DayTimeline";
 import { SectionInfo } from "@/components/ui/section-info";
 import {
   getCoordinatorWorkerStats,
@@ -72,7 +73,7 @@ const DANGER_SOFT = "var(--cc-status-danger-bg)";
 const UNASSIGNED_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
 
 type Bucket = "active" | "scheduled" | "completed" | "cancelled" | "unassigned";
-type ViewMode = "week" | "month" | "list" | "live";
+type ViewMode = "day" | "week" | "month" | "list" | "live";
 type AvailabilityMap = Record<
   string,
   WorkerAvailability & { blackout_dates?: BlackoutDate[] }
@@ -99,6 +100,7 @@ const STATUS_FILTERS: Array<{ key: Bucket | "all"; label: string }> = [
 ];
 
 const VIEW_TABS: Array<{ id: ViewMode; label: string }> = [
+  { id: "day", label: "Day" },
   { id: "week", label: "Week" },
   { id: "month", label: "Month" },
   { id: "list", label: "List" },
@@ -269,9 +271,20 @@ export default function MDSchedulePage() {
   // Month view spans a wider range than the week board, so the query range
   // follows whichever period is actually on screen — same approach as the
   // coordinator's own rostering page.
+  // Day view fetches a day either side: shifts are bucketed by their own
+  // branch's local day, which can differ from the viewer's.
   const rangeStart =
-    viewMode === "month" ? startOfMonth(currentMonth) : weekStart;
-  const rangeEnd = viewMode === "month" ? endOfMonth(currentMonth) : weekEnd;
+    viewMode === "month"
+      ? startOfMonth(currentMonth)
+      : viewMode === "day"
+        ? addDays(selectedDay, -1)
+        : weekStart;
+  const rangeEnd =
+    viewMode === "month"
+      ? endOfMonth(currentMonth)
+      : viewMode === "day"
+        ? addDays(selectedDay, 1)
+        : weekEnd;
   const startKey = format(rangeStart, "yyyy-MM-dd");
   const endKey = format(rangeEnd, "yyyy-MM-dd");
 
@@ -301,7 +314,7 @@ export default function MDSchedulePage() {
     {
       queryFn: getCoordinatorWorkerStats,
       staleTime: 60_000,
-      enabled: viewMode === "week",
+      enabled: viewMode === "week" || viewMode === "day",
     },
   );
   const workers = workersQuery.data ?? [];
@@ -366,7 +379,8 @@ export default function MDSchedulePage() {
     return { total, counts, perDay, cancellationRate, busiestCount };
   }, [searchedShifts, days]);
 
-  const periodWord = viewMode === "month" ? "this month" : "this week";
+  const periodWord =
+    viewMode === "month" ? "this month" : viewMode === "day" ? "today" : "this week";
 
   const attentionItems = useMemo(() => {
     if (shifts === null) return [];
@@ -465,9 +479,18 @@ export default function MDSchedulePage() {
   const periodLabel =
     viewMode === "month"
       ? format(currentMonth, "MMMM yyyy")
-      : `${format(weekStart, "d MMM")} - ${format(weekEnd, "d MMM")}`;
+      : viewMode === "day"
+        ? format(selectedDay, "EEE d MMM yyyy")
+        : `${format(weekStart, "d MMM")} – ${format(weekEnd, "d MMM yyyy")}`;
 
+  const moveDay = (delta: number) => {
+    const next = addDays(selectedDay, delta);
+    setSelectedDay(next);
+    setWeekStart(startOfWeek(next, { weekStartsOn: 1 }));
+    setCurrentMonth(next);
+  };
   const handlePrev = () => {
+    if (viewMode === "day") return moveDay(-1);
     if (viewMode === "month") {
       const next = subMonths(currentMonth, 1);
       setCurrentMonth(next);
@@ -479,6 +502,7 @@ export default function MDSchedulePage() {
     }
   };
   const handleNext = () => {
+    if (viewMode === "day") return moveDay(1);
     if (viewMode === "month") {
       const next = addMonths(currentMonth, 1);
       setCurrentMonth(next);
@@ -605,7 +629,7 @@ export default function MDSchedulePage() {
                   onClick={() => {
                     setViewMode(v.id);
                     if (v.id === "month") setCurrentMonth(selectedDay);
-                    else if (viewMode === "month")
+                    else if (viewMode === "month" || viewMode === "day")
                       setWeekStart(
                         startOfWeek(selectedDay, { weekStartsOn: 1 }),
                       );
@@ -1045,6 +1069,8 @@ export default function MDSchedulePage() {
                       workers={workers}
                       availMap={availMap}
                       loadingAvail={loadingAvail}
+                      colorBy="worker"
+                      allowCreate={false}
                       onCellClick={() => {
                         /* Creating new shifts stays with coordinators. */
                       }}
@@ -1055,6 +1081,19 @@ export default function MDSchedulePage() {
                   </>
                 )}
               </>
+            )}
+
+            {viewMode === "day" && (!error || shifts !== null) && (
+              shifts === null ? (
+                <div className="h-72 animate-pulse rounded-2xl" style={{ background: SOFT }} />
+              ) : (
+                <DayTimeline
+                  dayKey={format(selectedDay, "yyyy-MM-dd")}
+                  shifts={filteredShiftList}
+                  workers={workers}
+                  onSelect={(s) => setActiveShiftId(s.id)}
+                />
+              )
             )}
 
             {viewMode === "month" && (!error || shifts !== null) && (
