@@ -607,6 +607,30 @@ async def test_portal_invoices_hide_drafts_void_and_cancelled(db):
     assert sorted(r["status"] for r in rows) == ["issued", "overdue", "paid", "sent"]
 
 
+@pytest.mark.asyncio
+async def test_portal_agreements_hide_drafts_and_signing_internals(db):
+    signing_internals = {
+        "sign_token_hash": "abc", "signing_code_hash": "def", "signing_code_attempts": 2,
+        "participant_signed_ip": "203.0.113.9", "participant_signed_user_agent": "Mozilla",
+        "signer_email": "nominee@example.com", "provider_signature_png": "data:image/png;base64,x",
+        "service_agreement_supports": [{"negotiated_rate": 70}],
+    }
+    agreements = [
+        {"id": "sa-draft", "status": "draft", "start_date": "2026-10-01", "plan_management_type": "plan-managed", **signing_internals},
+        {"id": "sa-pending", "status": "pending_signature", "start_date": "2026-10-01",
+         "plan_management_type": "plan-managed", "agreement_number": "SA-0002", **signing_internals},
+        {"id": "sa-active", "status": "active", "start_date": "2026-07-01", "end_date": "2027-06-30",
+         "plan_management_type": "self-managed", "participant_signed_at": "2026-06-30T01:00:00Z", **signing_internals},
+    ]
+    with patch.object(participant_portal.service_agreement_service, "list_service_agreements", return_value=agreements), \
+         patch.object(participant_portal, "_get_my_signed_intake_document", return_value=None):
+        body = await participant_portal.list_my_service_agreements(participant_id=LILY, current_user=EMMA)
+    assert [a["id"] for a in body["agreements"]] == ["sa-pending", "sa-active"]
+    for agreement in body["agreements"]:
+        assert set(agreement) <= set(participant_portal._AGREEMENT_PORTAL_FIELDS)
+    assert body["agreements"][1]["end_date"] == "2027-06-30"
+
+
 def test_front_door_allows_only_the_self_settings_endpoints():
     from backend.app.core.security import participant_may_call
 

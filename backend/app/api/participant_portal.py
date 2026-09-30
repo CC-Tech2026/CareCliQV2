@@ -62,6 +62,15 @@ _INTAKE_PROFILE_FIELDS = (
 # Invoices a participant may see — drafts are the provider's work in
 # progress, and void/cancelled ones were never (or are no longer) owed.
 _PORTAL_INVOICE_STATUSES = ("issued", "sent", "overdue", "paid")
+# Agreements a participant may see — same reasoning as invoices: a draft is
+# the provider's work in progress. Only the fields the Documents page shows
+# go out; the row also holds e-signing token/code hashes and the signer's
+# IP address and browser, which never leave the server.
+_PORTAL_HIDDEN_AGREEMENT_STATUSES = ("draft",)
+_AGREEMENT_PORTAL_FIELDS = (
+    "id", "agreement_number", "plan_management_type", "start_date", "end_date",
+    "status", "participant_signed_at",
+)
 
 _ROLE_LABELS = {
     "support_worker": "Support worker",
@@ -351,8 +360,13 @@ async def list_my_service_agreements(participant_id: str = Query(...), current_u
     org_id = _require_org(current_user)
     supabase = get_supabase_admin()
     await _log_view(current_user, participant_id, "service_agreement")
+    agreements = service_agreement_service.list_service_agreements(participant_id, org_id)
     return {
-        "agreements": service_agreement_service.list_service_agreements(participant_id, org_id),
+        "agreements": [
+            _pick(a, _AGREEMENT_PORTAL_FIELDS)
+            for a in agreements
+            if a.get("status") not in _PORTAL_HIDDEN_AGREEMENT_STATUSES
+        ],
         "signed_document": _get_my_signed_intake_document(supabase, participant_id, org_id),
     }
 
