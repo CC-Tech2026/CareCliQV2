@@ -28,6 +28,7 @@ import {
   Phone,
   Mail,
   LogIn,
+  MapPin,
   Clock3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -1239,6 +1240,16 @@ export default function CoordinatorLivePage({
         setRecentClockIns(changed.map((s) => s.id));
         changed.forEach((s) =>
           toast({
+            variant: "live",
+            icon: (
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white">
+                {s.clock_in_verified && s.clock_in_method === "gps" ? (
+                  <MapPin size={18} aria-hidden />
+                ) : (
+                  <LogIn size={18} aria-hidden />
+                )}
+              </span>
+            ),
             title: translateParams("schedule.clockInToast", {
               worker: s.worker_name || translate("common.worker"),
             }),

@@ -193,11 +193,20 @@ export function DocumentTable({
               </div>
               <FileText size={15} className="mt-0.5 shrink-0" style={{ color: "var(--cc-muted)" }} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>
-                  {doc.title}
+                <p className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>
+                  <span className="truncate">{doc.title}</span>
+                  {doc.reference && (
+                    <span
+                      className="shrink-0 rounded px-1.5 py-px font-mono text-[10px] font-semibold"
+                      style={{ background: "var(--cc-soft)", color: "var(--cc-muted)" }}
+                    >
+                      {doc.reference}
+                    </span>
+                  )}
                 </p>
                 <p className="truncate text-[11px]" style={{ color: "var(--cc-muted)" }}>
                   {doc.person_name}
+                  {doc.detail ? ` · ${doc.detail}` : ""}
                   {showCategoryColumn ? ` · ${doc.folder_label}` : ""}
                 </p>
                 <div className="mt-1.5 flex items-center gap-1.5">

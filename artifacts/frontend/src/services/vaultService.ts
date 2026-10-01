@@ -16,6 +16,10 @@ export interface VaultDocument {
    * draft — lets the UI offer "Edit" (reopen the authoring sheet) instead
    * of only "Upload new version". Absent for raw file uploads. */
   policy_document_id?: string | null;
+  /** Short human reference, e.g. "SN-1A2B3C4D", for records that share a title. */
+  reference?: string | null;
+  /** One line of context: who, when, how long. */
+  detail?: string | null;
 }
 
 export interface VaultFolder {

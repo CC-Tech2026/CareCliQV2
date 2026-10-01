@@ -53,6 +53,10 @@ class VaultDocument(TypedDict):
     # draft (as opposed to a raw file upload) — lets the vault UI offer
     # "Edit" (reopen the authoring sheet) instead of only "Upload new version".
     policy_document_id: NotRequired[str | None]
+    # A short human reference ("SN-1A2B3C4D") and one line of context (who,
+    # when, how long) so rows that share a title can be told apart.
+    reference: NotRequired[str | None]
+    detail: NotRequired[str | None]
 
 
 GOVERNANCE_FOLDER_KEYS = (
@@ -389,11 +393,48 @@ def _minimal_record_pdf(title: str, meta_rows: list[tuple[str, str]], sections: 
 
 # ── Per-category list/render pairs ─────────────────────────────────────────
 
+def _humanise(value: str | None) -> str:
+    """"support_work" -> "Support work"."""
+    text = (value or "").replace("_", " ").strip()
+    return text[:1].upper() + text[1:].lower() if text else ""
+
+
+def session_reference(session_id: str) -> str:
+    return "SN-" + str(session_id).replace("-", "")[:8].upper()
+
+
+def _format_minutes(minutes: Any) -> str | None:
+    try:
+        total = int(round(float(minutes)))
+    except (TypeError, ValueError):
+        return None
+    if total <= 0:
+        return None
+    h, m = divmod(total, 60)
+    return f"{h}h {m}m" if h else f"{m}m"
+
+
+def _local_time(value: Any, tz) -> str | None:
+    text = str(value or "")
+    if len(text) < 16:
+        return None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(tz).strftime("%I:%M %p").lstrip("0").lower()
+
+
 def _list_sessions(org_id: str) -> list[VaultDocument]:
     try:
         resp = (
             get_supabase_admin().table("sessions")
-            .select("id, patient_id, session_date, session_type, status, created_at")
+            .select(
+                "id, patient_id, session_date, session_type, status, created_at, "
+                "worker_id, support_worker_id, duration_minutes"
+            )
             .eq("organization_id", org_id)
             .order("session_date", desc=True)
             .limit(500)
@@ -402,12 +443,29 @@ def _list_sessions(org_id: str) -> list[VaultDocument]:
     except Exception:
         return []
     patients = _patient_name_map(org_id)
+    workers = _user_name_map(org_id)
+    from ..core.timezone import head_office_timezone, request_timezone
+
+    try:
+        tz = head_office_timezone(org_id) or request_timezone()
+    except Exception:
+        tz = request_timezone()
+
+    def detail(row: dict) -> str | None:
+        worker = workers.get(row.get("worker_id") or row.get("support_worker_id") or "")
+        parts = [
+            f"by {worker}" if worker else None,
+            _local_time(row.get("session_date"), tz),
+            _format_minutes(row.get("duration_minutes")),
+        ]
+        return " · ".join(p for p in parts if p) or None
+
     return [
         VaultDocument(
             id=row["id"],
             category="session_notes",
             folder_label=CATEGORY_META["session_notes"]["label"],
-            title=f"{(row.get('session_type') or 'Session').title()} note",
+            title=f"{_humanise(row.get('session_type')) or 'Session'} note",
             person_name=patients.get(row.get("patient_id") or "", "Unknown participant"),
             person_type="Participant",
             date=str(row.get("session_date") or row.get("created_at") or ""),
@@ -415,6 +473,8 @@ def _list_sessions(org_id: str) -> list[VaultDocument]:
             source_table="sessions",
             source_id=row["id"],
             has_stored_file=False,
+            reference=session_reference(row["id"]),
+            detail=detail(row),
         )
         for row in (resp.data or [])
     ]
@@ -471,13 +531,14 @@ def _render_session(org_id: str, document_id: str, exclude_fields: set[str] | No
         goals_text = str(goals or "")
 
     meta = [
+        ("Reference", session_reference(row["id"])),
         ("Participant", patients.get(row.get("patient_id") or "", "Unknown participant")),
         ("Date", session_dt[:10] or "—"),
         ("Time", session_dt[11:16] if len(session_dt) >= 16 else "—"),
         ("Duration", f"{duration} minutes" if duration else "—"),
         ("Support worker", worker_display),
-        ("Type", row.get("session_type") or "—"),
-        ("Status", row.get("status") or "—"),
+        ("Type", _humanise(row.get("session_type")) or "—"),
+        ("Status", _humanise(row.get("status")) or "—"),
         ("Compliance score", f"{row.get('compliance_score')}%" if row.get("compliance_score") is not None else "—"),
     ]
     sections = [
@@ -488,7 +549,7 @@ def _render_session(org_id: str, document_id: str, exclude_fields: set[str] | No
         ("Outcomes", (row.get("outcomes") or "").strip()),
     ]
     pdf = _render_record_pdf(org_id, "Session Note", meta, sections, exclude=exclude_fields)
-    return f"session-note-{document_id[:8]}.pdf", pdf
+    return f"{session_reference(document_id)}-session-note.pdf", pdf
 
 
 def _list_incidents(org_id: str) -> list[VaultDocument]:
@@ -1627,7 +1688,10 @@ def _apply_filters(
     out = docs
     if search and search.strip():
         q = search.strip().lower()
-        out = [d for d in out if q in d["title"].lower() or q in d["person_name"].lower()]
+        out = [
+            d for d in out
+            if any(q in (d.get(k) or "").lower() for k in ("title", "person_name", "reference", "detail"))
+        ]
     if person:
         out = [d for d in out if d["person_name"] == person]
     if date_from:

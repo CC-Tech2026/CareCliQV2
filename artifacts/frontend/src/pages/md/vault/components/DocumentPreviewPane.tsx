@@ -158,9 +158,15 @@ function toggleFullscreen() {
               <div className="min-w-0">
                 <p className="truncate text-[13.5px] font-bold" style={{ color: "var(--cc-text)" }}>
                   {doc.title}
+                  {doc.reference && (
+                    <span className="ml-1.5 font-mono text-[11px] font-semibold" style={{ color: "var(--cc-muted)" }}>
+                      {doc.reference}
+                    </span>
+                  )}
                 </p>
                 <p className="text-[11.5px]" style={{ color: "var(--cc-muted)" }}>
                   {doc.person_name} · {formatDate(doc.date)}
+                  {doc.detail ? ` · ${doc.detail}` : ""}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
