@@ -4552,6 +4552,7 @@ def _live_checklist_entry(task: dict) -> dict:
         "task_id": task.get("task_id"),
         "label": task.get("label"),
         "completed": bool(task.get("completed")),
+        "completed_at": task.get("completed_at") if task.get("completed") else None,
         "documented": (
             shift_service._mandatory_task_satisfied(task)
             if task.get("mandatory")
@@ -4733,6 +4734,25 @@ async def get_live_shifts(
         except Exception:
             pass
 
+    # Completed shifts already through verification don't need a "Review
+    # shift" prompt on the board.
+    verified_ids: set[str] = set()
+    completed_ids = [
+        str(s["id"]) for s in shifts_raw
+        if s.get("clocked_out_at") or s.get("status") == "completed"
+    ]
+    if completed_ids:
+        try:
+            v_resp = (
+                supabase.table("shift_verifications")
+                .select("shift_id")
+                .in_("shift_id", completed_ids)
+                .execute()
+            )
+            verified_ids = {str(r.get("shift_id")) for r in (v_resp.data or [])}
+        except Exception:
+            logger.warning("Live shifts: verification lookup failed", exc_info=True)
+
     from ..services.long_shift_service import build_live_shift_engagement
 
     result = []
@@ -4769,7 +4789,10 @@ async def get_live_shifts(
 
         result.append({
             **shift,
-            "worker_name": worker.get("full_name") or shift.get("participant_name") or "Worker",
+            # An unassigned shift has no worker; never stand the participant's
+            # name in for one.
+            "worker_name": worker.get("full_name") or ("Worker" if worker_id else None),
+            "verified": str(sid) in verified_ids,
             "worker_email": worker.get("email"),
             "worker_phone": worker.get("phone"),
             "task_counts": task_counts,

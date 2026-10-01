@@ -1364,6 +1364,8 @@ export type LiveShift = {
   emergency_flagged_at?: string | null;
   emergency_note?: string | null;
   task_counts: { total: number; completed: number };
+  /** Completed shift already through shift verification. */
+  verified?: boolean;
   alerts: Array<{ id: string; alert_type: string; message: string; severity: string }>;
   live_status: "green" | "yellow" | "red";
   elapsed_minutes: number;
@@ -1389,6 +1391,7 @@ export type LiveShift = {
     task_id: string;
     label: string;
     completed: boolean;
+    completed_at?: string | null;
     documented: boolean;
     mandatory: boolean;
     goal_title?: string | null;
@@ -1423,7 +1426,7 @@ export type ShiftMessage = {
   sender_id: string;
   recipient_id: string;
   message: string;
-  message_type: "text" | "request_photo" | "task_suggestion" | "flag_issue" | "emergency";
+  message_type: "text" | "request_photo" | "task_suggestion" | "flag_issue" | "emergency" | "action_required";
   is_read: boolean;
   created_at?: string;
 };
@@ -1790,6 +1793,7 @@ export type ShiftVerificationQueueItem = {
   shift_id: string;
   participant_id?: string | null;
   participant_name?: string | null;
+  shift_type?: string | null;
   worker_id?: string | null;
   worker_name?: string | null;
   scheduled_start?: string | null;

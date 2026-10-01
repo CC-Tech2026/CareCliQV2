@@ -360,7 +360,7 @@ def _get_session_for_shift(shift: dict[str, Any]) -> Optional[dict[str, Any]]:
 _SHIFT_COLUMNS = (
     "id, organization_id, participant_id, participant_name, worker_id, "
     "scheduled_start, scheduled_end, clocked_in_at, clocked_out_at, "
-    "duration_minutes, status, session_id, tasks, expected_price_item_code, clock_in_verified, clock_in_method"
+    "duration_minutes, status, session_id, tasks, expected_price_item_code, clock_in_verified, clock_in_method, shift_type"
 )
 
 
@@ -427,6 +427,7 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
                 "compliance_score": (session or {}).get("compliance_score"),
                 "participant_id": shift.get("participant_id"),
                 "participant_name": shift.get("participant_name"),
+                "shift_type": shift.get("shift_type"),
                 "worker_id": shift.get("worker_id"),
                 "worker_name": worker_names.get(str(shift.get("worker_id") or ""), "Unknown worker"),
                 "scheduled_start": shift.get("scheduled_start"),

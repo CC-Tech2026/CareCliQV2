@@ -27,6 +27,29 @@ it("does not label a QR check-in as GPS verified and respects read-only access",
   expect(screen.queryByRole("link", { name: "Review shift" })).toBeNull();
 });
 it("shows GPS verification only when the stored method and result confirm it", () => {
-  render(<ScheduleLiveCard shift={{ ...shift, clock_in_verified: true, clock_in_method: "gps" }} onOpen={() => {}} />);
-  expect(screen.getByText("GPS verified")).toBeTruthy();
+  const active = { ...shift, status: "in_progress", clocked_out_at: null, clock_in_verified: true, clock_in_method: "gps" };
+  render(<ScheduleLiveCard shift={active} onOpen={() => {}} />);
+  expect(screen.getByText(/GPS verified/)).toBeTruthy();
+});
+it("drops the review prompt once a completed shift is verified", () => {
+  render(<ScheduleLiveCard shift={{ ...shift, verified: true }} onOpen={() => {}} />);
+  expect(screen.queryByRole("link", { name: "Review shift" })).toBeNull();
+  expect(screen.getByText("Verified")).toBeTruthy();
+});
+it("flags a late shift and says the coordinator was alerted", () => {
+  const late = { ...shift, status: "scheduled", clocked_in_at: null, clocked_out_at: null, scheduled_start: "2020-01-01T00:00:00Z", alerts: [{ id: "a", alert_type: "late", message: "Late", severity: "warning" }] } as LiveShift;
+  const { container } = render(<ScheduleLiveCard shift={late} onOpen={() => {}} />);
+  expect(screen.getByText("Not clocked in")).toBeTruthy();
+  expect(screen.getByText("Coordinator alerted")).toBeTruthy();
+  expect(container.querySelector("article")?.className).toContain("border-red-400");
+});
+it("names the participant and the latest task on an active shift", () => {
+  const active = { ...shift, status: "in_progress", clocked_out_at: null, checklist: [
+    { task_id: "1", label: "Meds", completed: true, completed_at: "2026-10-01T00:30:00Z", documented: true, mandatory: false },
+    { task_id: "2", label: "Lunch", completed: true, completed_at: "2026-10-01T01:15:00Z", documented: true, mandatory: false },
+  ] } as LiveShift;
+  render(<ScheduleLiveCard shift={active} onOpen={() => {}} />);
+  expect(screen.getByText(/with Sam/)).toBeTruthy();
+  expect(screen.getByText(/Task completed/)).toBeTruthy();
+  expect(screen.getByText("Tasks 2 of 4")).toBeTruthy();
 });

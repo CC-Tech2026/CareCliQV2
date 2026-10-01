@@ -65,7 +65,7 @@ import {
 import { getShiftMessages } from "@/services/coordinatorService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useLiveShiftsRealtime } from "@/hooks/useCoordinatorLiveRealtime";
-import { formatAppTimeWithZone } from "@/lib/datetime";
+import { formatAppTime, formatAppTimeWithZone } from "@/lib/datetime";
 
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
@@ -1244,12 +1244,13 @@ export default function CoordinatorLivePage({
             }),
             description: [
               s.participant_name,
+              s.clocked_in_at ? formatAppTime(s.clocked_in_at, s.timezone) : null,
               s.clock_in_verified && s.clock_in_method === "gps"
                 ? translate("schedule.gpsVerified")
                 : null,
             ]
               .filter(Boolean)
-              .join(" / "),
+              .join(" · "),
           }),
         );
       }
@@ -1353,14 +1354,27 @@ export default function CoordinatorLivePage({
       })
     : translate("common.emDash");
 
+  const lastUpdated = dataUpdatedAt
+    ? formatAppTime(new Date(dataUpdatedAt).toISOString())
+    : translate("common.emDash");
+
   return (
     <div className="pb-10">
       {/* Header — full when standalone, compact toolbar when embedded */}
       {/* When embedded the parent (rostering page) owns search + refresh — just show refresh timestamp */}
       {embedded ? (
-        <p className="text-[11px] mb-4" style={{ color: MUTED }}>
-          Live · updates as workers document · Last refresh {lastRefresh}
-        </p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-cc-muted">
+            {translate("schedule.todaysShifts")}
+          </h2>
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+            <span aria-hidden className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:hidden" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            {translateParams("schedule.liveUpdated", { time: lastUpdated })}
+          </p>
+        </div>
       ) : (
         <div className="flex items-center mb-5 flex-wrap gap-3">
           <div className="flex items-center gap-3">
@@ -1446,16 +1460,37 @@ export default function CoordinatorLivePage({
               <div
                 key={stage}
                 className={
-                  "rounded-xl border bg-cc-surface p-4 " +
+                  "rounded-2xl border bg-cc-surface p-4 shadow-sm " +
                   (stage === "late" && count
                     ? "border-red-400"
                     : "border-cc-border")
                 }
               >
-                <p className="text-xs text-cc-muted">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-cc-muted">
+                  <span
+                    aria-hidden
+                    className={
+                      "h-2 w-2 rounded-full " +
+                      {
+                        active: "bg-emerald-500",
+                        late: "bg-red-500",
+                        scheduled: "bg-pink-500",
+                        completed: "bg-blue-500",
+                      }[stage]
+                    }
+                  />
                   {translate("schedule.status." + stage)}
                 </p>
-                <p className="mt-2 text-2xl font-bold tabular-nums">{count}</p>
+                <p
+                  className={
+                    "mt-2 text-3xl font-bold tabular-nums " +
+                    (stage === "late" && count
+                      ? "text-red-600 dark:text-red-300"
+                      : "text-cc-text")
+                  }
+                >
+                  {count}
+                </p>
               </div>
             );
           },
@@ -1631,11 +1666,12 @@ export default function CoordinatorLivePage({
       )}
 
       {!isLoading && !isError && filtered.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 min-[1100px]:grid-cols-3 gap-4 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
           {filtered.map((shift) => (
             <ScheduleLiveCard
               key={shift.id}
               shift={shift}
+              highlighted={recentClockIns.includes(shift.id)}
               readOnly={readOnly}
               onOpen={() => setDetailShift(shift)}
             />
