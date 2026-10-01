@@ -118,7 +118,7 @@ function ShiftFooter({ shift, stage }: { shift: LiveShift; stage: ShiftStage }) 
     return (
       <p className="flex items-center gap-1 text-xs text-cc-muted">
         <CheckCircle2 size={12} aria-hidden className="text-blue-600" />
-        {translate(shift.visit_notes || shift.session_id ? "schedule.clockedOutWithNote" : "schedule.clockedOutLabel")}
+        {translate(shift.note_recorded || shift.visit_notes ? "schedule.clockedOutWithNote" : "schedule.clockedOutLabel")}
       </p>
     );
   }

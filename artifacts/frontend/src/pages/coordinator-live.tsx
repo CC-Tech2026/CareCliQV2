@@ -699,7 +699,7 @@ function ShiftDetailPanel({
                 {translate("coordinator.live.notes")}
               </p>
               <p style={{ color: TEXT }}>
-                {shift.visit_notes
+                {shift.note_recorded || shift.visit_notes
                   ? translate("coordinator.live.notesRecorded")
                   : translate("common.none")}
               </p>
@@ -894,7 +894,7 @@ function LiveShiftCard({
             {translate("coordinator.live.noSession")}
           </span>
         )}
-        {shift.visit_notes && (
+        {(shift.note_recorded || shift.visit_notes) && (
           <span
             className="flex items-center gap-1 text-[11px] font-semibold"
             style={{ color: "#3B82F6" }}

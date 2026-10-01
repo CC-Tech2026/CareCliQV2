@@ -338,6 +338,20 @@ def compute_verification_checks(
     }
 
 
+def session_note_text(session: Optional[dict[str, Any]]) -> Optional[str]:
+    """The finished note as the session's legal record: the English
+    translation, else the note as submitted (session_service computes
+    legal_record_text the same way when it reads a session — the stored
+    column is never filled in), else the plain notes field older sessions
+    used."""
+    session = session or {}
+    for key in ("translated_english_note", "compliance_input_text", "notes"):
+        text = str(session.get(key) or "").strip()
+        if text:
+            return text
+    return None
+
+
 def _get_session_for_shift(shift: dict[str, Any]) -> Optional[dict[str, Any]]:
     session_id = shift.get("session_id")
     if not session_id:
@@ -346,7 +360,10 @@ def _get_session_for_shift(shift: dict[str, Any]) -> Optional[dict[str, Any]]:
     try:
         result = (
             supabase.table("sessions")
-            .select("id, end_validation, status, legal_record_text, original_language_input, detected_language, compliance_score")
+            .select(
+                "id, end_validation, status, translated_english_note, compliance_input_text, notes, "
+                "original_language_input, detected_language, compliance_score"
+            )
             .eq("id", str(session_id))
             .execute()
         )
@@ -420,7 +437,7 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
             {
                 "shift_id": shift.get("id"),
                 "clock_in_location_verified": shift.get("clock_in_method") == "gps" and shift.get("clock_in_verified") is True,
-                "session_note": (session or {}).get("legal_record_text"),
+                "session_note": session_note_text(session),
                 "tasks": [task for task in (shift.get("tasks") or []) if isinstance(task, dict)],
                 "original_language_input": (session or {}).get("original_language_input"),
                 "detected_language": (session or {}).get("detected_language"),

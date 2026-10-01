@@ -19,6 +19,7 @@ from ..core.config import settings
 from ..core.security import get_current_user
 from ..core.timezone import parse_shift_datetime, participant_timezone, request_timezone
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
+from ..services.shift_verification_service import session_note_text
 from ..services.pattern_detection_service import (
     dismiss_pattern,
     get_active_patterns,
@@ -4664,6 +4665,32 @@ async def get_live_shifts(
         except Exception:
             pass
 
+    # Sessions first: the note a worker writes usually lives on the session,
+    # not on shifts.visit_notes, and both the alerts below and the board need it.
+    session_map: dict[str, dict] = {}
+    session_ids = [str(s.get("session_id")) for s in shifts_raw if s.get("session_id")]
+    if session_ids:
+        try:
+            sresp = (
+                supabase.table("sessions")
+                .select(
+                    "id, last_activity_at, max_gap_secs, checkin_count, "
+                    "break_duration_secs, engagement_score, is_long_shift, "
+                    "translated_english_note, compliance_input_text, notes"
+                )
+                .in_("id", session_ids)
+                .execute()
+            )
+            for row in sresp.data or []:
+                session_map[str(row["id"])] = row
+        except Exception:
+            pass
+
+    def _note_text(shift: dict) -> str | None:
+        return (str(shift.get("visit_notes") or "").strip() or None) or session_note_text(
+            session_map.get(str(shift.get("session_id") or ""))
+        )
+
     # Auto-generate alerts for monitored conditions
     alert_service_import_ok = True
     for shift in shifts_raw:
@@ -4672,7 +4699,7 @@ async def get_live_shifts(
         sid = shift["id"]
         elapsed = _elapsed_minutes(shift.get("clocked_in_at") or shift.get("scheduled_start"))
         has_session = bool(shift.get("session_id"))
-        has_notes = bool(shift.get("visit_notes"))
+        has_notes = bool(_note_text(shift))
 
         if elapsed > 30 and not has_session and shift.get("clocked_in_at"):
             existing = [a for a in alerts_map.get(sid, []) if a.get("alert_type") == "no_session_started"]
@@ -4716,24 +4743,6 @@ async def get_live_shifts(
                     )
 
     # Build response
-    session_map: dict[str, dict] = {}
-    session_ids = [str(s.get("session_id")) for s in shifts_raw if s.get("session_id")]
-    if session_ids:
-        try:
-            sresp = (
-                supabase.table("sessions")
-                .select(
-                    "id, last_activity_at, max_gap_secs, checkin_count, "
-                    "break_duration_secs, engagement_score, is_long_shift"
-                )
-                .in_("id", session_ids)
-                .execute()
-            )
-            for row in sresp.data or []:
-                session_map[str(row["id"])] = row
-        except Exception:
-            pass
-
     # Completed shifts already through verification don't need a "Review
     # shift" prompt on the board.
     verified_ids: set[str] = set()
@@ -4803,6 +4812,9 @@ async def get_live_shifts(
             "checklist": checklist,
             "medications": medications,
             "workflow_stage": workflow_stage,
+            # The worker's note, wherever it was written (visit notes or the session).
+            "note_recorded": bool(_note_text(shift)),
+            "session_note": _note_text(shift),
             # Participant's branch zone; the live monitor labels clock-in/
             # medication times with it when it differs from the coordinator's
             # own branch (same pattern as /coordinator/shifts and shift_service).

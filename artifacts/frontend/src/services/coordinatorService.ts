@@ -1358,6 +1358,10 @@ export type LiveShift = {
   duration_minutes?: number | null;
   session_id?: string | null;
   visit_notes?: string | null;
+  /** The worker's note was written, on the shift or in the session. */
+  note_recorded?: boolean;
+  /** The worker's note text, wherever it was written. */
+  session_note?: string | null;
   coordinator_notes?: string | null;
   special_instructions?: string | null;
   emergency_flagged?: boolean;
