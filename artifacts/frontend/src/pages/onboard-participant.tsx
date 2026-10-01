@@ -118,6 +118,9 @@ const SOURCE_META: Record<EnquirySource, { label: string; icon: typeof Mail }> =
   phone_call: { label: "Phone call", icon: PhoneCall },
   coordinator_referral: { label: "Support coordinator referral", icon: Users },
 };
+/** An unrecognised source shouldn't take the page down. */
+const sourceMeta = (source: string | null | undefined) =>
+  SOURCE_META[source as EnquirySource] ?? { label: "Other", icon: ClipboardCheck };
 
 function daysSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -295,7 +298,7 @@ function subtitleForIntake(intake: Intake): string {
     case "enquiry": {
       const age = daysSince(intake.created_at);
       const relative = age < 1 ? "today" : age === 1 ? "1 day ago" : `${age} days ago`;
-      return `${SOURCE_META[intake.source].label} · ${relative}`;
+      return `${sourceMeta(intake.source).label} · ${relative}`;
     }
     case "screening": return "Awaiting plan copy";
     case "meet_greet": return "Awaiting scheduling";
@@ -2111,7 +2114,7 @@ function IntakeDetail({
                     {intake.status === "enquiry" ? (
                       <>
                         <p className="text-xs" style={{ color: MUTED }}>
-                          Logged via {SOURCE_META[intake.source].label.toLowerCase()}. Start screening when you're ready to review this enquiry.
+                          Logged via {sourceMeta(intake.source).label.toLowerCase()}. Start screening when you're ready to review this enquiry.
                         </p>
                         <div className="pt-2 space-y-1.5">
                           <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Decline reason</label>
@@ -2140,7 +2143,7 @@ function IntakeDetail({
                       <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
                         <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
                         <p className="text-xs font-bold" style={{ color: SUCCESS }}>
-                          Logged via {SOURCE_META[intake.source].label.toLowerCase()}. Passed to screening.
+                          Logged via {sourceMeta(intake.source).label.toLowerCase()}. Passed to screening.
                         </p>
                       </div>
                     )}
@@ -2460,8 +2463,8 @@ function IntakeDetail({
               {intake.email && <p className="text-xs" style={{ color: MUTED }}>{intake.email}</p>}
               {intake.phone && <p className="text-xs" style={{ color: MUTED }}>{intake.phone}</p>}
               <p className="text-xs flex items-center gap-1.5" style={{ color: MUTED }}>
-                {(() => { const Icon = SOURCE_META[intake.source].icon; return <Icon size={12} />; })()}
-                {SOURCE_META[intake.source].label}
+                {(() => { const Icon = sourceMeta(intake.source).icon; return <Icon size={12} />; })()}
+                {sourceMeta(intake.source).label}
               </p>
             </div>
           </div>

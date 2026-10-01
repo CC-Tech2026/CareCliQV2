@@ -23,6 +23,17 @@ function initials(name: string) {
   return name.split(" ").map((p) => p[0]).filter(Boolean).join("").slice(0, 2).toUpperCase() || "?";
 }
 
+/** The server's reason, said plainly — "Not Found" means the server
+ * hasn't been updated with Easy Capture yet. */
+function describeFailure(err: unknown, fallback: string | undefined): string | undefined {
+  const status = (err as { status?: number } | null)?.status;
+  if (status === 404) return "The server doesn't have Easy Capture yet — the API needs redeploying.";
+  if (status === 413) return "The recording is too long (25MB limit). Record in shorter parts.";
+  if (err instanceof TypeError) return "Couldn't reach the server — check your connection.";
+  const message = err instanceof Error ? err.message : "";
+  return message.replace(/^Could not transcribe audio:\s*/, "Transcription failed: ") || fallback;
+}
+
 function formatElapsed(sec: number) {
   return `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
 }
@@ -99,6 +110,10 @@ export function MeetGreetCapture({
   const [phase, setPhase] = useState<Phase>("idle");
   const [elapsed, setElapsed] = useState(0);
   const [levels, setLevels] = useState<number[]>(() => Array(BARS).fill(0));
+  // Tapping the mic before consent points at the consent box instead of
+  // doing nothing.
+  const [needsConsent, setNeedsConsent] = useState(false);
+  const consentRef = useRef<HTMLInputElement>(null);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -160,7 +175,7 @@ export function MeetGreetCapture({
     } catch (err) {
       toast({
         title: "Recording not saved",
-        description: err instanceof Error ? err.message : "Try recording again.",
+        description: describeFailure(err, "Try recording again."),
         variant: "destructive",
       });
       setPhase("idle");
@@ -177,15 +192,24 @@ export function MeetGreetCapture({
         const current = notesRef.current.trim();
         onNotesChange(current ? `${current}\n\nTranscript:\n${text}` : `Transcript:\n${text}`);
       }
-    } catch {
-      toast({ title: "Recording saved", description: "It couldn't be transcribed, but you can play it back." });
+    } catch (err) {
+      const reason = describeFailure(err, "");
+      toast({
+        title: "Recording saved — not transcribed",
+        description: `You can play it back below and type the notes.${reason ? ` (${reason})` : ""}`,
+      });
     } finally {
       setPhase("idle");
     }
   }
 
   async function start() {
-    if (!consented || phase !== "idle") return;
+    if (phase !== "idle") return;
+    if (!consented) {
+      setNeedsConsent(true);
+      consentRef.current?.focus();
+      return;
+    }
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       toast({ title: "Recording isn't supported in this browser", variant: "destructive" });
       return;
@@ -211,7 +235,7 @@ export function MeetGreetCapture({
       sessionRef.current = session.session_id;
     } catch (err) {
       stream.getTracks().forEach((t) => t.stop());
-      toast({ title: "Couldn't start recording", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+      toast({ title: "Couldn't start recording", description: describeFailure(err, undefined), variant: "destructive" });
       setPhase("idle");
       return;
     }
@@ -264,14 +288,24 @@ export function MeetGreetCapture({
         {/* Capture */}
         <section className="flex min-h-[340px] flex-col rounded-2xl p-5" style={{ background: "#F2EDE0" }}>
           {editable ? (
-            <div className="rounded-xl border bg-white px-3 py-2.5" style={{ borderColor: BORDER }}>
+            <div
+              className="rounded-xl border bg-white px-3 py-2.5 transition-shadow"
+              style={{
+                borderColor: needsConsent ? PINK : BORDER,
+                boxShadow: needsConsent ? "0 0 0 3px rgba(232,69,122,0.18)" : undefined,
+              }}
+            >
               <label className="flex cursor-pointer items-center gap-2.5 text-[13px]" style={{ color: TEXT }}>
                 <input
+                  ref={consentRef}
                   type="checkbox"
                   className="h-4 w-4 accent-[#0F7B57]"
                   checked={consented}
                   disabled={recording || busy}
-                  onChange={(e) => setConsented(e.target.checked)}
+                  onChange={(e) => {
+                    setConsented(e.target.checked);
+                    if (e.target.checked) setNeedsConsent(false);
+                  }}
                 />
                 {givenBy === "participant" ? `${firstName} consents` : `${firstName}'s ${givenBy} consents`} to recording
               </label>
@@ -299,10 +333,12 @@ export function MeetGreetCapture({
               <button
                 type="button"
                 onClick={recording ? stop : start}
-                disabled={!recording && (!consented || busy)}
+                disabled={!recording && busy}
                 aria-label={recording ? "Stop recording" : "Start recording"}
                 title={!recording && !consented ? "Confirm consent first" : undefined}
-                className="flex h-[88px] w-[88px] items-center justify-center rounded-full text-white transition-transform enabled:hover:scale-105 disabled:opacity-40"
+                className={`flex h-[88px] w-[88px] items-center justify-center rounded-full text-white transition-transform enabled:hover:scale-105 disabled:opacity-40 ${
+                  !recording && !consented && !busy ? "opacity-60" : ""
+                }`}
                 style={{ background: PINK, boxShadow: recording ? "0 0 0 10px rgba(232,69,122,0.18)" : "0 10px 24px rgba(232,69,122,0.35)" }}
               >
                 {busy ? <Loader2 size={30} className="animate-spin" /> : recording ? <Square size={26} fill="white" /> : <Mic size={32} />}
@@ -313,7 +349,7 @@ export function MeetGreetCapture({
                 : phase === "uploading" ? "Saving recording…"
                 : phase === "transcribing" ? "Transcribing…"
                 : phase === "starting" ? "Starting…"
-                : editable ? (consented ? "Tap to record" : "Confirm consent to record")
+                : editable ? (consented ? "Tap to record" : needsConsent ? "Tick consent above first" : "Confirm consent to record")
                 : ""}
             </p>
             <div className="flex h-8 items-center gap-[3px]" aria-hidden>

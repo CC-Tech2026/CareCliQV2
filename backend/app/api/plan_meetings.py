@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
@@ -612,9 +612,11 @@ def _parse_speaker_segments(raw_text: str) -> list[dict[str, Any]]:
 async def transcribe_and_resolve_names(
     session_id: str,
     audio_file: UploadFile = File(...),
-    coordinator_name: str | None = None,
-    participant_name: str | None = None,
-    others: str = "[]",  # JSON string
+    # Sent as form fields alongside the audio (they used to be declared as
+    # query parameters, so the names the app sent were silently dropped).
+    coordinator_name: Optional[str] = Form(None),
+    participant_name: Optional[str] = Form(None),
+    others: str = Form("[]"),  # JSON string
     current_user: dict = Depends(get_current_user),
 ):
     """
