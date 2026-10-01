@@ -173,6 +173,101 @@ async def resolve_price(
     }
 
 
+# ── NDIS price limits ──────────────────────────────────────────────────────
+#
+# The limit is always the platform catalogue's price for the item on the
+# delivery date — never the org's own override, which is what's being
+# checked. Quote-required items are never loaded into the catalogue (see
+# load_platform_price_schedule), so they have no limit and aren't capped.
+
+_LIMIT_CODE_CHUNK = 200
+
+
+def _as_utc(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def load_price_limit_rows(item_codes: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """Every platform catalogue version for these item codes, by code — one
+    query per 200 codes instead of one per invoice line."""
+    codes = sorted({str(c).strip() for c in item_codes if c and str(c).strip()})
+    by_code: dict[str, list[dict[str, Any]]] = {}
+    for i in range(0, len(codes), _LIMIT_CODE_CHUNK):
+        rows = (
+            get_supabase_admin().table("platform_ndis_price_items")
+            .select("item_code, price_national, price_remote, price_very_remote, valid_from, valid_to")
+            .in_("item_code", codes[i:i + _LIMIT_CODE_CHUNK])
+            .execute()
+        ).data or []
+        for row in rows:
+            by_code.setdefault(str(row["item_code"]), []).append(row)
+    return by_code
+
+
+def price_limit_cents(
+    rows_by_code: dict[str, list[dict[str, Any]]],
+    item_code: str,
+    on: date | str,
+    location_type: str = "national",
+) -> Optional[int]:
+    """The NDIS price limit in cents for one unit of an item delivered on a
+    day, or None when the item has no limit in the catalogue. Same
+    effective-dating as _effective_dated_filter: valid_from on or before the
+    day, valid_to (exclusive) after it, newest version wins."""
+    day = date.fromisoformat(str(on)[:10]) if not isinstance(on, date) else on
+    cutoff = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+    current = [
+        r for r in rows_by_code.get(str(item_code).strip(), [])
+        if _as_utc(r.get("valid_from")) <= cutoff
+        and (r.get("valid_to") is None or _as_utc(r["valid_to"]) > cutoff)
+    ]
+    if not current:
+        return None
+    row = max(current, key=lambda r: _as_utc(r["valid_from"]))
+    limit, _ = _compute_effective_price(
+        {k: (float(v) if v is not None else None) for k, v in row.items()
+         if k in ("price_national", "price_remote", "price_very_remote")},
+        location_type or "national",
+    )
+    if limit is None or limit <= 0:
+        return None
+    return int((Decimal(str(limit)) * 100).quantize(Decimal("1")))
+
+
+def price_limit_breaches(
+    line_items: list[dict[str, Any]],
+    rows_by_code: Optional[dict[str, list[dict[str, Any]]]] = None,
+) -> list[str]:
+    """One sentence per invoice line charged above the NDIS price limit on its
+    delivery date. Lines with no item code or no date aren't checked here —
+    claims already refuse those for their own reasons. Pass rows_by_code
+    (from load_price_limit_rows) when checking many invoices at once."""
+    checkable = [
+        item for item in line_items
+        if item.get("item_code") and (item.get("service_date") or item.get("service_date_from"))
+    ]
+    if not checkable:
+        return []
+    rows = rows_by_code if rows_by_code is not None else load_price_limit_rows([item["item_code"] for item in checkable])
+    problems: list[str] = []
+    for item in checkable:
+        on = item.get("service_date") or item.get("service_date_from")
+        limit = price_limit_cents(rows, item["item_code"], on, item.get("location_type") or "national")
+        charged = int(item.get("unit_amount_cents") or 0)
+        # 1 cent of slack: generated lines derive the unit price from a
+        # rounded total.
+        if limit is not None and charged > limit + 1:
+            label = item.get("description") or item["item_code"]
+            problems.append(
+                f"{label}: ${charged / 100:,.2f} is above the NDIS price limit of "
+                f"${limit / 100:,.2f} for {item['item_code']} on {str(on)[:10]}."
+            )
+    return problems
+
+
 async def list_organization_categories(org_id: UUID | str) -> list[dict[str, Any]]:
     """Distinct fundable categories from the org's currently-loaded NDIS pricing schedule.
 
@@ -811,6 +906,21 @@ async def edit_item_price(
             raise HTTPException(
                 status_code=422,
                 detail=f"Invalid price_very_remote: {price_very_remote}",
+            )
+
+    # ── NDIS price limit: a negotiated rate can be lower, never higher ───
+    limit_rows = await asyncio.to_thread(load_price_limit_rows, [item_code])
+    for location, price in (("national", price_national), ("remote", price_remote), ("very_remote", price_very_remote)):
+        if price is None:
+            continue
+        limit = price_limit_cents(limit_rows, item_code, effective_date, location)
+        if limit is not None and int(round(price * 100)) > limit:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"${price:,.2f} is above the NDIS price limit of ${limit / 100:,.2f} "
+                    f"for {item_code} ({location.replace('_', ' ')}) from {effective_date.isoformat()}."
+                ),
             )
 
     # ── Backdating check: reject if edits overlap invoiced periods ───

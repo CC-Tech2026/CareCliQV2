@@ -4,9 +4,9 @@ Ready to claim -> Submitted -> Paid:
 
 - Ready: a finalised (reviewed) invoice for an NDIA-managed participant
   that hasn't been claimed yet. Anything that would make the claim bounce
-  (no NDIS number, a line with no support item or no delivery dates, no
-  registration number on the organisation) is listed against it and it
-  can't be selected until fixed.
+  (no NDIS number, a line with no support item or no delivery dates, a
+  line priced above the NDIS price limit, no registration number on the
+  organisation) is listed against it and it can't be selected until fixed.
 - Submitting a selection creates a claim batch: one bulk payment request
   CSV for the provider portal's bulk upload, stored with the batch. The
   invoices are marked sent (payment method: NDIS portal).
@@ -32,7 +32,7 @@ from fastapi import HTTPException
 
 from ..core.access import get_user_id
 from ..core.timezone import app_today
-from . import audit_service, billing_period_service
+from . import audit_service, billing_period_service, ndis_pricing_service
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -143,11 +143,17 @@ def claim_lines(invoice: dict, period: Optional[dict]) -> list[dict[str, Any]]:
             "line_total_cents": int(item.get("line_total_cents") or 0),
             "from": str(start)[:10] if start else None,
             "to": str(end)[:10] if end else None,
+            "location_type": item.get("location_type") or "national",
         })
     return lines
 
 
-def claim_problems(invoice: dict, participant: Optional[dict], org: dict, lines: list[dict]) -> list[str]:
+def claim_problems(
+    invoice: dict, participant: Optional[dict], org: dict, lines: list[dict],
+    price_limits: Optional[dict[str, list[dict]]] = None,
+) -> list[str]:
+    """price_limits: from ndis_pricing_service.load_price_limit_rows, loaded
+    once for every invoice being checked. Omitted, prices aren't checked."""
     problems = []
     if not _digits(org.get("ndis_provider_number")):
         problems.append("Add your NDIS registration number in organisation settings.")
@@ -165,7 +171,20 @@ def claim_problems(invoice: dict, participant: Optional[dict], org: dict, lines:
             problems.append(f"{label}: no delivery dates.")
         if line["quantity"] <= 0:
             problems.append(f"{label}: quantity is zero.")
+    if price_limits is not None:
+        problems.extend(ndis_pricing_service.price_limit_breaches(
+            [{**line, "service_date": line["from"]} for line in lines], price_limits,
+        ))
     return problems
+
+
+def _price_limits_for(invoices: list[dict]) -> dict[str, list[dict]]:
+    codes = [
+        str(item.get("item_code"))
+        for invoice in invoices for item in (invoice.get("line_items") or [])
+        if item.get("item_code")
+    ]
+    return ndis_pricing_service.load_price_limit_rows(codes)
 
 
 def _hours(quantity: float) -> str:
@@ -223,7 +242,10 @@ def _quantity_label(lines: list[dict]) -> str:
     return quantity_label(line["quantity"], line["unit"], line["item_code"], line["description"])
 
 
-def _row(invoice: dict, participant: Optional[dict], period: Optional[dict], org: dict, batch: Optional[dict]) -> dict[str, Any]:
+def _row(
+    invoice: dict, participant: Optional[dict], period: Optional[dict], org: dict, batch: Optional[dict],
+    price_limits: Optional[dict[str, list[dict]]] = None,
+) -> dict[str, Any]:
     lines = claim_lines(invoice, period)
     codes = [line["item_code"] for line in lines if line["item_code"]]
     return {
@@ -235,7 +257,7 @@ def _row(invoice: dict, participant: Optional[dict], period: Optional[dict], org
         "quantity_label": _quantity_label(lines),
         "total_cents": int(invoice.get("total_cents") or 0),
         "status": invoice.get("status"),
-        "problems": claim_problems(invoice, participant, org, lines),
+        "problems": claim_problems(invoice, participant, org, lines, price_limits),
         "claim_submitted_at": invoice.get("claim_submitted_at"),
         "paid_at": invoice.get("paid_at"),
         "payment_reference": invoice.get("payment_reference"),
@@ -260,6 +282,10 @@ def list_claims(user: dict) -> dict[str, Any]:
     periods = _periods(list({str(i["billing_period_id"]) for i in invoices if i.get("billing_period_id")}))
     batches = _batches(list({str(i["claim_batch_id"]) for i in invoices if i.get("claim_batch_id")}))
     org = _org(org_id)
+    # Only invoices that could still be claimed need their prices checked.
+    price_limits = _price_limits_for([
+        i for i in invoices if not i.get("claim_batch_id") and i.get("status") in READY_STATUSES
+    ])
 
     ready, submitted, paid = [], [], []
     drafts_awaiting_review = 0
@@ -276,7 +302,7 @@ def list_claims(user: dict) -> dict[str, Any]:
         if invoice.get("status") == "draft":
             drafts_awaiting_review += 1
         elif invoice.get("status") in READY_STATUSES:
-            ready.append(_row(invoice, participant, period, org, None))
+            ready.append(_row(invoice, participant, period, org, None, price_limits))
     return {
         "ready": ready,
         "submitted": submitted,
@@ -316,6 +342,7 @@ async def submit_batch(user: dict, invoice_ids: list[str]) -> dict[str, Any]:
     participants = _participants(org_id, list({str(i["participant_id"]) for i in invoices if i.get("participant_id")}))
     periods = _periods(list({str(i["billing_period_id"]) for i in invoices if i.get("billing_period_id")}))
     org = _org(org_id)
+    price_limits = _price_limits_for(invoices)
 
     claims, blocked = [], []
     for invoice in invoices:
@@ -332,7 +359,7 @@ async def submit_batch(user: dict, invoice_ids: list[str]) -> dict[str, Any]:
             blocked.append(f"{label} isn't for an NDIA-managed participant.")
             continue
         lines = claim_lines(invoice, period)
-        problems = claim_problems(invoice, participant, org, lines)
+        problems = claim_problems(invoice, participant, org, lines, price_limits)
         if problems:
             blocked.append(f"{label}: {problems[0]}")
             continue

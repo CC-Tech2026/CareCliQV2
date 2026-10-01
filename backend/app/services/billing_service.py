@@ -152,6 +152,17 @@ def _calculate_totals(line_items: list[dict]) -> tuple[list[dict], int, int, int
     return cleaned, subtotal, tax, subtotal + tax
 
 
+def _enforce_price_limits(line_items: list[dict]) -> None:
+    """Refuse lines charged above the NDIS price limit — billing a participant
+    more than the limit is over-claiming their plan, whatever the source of
+    the price (typed in, an org override, or a verified task's recorded rate)."""
+    from . import ndis_pricing_service
+
+    problems = ndis_pricing_service.price_limit_breaches(line_items)
+    if problems:
+        raise HTTPException(status_code=422, detail=" ".join(problems))
+
+
 async def _resolve_ndis_prices_for_invoice(
     line_items: list[dict],
     org_id: str,
@@ -560,7 +571,8 @@ async def create_invoice(user: dict, data: dict) -> dict:
         line_items = generated_line_items
 
     line_items, subtotal, tax, total = _calculate_totals(line_items)
-    
+    _enforce_price_limits(line_items)
+
     # Verified task amounts retain their recorded prices; do not relabel them
     # with a catalogue version resolved at invoice creation time.
     
@@ -736,12 +748,16 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
             [dict(item) for item in (data.get("line_items") or [])], _require_org(user)
         )
         line_items, subtotal, tax, total = _calculate_totals(resolved_items)
+        _enforce_price_limits(line_items)
         payload.update({
             "line_items": line_items,
             "subtotal_cents": subtotal,
             "tax_cents": tax,
             "total_cents": total,
         })
+    elif current_status == "draft" and status_value in {"finalized", "issued", "sent", "paid"}:
+        # A draft saved before limits were enforced is checked on its way out.
+        _enforce_price_limits(existing.get("line_items") or [])
     if status_value in {"issued", "sent", "paid"} and not existing.get("issued_at"):
         payload["issued_at"] = _now_iso()
     if status_value in {"finalized", "issued", "sent", "paid"} and not existing.get("finalized_at"):
