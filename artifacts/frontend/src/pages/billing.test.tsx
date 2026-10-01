@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import Billing, {
   NdisCatalogueBrowser,
@@ -94,7 +95,13 @@ vi.mock("@/lib/api-fetch", () => ({
   })),
 }));
 
+/** The register is a section now; NDIS claims is the landing view. */
+function openRegister() {
+  window.history.replaceState(null, "", "/billing?workspace=invoices");
+}
+
 afterEach(() => {
+  window.history.replaceState(null, "", "/billing");
   cleanup();
   queryState.data = null;
   queryState.error = false;
@@ -102,51 +109,70 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 describe("coordinator invoice workspace", () => {
+  it("opens on NDIS claims and keeps the chosen section in the address", async () => {
+    render(<Billing />);
+    expect(await screen.findByRole("heading", { name: /NDIS invoices/ })).toBeTruthy();
+    const nav = screen.getByRole("navigation", { name: "Invoicing sections" });
+    expect(within(nav).getByRole("button", { name: /NDIS claims/ }).getAttribute("aria-current")).toBe("page");
+    fireEvent.click(within(nav).getByRole("button", { name: /All invoices/ }));
+    expect(window.location.search).toBe("?workspace=invoices");
+    expect(await screen.findByRole("textbox", { name: "Search invoices" })).toBeTruthy();
+  });
   it("filters by recipient and status, and clears unmatched filters", async () => {
+    openRegister();
     render(<Billing />);
     await screen.findByText("Alex Morgan");
     fireEvent.change(screen.getByRole("textbox", { name: "Search invoices" }), {
       target: { value: "alex@example.test" },
     });
     expect(screen.queryByText("Casey Lee")).toBeNull();
-    fireEvent.change(
-      screen.getByRole("combobox", { name: "Filter invoice status" }),
-      { target: { value: "unknown" } },
-    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Search invoices" }), {
+      target: { value: "nobody" },
+    });
     expect(screen.queryByText("Alex Morgan")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(screen.getByText("Alex Morgan")).toBeTruthy();
-    // Coordinators have no Revenue report, so paid invoices stay in their
-    // register for checking.
+    // Paid invoices are in the register, with their own filter.
+    const filters = within(screen.getByRole("group", { name: "Filter invoice status" }));
+    fireEvent.click(filters.getByRole("button", { name: /^Paid/ }));
     expect(screen.getByText("Casey Lee")).toBeTruthy();
+    expect(screen.queryByText("Alex Morgan")).toBeNull();
+    // Plain-English statuses.
+    fireEvent.click(filters.getByRole("button", { name: /^All/ }));
+    expect(screen.getByText("Draft")).toBeTruthy();
+    expect(screen.getAllByText("Paid").length).toBeGreaterThan(0);
   });
   it("hides organisation revenue and totals from coordinators", async () => {
+    openRegister();
     render(<Billing />);
     await screen.findByText("Alex Morgan");
-    expect(screen.queryByRole("button", { name: "Revenue report" })).toBeNull();
-    expect(
-      screen.queryByText("Paid invoices are available in Revenue report."),
-    ).toBeNull();
-    expect(
-      screen.getByRole("button", { name: /Check completed shifts/ }),
-    ).toBeTruthy();
+    const nav = screen.getByRole("navigation", { name: "Invoicing sections" });
+    expect(within(nav).queryByRole("button", { name: /Revenue/ })).toBeNull();
+    expect(within(nav).getByRole("button", { name: /Check shifts/ })).toBeTruthy();
+    expect(screen.queryByText(/outstanding ·/)).toBeNull();
   });
-  it("shows the managing director revenue and keeps paid invoices there", async () => {
+  it("gives the managing director revenue and the register's totals", async () => {
     auth.role = "managing_director";
+    openRegister();
     render(<Billing />);
     await screen.findByText("Alex Morgan");
-    expect(screen.getByRole("button", { name: "Revenue report" })).toBeTruthy();
-    expect(screen.queryByText("Casey Lee")).toBeNull();
+    const nav = screen.getByRole("navigation", { name: "Invoicing sections" });
+    expect(within(nav).getByRole("button", { name: /Revenue/ })).toBeTruthy();
+    expect(screen.getByText("Casey Lee")).toBeTruthy();
+    expect(screen.getByText(/\$125\.00 outstanding · \$80\.00 paid/)).toBeTruthy();
   });
-  it("keeps drafting out of the register until requested and retains line-item detail", async () => {
+  it("keeps drafting out of the register until requested and shows line items on a row", async () => {
+    openRegister();
     render(<Billing />);
     await screen.findByText("Alex Morgan");
     expect(screen.queryByTestId("select-billing-participant")).toBeNull();
+    expect(screen.queryByText("Community participation")).toBeNull();
+    fireEvent.click(screen.getByText("Alex Morgan"));
+    expect(screen.getByText("Community participation")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "New invoice" }));
     await waitFor(() =>
       expect(screen.getByTestId("select-billing-participant")).toBeTruthy(),
     );
-    expect(screen.getByText("Community participation")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByTestId("select-billing-participant")).toBeNull();
   });
@@ -219,27 +245,30 @@ it("resolves dollars for the selected date and region and clears a failed lookup
 });
 
 it("keeps pricing and reports separate from the invoice list", async () => {
+  openRegister();
   render(<Billing />);
   await screen.findByText("Alex Morgan");
+  const nav = () => within(screen.getByRole("navigation", { name: "Invoicing sections" }));
   expect(screen.getByRole("textbox", { name: "Search invoices" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "NDIS pricing" }));
+  fireEvent.click(nav().getByRole("button", { name: /NDIS pricing/ }));
   expect(screen.queryByRole("textbox", { name: "Search invoices" })).toBeNull();
   expect(
     screen.getByRole("region", { name: "NDIS pricing catalogue" }),
   ).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Ready to invoice" }));
+  fireEvent.click(nav().getByRole("button", { name: /To invoice/ }));
   expect(
     screen.getByText("No verified shifts are waiting to be invoiced."),
   ).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Invoices" }));
+  fireEvent.click(nav().getByRole("button", { name: /All invoices/ }));
   expect(screen.getByRole("textbox", { name: "Search invoices" })).toBeTruthy();
 });
 
-it("limits the register to ten invoices and resets the page when searching", async () => {
+it("pages the register fifteen at a time and resets the page when searching", async () => {
+  openRegister();
   vi.mocked(apiFetch).mockResolvedValueOnce({
     ok: true,
     json: async () =>
-      Array.from({ length: 12 }, (_, index) => ({
+      Array.from({ length: 17 }, (_, index) => ({
         id: String(index),
         invoice_number: "INV-" + index,
         recipient_name: "Participant " + index,
@@ -252,9 +281,9 @@ it("limits the register to ten invoices and resets the page when searching", asy
   } as Response);
   render(<Billing />);
   await screen.findByText("Participant 0");
-  expect(screen.queryByText("Participant 10")).toBeNull();
+  expect(screen.queryByText("Participant 15")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
-  expect(screen.getByText("Participant 10")).toBeTruthy();
+  expect(screen.getByText("Participant 15")).toBeTruthy();
   expect(screen.queryByText("Participant 0")).toBeNull();
   fireEvent.change(screen.getByRole("textbox", { name: "Search invoices" }), {
     target: { value: "Participant 0" },
@@ -367,9 +396,10 @@ it("flags incomplete NDIS service dates and failed PDFs for review", () => {
   ).toHaveLength(2);
 });
 it("requires deliberate review before finalising a draft", async () => {
+  openRegister();
   render(<Billing />);
   await screen.findByText("Alex Morgan");
-  fireEvent.click(screen.getAllByText("View invoice details")[0]);
+  fireEvent.click(screen.getByText("Alex Morgan"));
   fireEvent.click(screen.getByRole("button", { name: "Review & finalise" }));
   expect(screen.getByRole("dialog")).toBeTruthy();
   const finalise = screen.getByRole("button", {

@@ -887,7 +887,7 @@ function RecentInvoices({ rows }: { rows: FinancialSummary["recent_invoices"] })
     <Card label="Recent invoices">
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-bold" style={{ color: TEXT }}>Recent invoices</h2>
-        <Link href="/billing" className="text-[12px] font-semibold" style={{ color: PLUM }}>All invoices</Link>
+        <Link href="/billing?workspace=invoices" className="text-[12px] font-semibold" style={{ color: PLUM }}>All invoices</Link>
       </div>
       {rows.length === 0 ? (
         <p className="mt-4 text-sm" style={{ color: MUTED }}>No invoices yet.</p>

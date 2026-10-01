@@ -8,9 +8,14 @@ import {
   Settings,
   Lock,
   FileText,
-  Clock,
   Search,
   ChevronDown,
+  CircleDollarSign,
+  Send,
+  ClipboardCheck,
+  ListChecks,
+  BarChart3,
+  BookOpen,
 } from "lucide-react";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -36,7 +41,6 @@ import { SectionInfo } from "@/components/ui/section-info";
 import { useReAuth } from "@/hooks/useReAuth";
 import { NdiaClaimsPanel } from "@/components/billing/NdiaClaimsPanel";
 import { Button } from "@/components/ui/button";
-import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -289,6 +293,127 @@ function statusTone(status: string) {
   return "bg-slate-50 text-slate-600 border-slate-200"; // draft
 }
 
+// ── Invoice register ─────────────────────────────────────────────────────────
+
+const BILLING_WORKSPACES = ["claims", "invoices", "ready", "checks", "reports", "pricing"] as const;
+type BillingWorkspace = (typeof BILLING_WORKSPACES)[number];
+
+type InvoiceFilter = "all" | "draft" | "outstanding" | "overdue" | "paid" | "cancelled";
+const INVOICE_FILTERS: Array<[InvoiceFilter, string]> = [
+  ["all", "All"],
+  ["draft", "Drafts"],
+  ["outstanding", "Outstanding"],
+  ["overdue", "Overdue"],
+  ["paid", "Paid"],
+  ["cancelled", "Cancelled"],
+];
+const INVOICE_PAGE_SIZE = 15;
+
+function isOverdue(invoice: Invoice) {
+  return invoice.status === "overdue" || overdueDays(invoice) > 0;
+}
+
+export function matchesFilter(invoice: Invoice, filter: InvoiceFilter) {
+  switch (filter) {
+    case "all":
+      return true;
+    case "draft":
+      return invoice.status === "draft";
+    case "outstanding":
+      return ["finalized", "issued", "sent"].includes(invoice.status) && !isOverdue(invoice);
+    case "overdue":
+      return isOverdue(invoice);
+    case "paid":
+      return invoice.status === "paid";
+    case "cancelled":
+      return invoice.status === "cancelled" || invoice.status === "void";
+  }
+}
+
+/** Plain-English status, coloured by what needs doing. */
+export function invoiceStatusPill(invoice: Invoice): { label: string; fg: string; bg: string } {
+  const days = overdueDays(invoice);
+  if (days > 0 || invoice.status === "overdue")
+    return {
+      label: days > 0 ? `${days} day${days === 1 ? "" : "s"} overdue` : "Overdue",
+      fg: "var(--cc-status-danger)",
+      bg: "var(--cc-status-danger-bg)",
+    };
+  switch (invoice.status) {
+    case "paid":
+      return { label: "Paid", fg: "var(--cc-status-success)", bg: "var(--cc-status-success-bg)" };
+    case "finalized":
+      return { label: "Finalised", fg: "var(--cc-status-info)", bg: "var(--cc-status-info-bg)" };
+    case "issued":
+      return { label: "Issued", fg: "var(--cc-status-info)", bg: "var(--cc-status-info-bg)" };
+    case "sent":
+      return { label: "Sent", fg: "var(--cc-plum)", bg: "var(--cc-soft)" };
+    case "cancelled":
+    case "void":
+      return { label: invoice.status === "void" ? "Void" : "Cancelled", fg: "var(--cc-muted)", bg: "var(--cc-soft)" };
+    default:
+      return { label: "Draft", fg: "var(--cc-status-warning)", bg: "var(--cc-status-warning-bg)" };
+  }
+}
+
+const AVATAR_COLOURS = ["#8B7FD1", "#C7853D", "#E8457A", "#D9A441", "#4E9A76", "#3B4A63"];
+function avatarColour(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_COLOURS[hash % AVATAR_COLOURS.length];
+}
+function initialsOf(name: string) {
+  return name.split(" ").map((p) => p[0]).filter(Boolean).join("").slice(0, 2).toUpperCase() || "?";
+}
+function formatShortDate(value: string) {
+  const date = new Date(value.length === 10 ? `${value}T00:00:00` : value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** One register row; clicking it (or Enter) shows the lines and actions below. */
+function InvoiceRows({
+  open,
+  onToggle,
+  summary,
+  details,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  summary: React.ReactNode;
+  details: React.ReactNode;
+}) {
+  return (
+    <>
+      <tr
+        className={`cursor-pointer border-b border-cc-border transition-colors hover:bg-cc-soft/50 ${open ? "bg-cc-soft/40" : ""}`}
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest("button, a, input")) return;
+          onToggle();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggle();
+          }
+        }}
+        tabIndex={0}
+        aria-expanded={open}
+      >
+        {summary}
+      </tr>
+      {open && (
+        <tr className="border-b border-cc-border bg-cc-soft/20">
+          <td colSpan={6} className="px-4 py-4 sm:pl-14">
+            {details}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 // ── Shared card component ─────────────────────────────────────────────────────
 function Card({
   title,
@@ -322,26 +447,27 @@ export default function Billing() {
   const canInvoice = isCoordinator || isManagingDirector;
   const priceRequest = useRef(0);
 
-  // Set by the stat tiles: opens the revenue ledger filtered to what the tile counts.
-  const [ledgerStatus, setLedgerStatus] = useState<RevenueLedgerStatusFilter>("all");
-  const openLedger = (status: RevenueLedgerStatusFilter) => {
-    setLedgerStatus(status);
-    setWorkspace("reports");
+  const [workspace, setWorkspaceState] = useState<BillingWorkspace>(() => {
+    const requested =
+      typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("workspace") : null;
+    return BILLING_WORKSPACES.includes(requested as BillingWorkspace) ? (requested as BillingWorkspace) : "claims";
+  });
+  // Kept in the address so a section can be linked to and survives a refresh.
+  const setWorkspace = (next: BillingWorkspace) => {
+    setWorkspaceState(next);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (next === "claims") url.searchParams.delete("workspace");
+    else url.searchParams.set("workspace", next);
+    window.history.replaceState(null, "", url.toString());
   };
-  const [workspace, setWorkspace] = useState<
-    "invoices" | "claims" | "ready" | "checks" | "reports" | "pricing"
-  >(() =>
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("workspace") === "claims"
-      ? "claims"
-      : "invoices",
-  );
   const [readySearch, setReadySearch] = useState("");
   const [preparingDraft, setPreparingDraft] = useState(false);
   const [invoicePage, setInvoicePage] = useState(1);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
   const [invoiceSearch, setInvoiceSearch] = useState("");
-  const [invoiceFilter, setInvoiceFilter] = useState("all");
+  const [invoiceFilter, setInvoiceFilter] = useState<InvoiceFilter>("all");
+  const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(null);
   useEffect(() => setInvoicePage(1), [invoiceSearch, invoiceFilter]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busyInvoice, setBusyInvoice] = useState<string | null>(null);
@@ -753,23 +879,21 @@ export default function Billing() {
     );
   }
 
-  // An MD finds paid invoices in the Revenue report. Coordinators don't get
-  // that report, so paid invoices stay in their register instead - they
-  // still need to check every invoice is accurate.
-  const paidInRegister = !isManagingDirector;
+  // Every invoice, paid included, so the register is the one place to find
+  // any invoice; the Revenue report is for totals.
+  const paidInRegister = true;
   const activeInvoices = invoices.filter(
     (invoice) => paidInRegister || invoice.status !== "paid",
   );
   const filteredInvoices = activeInvoices.filter(
     (invoice) =>
-      (invoiceFilter === "all" ||
-        (invoiceFilter === "overdue"
-          ? overdueDays(invoice) > 0 || invoice.status === "overdue"
-          : invoice.status === invoiceFilter)) &&
+      matchesFilter(invoice, invoiceFilter) &&
       `${invoice.invoice_number} ${invoice.id} ${invoice.recipient_name} ${invoice.recipient_email || ""}`
         .toLowerCase()
         .includes(invoiceSearch.trim().toLowerCase()),
   );
+  const invoicePageCount = Math.max(1, Math.ceil(filteredInvoices.length / INVOICE_PAGE_SIZE));
+  const currentInvoicePage = Math.min(invoicePage, invoicePageCount);
 
   const liveTotal =
     Number(form.quantity || 0) * Number(form.unit_amount || 0) * 100;
@@ -860,22 +984,29 @@ export default function Billing() {
       <div className="w-full min-w-0 space-y-4 pb-6">
         {/* ── Page header ───────────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="hidden text-cc-muted">
-              {translate("billing.role.coordinator")}
-            </p>
-            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-cc-text sm:text-3xl">
-              {translate("billing.title")}
-              <SectionInfo text="NDIS invoicing for delivered shifts: generate invoices, track payment status, and review pricing." />
-            </h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-cc-muted">
-              Create drafts, review invoice details and track payments in one
-              place.
-            </p>
+          <div className="flex items-start gap-3">
+            <span
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+              style={{ background: "var(--cc-active-bg)", color: "#E8457A" }}
+            >
+              <CircleDollarSign size={20} />
+            </span>
+            <div>
+              <h1 className="flex items-center gap-2 text-xl font-semibold tracking-[-0.025em] text-cc-text">
+                NDIS invoices
+                <SectionInfo text="NDIS invoicing for delivered shifts: generate invoices, claim NDIA-managed ones in bulk, track payments and review pricing." />
+              </h1>
+              <p className="mt-0.5 text-[13px] text-cc-muted">
+                Create, review and claim invoices from delivered sessions
+              </p>
+            </div>
           </div>
           <Button
-            className="min-h-11 gap-2 rounded-xl bg-cc-plum text-white"
-            onClick={() => setShowInvoiceForm((open) => !open)}
+            className="min-h-10 gap-2 rounded-xl bg-cc-plum text-white"
+            onClick={() => {
+              setWorkspace("invoices");
+              setShowInvoiceForm((open) => !open);
+            }}
             aria-expanded={showInvoiceForm}
             aria-controls="invoice-draft-form"
           >
@@ -884,69 +1015,48 @@ export default function Billing() {
           </Button>
         </div>
 
-        {/* ── Inline stat strip ─────────────────────────────────────────────── */}
-        {/* Organisation-wide totals and the revenue report are managing
-            director only. Coordinators work invoice by invoice (checking and
-            verifying them) without the organisation's financial statistics. */}
-        {isManagingDirector && (
-          <KpiGrid className="sm:grid-cols-3 lg:grid-cols-3">
-            <KpiCard
-              label={translate("billing.stat.invoices")}
-              value={loadError ? "Unavailable" : invoices.length}
-              icon={<FileText />}
-              onClick={() => setWorkspace("invoices")}
-            />
-            <KpiCard
-              label={translate("billing.stat.outstanding")}
-              value={loadError ? "Unavailable" : cents(totalOutstanding)}
-              tone={totalOutstanding > 0 ? "warning" : "neutral"}
-              icon={<Clock />}
-              onClick={() => openLedger("outstanding")}
-            />
-            <KpiCard
-              label={translate("billing.stat.paid")}
-              value={loadError ? "Unavailable" : cents(totalPaid)}
-              tone="success"
-              icon={<Check />}
-              onClick={() => openLedger("paid")}
-            />
-          </KpiGrid>
-        )}
-        <nav
-          aria-label="Invoicing sections"
-          className="flex flex-wrap gap-1 rounded-xl border border-cc-border bg-white p-1"
-        >
+        <nav aria-label="Invoicing sections" className="flex gap-1 overflow-x-auto border-b border-cc-border">
           {(
             [
-              ["invoices", "Invoices"],
-              ["claims", "NDIA claims"],
-              ["ready", "Ready to invoice"],
-              ["checks", "Check completed shifts"],
-              ["reports", "Revenue report"],
-              ["pricing", "NDIS pricing"],
+              ["claims", "NDIS claims", Send],
+              ["invoices", "All invoices", FileText],
+              ["ready", "To invoice", ClipboardCheck],
+              ["checks", "Check shifts", ListChecks],
+              ["reports", "Revenue", BarChart3],
+              ["pricing", "NDIS pricing", BookOpen],
             ] as const
           )
             .filter(([key]) => key !== "reports" || isManagingDirector)
-            .map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={workspace === key}
-                onClick={() => setWorkspace(key)}
-                className="min-h-11 rounded-lg px-4 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{
-                  background: workspace === key ? SOFT : "transparent",
-                  color: workspace === key ? PLUM : MUTED,
-                }}
-              >
-                {label}
-                {key === "ready" && readyToInvoiceQuery.data?.length
-                  ? ` (${readyToInvoiceQuery.data.length})`
-                  : ""}
-              </button>
-            ))}
+            .map(([key, label, Icon]) => {
+              const count =
+                key === "ready" ? readyToInvoiceQuery.data?.length : key === "invoices" ? invoices.length : undefined;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  aria-current={workspace === key ? "page" : undefined}
+                  onClick={() => setWorkspace(key)}
+                  className="-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                  style={{
+                    borderColor: workspace === key ? "#E8457A" : "transparent",
+                    color: workspace === key ? "var(--cc-text)" : MUTED,
+                  }}
+                >
+                  <Icon size={14} />
+                  {label}
+                  {count ? (
+                    <span className="rounded-full bg-cc-soft px-1.5 text-[10px] tabular-nums text-cc-muted">{count}</span>
+                  ) : null}
+                </button>
+              );
+            })}
         </nav>
-        {workspace === "claims" && <NdiaClaimsPanel onChanged={() => void loadBilling({ silent: true })} />}
+        {workspace === "claims" && (
+          <NdiaClaimsPanel
+            onChanged={() => void loadBilling({ silent: true })}
+            onShowAllInvoices={() => setWorkspace("invoices")}
+          />
+        )}
         {workspace === "ready" && readyToInvoiceQuery.isLoading && (
           <p role="status" className="py-6 text-sm text-cc-muted">
             Loading completed shifts...
@@ -1496,85 +1606,60 @@ export default function Billing() {
           </Sheet>
 
           {/* Invoice register + revenue */}
-          <div className="min-w-0 space-y-6" hidden={workspace !== "invoices"}>
-            <Card
-              title={translate("billing.invoiceRegister")}
-              action={
-                activeInvoices.length > 0 ? (
-                  <span className="rounded-lg px-3 py-1 text-xs font-semibold bg-cc-soft text-cc-plum">
-                    {translateParams("billing.registerTotal", {
-                      count: String(activeInvoices.length),
-                    })}
-                  </span>
-                ) : undefined
-              }
-            >
-              {isManagingDirector && (
-                <p className="mb-4 text-sm text-cc-muted">
-                  Paid invoices are available in Revenue report.
-                </p>
-              )}
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+          <div className="min-w-0 space-y-4" hidden={workspace !== "invoices"}>
+            <section className="rounded-2xl border border-cc-border bg-white" aria-label={translate("billing.invoiceRegister")}>
+              <div className="flex flex-col gap-3 border-b border-cc-border p-4 sm:flex-row sm:items-center">
                 <div className="relative min-w-0 flex-1">
-                  <Search
-                    aria-hidden="true"
-                    className="absolute left-3 top-3.5 h-4 w-4 text-cc-muted"
-                  />
+                  <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cc-muted" />
                   <Input
                     aria-label="Search invoices"
-                    placeholder="Search invoice number, recipient or email"
+                    placeholder="Search participant, invoice number or email"
                     value={invoiceSearch}
                     onChange={(event) => setInvoiceSearch(event.target.value)}
-                    className="h-11 rounded-xl pl-10"
+                    className="h-10 rounded-xl pl-9"
                   />
                 </div>
-                <select
-                  aria-label="Filter invoice status"
-                  value={invoiceFilter}
-                  onChange={(event) => setInvoiceFilter(event.target.value)}
-                  className="min-h-11 rounded-xl border border-cc-border bg-white px-3 text-sm"
-                >
-                  <option value="all">All statuses</option>
-                  <option value="overdue">Overdue</option>
-                  {Array.from(
-                    new Set(
-                      invoices
-                        .filter(
-                          (invoice) =>
-                            (paidInRegister || invoice.status !== "paid") &&
-                            invoice.status !== "overdue",
-                        )
-                        .map((invoice) => invoice.status),
-                    ),
-                  )
-                    .sort()
-                    .map((status) => (
-                      <option key={status} value={status}>
-                        {status.replaceAll("_", " ")}
-                      </option>
-                    ))}
-                </select>
+                <div className="flex flex-wrap gap-1" role="group" aria-label="Filter invoice status">
+                  {INVOICE_FILTERS.map(([value, label]) => {
+                    const count =
+                      value === "all"
+                        ? activeInvoices.length
+                        : activeInvoices.filter((invoice) => matchesFilter(invoice, value)).length;
+                    if (value !== "all" && count === 0) return null;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={invoiceFilter === value}
+                        onClick={() => setInvoiceFilter(value)}
+                        className="rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors"
+                        style={{
+                          borderColor: invoiceFilter === value ? "#E8457A" : "var(--cc-border)",
+                          background: invoiceFilter === value ? "rgba(232,69,122,0.08)" : "transparent",
+                          color: invoiceFilter === value ? "var(--cc-text)" : MUTED,
+                        }}
+                      >
+                        {label} <span className="tabular-nums opacity-70">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               {loadError ? (
-                <div
-                  role="alert"
-                  className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
-                >
+                <div role="alert" className="m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
                   {loadError}
-                  <Button
-                    variant="outline"
-                    className="ml-3"
-                    onClick={() => void loadBilling()}
-                  >
+                  <Button variant="outline" className="ml-3" onClick={() => void loadBilling()}>
                     Retry
                   </Button>
                 </div>
               ) : null}
-              <p className="mb-3 text-xs text-cc-muted" aria-live="polite">
-                {filteredInvoices.length} of {activeInvoices.length} invoices
-              </p>
-              {activeInvoices.length > 0 && filteredInvoices.length === 0 ? (
-                <div className="py-8 text-center text-sm text-cc-muted">
+              {activeInvoices.length === 0 && !loadError ? (
+                <div className="py-12 text-center">
+                  <p className="text-sm font-semibold text-cc-text">{translate("billing.noInvoices")}</p>
+                  <p className="mt-1 text-sm text-cc-muted">{translate("billing.noInvoicesHint")}</p>
+                </div>
+              ) : activeInvoices.length > 0 && filteredInvoices.length === 0 ? (
+                <div className="py-10 text-center text-sm text-cc-muted">
                   No invoices match your search.
                   <Button
                     variant="link"
@@ -1586,240 +1671,194 @@ export default function Billing() {
                     Clear filters
                   </Button>
                 </div>
-              ) : null}
-              {activeInvoices.length === 0 && !loadError ? (
-                <div className="py-10 text-center">
-                  <p className="text-sm font-semibold text-cc-text">
-                    {translate("billing.noInvoices")}
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-cc-muted">
-                    {translate("billing.noInvoicesHint")}
-                  </p>
-                </div>
               ) : (
-                <div className="divide-y border-cc-border">
-                  {filteredInvoices
-                    .slice(
-                      (Math.min(
-                        invoicePage,
-                        Math.max(1, Math.ceil(filteredInvoices.length / 10)),
-                      ) -
-                        1) *
-                        10,
-                      Math.min(
-                        invoicePage,
-                        Math.max(1, Math.ceil(filteredInvoices.length / 10)),
-                      ) * 10,
-                    )
-                    .map((invoice) => (
-                      <div
-                        key={invoice.id}
-                        className="flex flex-wrap items-center gap-3 py-5 first:pt-0 last:pb-0"
-                      >
-                        {/* Initials circle */}
-                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-xs font-semibold text-white bg-cc-plum">
-                          {invoice.recipient_name
-                            .split(" ")
-                            .map((p) => p[0])
-                            .join("")
-                            .slice(0, 2)
-                            .toUpperCase()}
-                        </div>
-
-                        {/* Info */}
-                        <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-semibold text-cc-text">
-                              {invoice.recipient_name}
-                            </p>
-                            <span
-                              className={`rounded-lg border px-2.5 py-0.5 text-[11px] font-bold ${statusTone(invoice.status)}`}
-                            >
-                              {overdueDays(invoice) > 0
-                                ? `${overdueDays(invoice)} days overdue`
-                                : invoice.status}
-                            </span>
-                          </div>
-                          <p className="mt-1 break-words text-sm text-cc-muted">
-                            {invoice.invoice_number}
-                            {invoice.due_date
-                              ? ` · ${translateParams("billing.due", { date: invoice.due_date })}`
-                              : ""}
-                          </p>
-                        </div>
-
-                        {/* Amount */}
-                        <p className="shrink-0 text-lg font-semibold tabular-nums text-cc-text">
-                          {cents(invoice.total_cents, invoice.currency)}
-                        </p>
-
-                        <details className="w-full min-w-0 rounded-xl border border-cc-border px-3">
-                          <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 text-sm font-medium text-cc-plum">
-                            View invoice details
-                            <ChevronDown className="h-4 w-4" />
-                          </summary>
-                          <div className="space-y-3 border-t border-cc-border py-3 text-sm">
-                            {invoice.recipient_email ? (
-                              <p className="break-all text-cc-muted">
-                                {invoice.recipient_email}
-                              </p>
-                            ) : null}
-                            {invoice.line_items.map((item, index) => (
-                              <div
-                                key={index}
-                                className="flex flex-wrap items-start justify-between gap-2"
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <p className="break-words text-cc-text">
-                                    {item.description}
-                                  </p>
-                                  {item.item_code && (
-                                    <p className="break-all text-xs text-cc-muted">
-                                      {item.item_code}
-                                      {item.service_date
-                                        ? ` | Service: ${item.service_date}`
-                                        : ""}
-                                      {item.location_type
-                                        ? ` | ${item.location_type.replaceAll("_", " ")}`
-                                        : ""}
-                                    </p>
-                                  )}
-                                  <p className="text-xs text-cc-muted">
-                                    {item.quantity} &times;{" "}
-                                    {cents(
-                                      item.unit_amount_cents,
-                                      invoice.currency,
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm sm:min-w-[720px]">
+                    <thead>
+                      <tr className="border-b border-cc-border bg-cc-soft/60 text-left text-[11px] uppercase tracking-wide text-cc-muted">
+                        <th className="px-4 py-3 font-semibold">Participant</th>
+                        <th className="hidden px-2 py-3 font-semibold sm:table-cell">Invoice</th>
+                        <th className="hidden px-2 py-3 font-semibold sm:table-cell">Due</th>
+                        <th className="px-2 py-3 text-right font-semibold">Amount</th>
+                        <th className="px-2 py-3 text-right font-semibold">Status</th>
+                        <th className="w-10 px-2 py-3"><span className="sr-only">Details</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredInvoices
+                        .slice((currentInvoicePage - 1) * INVOICE_PAGE_SIZE, currentInvoicePage * INVOICE_PAGE_SIZE)
+                        .map((invoice) => {
+                          const open = openInvoiceId === invoice.id;
+                          const pill = invoiceStatusPill(invoice);
+                          return (
+                            <InvoiceRows
+                              key={invoice.id}
+                              open={open}
+                              onToggle={() => setOpenInvoiceId(open ? null : invoice.id)}
+                              summary={
+                                <>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-2.5">
+                                      <span
+                                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                                        style={{ background: avatarColour(invoice.recipient_name) }}
+                                      >
+                                        {initialsOf(invoice.recipient_name)}
+                                      </span>
+                                      <span className="min-w-0">
+                                        <span className="block truncate font-semibold text-cc-text">{invoice.recipient_name}</span>
+                                        {invoice.recipient_email && (
+                                          <span className="hidden truncate text-[11px] text-cc-muted sm:block">{invoice.recipient_email}</span>
+                                        )}
+                                        {/* Phones: the invoice and due columns are hidden, so say it here. */}
+                                        <span className="block truncate text-[11px] text-cc-muted sm:hidden">
+                                          {invoice.invoice_number}
+                                          {invoice.due_date ? ` · due ${formatShortDate(invoice.due_date)}` : ""}
+                                        </span>
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="hidden px-2 py-3 font-mono text-[12px] text-cc-muted sm:table-cell">{invoice.invoice_number}</td>
+                                  <td className="hidden px-2 py-3 text-[13px] text-cc-muted sm:table-cell">{invoice.due_date ? formatShortDate(invoice.due_date) : "—"}</td>
+                                  <td className="px-2 py-3 text-right font-semibold tabular-nums text-cc-text">
+                                    {cents(invoice.total_cents, invoice.currency)}
+                                  </td>
+                                  <td className="px-2 py-3 text-right">
+                                    <span
+                                      className="inline-block rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide"
+                                      style={{ color: pill.fg, background: pill.bg }}
+                                    >
+                                      {pill.label}
+                                    </span>
+                                  </td>
+                                  <td className="px-2 py-3 text-cc-muted">
+                                    <ChevronDown size={16} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+                                  </td>
+                                </>
+                              }
+                              details={
+                                <div className="space-y-3 text-sm">
+                                  {invoice.line_items.map((item, index) => (
+                                    <div key={index} className="flex flex-wrap items-start justify-between gap-2">
+                                      <div className="min-w-0 flex-1">
+                                        <p className="break-words text-cc-text">{item.description}</p>
+                                        <p className="break-all text-xs text-cc-muted">
+                                          {[
+                                            item.item_code,
+                                            item.service_date ? `Service ${item.service_date}` : null,
+                                            item.location_type ? item.location_type.replaceAll("_", " ") : null,
+                                            `${item.quantity} × ${cents(item.unit_amount_cents, invoice.currency)}`,
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" · ")}
+                                        </p>
+                                      </div>
+                                      <span className="font-semibold tabular-nums">{cents(item.line_total_cents, invoice.currency)}</span>
+                                    </div>
+                                  ))}
+                                  <div className="flex flex-wrap items-center gap-2 border-t border-cc-border pt-3">
+                                    {invoice.status === "draft" && (
+                                      <Button
+                                        size="sm"
+                                        className="rounded-lg bg-cc-plum text-white"
+                                        disabled={busyInvoice !== null}
+                                        onClick={() => (setReviewConfirmed(false), setReviewInvoice(invoice))}
+                                      >
+                                        Review & finalise
+                                      </Button>
                                     )}
-                                  </p>
+                                    {["finalized", "issued"].includes(invoice.status) && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-lg"
+                                        disabled={busyInvoice !== null}
+                                        onClick={() => invoiceAction(invoice, "mark-sent")}
+                                      >
+                                        {translate("billing.action.markSent")}
+                                      </Button>
+                                    )}
+                                    {/* A draft is reviewed and finalised before it can be paid. */}
+                                    {!["draft", "paid", "void", "cancelled"].includes(invoice.status) && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-lg"
+                                        disabled={busyInvoice !== null}
+                                        onClick={() => markPaid(invoice)}
+                                      >
+                                        {translate("billing.action.paid")}
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="rounded-lg"
+                                      disabled={busyInvoice !== null}
+                                      onClick={() => invoiceAction(invoice, "pdf")}
+                                    >
+                                      {translate("billing.action.pdf")}
+                                    </Button>
+                                    {!["paid", "void", "cancelled"].includes(invoice.status) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="ml-auto rounded-lg text-red-500"
+                                        disabled={busyInvoice !== null}
+                                        onClick={() => invoiceAction(invoice, "cancel")}
+                                      >
+                                        {translate("billing.action.cancel")}
+                                      </Button>
+                                    )}
+                                  </div>
                                 </div>
-                                <span className="font-semibold tabular-nums">
-                                  {cents(
-                                    item.line_total_cents,
-                                    invoice.currency,
-                                  )}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                          {/* Actions */}
-                          <div className="flex w-full flex-wrap items-center gap-2 rounded-xl bg-cc-soft/40 p-2">
-                            {invoice.status === "draft" && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="rounded-lg text-sm min-h-10 h-auto px-3 py-2"
-                                disabled={busyInvoice !== null}
-                                onClick={() => (
-                                  setReviewConfirmed(false),
-                                  setReviewInvoice(invoice)
-                                )}
-                              >
-                                Review & finalise
-                              </Button>
-                            )}
-                            {["finalized", "issued"].includes(
-                              invoice.status,
-                            ) && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="rounded-lg text-sm min-h-10 h-auto px-3 py-2"
-                                disabled={busyInvoice !== null}
-                                onClick={() =>
-                                  invoiceAction(invoice, "mark-sent")
-                                }
-                              >
-                                {translate("billing.action.markSent")}
-                              </Button>
-                            )}
-                            {/* A draft is reviewed and finalised before it can be paid. */}
-                            {!["draft", "paid", "void", "cancelled"].includes(
-                              invoice.status,
-                            ) && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="rounded-lg text-sm min-h-10 h-auto px-3 py-2"
-                                disabled={busyInvoice !== null}
-                                onClick={() => markPaid(invoice)}
-                              >
-                                {translate("billing.action.paid")}
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="rounded-lg text-sm min-h-10 h-auto px-3 py-2"
-                              disabled={busyInvoice !== null}
-                              onClick={() => invoiceAction(invoice, "pdf")}
-                            >
-                              {translate("billing.action.pdf")}
-                            </Button>
-                            {!["paid", "void", "cancelled"].includes(
-                              invoice.status,
-                            ) && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="rounded-lg text-sm min-h-10 h-auto px-3 py-2 text-red-500"
-                                disabled={busyInvoice !== null}
-                                onClick={() => invoiceAction(invoice, "cancel")}
-                              >
-                                {translate("billing.action.cancel")}
-                              </Button>
-                            )}
-                          </div>
-                        </details>
-                      </div>
-                    ))}
+                              }
+                            />
+                          );
+                        })}
+                    </tbody>
+                  </table>
                 </div>
               )}
-              {filteredInvoices.length > 10 && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-cc-border pt-4">
-                  <p className="text-sm text-cc-muted">
-                    Page{" "}
-                    {Math.min(
-                      invoicePage,
-                      Math.ceil(filteredInvoices.length / 10),
-                    )}{" "}
-                    of {Math.ceil(filteredInvoices.length / 10)}
+              {filteredInvoices.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-cc-border px-4 py-3">
+                  <p className="text-[12px] text-cc-muted" aria-live="polite">
+                    {filteredInvoices.length} of {activeInvoices.length} invoices
+                    {isManagingDirector && !loadError
+                      ? ` · ${cents(totalOutstanding)} outstanding · ${cents(totalPaid)} paid`
+                      : ""}
                   </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      disabled={invoicePage <= 1}
-                      onClick={() =>
-                        setInvoicePage((page) =>
-                          Math.max(
-                            1,
-                            Math.min(
-                              page,
-                              Math.ceil(filteredInvoices.length / 10),
-                            ) - 1,
-                          ),
-                        )
-                      }
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={
-                        invoicePage >= Math.ceil(filteredInvoices.length / 10)
-                      }
-                      onClick={() => setInvoicePage((page) => page + 1)}
-                    >
-                      Next
-                    </Button>
-                  </div>
+                  {invoicePageCount > 1 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[12px] text-cc-muted">
+                        Page {currentInvoicePage} of {invoicePageCount}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentInvoicePage <= 1}
+                        onClick={() => setInvoicePage(currentInvoicePage - 1)}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentInvoicePage >= invoicePageCount}
+                        onClick={() => setInvoicePage(currentInvoicePage + 1)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
-            </Card>
+            </section>
           </div>
         </div>
 
         {workspace === "reports" && isManagingDirector && (
-          <RevenueReportPanel ledgerStatus={ledgerStatus} />
+          <RevenueReportPanel />
         )}
         <section
           hidden={workspace !== "pricing"}

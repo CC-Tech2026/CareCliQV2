@@ -100,8 +100,11 @@ function StatusPill({ row, tab }: { row: ClaimRow; tab: Tab }) {
 export function NdiaClaimsPanel({
   onChanged,
   heading,
+  onShowAllInvoices,
 }: {
   onChanged?: () => void;
+  /** Offered when nothing is ready to claim (e.g. no NDIA-managed participants). */
+  onShowAllInvoices?: () => void;
   /** Shows the panel as a titled card (Financial Governance). */
   heading?: string;
 }) {
@@ -256,7 +259,7 @@ export function NdiaClaimsPanel({
 
   return (
     <section
-      className={heading ? "space-y-4 rounded-3xl border border-cc-border bg-cc-surface p-4 sm:p-6" : "space-y-4"}
+      className={`${heading ? "space-y-4 rounded-3xl border border-cc-border bg-cc-surface p-4 sm:p-6" : "space-y-4"} ${chosen.length ? "pb-2" : ""}`}
       aria-label={heading ?? "NDIA claims"}
     >
       {modal}
@@ -266,7 +269,7 @@ export function NdiaClaimsPanel({
           <p className="max-w-xl text-sm text-cc-muted">
             {heading
               ? "Create, review and claim invoices from delivered sessions."
-              : "Finalised invoices for NDIA-managed participants. Submit them together as one bulk payment request, then record the remittance when the NDIA pays."}
+              : "NDIA-managed invoices, claimed together as one bulk payment request."}
           </p>
         </div>
         <div role="tablist" aria-label="Claim status" className="flex rounded-xl border border-cc-border bg-cc-soft p-1">
@@ -354,6 +357,14 @@ export function NdiaClaimsPanel({
                 : tab === "submitted"
                   ? "No claims waiting on payment."
                   : "No paid claims yet."}
+            {!q && tab === "ready" && onShowAllInvoices && (
+              <>
+                <br />
+                <button type="button" className="mt-2 font-semibold text-cc-plum underline" onClick={onShowAllInvoices}>
+                  See all invoices
+                </button>
+              </>
+            )}
           </p>
         ) : (
           <table className="w-full min-w-[640px] text-sm">
@@ -422,7 +433,7 @@ export function NdiaClaimsPanel({
                             <ul className="mt-1 space-y-0.5 text-[11px]" style={{ color: "var(--cc-status-danger)" }}>
                               {row.problems.slice(0, 3).map((p) => <li key={p}>{p}</li>)}
                               <li>
-                                <a href="/billing" className="font-semibold underline">Fix invoice</a>
+                                <a href="/billing?workspace=invoices" className="font-semibold underline">Fix invoice</a>
                               </li>
                             </ul>
                           )}
@@ -461,7 +472,7 @@ export function NdiaClaimsPanel({
 
       {chosen.length > 0 && (
         <div
-          className="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3 text-white shadow-xl sm:px-5"
+          className="sticky bottom-4 mt-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3 text-white shadow-xl sm:px-5"
           style={{ background: "#1E1B2E" }}
           role="region"
           aria-label="Selected claims"
