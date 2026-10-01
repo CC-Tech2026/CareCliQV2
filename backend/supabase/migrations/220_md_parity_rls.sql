@@ -16,11 +16,6 @@
 
 BEGIN;
 
--- cs_is_coordinator() is defined identically 3x across migration history
--- (003, 006, 052) — CREATE OR REPLACE updates the one live function
--- definition; the historical files are left untouched (existing convention).
--- cs_is_admin() delegates to this function, so it's fixed too without a
--- separate change.
 CREATE OR REPLACE FUNCTION cs_is_coordinator()
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER
@@ -35,12 +30,13 @@ AS $$
   );
 $$;
 
-DROP POLICY IF EXISTS "Coordinators can insert price schedules" ON ndis_price_schedules;
-CREATE POLICY "Coordinators and MDs can insert price schedules" ON ndis_price_schedules
+DROP POLICY IF EXISTS "Coordinators can insert price schedules" ON public.ndis_price_schedules;
+DROP POLICY IF EXISTS "Coordinators and MDs can insert price schedules" ON public.ndis_price_schedules;
+CREATE POLICY "Coordinators and MDs can insert price schedules" ON public.ndis_price_schedules
     FOR INSERT WITH CHECK (
-        organization_id = (SELECT organization_id FROM users WHERE id = auth.uid()) AND
+        organization_id = (SELECT organization_id FROM public.users WHERE id = auth.uid()) AND
         EXISTS (
-            SELECT 1 FROM organization_members
+            SELECT 1 FROM public.organization_members
             WHERE user_id = auth.uid() AND
                   organization_id = ndis_price_schedules.organization_id AND
                   role IN ('support_coordinator', 'managing_director')

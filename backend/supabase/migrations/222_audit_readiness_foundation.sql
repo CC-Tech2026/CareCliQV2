@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS public.audit_requirement_settings (
 
 CREATE TABLE IF NOT EXISTS public.audit_evidence_links (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id  UUID        NOT NULL REFERENCES public.organizations(organization_id) ON DELETE CASCADE,
+    organization_id  UUID        NOT NULL REFERENCES public.organizations(organization_id) ON DELETE RESTRICT,
     requirement_code TEXT        NOT NULL,
     subject_type     TEXT        NOT NULL CHECK (subject_type IN ('organisation', 'worker', 'participant')),
     subject_id       UUID,
@@ -85,7 +85,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_evidence_links_org
 
 CREATE TABLE IF NOT EXISTS public.audit_na_decisions (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id  UUID        NOT NULL REFERENCES public.organizations(organization_id) ON DELETE CASCADE,
+    organization_id  UUID        NOT NULL REFERENCES public.organizations(organization_id) ON DELETE RESTRICT,
     requirement_code TEXT        NOT NULL,
     subject_type     TEXT        NOT NULL CHECK (subject_type IN ('organisation', 'worker', 'participant')),
     subject_id       UUID,
