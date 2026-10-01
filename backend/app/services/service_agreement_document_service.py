@@ -47,10 +47,6 @@ LOCATION_LABELS = {
 }
 FREQUENCY_LABELS = {"weekly": "Weekly", "fortnightly": "Fortnightly", "monthly": "Monthly", "as_scheduled": "As scheduled"}
 # NDIS unit of measure -> (singular, plural) shown next to a quantity.
-UNIT_LABELS = {
-    "H": ("hr", "hrs"), "HOUR": ("hr", "hrs"), "D": ("day", "days"), "WK": ("week", "weeks"),
-    "MON": ("month", "months"), "YR": ("year", "years"),
-}
 HOUR_UNITS = {"H", "HOUR"}
 
 
@@ -73,12 +69,12 @@ def _fmt_date(value: Any) -> Optional[str]:
         return str(value)
 
 
-def quantity_label(quantity: float, unit: Optional[str]) -> str:
-    qty = f"{quantity:,.2f}".rstrip("0").rstrip(".")
-    labels = UNIT_LABELS.get((unit or "").upper())
-    if not labels:
-        return qty
-    return f"{qty} {labels[0] if quantity == 1 else labels[1]}"
+def quantity_label(
+    quantity: float, unit: Optional[str], item_code: Optional[str] = None, name: Optional[str] = None,
+) -> str:
+    from .ndis_units import quantity_label as label
+
+    return label(quantity, unit, item_code, name)
 
 
 def effective_status(agreement: dict[str, Any], today: Optional[date] = None) -> str:
@@ -487,7 +483,9 @@ def document_context(org: dict[str, Any], agreement: dict[str, Any], participant
         lines.append({
             "name": s.get("item_name") or s.get("support_item_code"),
             "detail": " · ".join(d for d in detail if d),
-            "quantity_label": quantity_label(quantity, s.get("unit")) if quantity else "—",
+            "quantity_label": (
+                quantity_label(quantity, s.get("unit"), s.get("support_item_code"), s.get("item_name")) if quantity else "—"
+            ),
             "rate_label": _money(float(rate)) if rate is not None else "—",
             "total_label": _money(line_total),
         })

@@ -92,7 +92,7 @@ def test_document_matches_the_schedule_of_supports():
     assert ctx["period"] == "1 Oct 2026 to 30 Sep 2027"
     assert ctx["plan_management_label"] == "Plan-managed"
     assert ctx["participant"]["date_of_birth"] == "14 Mar 1998"
-    assert [l["quantity_label"] for l in ctx["supports"]] == ["312 hrs", "156"]
+    assert [l["quantity_label"] for l in ctx["supports"]] == ["312 hrs", "156 trips"]
     assert ctx["supports"][0]["detail"] == "Weekly · at home · 01_011_0107_1_1"
     assert ctx["total_label"] == "$23,456.16"
     assert ctx["draft"] is False

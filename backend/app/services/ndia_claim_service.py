@@ -217,11 +217,10 @@ def build_bulk_csv(org: dict, claims: list[dict[str, Any]]) -> str:
 def _quantity_label(lines: list[dict]) -> str:
     if len(lines) != 1:
         return f"{len(lines)} items"
+    from .ndis_units import quantity_label
+
     line = lines[0]
-    qty = f"{line['quantity']:.2f}".rstrip("0").rstrip(".")
-    if line["unit"] in HOUR_UNITS:
-        return f"{qty} hr" if line["quantity"] == 1 else f"{qty} hrs"
-    return qty
+    return quantity_label(line["quantity"], line["unit"], line["item_code"], line["description"])
 
 
 def _row(invoice: dict, participant: Optional[dict], period: Optional[dict], org: dict, batch: Optional[dict]) -> dict[str, Any]:

@@ -867,13 +867,14 @@ def _minimal_pdf_bytes(invoice: dict, *, render_error: str | None = None) -> byt
 
 
 def _quantity_label(item: dict) -> str:
-    """'1.5 hrs' for time-based items, '2' for per-item supports."""
-    qty = float(item.get("quantity") or 0)
-    text = f"{qty:.2f}".rstrip("0").rstrip(".")
-    unit = str(item.get("unit") or "H").upper()
-    if unit in {"H", "HOUR"}:
-        return f"{text} hr" if qty == 1 else f"{text} hrs"
-    return text
+    """'1.5 hrs' for time-based items, '4 trips' for transport, '2' when
+    the count's noun isn't known."""
+    from .ndis_units import quantity_label
+
+    return quantity_label(
+        float(item.get("quantity") or 0), str(item.get("unit") or "H"),
+        item.get("item_code"), item.get("description"),
+    )
 
 
 def _line_date_label(item: dict) -> str:
