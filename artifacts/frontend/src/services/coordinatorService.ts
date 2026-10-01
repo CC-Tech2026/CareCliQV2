@@ -1674,6 +1674,8 @@ export type GoalsAndTasksValidation = {
   active_goals: number;
   tasks_count: number;
   message?: string;
+  /** False when the participant has no active NDIS plan — shifts can't be created yet. */
+  has_active_plan?: boolean;
 };
 
 export function checkParticipantGoalsAndTasks(participantId: string) {

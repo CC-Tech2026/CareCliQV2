@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ShiftAssignmentModal } from "./ShiftAssignmentModal";
 
@@ -25,18 +25,22 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ user: { organizationId: "org-1" } }),
 }));
 
+const credentialStatus = vi.hoisted(() => ({
+  value: { valid: true, missing_credentials: [] as string[], warning: null as string | null },
+}));
+
 vi.mock("@/services/coordinatorService", () => ({
   assignShift: vi.fn(),
+  getAvailableWorkers: vi.fn().mockResolvedValue([]),
+  checkParticipantGoalsAndTasks: vi.fn().mockResolvedValue({ has_valid: true, active_goals: 1, tasks_count: 1, has_active_plan: true }),
+  getParticipantTasks: vi.fn().mockResolvedValue([]),
+  getParticipantPriceItemOptions: vi.fn().mockResolvedValue([]),
   getCoordinatorCredentialAlerts: vi.fn().mockResolvedValue({ alerts: [], generated_at: "2026-01-01T00:00:00Z", training_due_count: 0 }),
-  getCoordinatorWorkerCredentialStatus: vi.fn().mockResolvedValue({
+  getCoordinatorWorkerCredentialStatus: vi.fn(async () => ({
     worker_id: "w-1",
     shift_type: "standard_support",
-    credential_status: {
-      valid: true,
-      missing_credentials: [],
-      warning: null,
-    },
-  }),
+    credential_status: credentialStatus.value,
+  })),
 }));
 
 vi.mock("@workspace/api-client-react", async (importOriginal) => {
@@ -83,6 +87,8 @@ const mockWorkers = [
 describe("ShiftAssignmentModal", () => {
   let queryClient: QueryClient;
 
+  afterEach(() => cleanup());
+
   beforeEach(() => {
     queryClient = new QueryClient({
       defaultOptions: {
@@ -103,8 +109,10 @@ describe("ShiftAssignmentModal", () => {
       </QueryClientProvider>
     );
 
-    const titleElement = screen.getAllByText("Create Shift")[0];
-    expect(titleElement).toBeTruthy();
+    expect(screen.getByText("Create shift")).toBeTruthy();
+    expect(screen.getByText("Assign a shift to a support worker")).toBeTruthy();
+    // The footer says what's still needed.
+    expect(screen.getByText("Choose a participant")).toBeTruthy();
   });
 
   it("closes modal when cancel button is clicked", () => {
@@ -141,7 +149,7 @@ describe("ShiftAssignmentModal", () => {
     expect((submitButton as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("displays worker selection dropdown", () => {
+  it("asks for a participant and time before suggesting workers", () => {
     render(
       <QueryClientProvider client={queryClient}>
         <ShiftAssignmentModal
@@ -152,8 +160,29 @@ describe("ShiftAssignmentModal", () => {
       </QueryClientProvider>
     );
 
-    const workerLabel = screen.getAllByText("Support Worker")[0];
-    expect(workerLabel).toBeTruthy();
+    expect(screen.getByText("Suggested workers")).toBeTruthy();
+    expect(screen.getByText("Choose a participant and time to see who fits best.")).toBeTruthy();
+  });
+
+  it("fills date and times from the roster cell, with the shift length", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ShiftAssignmentModal
+          open={true}
+          onOpenChange={vi.fn()}
+          workers={mockWorkers}
+          initialDate="2026-10-01"
+        />
+      </QueryClientProvider>
+    );
+
+    expect((screen.getByLabelText("Date") as HTMLInputElement).value).toBe("2026-10-01");
+    expect((screen.getByLabelText("Start") as HTMLInputElement).value).toBe("09:00");
+    expect((screen.getByLabelText(/^End/) as HTMLInputElement).value).toBe("13:00");
+    expect(screen.getByText("· 4h")).toBeTruthy();
+    // An end before the start runs overnight.
+    fireEvent.change(screen.getByLabelText(/^End/), { target: { value: "07:00" } });
+    expect(screen.getByText("· 22h · overnight")).toBeTruthy();
   });
 
   it("displays participant selection dropdown", () => {
@@ -186,7 +215,8 @@ describe("ShiftAssignmentModal", () => {
     expect(shiftTypeLabel).toBeTruthy();
   });
 
-  it("shows credential status for pre-selected worker", async () => {
+  it("keeps the clicked worker selected and explains a credential block", async () => {
+    credentialStatus.value = { valid: false, missing_credentials: ["First Aid"], warning: null };
     render(
       <QueryClientProvider client={queryClient}>
         <ShiftAssignmentModal
@@ -194,13 +224,38 @@ describe("ShiftAssignmentModal", () => {
           onOpenChange={vi.fn()}
           workers={mockWorkers}
           worker={mockWorkers[0]}
+          initialParticipantId="p-1"
+          initialDate="2026-10-01"
         />
       </QueryClientProvider>
     );
 
-    await waitFor(() => {
-      const credentialElement = screen.getByText("Credentials valid");
-      expect(credentialElement).toBeTruthy();
-    });
+    const radio = await screen.findByRole("radio", { name: /Alice Worker/ });
+    expect((radio as HTMLInputElement).checked).toBe(true);
+    await waitFor(() => expect(screen.getByText(/First Aid/)).toBeTruthy());
+    expect(screen.getByText("Alice Worker is missing a required credential")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /Assign shift/ }) as HTMLButtonElement).disabled).toBe(true);
+    credentialStatus.value = { valid: true, missing_credentials: [], warning: null };
+  });
+
+  it("says up front when the participant has no active NDIS plan", async () => {
+    const service = await import("@/services/coordinatorService");
+    vi.mocked(service.checkParticipantGoalsAndTasks).mockResolvedValueOnce({
+      has_valid: true, active_goals: 1, tasks_count: 1, has_active_plan: false,
+    } as never);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ShiftAssignmentModal
+          open={true}
+          onOpenChange={vi.fn()}
+          workers={mockWorkers}
+          initialParticipantId="p-1"
+          initialDate="2026-10-01"
+        />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText(/has no active NDIS plan/)).toBeTruthy();
+    expect(screen.getByText("Add an active NDIS plan first")).toBeTruthy();
   });
 });

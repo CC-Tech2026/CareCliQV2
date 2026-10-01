@@ -653,14 +653,17 @@ export function RosterBoard({
                             <button type="button"
                               aria-label={assignLabel}
                               onClick={() => onCellClick(worker, dayKey)}
-                              className="flex min-h-16 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-transparent text-xs font-semibold text-cc-plum hover:border-cc-plum hover:bg-cc-soft focus-visible:border-cc-plum focus-visible:outline-2 focus-visible:outline-cc-plum">
-                              <Plus size={14} /> {translate("schedule.assign")}
+                              className="group/assign flex min-h-16 w-full items-center justify-center rounded-lg border-[1.5px] border-dashed border-transparent text-xs font-semibold text-[#E8457A] transition-colors hover:border-[#E8457A] hover:bg-[#E8457A]/5 focus-visible:border-[#E8457A] focus-visible:outline-none">
+                              {/* Shown on hover (and keyboard focus) so the grid stays calm; always shown on touch screens. */}
+                              <span className="flex items-center gap-1 transition-opacity [@media(hover:hover)]:opacity-0 group-hover/assign:opacity-100 group-focus-visible/assign:opacity-100">
+                                <Plus size={14} /> {translate("schedule.assign")}
+                              </span>
                             </button>
                           )}
                           {cellState === "assigned" && (
                             <div className="space-y-1">
                               {dayShifts.map((s) => (
-                                <div key={s.id} className={"relative group/card rounded-lg " + (newShiftId === s.id ? "ring-2 ring-cc-plum ring-offset-2" : "")}>
+                                <div key={s.id} className={"relative group/card rounded-lg " + (newShiftId === s.id ? "outline-dashed outline-2 outline-offset-2 outline-[#E8457A] animate-in fade-in zoom-in-95 duration-500" : "")}>
                                   <ShiftCard shift={s} colorBy={colorBy} onClick={() => setDetailShift(s)} />
                                   <button
                                     onClick={() => handleUnassignClick(s)}

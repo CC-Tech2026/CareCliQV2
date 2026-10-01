@@ -5554,11 +5554,19 @@ async def check_goals_and_tasks(
             elif tasks_count == 0:
                 message = "No tasks found for active goals. Please add tasks first."
         
+        # Shifts also need an active NDIS plan (create_shift refuses without
+        # one) — say so here, so the shift form can tell the coordinator
+        # before they've filled it in rather than after they press Assign.
+        from ..services import funding_service
+
+        has_active_plan = bool(await funding_service.get_plan_for_participant(participant_id))
+
         return {
             "has_valid": has_valid,
             "active_goals": active_goals,
             "tasks_count": tasks_count,
             "message": message,
+            "has_active_plan": has_active_plan,
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=internal_error_detail("Validation check failed", exc))
