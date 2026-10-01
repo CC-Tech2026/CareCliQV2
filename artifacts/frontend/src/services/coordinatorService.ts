@@ -1340,6 +1340,8 @@ export function addParticipantRequiredSkill(participantId: string, skill: string
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type LiveShift = {
+  clock_in_verified?: boolean;
+  clock_in_method?: string;
   id: string;
   worker_id?: string;
   worker_name?: string;
@@ -1777,6 +1779,12 @@ export type ShiftVerificationChecks = {
 };
 
 export type ShiftVerificationQueueItem = {
+  tasks?: Array<{ id?: string; name?: string; label?: string; title?: string; completed?: boolean; completed_at?: string | null }>;
+  clock_in_location_verified?: boolean;
+  session_note?: string | null;
+  original_language_input?: string | null;
+  detected_language?: string | null;
+  compliance_score?: number | null;
   shift_id: string;
   participant_id?: string | null;
   participant_name?: string | null;

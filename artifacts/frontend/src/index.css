@@ -167,6 +167,7 @@
   --color-cc-border: var(--cc-border);
   --color-cc-soft: var(--cc-soft);
   --color-cc-bg: var(--cc-bg);
+  --color-cc-panel: var(--cc-panel);
   --color-cc-surface: var(--cc-surface);
   --color-cc-active-bg: var(--cc-active-bg);
 }
@@ -218,6 +219,10 @@
   --cc-muted:      #6A6A77;   /* Charcoal Navy @ 65% over white */
   --cc-border:     #E0DDD0;   /* Warm ivory-tinted border (APPLAYOUT_REDESIGN_REFERENCE.md) */
   /* ── Surfaces ── */
+  --cc-panel: #F1EDDC;
+  --cc-grid-header: #F4EBE5;
+  --cc-today-header: #F3E6E1;
+  --cc-today-col: #FEF7FA;
   --cc-bg:         #F5F5F5;   /* Light Grey — page canvas (was warm cream #FCFBF0) */
   --cc-surface:    #FFFFFF;   /* Pure white — cards/panels lift off the grey page canvas via colour + shadow */
   --cc-soft:       #ECECEC;   /* Light Grey tint — hover/secondary/muted bg (was warm off-white #F4EDE6) */
@@ -333,6 +338,10 @@
   --cc-muted:      #9CA3AF;
   --cc-border:     #374151;
   /* Surfaces (Charcoal Navy family) */
+  --cc-panel: #242438;
+  --cc-grid-header: #29293E;
+  --cc-today-header: #392B3B;
+  --cc-today-col: #302535;
   --cc-bg:         #1A1A2E;
   --cc-surface:    #2C2C3F;
   --cc-soft:       #242438;

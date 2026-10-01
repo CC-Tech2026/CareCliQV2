@@ -98,14 +98,16 @@ function CheckRow({
   );
 }
 
-function ShiftVerificationCard({
+export function ShiftVerificationCard({
+  initiallyExpanded = false,
   item,
   onVerified,
 }: {
+  initiallyExpanded?: boolean;
   item: ShiftVerificationQueueItem;
   onVerified: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const [priceTouched, setPriceTouched] = useState(false);
   const [priceItemCode, setPriceItemCode] = useState("");
   const { toast } = useToast();

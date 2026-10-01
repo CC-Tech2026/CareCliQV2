@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useMemo, useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -289,6 +290,12 @@ export default function CoordinatorRosteringPage() {
   const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
   const liveOrgId = currentUser?.organizationId ?? "__no_org__";
+  const [newShiftId, setNewShiftId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!newShiftId) return;
+    const timer = setTimeout(() => setNewShiftId(null), 5000);
+    return () => clearTimeout(timer);
+  }, [newShiftId]);
   const [liveSearch, setLiveSearch] = useState("");
   const [pageTab,      setPageTab]      = useState<ScheduleTab>("roster");
   const [viewMode,     setViewMode]     = useState<ViewMode>("roster");
@@ -474,6 +481,7 @@ export default function CoordinatorRosteringPage() {
           like an isolated, oddly-clipped shape floating on its own instead
           of merging into the panel below). */}
       <div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
       <div role="tablist" className="flex items-end gap-3">
         {SCHEDULE_TABS.map((tab) => {
           const active = pageTab === tab.id;
@@ -503,6 +511,8 @@ export default function CoordinatorRosteringPage() {
             </button>
           );
         })}
+      </div>
+      <Link href="/coordinator/verification" className="mb-2 inline-flex min-h-11 items-center rounded-full border border-cc-border bg-cc-surface px-4 text-sm font-semibold text-cc-plum">{translate("schedule.verification")}</Link>
       </div>
       <div className="rounded-2xl rounded-tl-none" style={{ background: "var(--cc-surface)", padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
@@ -624,6 +634,7 @@ export default function CoordinatorRosteringPage() {
 
       {viewMode === "roster" && (
         <RosterBoard
+          newShiftId={newShiftId}
           weekStart={weekStart}
           shifts={shifts}
           workers={workers}
@@ -687,9 +698,11 @@ export default function CoordinatorRosteringPage() {
       </Sheet>
 
       <ShiftAssignmentModal
+        onAssigned={setNewShiftId}
         open={assignOpen}
         onOpenChange={(open) => { setAssignOpen(open); if (!open) setAssignTarget(null); }}
-        worker={assignTarget?.worker ?? assignWorker}
+        worker={assignTarget ? null : assignWorker}
+        initialWorkerId={assignTarget?.worker.id}
         workers={workers}
         initialDate={assignTarget?.date}
       />

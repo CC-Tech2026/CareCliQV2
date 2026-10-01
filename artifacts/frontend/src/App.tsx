@@ -1,3 +1,4 @@
+import CoordinatorVerificationPage from "@/pages/coordinator-verification";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
@@ -614,6 +615,11 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/coordinator/verification">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><CoordinatorVerificationPage /></AppLayout>
+        </ProtectedRoute>
+      </Route>
       <Route path="/coordinator/rostering">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><CoordinatorRosteringPage /></AppLayout>

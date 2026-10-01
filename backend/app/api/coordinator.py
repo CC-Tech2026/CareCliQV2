@@ -17,7 +17,7 @@ from ..core.errors import internal_error_detail
 from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access, has_active_grant
 from ..core.config import settings
 from ..core.security import get_current_user
-from ..core.timezone import parse_shift_datetime, participant_timezone
+from ..core.timezone import parse_shift_datetime, participant_timezone, request_timezone
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
 from ..services.pattern_detection_service import (
     dismiss_pattern,
@@ -4504,7 +4504,7 @@ def _fetch_live_shifts_raw(
     full_columns = (
         "id, organization_id, worker_id, participant_id, participant_name, "
         "shift_type, scheduled_start, scheduled_end, status, "
-        "clocked_in_at, clocked_out_at, duration_minutes, "
+        "clocked_in_at, clocked_out_at, duration_minutes, clock_in_verified, clock_in_method, "
         "session_id, visit_notes, coordinator_notes, special_instructions, "
         "emergency_flagged, emergency_flagged_at, emergency_note, "
         "created_at, updated_at"
@@ -4522,8 +4522,9 @@ def _fetch_live_shifts_raw(
             supabase.table("shifts")
             .select(select_columns)
             .eq("organization_id", org_id)
-            .in_("status", ["in_progress", "clocked_in", "scheduled"])
+            .in_("status", ["in_progress", "clocked_in", "scheduled", "completed"])
             .gte("scheduled_start", window_start)
+            .lt("scheduled_start", (datetime.now(request_timezone()).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).isoformat())
             .order("scheduled_start")
             .execute()
         )
@@ -4605,7 +4606,7 @@ async def get_live_shifts(
     org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc)
-    window_start = (now - timedelta(hours=12)).isoformat()
+    window_start = (now.astimezone(request_timezone()).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=12)).isoformat()
 
     try:
         shifts_raw = _fetch_live_shifts_raw(supabase, org_id, window_start)
@@ -4665,6 +4666,8 @@ async def get_live_shifts(
     # Auto-generate alerts for monitored conditions
     alert_service_import_ok = True
     for shift in shifts_raw:
+        if shift.get("clocked_out_at") or shift.get("status") == "completed":
+            continue
         sid = shift["id"]
         elapsed = _elapsed_minutes(shift.get("clocked_in_at") or shift.get("scheduled_start"))
         has_session = bool(shift.get("session_id"))

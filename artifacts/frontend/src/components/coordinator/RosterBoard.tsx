@@ -298,6 +298,7 @@ function UnassignModal({
 
 // ── Main board ─────────────────────────────────────────────────────────────
 interface RosterBoardProps {
+  newShiftId?: string | null;
   weekStart: Date;
   shifts: CoordinatorShiftRecord[];
   workers: WorkerStats[];
@@ -312,7 +313,7 @@ interface RosterBoardProps {
 }
 
 export function RosterBoard({
-  weekStart, shifts, workers, availMap, loadingAvail, onCellClick, onRefresh,
+  newShiftId, weekStart, shifts, workers, availMap, loadingAvail, onCellClick, onRefresh,
   colorBy = "status", allowCreate = true,
 }: RosterBoardProps) {
   const { translate, translateParams } = useAccessibility();
@@ -545,7 +546,7 @@ export function RosterBoard({
                   <th
                     key={d.toISOString()}
                     className="min-w-[132px] px-2 py-2.5 text-center"
-                    style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#F0ECFF" : SOFT }}
+                    style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "var(--cc-today-header)" : "var(--cc-grid-header)" }}
                   >
                     <div className="text-[10px] font-black uppercase tracking-wider" style={{ color: isToday(d) ? PLUM : MUTED }}>
                       {format(d, "EEE")}
@@ -605,17 +606,20 @@ export function RosterBoard({
                       let cellState: "available" | "assigned" | "blackout" | "unavailable" | "loading" = "available";
                       // A rostered shift always shows, even on a day off or leave —
                       // hiding it hid a real conflict.
-                      if (hasShift) { cellState = "assigned"; cellBg = onBlackout ? "#FFFBEB" : isToday(d) ? "#FAFAFE" : "var(--cc-bg)"; }
+                      if (hasShift) { cellState = "assigned"; cellBg = onBlackout ? "#FFFBEB" : isToday(d) ? "var(--cc-today-col)" : "var(--cc-surface)"; }
                       else if (!avail && loadingAvail) cellState = "loading";
                       else if (onBlackout) { cellState = "blackout"; cellBg = "#FFFBEB"; }
                       else if (!isWorkDay) { cellState = "unavailable"; cellBg = "#F8FAFC"; }
-                      else { cellState = "available"; cellBg = isToday(d) ? "#F0FFF4" : "#F7FEF9"; }
+                      else { cellState = "available"; cellBg = isToday(d) ? "var(--cc-today-col)" : "var(--cc-surface)"; }
                       // Read-only boards don't need "free slot" green; keep today's column visible instead.
                       if (!allowCreate && (cellState === "available" || cellState === "assigned")) {
                         cellBg = isToday(d) ? "rgba(232,69,122,0.05)" : "var(--cc-bg)";
                       }
 
                       const dropDisabled = activeDayIso != null && activeDayIso !== dayKey;
+                      // Past days can't take a new shift from the grid.
+                      const canCreateHere = allowCreate && dayKey >= appLocalDateKey(new Date().toISOString());
+                      const assignLabel = translateParams("coordinator.rostering.assignShiftTo", { worker: worker.full_name, date: format(d, "d MMM") });
 
                       return (
                         <DayCell key={d.toISOString()} workerId={worker.id} dayIso={dayKey} disabled={dropDisabled} cellBg={cellBg}>
@@ -630,40 +634,34 @@ export function RosterBoard({
                               <span className="text-[9px] font-bold text-amber-700">{translate("coordinator.rostering.onLeave")}</span>
                             </div>
                           )}
-                          {cellState === "unavailable" && !allowCreate && (
-                            <div className="flex h-10 items-center justify-center">
-                              <MinusCircle size={12} className="opacity-25" style={{ color: MUTED }} />
-                            </div>
+                          {cellState === "unavailable" && !canCreateHere && (
+                            <div className="flex min-h-16 items-center justify-center rounded-lg text-xs text-cc-muted" style={{ background: "repeating-linear-gradient(135deg, transparent, transparent 5px, #88888810 5px, #88888810 7px), var(--cc-grid-header)" }}>{translate("schedule.unavailable")}</div>
                           )}
-                          {cellState === "unavailable" && allowCreate && (
+                          {cellState === "unavailable" && canCreateHere && (
                             // Outside the worker's usual days — still possible to roster
                             // (they may have agreed to it); the shift form checks conflicts.
-                            <button
-                              type="button"
-                              title={`${translateParams("coordinator.rostering.assignShiftTo", { worker: worker.full_name, date: format(d, "d MMM") })} (outside usual availability)`}
+                            <button type="button"
+                              aria-label={`${assignLabel} (outside usual availability)`}
                               onClick={() => onCellClick(worker, dayKey)}
-                              className="group flex h-10 w-full items-center justify-center rounded-lg border border-dashed border-transparent transition-all hover:border-slate-300 hover:bg-slate-50"
-                            >
-                              <MinusCircle size={12} className="opacity-25 group-hover:hidden" style={{ color: MUTED }} />
-                              <Plus size={13} className="hidden text-slate-400 group-hover:block" />
+                              className="flex min-h-16 w-full items-center justify-center rounded-lg border border-dashed border-transparent text-xs text-cc-muted hover:border-cc-plum hover:text-cc-plum focus-visible:border-cc-plum focus-visible:outline-2 focus-visible:outline-cc-plum"
+                              style={{ background: "repeating-linear-gradient(135deg, transparent, transparent 5px, #88888810 5px, #88888810 7px), var(--cc-grid-header)" }}>
+                              {translate("schedule.unavailable")}
                             </button>
                           )}
-                          {cellState === "available" && !allowCreate && <div className="h-10" />}
-                          {cellState === "available" && allowCreate && (
-                            <button
-                              type="button"
-                              title={translateParams("coordinator.rostering.assignShiftTo", { worker: worker.full_name, date: format(d, "d MMM") })}
+                          {cellState === "available" && !canCreateHere && <div className="h-16" />}
+                          {cellState === "available" && canCreateHere && (
+                            <button type="button"
+                              aria-label={assignLabel}
                               onClick={() => onCellClick(worker, dayKey)}
-                              className="group flex h-10 w-full items-center justify-center rounded-lg border border-dashed border-green-200 hover:border-green-400 hover:bg-green-50 transition-all"
-                            >
-                              <Plus size={13} className="text-green-400 group-hover:text-green-600 transition-colors" />
+                              className="flex min-h-16 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-transparent text-xs font-semibold text-cc-plum hover:border-cc-plum hover:bg-cc-soft focus-visible:border-cc-plum focus-visible:outline-2 focus-visible:outline-cc-plum">
+                              <Plus size={14} /> {translate("schedule.assign")}
                             </button>
                           )}
                           {cellState === "assigned" && (
                             <div className="space-y-1">
                               {dayShifts.map((s) => (
-                                <div key={s.id} className="relative group/card">
-                                  <ShiftCard shift={s} colorBy={colorBy} />
+                                <div key={s.id} className={"relative group/card rounded-lg " + (newShiftId === s.id ? "ring-2 ring-cc-plum ring-offset-2" : "")}>
+                                  <ShiftCard shift={s} colorBy={colorBy} onClick={() => setDetailShift(s)} />
                                   <button
                                     onClick={() => handleUnassignClick(s)}
                                     className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full border bg-white shadow group-hover/card:flex"

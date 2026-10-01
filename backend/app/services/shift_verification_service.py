@@ -346,7 +346,7 @@ def _get_session_for_shift(shift: dict[str, Any]) -> Optional[dict[str, Any]]:
     try:
         result = (
             supabase.table("sessions")
-            .select("id, end_validation, status")
+            .select("id, end_validation, status, legal_record_text, original_language_input, detected_language, compliance_score")
             .eq("id", str(session_id))
             .execute()
         )
@@ -360,7 +360,7 @@ def _get_session_for_shift(shift: dict[str, Any]) -> Optional[dict[str, Any]]:
 _SHIFT_COLUMNS = (
     "id, organization_id, participant_id, participant_name, worker_id, "
     "scheduled_start, scheduled_end, clocked_in_at, clocked_out_at, "
-    "duration_minutes, status, session_id, tasks, expected_price_item_code"
+    "duration_minutes, status, session_id, tasks, expected_price_item_code, clock_in_verified, clock_in_method"
 )
 
 
@@ -419,6 +419,12 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
         out.append(
             {
                 "shift_id": shift.get("id"),
+                "clock_in_location_verified": shift.get("clock_in_method") == "gps" and shift.get("clock_in_verified") is True,
+                "session_note": (session or {}).get("legal_record_text"),
+                "tasks": [task for task in (shift.get("tasks") or []) if isinstance(task, dict)],
+                "original_language_input": (session or {}).get("original_language_input"),
+                "detected_language": (session or {}).get("detected_language"),
+                "compliance_score": (session or {}).get("compliance_score"),
                 "participant_id": shift.get("participant_id"),
                 "participant_name": shift.get("participant_name"),
                 "worker_id": shift.get("worker_id"),

@@ -58,11 +58,21 @@ it("Create shift opens from the header and from an empty day", async () => {
   fireEvent.keyDown(document.body, { key: "Escape" });
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
-  // Mon–Fri worker: Tuesday is open; the Monday shift is shown, not hidden.
-  const tuesday = await screen.findByTitle(/Alice Worker.*29 Sep|29 Sep.*Alice Worker/);
-  fireEvent.click(tuesday);
+  // Mon–Fri worker, today is Wednesday 30 Sep. Thursday is open; the Monday
+  // shift is shown, not hidden.
+  const thursday = await screen.findByLabelText(/Alice Worker.*1 Oct|1 Oct.*Alice Worker/);
+  fireEvent.click(thursday);
   expect(await screen.findByRole("dialog")).toBeTruthy();
   expect(screen.getAllByText("Liam Carter").length).toBeGreaterThan(0);
+  fireEvent.keyDown(document.body, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+  // Tuesday has passed: no new shift from the grid.
+  expect(screen.queryByLabelText(/Alice Worker.*29 Sep|29 Sep.*Alice Worker/)).toBeNull();
+
+  // Saturday is outside her usual days but can still be rostered.
+  fireEvent.click(screen.getByLabelText(/3 Oct.*outside usual availability/));
+  expect(await screen.findByRole("dialog")).toBeTruthy();
 });
 
 it("a worker with no availability days doesn't break the board", async () => {

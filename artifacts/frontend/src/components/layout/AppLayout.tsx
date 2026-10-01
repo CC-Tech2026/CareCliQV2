@@ -184,6 +184,7 @@ function isActive(location: string, href: string) {
   if (href === "/coordinator/rostering" &&
     (location.startsWith("/coordinator/live") ||
      location.startsWith("/coordinator/monitor") ||
+     location.startsWith("/coordinator/verification") ||
      location.startsWith("/coordinator/travel") ||
      location.startsWith("/approvals"))) return true;
   // Quality & Compliance: audit-pack rolls up to /compliance
