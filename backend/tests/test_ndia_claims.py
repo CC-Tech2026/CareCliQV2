@@ -29,6 +29,14 @@ def _invoice(**kw):
 PERIOD = {"id": "bp1", "period_start": "2026-09-01", "period_end": "2026-09-30", "locked_plan_management_type": "NDIA-managed"}
 
 
+@pytest.fixture(autouse=True)
+def _no_price_limits():
+    """No catalogue in these tests — price limits have their own tests in
+    test_ndis_price_limits.py."""
+    with patch.object(claims, "_price_limits_for", return_value={}):
+        yield
+
+
 def test_plan_type_uses_the_locked_billing_period_first():
     assert claims.plan_type({}, PERIOD, {"plan_management_type": "plan-managed"}) == "NDIA-managed"
     assert claims.plan_type({}, None, {"plan_management_type": "self-managed"}) == "self-managed"
