@@ -156,18 +156,25 @@ function toggleFullscreen() {
           <div className="flex h-full flex-col">
             <div className="flex items-start justify-between gap-2 p-3.5">
               <div className="min-w-0">
+                {(doc.doc_id || doc.reference) && (
+                  <p className="font-mono text-[11px] font-bold tracking-wide" style={{ color: "var(--cc-plum)" }}>
+                    {doc.doc_id || doc.reference}
+                  </p>
+                )}
                 <p className="truncate text-[13.5px] font-bold" style={{ color: "var(--cc-text)" }}>
                   {doc.title}
-                  {doc.reference && (
-                    <span className="ml-1.5 font-mono text-[11px] font-semibold" style={{ color: "var(--cc-muted)" }}>
-                      {doc.reference}
-                    </span>
-                  )}
+                  {doc.version && doc.version > 1 ? ` (v${doc.version})` : ""}
                 </p>
                 <p className="text-[11.5px]" style={{ color: "var(--cc-muted)" }}>
-                  {doc.person_name} · {formatDate(doc.date)}
+                  {doc.person_name}
+                  {doc.person_ref ? ` (${doc.person_ref})` : ""} · {formatDate(doc.date)}
                   {doc.detail ? ` · ${doc.detail}` : ""}
                 </p>
+                {doc.source_label && (
+                  <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>
+                    From: {doc.source_label}
+                  </p>
+                )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {(previewKind === "pdf" || previewKind === "image") && previewUrl && (

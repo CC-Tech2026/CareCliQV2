@@ -69,7 +69,7 @@ def test_folder_statuses():
     assert (docs["agreement-p1"]["title"], docs["agreement-p1"]["status"]) == ("Service agreement", "signed")
     assert docs["agreement-p2"]["status"] == "pending"
     assert "agreement-p3" not in docs  # draft plan
-    assert (docs["c1"]["title"], docs["c1"]["status"]) == ("Consent to record", "signed")
+    assert (docs["c1"]["title"], docs["c1"]["status"]) == ("Consent to record (plan meeting)", "signed")
     # Pending signatures count towards "flagged for review".
     assert "pending" in vault_service.FLAGGED_STATUSES
 

@@ -366,7 +366,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
             )}
             <div className="relative flex-1 min-w-[200px]">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--cc-muted)" }} />
-              <Input className="pl-8" placeholder="Search this folder" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input className="pl-8" placeholder="Search by title, name or ID" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <Select value={person} onValueChange={setPerson}>
               <SelectTrigger className="w-[180px]">

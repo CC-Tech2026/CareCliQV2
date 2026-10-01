@@ -16,10 +16,20 @@ export interface VaultDocument {
    * draft — lets the UI offer "Edit" (reopen the authoring sheet) instead
    * of only "Upload new version". Absent for raw file uploads. */
   policy_document_id?: string | null;
-  /** Short human reference, e.g. "SN-1A2B3C4D", for records that share a title. */
+  /** Short reference derived from the record, e.g. "SN-1A2B3C4D" — shown only when
+   * doc_id isn't available. */
   reference?: string | null;
   /** One line of context: who, when, how long. */
   detail?: string | null;
+  /** Permanent register ID, e.g. SUNR-SN-000047. Null until the register
+   * migration (232) is applied. */
+  doc_id?: string | null;
+  /** The person's own ID: a worker's employee ID or a participant's NDIS number. */
+  person_ref?: string | null;
+  /** Where the document came from, e.g. "Shift session note", "Uploaded". */
+  source_label?: string;
+  /** Set for documents that have versions (governance documents). */
+  version?: number;
 }
 
 export interface VaultFolder {

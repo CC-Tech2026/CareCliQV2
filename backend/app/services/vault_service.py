@@ -57,6 +57,18 @@ class VaultDocument(TypedDict):
     # when, how long) so rows that share a title can be told apart.
     reference: NotRequired[str | None]
     detail: NotRequired[str | None]
+    # Register fields (see _enrich_documents): the permanent document ID
+    # (e.g. SUNR-SN-000047), the person's own ID (employee ID or NDIS
+    # number), where the document came from, and the version for documents
+    # that have versions.
+    doc_id: NotRequired[str | None]
+    person_id: NotRequired[str | None]
+    person_ref: NotRequired[str | None]
+    source_label: NotRequired[str]
+    version: NotRequired[int]
+    # The row a document is registered under, when it isn't source_id — a
+    # governance document's first version, so the ID survives new versions.
+    register_source_id: NotRequired[str]
 
 
 GOVERNANCE_FOLDER_KEYS = (
@@ -148,12 +160,24 @@ _TTL_SECONDS = 30.0
 _ttl_cache: dict[str, tuple[float, Any]] = {}
 
 
+class _Uncached:
+    """A compute() result to use once but not keep: a lookup that failed
+    (e.g. a dropped connection) returns its fallback wrapped in this, so the
+    next request retries instead of showing "Unknown participant" for the
+    whole TTL window."""
+
+    def __init__(self, value: Any):
+        self.value = value
+
+
 def _cached(key: str, compute: Callable[[], Any]) -> Any:
     now = time.monotonic()
     hit = _ttl_cache.get(key)
     if hit and now - hit[0] < _TTL_SECONDS:
         return hit[1]
     value = compute()
+    if isinstance(value, _Uncached):
+        return value.value
     _ttl_cache[key] = (now, value)
     return value
 
@@ -171,7 +195,7 @@ def _patient_name_map(org_id: str) -> dict[str, str]:
             )
             return {row["id"]: row.get("full_name") or "Unknown participant" for row in (resp.data or [])}
         except Exception:
-            return {}
+            return _Uncached({})
 
     return _cached(f"patients:{org_id}", compute)
 
@@ -187,7 +211,7 @@ def _user_name_map(org_id: str) -> dict[str, str]:
             )
             return {row["id"]: row.get("full_name") or "Unknown worker" for row in (resp.data or [])}
         except Exception:
-            return {}
+            return _Uncached({})
 
     return _cached(f"users:{org_id}", compute)
 
@@ -203,7 +227,7 @@ def _applicant_name_map(org_id: str) -> dict[str, str]:
             )
             return {row["id"]: row.get("full_name") or "Unknown applicant" for row in (resp.data or [])}
         except Exception:
-            return {}
+            return _Uncached({})
 
     return _cached(f"applicants:{org_id}", compute)
 
@@ -234,9 +258,71 @@ def _org_name(org_id: str) -> str:
             row = (resp.data or [None])[0]
             return (row or {}).get("organization_name") or "Organisation"
         except Exception:
-            return "Organisation"
+            return _Uncached("Organisation")
 
     return _cached(f"org_name:{org_id}", compute)
+
+
+def _medication_name_map(org_id: str) -> dict[str, str]:
+    def compute() -> dict[str, str]:
+        try:
+            rows = (
+                get_supabase_admin().table("medications").select("id, name, strength")
+                .eq("organization_id", org_id).execute()
+            ).data or []
+        except Exception:
+            return _Uncached({})
+        out = {}
+        for r in rows:
+            name, strength = (r.get("name") or "").strip(), (r.get("strength") or "").strip()
+            if name:
+                out[str(r["id"])] = f"{name} {strength}" if strength and strength.lower() not in name.lower() else name
+        return out
+
+    return _cached(f"medications:{org_id}", compute)
+
+
+def _org_abbrev(org_id: str) -> str | None:
+    def compute() -> str | None:
+        try:
+            row = (
+                get_supabase_admin().table("organizations").select("org_abbrev")
+                .eq("organization_id", org_id).limit(1).execute()
+            ).data or [None]
+        except Exception:
+            return _Uncached(None)
+        return (row[0] or {}).get("org_abbrev") or None
+
+    return _cached(f"org_abbrev:{org_id}", compute)
+
+
+def _person_refs(org_id: str) -> dict[str, dict[str, str]]:
+    """The ID a person is known by: a worker's employee ID (SW003SUNR) and a
+    participant's NDIS number. Applicants have neither yet."""
+    def compute() -> dict[str, dict[str, str]]:
+        refs: dict[str, dict[str, str]] = {"Worker": {}, "Participant": {}}
+        failed = False
+        try:
+            for r in (
+                get_supabase_admin().table("organization_members").select("user_id, employee_id")
+                .eq("organization_id", org_id).execute()
+            ).data or []:
+                if r.get("employee_id"):
+                    refs["Worker"][str(r["user_id"])] = r["employee_id"]
+        except Exception:
+            failed = True
+        try:
+            for r in (
+                get_supabase_admin().table("participants").select("id, ndis_number")
+                .eq("organization_id", org_id).execute()
+            ).data or []:
+                if r.get("ndis_number"):
+                    refs["Participant"][str(r["id"])] = f"NDIS {r['ndis_number']}"
+        except Exception:
+            failed = True
+        return _Uncached(refs) if failed else refs
+
+    return _cached(f"person_refs:{org_id}", compute)
 
 
 def _download_stored_file(bucket_name: str, file_path: str) -> bytes:
@@ -395,7 +481,7 @@ def _minimal_record_pdf(title: str, meta_rows: list[tuple[str, str]], sections: 
 
 def _humanise(value: str | None) -> str:
     """"support_work" -> "Support work"."""
-    text = (value or "").replace("_", " ").strip()
+    text = " ".join((value or "").replace("_", " ").split())
     return text[:1].upper() + text[1:].lower() if text else ""
 
 
@@ -468,6 +554,7 @@ def _list_sessions(org_id: str) -> list[VaultDocument]:
             title=f"{_humanise(row.get('session_type')) or 'Session'} note",
             person_name=patients.get(row.get("patient_id") or "", "Unknown participant"),
             person_type="Participant",
+            person_id=row.get("patient_id"),
             date=str(row.get("session_date") or row.get("created_at") or ""),
             status=row.get("status") or "draft",
             source_table="sessions",
@@ -530,8 +617,12 @@ def _render_session(org_id: str, document_id: str, exclude_fields: set[str] | No
     else:
         goals_text = str(goals or "")
 
+    # The register ID (SUNR-SN-000047) when the document has one; the short
+    # session reference otherwise.
+    registered = find_document(org_id, "session_notes", document_id)
+    reference = (registered or {}).get("doc_id") or session_reference(row["id"])
     meta = [
-        ("Reference", session_reference(row["id"])),
+        ("Reference", reference),
         ("Participant", patients.get(row.get("patient_id") or "", "Unknown participant")),
         ("Date", session_dt[:10] or "—"),
         ("Time", session_dt[11:16] if len(session_dt) >= 16 else "—"),
@@ -549,7 +640,7 @@ def _render_session(org_id: str, document_id: str, exclude_fields: set[str] | No
         ("Outcomes", (row.get("outcomes") or "").strip()),
     ]
     pdf = _render_record_pdf(org_id, "Session Note", meta, sections, exclude=exclude_fields)
-    return f"{session_reference(document_id)}-session-note.pdf", pdf
+    return f"{reference}-session-note.pdf", pdf
 
 
 def _list_incidents(org_id: str) -> list[VaultDocument]:
@@ -571,9 +662,12 @@ def _list_incidents(org_id: str) -> list[VaultDocument]:
             id=row["id"],
             category="incident_reports",
             folder_label=CATEGORY_META["incident_reports"]["label"],
-            title=row.get("title") or "Incident report",
+            title=row.get("title") or (
+                f"Incident: {_humanise(row['incident_type'])}" if row.get("incident_type") else "Incident report"
+            ),
             person_name=patients.get(row.get("participant_id") or "", "Unknown participant"),
             person_type="Participant",
+            person_id=row.get("participant_id"),
             date=str(row.get("incident_date") or ""),
             status=row.get("status") or "reported",
             source_table="incidents",
@@ -635,6 +729,7 @@ def _list_ndis_plans(org_id: str) -> list[VaultDocument]:
             title=(f"NDIS plan {row.get('plan_number')}" if row.get("plan_number") else "NDIS plan"),
             person_name=patients.get(row.get("patient_id") or "", "Unknown participant"),
             person_type="Participant",
+            person_id=row.get("patient_id"),
             date=str(row.get("plan_start") or ""),
             status=row.get("status") or "active",
             source_table="ndis_plans",
@@ -690,9 +785,10 @@ def _list_medication_records(org_id: str) -> list[VaultDocument]:
                     id=row["id"],
                     category="medication_records",
                     folder_label=CATEGORY_META["medication_records"]["label"],
-                    title=(row.get("document_type") or "medication_document").replace("_", " ").title(),
+                    title=_humanise(row.get("document_type") or "medication_document"),
                     person_name=patients.get(row.get("participant_id") or "", "Unknown participant"),
                     person_type="Participant",
+                    person_id=row.get("participant_id"),
                     date=str(row.get("uploaded_at") or ""),
                     status="on_file",
                     source_table="medication_documents",
@@ -711,21 +807,24 @@ def _list_medication_records(org_id: str) -> list[VaultDocument]:
         resp = (
             get_supabase_admin()
             .table("medication_administrations")
-            .select("id, participant_id, outcome, administered_time")
+            .select("id, participant_id, medication_id, outcome, administered_time")
             .eq("organization_id", org_id)
             .order("administered_time", desc=True)
             .limit(300)
             .execute()
         )
+        medicines = _medication_name_map(org_id)
         for row in resp.data or []:
+            medicine = medicines.get(str(row.get("medication_id") or ""))
             docs.append(
                 VaultDocument(
                     id=row["id"],
                     category="medication_records",
                     folder_label=CATEGORY_META["medication_records"]["label"],
-                    title="Medication administration record",
+                    title=f"Medication given: {medicine}" if medicine else "Medication administration record",
                     person_name=patients.get(row.get("participant_id") or "", "Unknown participant"),
                     person_type="Participant",
+                    person_id=row.get("participant_id"),
                     date=str(row.get("administered_time") or ""),
                     status=row.get("outcome") or "given_on_time",
                     source_table="medication_administrations",
@@ -802,9 +901,10 @@ def _list_credentials(org_id: str) -> list[VaultDocument]:
             id=row["id"],
             category="worker_credentials",
             folder_label=CATEGORY_META["worker_credentials"]["label"],
-            title=row.get("title") or (row.get("credential_type") or "Credential"),
+            title=row.get("title") or _humanise(row.get("credential_type") or "credential"),
             person_name=workers.get(row.get("user_id") or "", "Unknown worker"),
             person_type="Worker",
+            person_id=row.get("user_id"),
             date=str(row.get("issue_date") or ""),
             status=row.get("status") or "pending_review",
             source_table="credentials",
@@ -871,6 +971,7 @@ def _list_invoices(org_id: str) -> list[VaultDocument]:
                 title=(f"Invoice {row.get('invoice_number')}" if row.get("invoice_number") else "Invoice"),
                 person_name=person_name,
                 person_type="Participant",
+                person_id=participant_id,
                 date=str(date_value),
                 status=row.get("status") or "draft",
                 source_table="invoices",
@@ -1024,6 +1125,7 @@ def _list_participant_agreements(org_id: str, patients: dict[str, str]) -> list[
             title=f"Service agreement {row['agreement_number']}" if row.get("agreement_number") else "Service agreement",
             person_name=patients.get(str(row.get("participant_id") or ""), "Unknown participant"),
             person_type="Participant",
+            person_id=row.get("participant_id"),
             date=str(row.get("signed_date") or row.get("sent_at") or row.get("created_at") or ""),
             status=status,
             source_table="service_agreements",
@@ -1052,9 +1154,10 @@ def _list_plan_agreements(org_id: str, patients: dict[str, str], covered: set[st
             id=f"agreement-{row['id']}",
             category="consent_onboarding",
             folder_label=CATEGORY_META["consent_onboarding"]["label"],
-            title="Service agreement",
+            title=f"Service agreement (plan {row['plan_number']})" if row.get("plan_number") else "Service agreement",
             person_name=patients.get(row.get("patient_id") or "", "Unknown participant"),
             person_type="Participant",
+            person_id=row.get("patient_id"),
             date=str(row.get("agreement_signed_at") or row.get("plan_start") or ""),
             status=AGREEMENT_STATUS.get(row.get("agreement_status") or "unsigned", "pending"),
             source_table="ndis_plans",
@@ -1089,9 +1192,10 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
                     id=row["id"],
                     category="consent_onboarding",
                     folder_label=CATEGORY_META["consent_onboarding"]["label"],
-                    title=row.get("title") or "Onboarding document",
+                    title=row.get("title") or _humanise(row.get("document_type") or "onboarding_document"),
                     person_name=workers.get(row.get("worker_id") or "", "Unknown worker"),
                     person_type="Worker",
+                    person_id=row.get("worker_id"),
                     date=str(row.get("signed_at") or row.get("created_at") or ""),
                     # Signed through the hiring flow, or uploaded with no
                     # signing record (we can't claim it was signed).
@@ -1123,7 +1227,7 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
                     id=row["id"],
                     category="consent_onboarding",
                     folder_label=CATEGORY_META["consent_onboarding"]["label"],
-                    title=row.get("title") or "Applicant document",
+                    title=row.get("title") or _humanise(row.get("document_type") or "applicant_document"),
                     person_name=applicants.get(row.get("applicant_id") or "", "Unknown applicant"),
                     person_type="Worker",
                     date=str(row.get("created_at") or ""),
@@ -1159,11 +1263,12 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
                     id=row["id"],
                     category="consent_onboarding",
                     folder_label=CATEGORY_META["consent_onboarding"]["label"],
-                    title="Consent to record",
+                    title="Consent to record (plan meeting)",
                     person_name=patients.get(row.get("participant_id") or "")
                     or intake_names.get(str(row.get("intake_id") or ""))
                     or "Unknown participant",
                     person_type="Participant",
+                    person_id=row.get("participant_id"),
                     date=str(row.get("consent_confirmed_at") or ""),
                     status="signed",
                     source_table="plan_meeting_sessions",
@@ -1351,8 +1456,11 @@ def _list_governance(org_id: str, folder_key: str) -> list[VaultDocument]:
     org_name = _org_name(org_id)
     doc_ids = [row["id"] for row in (resp.data or [])]
     policy_doc_by_governance_id = _policy_document_id_by_governance_id(org_id, doc_ids)
-    return [
-        VaultDocument(
+    first_versions = _governance_first_versions(org_id, folder_key)
+    docs = []
+    for row in resp.data or []:
+        first_id, version = first_versions.get(row["id"], (row["id"], 1))
+        docs.append(VaultDocument(
             id=row["id"],
             category=folder_key,
             folder_label=CATEGORY_META[folder_key]["label"],
@@ -1365,9 +1473,37 @@ def _list_governance(org_id: str, folder_key: str) -> list[VaultDocument]:
             source_id=row["id"],
             has_stored_file=True,
             policy_document_id=policy_doc_by_governance_id.get(row["id"]),
-        )
-        for row in (resp.data or [])
-    ]
+            register_source_id=first_id,
+            version=version,
+        ))
+    return docs
+
+
+def _governance_first_versions(org_id: str, folder_key: str) -> dict[str, tuple[str, int]]:
+    """For each version of a governance document: (id of its first version,
+    its version number). A new version supersedes the one before it
+    (superseded_by_document_id), so walking back from any version reaches
+    the first one — the row the document's ID is registered under."""
+    try:
+        rows = (
+            get_supabase_admin().table("governance_documents")
+            .select("id, superseded_by_document_id")
+            .eq("organization_id", org_id)
+            .eq("folder_key", folder_key)
+            .execute()
+        ).data or []
+    except Exception:
+        return {}
+    previous = {str(r["superseded_by_document_id"]): str(r["id"]) for r in rows if r.get("superseded_by_document_id")}
+    out: dict[str, tuple[str, int]] = {}
+    for row in rows:
+        current, version, seen = str(row["id"]), 1, set()
+        while current in previous and current not in seen:
+            seen.add(current)
+            current = previous[current]
+            version += 1
+        out[str(row["id"])] = (current, version)
+    return out
 
 
 def _policy_document_id_by_governance_id(org_id: str, governance_document_ids: list[str]) -> dict[str, str]:
@@ -1677,6 +1813,17 @@ def set_folder_order(org_id: str, ordered_keys: list[str]) -> None:
         logger.warning("Could not persist vault folder order: %s", exc)
 
 
+def _matches_text(doc: VaultDocument, q: str) -> bool:
+    """Search by title, person, document ID (SUNR-SN-000047, or just
+    000047), the person's own ID (SW003SUNR, NDIS number), a session's short
+    reference, or its detail line (e.g. the worker who wrote it)."""
+    fields = (
+        doc["title"], doc["person_name"], doc.get("doc_id"), doc.get("person_ref"),
+        doc.get("reference"), doc.get("detail"),
+    )
+    return any(q in str(f).lower() for f in fields if f)
+
+
 def _apply_filters(
     docs: list[VaultDocument],
     *,
@@ -1688,10 +1835,7 @@ def _apply_filters(
     out = docs
     if search and search.strip():
         q = search.strip().lower()
-        out = [
-            d for d in out
-            if any(q in (d.get(k) or "").lower() for k in ("title", "person_name", "reference", "detail"))
-        ]
+        out = [d for d in out if _matches_text(d, q)]
     if person:
         out = [d for d in out if d["person_name"] == person]
     if date_from:
@@ -1701,6 +1845,124 @@ def _apply_filters(
     return sorted(out, key=lambda d: d["date"] or "", reverse=True)
 
 
+# ── Document register (232_vault_document_register.sql) ───────────────────
+#
+# Every document gets a permanent ID the first time the vault lists it:
+# <org abbreviation>-<type code>-<number>, e.g. SUNR-SN-000047. A document
+# kind is usually its source table; a plan's agreement status shares
+# ndis_plans with the plan itself, so it's its own kind.
+
+DOC_TYPE_CODES: dict[str, str] = {
+    "sessions": "SN",
+    "incidents": "INC",
+    "ndis_plans": "PLN",
+    "plan_agreements": "AGR",
+    "service_agreements": "AGR",
+    "medication_documents": "MED",
+    "medication_administrations": "MAR",
+    "credentials": "CRD",
+    "invoices": "INV",
+    "employee_onboarding_documents": "OFR",
+    "worker_onboarding_documents": "ONB",
+    "applicant_documents": "APL",
+    "plan_meeting_sessions": "CON",
+    "audit_pack_exports": "AUD",
+    "governance_documents": "POL",
+    "vault_custom_folder_documents": "DOC",
+}
+
+# Where each kind of document comes from, in the words the listing uses.
+DOC_SOURCE_LABELS: dict[str, str] = {
+    "sessions": "Shift session note",
+    "incidents": "Incident report",
+    "ndis_plans": "Participant plan",
+    "plan_agreements": "Recorded on the NDIS plan",
+    "service_agreements": "Service agreement",
+    "medication_documents": "Medication upload",
+    "medication_administrations": "Medication round",
+    "credentials": "Worker credential",
+    "invoices": "Invoicing",
+    "employee_onboarding_documents": "Offer letter",
+    "worker_onboarding_documents": "Staff onboarding",
+    "applicant_documents": "Recruitment",
+    "plan_meeting_sessions": "Plan meeting",
+    "audit_pack_exports": "Generated by the vault",
+    "governance_documents": "Uploaded",
+    "vault_custom_folder_documents": "Uploaded",
+}
+
+REGISTER_BATCH = 500
+
+
+def _doc_kind(doc: VaultDocument) -> str:
+    if doc["source_table"] == "ndis_plans" and doc["category"] == "consent_onboarding":
+        return "plan_agreements"
+    return doc["source_table"]
+
+
+def _register_key(doc: VaultDocument) -> tuple[str, str]:
+    return _doc_kind(doc), str(doc.get("register_source_id") or doc["source_id"])
+
+
+def format_doc_id(org_abbrev: str | None, type_code: str, seq: int) -> str:
+    number = f"{type_code}-{int(seq):06d}"
+    return f"{org_abbrev}-{number}" if org_abbrev else number
+
+
+def _assign_document_ids(org_id: str, docs: list[VaultDocument]) -> bool:
+    """Number any document the register hasn't seen yet (oldest first, so
+    older documents get lower numbers) and set doc_id on all of them. If the
+    register isn't available the vault still lists everything, without IDs,
+    and returns False so that listing isn't cached."""
+    items: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for doc in sorted(docs, key=lambda d: d.get("date") or ""):
+        key = _register_key(doc)
+        code = DOC_TYPE_CODES.get(key[0])
+        if not code or key in seen:
+            continue
+        seen.add(key)
+        items.append({"kind": key[0], "source_id": key[1], "type_code": code})
+    if not items:
+        return True
+    numbers: dict[tuple[str, str], tuple[str, int]] = {}
+    try:
+        for i in range(0, len(items), REGISTER_BATCH):
+            rows = (
+                get_supabase_admin()
+                .rpc("assign_vault_document_ids", {"p_org": org_id, "p_items": items[i:i + REGISTER_BATCH]})
+                .execute()
+            ).data or []
+            numbers.update({(r["doc_kind"], str(r["source_id"])): (r["type_code"], r["seq"]) for r in rows})
+    except Exception as exc:
+        logger.warning("Vault document register unavailable for org %s: %s", org_id, exc)
+        return False
+    abbrev = _org_abbrev(org_id)
+    for doc in docs:
+        hit = numbers.get(_register_key(doc))
+        if hit:
+            doc["doc_id"] = format_doc_id(abbrev, *hit)
+    return True
+
+
+def _enrich_documents(org_id: str, docs: list[VaultDocument]) -> list[VaultDocument] | _Uncached:
+    """Adds what the listing needs to tell documents apart: the permanent
+    document ID, the person's own ID, and where the document came from."""
+    refs = _person_refs(org_id)
+    for doc in docs:
+        kind = _doc_kind(doc)
+        label = DOC_SOURCE_LABELS.get(kind, "")
+        if kind == "governance_documents" and doc.get("policy_document_id"):
+            label = "Written in the policy editor"
+        doc["source_label"] = label
+        person_id = doc.get("person_id")
+        doc["person_ref"] = refs.get(doc["person_type"], {}).get(str(person_id)) if person_id else None
+        doc.setdefault("doc_id", None)
+    if not _assign_document_ids(org_id, docs):
+        return _Uncached(docs)
+    return docs
+
+
 def _load_category_docs(org_id: str, category: str) -> list[VaultDocument]:
     """The raw, unfiltered per-category fetch — the part that's actually
     worth caching, since it's identical for every request in the TTL window
@@ -1708,13 +1970,15 @@ def _load_category_docs(org_id: str, category: str) -> list[VaultDocument]:
     on this data (list, count, search) starts from this same cached list."""
     def compute() -> list[VaultDocument]:
         if category.startswith(CUSTOM_FOLDER_PREFIX):
-            return _list_custom_folder_documents(org_id, _custom_folder_id(category))
-        if category not in CATEGORY_META:
+            docs = _list_custom_folder_documents(org_id, _custom_folder_id(category))
+        elif category not in CATEGORY_META:
             raise HTTPException(status_code=404, detail="Unknown vault category.")
-        if category in GOVERNANCE_FOLDER_KEYS:
-            return _list_governance(org_id, category)
-        loader = _RECORD_LOADERS.get(category)
-        return loader(org_id) if loader else []
+        elif category in GOVERNANCE_FOLDER_KEYS:
+            docs = _list_governance(org_id, category)
+        else:
+            loader = _RECORD_LOADERS.get(category)
+            docs = loader(org_id) if loader else []
+        return _enrich_documents(org_id, docs)
 
     return _cached(f"docs:{org_id}:{category}", compute)
 
@@ -1778,17 +2042,26 @@ def render_document_file(
     touching the underlying record. Categories backed by an already-stored
     file (credentials, governance docs, custom-folder uploads...) have no
     structured content to redact this way, so the parameter is accepted
-    for a uniform call signature but has no effect there."""
+    for a uniform call signature but has no effect there.
+
+    The file name starts with the document's register ID when it has one,
+    so a downloaded or zipped file can be traced back to the vault."""
     if category.startswith(CUSTOM_FOLDER_PREFIX):
-        return _render_custom_folder_file(org_id, _custom_folder_id(category), document_id)
-    if category not in CATEGORY_META:
+        filename, data = _render_custom_folder_file(org_id, _custom_folder_id(category), document_id)
+    elif category not in CATEGORY_META:
         raise HTTPException(status_code=404, detail="Unknown vault category.")
-    if category in GOVERNANCE_FOLDER_KEYS:
-        return _render_governance_file(org_id, category, document_id)
-    renderer = _RECORD_RENDERERS.get(category)
-    if not renderer:
-        raise HTTPException(status_code=404, detail="Document not found.")
-    return renderer(org_id, document_id, exclude_fields)
+    elif category in GOVERNANCE_FOLDER_KEYS:
+        filename, data = _render_governance_file(org_id, category, document_id)
+    else:
+        renderer = _RECORD_RENDERERS.get(category)
+        if not renderer:
+            raise HTTPException(status_code=404, detail="Document not found.")
+        filename, data = renderer(org_id, document_id, exclude_fields)
+    doc = find_document(org_id, category, document_id)
+    doc_id = (doc or {}).get("doc_id")
+    if doc_id and not filename.startswith(doc_id):
+        filename = f"{doc_id}_{filename}"
+    return filename, data
 
 
 def _folder_meta_from_docs(
@@ -2838,7 +3111,7 @@ def search_documents(org_id: str, query: str) -> tuple[str, list[VaultDocument]]
 
     if not categories and not person and not date_from:
         q = query.lower()
-        results = [d for d in results if q in d["title"].lower() or q in d["person_name"].lower()]
+        results = [d for d in results if _matches_text(d, q)]
 
     results.sort(key=lambda d: d["date"] or "", reverse=True)
     results = results[:200]
