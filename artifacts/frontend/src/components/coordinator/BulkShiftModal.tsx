@@ -20,6 +20,8 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   bulkCreateShifts,
   getParticipantPriceItemOptions,
+  getParticipantAgreementSupports,
+  type AgreementSupport,
   type BulkShiftResult,
   type WorkerStats,
   type ShiftPriceItemOption,
@@ -85,6 +87,27 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
   const [result,         setResult]         = useState<BulkShiftResult | null>(null);
   const [confirmed,      setConfirmed]      = useState(false);
   const [expectedPriceItemCode, setExpectedPriceItemCode] = useState("");
+  const [agreementSupportId, setAgreementSupportId] = useState("");
+
+  // Supports on the participant's sent or signed agreements. Warnings for the
+  // whole series (dates, signing, hours) come back once the shifts are made.
+  const agreementSupportsQuery = useOrgQuery<AgreementSupport[]>(
+    [orgId, "participant-agreement-supports", participantId],
+    {
+      queryFn: () => getParticipantAgreementSupports(participantId),
+      enabled: !!participantId,
+      staleTime: 30_000,
+    }
+  );
+  const chooseParticipant = (id: string) => {
+    setParticipantId(id);
+    setAgreementSupportId("");
+  };
+  const chooseAgreementSupport = (id: string) => {
+    const line = (agreementSupportsQuery.data ?? []).find((l) => l.id === id);
+    setAgreementSupportId(line ? id : "");
+    if (line) setExpectedPriceItemCode(line.support_item_code);
+  };
 
   const priceItemsQuery = useOrgQuery<ShiftPriceItemOption[]>(
     [orgId, "participant-price-items", participantId],
@@ -131,6 +154,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
         worker_id:         workerId || undefined,
         confirm_conflicts: confirmConflicts,
         expected_price_item_code: expectedPriceItemCode || undefined,
+        service_agreement_support_id: agreementSupportId || undefined,
       }),
     onSuccess: (data) => {
       setResult(data);
@@ -150,6 +174,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
         setParticipantId("");
         setWorkerId("");
         setExpectedPriceItemCode("");
+        setAgreementSupportId("");
       }, 300);
     }
   }
@@ -192,6 +217,15 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                 </div>
               </div>
 
+              {(result.agreement_warnings ?? []).length > 0 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-[11px] font-black text-amber-800 mb-2">Check the service agreement</p>
+                  {result.agreement_warnings!.map((w) => (
+                    <p key={w} className="text-[11px] text-amber-700">• {w}</p>
+                  ))}
+                </div>
+              )}
+
               {result.conflicts_summary.filter((c) => c.conflicts.length > 0).length > 0 && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                   <p className="text-[11px] font-black text-amber-800 mb-2">{translate("coordinator.bulkShift.conflictsTitle")}</p>
@@ -232,7 +266,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
               {/* Participant */}
               <div className="space-y-2">
                 <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.bulkShift.participant")}</label>
-                <Select value={participantId} onValueChange={setParticipantId}>
+                <Select value={participantId} onValueChange={chooseParticipant}>
                   <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
                     <SelectValue placeholder={translate("coordinator.bulkShift.selectParticipant")} />
                   </SelectTrigger>
@@ -261,6 +295,33 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Agreed support: hours for every occurrence count against it,
+                  and it sets the expected NDIS item below. */}
+              {participantId && (agreementSupportsQuery.data ?? []).length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-[12px] font-black" style={{ color: TEXT }}>
+                    Agreed support <span className="font-normal">({translate("common.optional")})</span>
+                  </label>
+                  <Select value={agreementSupportId || "__none__"} onValueChange={(val) => chooseAgreementSupport(val === "__none__" ? "" : val)}>
+                    <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
+                      <SelectValue placeholder="Not linked to an agreement" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Not linked to an agreement</SelectItem>
+                      {(agreementSupportsQuery.data ?? []).map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.item_name ?? l.support_item_code}
+                          {l.counted && l.left_hours != null
+                            ? l.left_hours < 0 ? ` (${Number((-l.left_hours).toFixed(2))}h over)` : ` (${Number(l.left_hours.toFixed(2))}h left)`
+                            : ""}
+                          {l.agreement_status === "pending_signature" ? " · Not signed yet" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Expected NDIS item — applied to every occurrence this
                   request generates; cross-checked (warn, not blocked)

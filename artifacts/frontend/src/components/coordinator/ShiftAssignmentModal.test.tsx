@@ -31,6 +31,8 @@ const credentialStatus = vi.hoisted(() => ({
 
 vi.mock("@/services/coordinatorService", () => ({
   assignShift: vi.fn(),
+  createUnassignedShift: vi.fn().mockResolvedValue({ shift_id: "s-1", shift: {} }),
+  getParticipantAgreementSupports: vi.fn().mockResolvedValue([]),
   getAvailableWorkers: vi.fn().mockResolvedValue([]),
   checkParticipantGoalsAndTasks: vi.fn().mockResolvedValue({ has_valid: true, active_goals: 1, tasks_count: 1, has_active_plan: true }),
   getParticipantTasks: vi.fn().mockResolvedValue([]),
@@ -257,5 +259,53 @@ describe("ShiftAssignmentModal", () => {
 
     expect(await screen.findByText(/has no active NDIS plan/)).toBeTruthy();
     expect(screen.getByText("Add an active NDIS plan first")).toBeTruthy();
+  });
+
+  it("rosters against an agreed support, with hours used and its warnings", async () => {
+    const service = await import("@/services/coordinatorService");
+    const line = (over: Record<string, unknown>) => ({
+      service_agreement_id: "sa-1", agreement_number: "SA-0001", agreement_status: "active",
+      start_date: "2026-07-01", end_date: "2027-06-30", frequency: "weekly", location: "home",
+      group_codes: [], in_current_catalogue: true, counted: true, hours_allocated: 52,
+      delivered_hours: 18, booked_soon_hours: 6, booked_later_hours: 0, left_hours: 28, warnings: [], ...over,
+    });
+    vi.mocked(service.getParticipantAgreementSupports).mockResolvedValue([
+      line({
+        id: "line-1", support_item_code: "01_011_0107_1_1", item_name: "Assistance With Self-Care Activities - Standard - Weekday Daytime",
+        unit: "H", agreement_status: "pending_signature", warnings: ["This agreement hasn't been signed yet."],
+      }),
+      line({
+        id: "line-2", support_item_code: "04_590_0125_6_1", item_name: "Activity Based Transport", unit: "E",
+        counted: false, hours_allocated: null, left_hours: null,
+      }),
+    ] as never);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ShiftAssignmentModal open={true} onOpenChange={vi.fn()} workers={mockWorkers} initialParticipantId="p-1" initialDate="2026-10-05" />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText("Agreed support")).toBeTruthy();
+    expect(screen.getByText("18h used · 6h booked")).toBeTruthy();
+    expect(screen.getByText("28h left of 52h")).toBeTruthy();
+    expect(screen.getByText("Per item, not counted in hours")).toBeTruthy();
+    expect(screen.getByText(/SA-0001 · Not signed yet/)).toBeTruthy();
+    // The proposed shift's times go with the request, so warnings fit this shift.
+    expect(vi.mocked(service.getParticipantAgreementSupports)).toHaveBeenCalledWith(
+      "p-1", expect.objectContaining({ start: expect.any(String), end: expect.any(String) }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Self-Care Activities/ }));
+    expect(screen.getByText("This agreement hasn't been signed yet.")).toBeTruthy();
+
+    const submit = screen.getAllByRole("button", { name: /create unassigned shift/i })[0] as HTMLButtonElement;
+    await waitFor(() => expect(submit.disabled).toBe(false));
+    fireEvent.click(submit);
+    await waitFor(() =>
+      expect(vi.mocked(service.createUnassignedShift)).toHaveBeenCalledWith(
+        expect.objectContaining({ service_agreement_support_id: "line-1", expected_price_item_code: "01_011_0107_1_1" }),
+      ),
+    );
+    vi.mocked(service.getParticipantAgreementSupports).mockResolvedValue([]);
   });
 });

@@ -149,10 +149,18 @@ async def _priced_lines(org_id: str, start_date: str, supports: list[dict[str, A
                 status_code=422,
                 detail=f"{code} isn't in the NDIS price catalogue for {_fmt_date(start_date)}.",
             )
-        limit = item.get("effective_price")
-        limit = float(limit) if limit is not None else None
+        # The rate defaults to the organisation's price for the item. The cap
+        # is the NDIS price limit (platform catalogue) on the agreement's
+        # start date, not the organisation's price: a participant may agree
+        # anything up to the limit.
+        default_rate = item.get("effective_price")
+        default_rate = float(default_rate) if default_rate is not None else None
+        limit_cents = ndis_pricing_service.price_limit_cents(
+            ndis_pricing_service.load_price_limit_rows([code]), code, start_date,
+        )
+        limit = limit_cents / 100 if limit_cents is not None else None
         rate = line.get("rate")
-        rate = float(rate) if rate is not None else limit
+        rate = float(rate) if rate is not None else default_rate
         if rate is None:
             raise HTTPException(
                 status_code=422,

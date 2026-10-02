@@ -17,6 +17,19 @@ def _item(code="01_011_0107_1_1", price=70.23, unit="H", name="Assistance with s
     return {"item_code": code, "name": name, "unit": unit, "effective_price": price}
 
 
+# The NDIS price limit (platform catalogue) the builder checks agreed rates
+# against: $73.58 for weekday self-care; transport has no limit here.
+LIMITS = {"01_011_0107_1_1": [{"item_code": "01_011_0107_1_1", "price_national": 73.58, "price_remote": None,
+                                 "price_very_remote": None, "valid_from": "2026-07-01T00:00:00+00:00", "valid_to": None}]}
+
+
+@pytest.fixture(autouse=True)
+def _ndis_limits():
+    with patch.object(docs.ndis_pricing_service, "load_price_limit_rows", return_value=LIMITS):
+        yield
+
+
+
 @pytest.mark.asyncio
 async def test_lines_are_priced_from_the_catalogue():
     with patch.object(docs.ndis_pricing_service, "resolve_price", new=AsyncMock(side_effect=[
@@ -37,11 +50,20 @@ async def test_rate_above_the_price_limit_is_refused():
     with patch.object(docs.ndis_pricing_service, "resolve_price", new=AsyncMock(return_value=_item())):
         with pytest.raises(HTTPException) as err:
             await docs._priced_lines(ORG, "2026-10-01", [{"support_item_code": "01_011_0107_1_1", "quantity": 1, "rate": 80}])
-    assert err.value.status_code == 422 and "price limit" in err.value.detail
+    assert err.value.status_code == 422 and "price limit of $73.58" in err.value.detail
     # Below the limit is fine.
     with patch.object(docs.ndis_pricing_service, "resolve_price", new=AsyncMock(return_value=_item())):
         lines = await docs._priced_lines(ORG, "2026-10-01", [{"support_item_code": "01_011_0107_1_1", "quantity": 2, "rate": 65}])
     assert lines[0]["total_funding"] == 130
+
+
+@pytest.mark.asyncio
+async def test_agreed_rate_can_exceed_the_org_price_up_to_the_ndis_limit():
+    # The organisation's price is $70.23; the NDIS limit is $73.58.
+    with patch.object(docs.ndis_pricing_service, "resolve_price", new=AsyncMock(return_value=_item())):
+        lines = await docs._priced_lines(ORG, "2026-10-01", [{"support_item_code": "01_011_0107_1_1", "quantity": 1, "rate": 72}])
+    assert lines[0]["rate"] == 72
+
 
 
 @pytest.mark.asyncio

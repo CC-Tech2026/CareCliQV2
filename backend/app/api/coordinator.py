@@ -31,7 +31,7 @@ from ..services.funding_service import (
     require_active_plan_for_participant,
 )
 from ..services import roster_eligibility_service
-from ..services import shift_task_service
+from ..services import agreement_support_service, shift_task_service
 from ..services.notification_service import (
     notify_certification_expiry,
     notify_coordinator_message,
@@ -1588,6 +1588,9 @@ class AssignShiftBody(BaseModel):
     # cross-checked (warn, not blocked) against whatever's actually chosen
     # in verify_shift().
     expected_price_item_code: Optional[str] = None
+    # The service agreement line this shift delivers (step 3a). Sets the
+    # expected item when that isn't given; warnings never block.
+    service_agreement_support_id: Optional[str] = None
 
 
 class CredentialStatus(BaseModel):
@@ -1848,6 +1851,7 @@ def _insert_shift_with_legacy_fallback(supabase, payload: dict[str, Any]):
         fallback_payload.pop("is_shadow_shift", None)
         fallback_payload.pop("shadow_of_worker_id", None)
         fallback_payload.pop("expected_price_item_code", None)
+        fallback_payload.pop("service_agreement_support_id", None)
         try:
             return supabase.table("shifts").insert(fallback_payload).execute()
         except Exception as exc2:
@@ -1984,6 +1988,41 @@ async def delete_shift_credential_requirement(
 
     supabase.table("shift_credential_requirements").delete().eq("id", requirement_id).eq("organization_id", org_id).execute()
     return None
+
+
+def _agreement_line_for_new_shift(
+    supabase,
+    *,
+    line_id: Optional[str],
+    participant_id: str,
+    org_id: str,
+    start: datetime,
+    end: datetime,
+    expected_code: Optional[str],
+) -> tuple[dict[str, Any], list[str]]:
+    """Fields to store for the agreement line a new shift delivers, and its
+    rostering warnings (outside the agreement dates, unsigned, hours over).
+    Refuses a line that isn't on this participant's agreement; the warnings
+    never block."""
+    if not line_id:
+        return {}, []
+    line = agreement_support_service.resolve_line_for_shift(
+        supabase, line_id=line_id, participant_id=participant_id, org_id=org_id,
+    )
+    fields: dict[str, Any] = {"service_agreement_support_id": str(line["id"])}
+    if not expected_code:
+        fields["expected_price_item_code"] = line["support_item_code"]
+    warnings: list[str] = []
+    try:
+        local_date = shift_task_service.local_shift_date(start, participant_id, org_id)
+        lines = agreement_support_service.list_participant_supports(
+            participant_id, org_id, start=start, end=end, local_date=local_date,
+        )
+        match = next((l for l in lines if str(l["id"]) == str(line["id"])), None)
+        warnings = (match or {}).get("warnings") or []
+    except Exception as exc:
+        logger.warning("Agreement warnings for participant %s failed: %s", participant_id, exc)
+    return fields, warnings
 
 
 @router.post("/shifts")
@@ -2133,6 +2172,11 @@ async def assign_shift(
             "care_coordinator_id": care_coordinator_id,
             "expected_price_item_code": body.expected_price_item_code,
         }
+        agreement_fields, agreement_warnings = _agreement_line_for_new_shift(
+            supabase, line_id=body.service_agreement_support_id, participant_id=body.participant_id,
+            org_id=org_id, start=scheduled_start, end=scheduled_end, expected_code=body.expected_price_item_code,
+        )
+        shift_payload.update(agreement_fields)
 
         result = _insert_shift_with_legacy_fallback(supabase, shift_payload)
         
@@ -2177,6 +2221,7 @@ async def assign_shift(
             "credential_status": cred_status,
             "message": "Shift assigned successfully",
             "tasks_linked": len(task_result["generated"]) + len(task_result["selected"]),
+            "agreement_warnings": agreement_warnings,
             **({"warning": shift_tasks_warning} if shift_tasks_warning else {}),
         }
     
@@ -3532,6 +3577,7 @@ class BulkShiftBody(BaseModel):
     expected_price_item_code: Optional[str] = None
     # Linked to every occurrence, alongside the care-plan template tasks.
     selected_task_ids: Optional[list[str]] = None
+    service_agreement_support_id: Optional[str] = None
 
 
 @router.post("/shifts/bulk")
@@ -3579,6 +3625,15 @@ async def bulk_create_shifts(
     conflicts_summary: list[dict] = []
     # The coordinator types wall-clock times for the participant's office.
     bulk_tz = participant_timezone(body.participant_id, organization_id=org_id)
+    agreement_fields: dict[str, Any] = {}
+    if body.service_agreement_support_id:
+        line = agreement_support_service.resolve_line_for_shift(
+            supabase, line_id=body.service_agreement_support_id,
+            participant_id=body.participant_id, org_id=org_id,
+        )
+        agreement_fields["service_agreement_support_id"] = str(line["id"])
+        if not body.expected_price_item_code:
+            agreement_fields["expected_price_item_code"] = line["support_item_code"]
     care_coordinator_id = _resolve_care_coordinator_id(supabase, body.participant_id, org_id)
 
     for week in range(body.weeks):
@@ -3631,6 +3686,7 @@ async def bulk_create_shifts(
             }
             if body.worker_id:
                 payload["worker_id"] = body.worker_id
+            payload.update(agreement_fields)
 
             try:
                 result = _insert_shift_with_legacy_fallback(supabase, payload)
@@ -3656,6 +3712,35 @@ async def bulk_create_shifts(
                     "conflicts": [],
                 })
 
+    agreement_warnings: list[str] = []
+    if agreement_fields and created:
+        # Checked once the whole series exists, so the hours count every
+        # occurrence up to the agreement end.
+        try:
+            lines = agreement_support_service.list_participant_supports(body.participant_id, org_id)
+            match = next((l for l in lines if str(l["id"]) == agreement_fields["service_agreement_support_id"]), None)
+            if match:
+                days = [
+                    _parse_dt(c.get("scheduled_start")).astimezone(bulk_tz).date().isoformat()
+                    for c in created if _parse_dt(c.get("scheduled_start"))
+                ]
+                outside = [
+                    d for d in days
+                    if (match.get("start_date") and d < str(match["start_date"])[:10])
+                    or (match.get("end_date") and d > str(match["end_date"])[:10])
+                ]
+                if outside:
+                    agreement_warnings.append(f"{len(outside)} of these shifts fall outside the agreement dates.")
+                if match.get("agreement_status") == "pending_signature":
+                    agreement_warnings.append("This agreement hasn't been signed yet.")
+                if match.get("left_hours") is not None and match["left_hours"] < 0:
+                    agreement_warnings.append(
+                        f"With every booking up to the agreement end, this support is "
+                        f"{abs(match['left_hours']):g}h over the {match['hours_allocated']:g}h agreed."
+                    )
+        except Exception as exc:
+            logger.warning("Agreement warnings for bulk shifts failed: %s", exc)
+
     if body.worker_id and created:
         await _send_worker_notification(
             supabase, body.worker_id, org_id,
@@ -3671,6 +3756,7 @@ async def bulk_create_shifts(
         "shifts": created,
         "skipped": skipped,
         "conflicts_summary": conflicts_summary,
+        "agreement_warnings": agreement_warnings,
     }
 
 
@@ -3692,6 +3778,7 @@ class CreateUnassignedShiftBody(BaseModel):
     is_sleepover: bool = False
     sleepover_start: Optional[str] = None
     sleepover_end: Optional[str] = None
+    service_agreement_support_id: Optional[str] = None
 
 
 @router.post("/shifts/unassigned")
@@ -3749,6 +3836,11 @@ async def create_unassigned_shift(
         "expected_price_item_code": body.expected_price_item_code,
         "is_sleepover": bool(body.is_sleepover and body.sleepover_start and body.sleepover_end),
     }
+    agreement_fields, agreement_warnings = _agreement_line_for_new_shift(
+        supabase, line_id=body.service_agreement_support_id, participant_id=body.participant_id,
+        org_id=org_id, start=s_dt, end=e_dt, expected_code=body.expected_price_item_code,
+    )
+    payload.update(agreement_fields)
     result = _insert_shift_with_legacy_fallback(supabase, payload)
     shift = (result.data or [None])[0] or payload
 
@@ -3772,6 +3864,7 @@ async def create_unassigned_shift(
         "shift_id": shift_id,
         "shift": shift,
         "tasks_linked": len(task_result["generated"]) + len(task_result["selected"]),
+        "agreement_warnings": agreement_warnings,
         **({"warning": task_result["warning"]} if task_result["warning"] else {}),
     }
 
@@ -5475,6 +5568,32 @@ async def check_goals_and_tasks(
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=internal_error_detail("Validation check failed", exc))
+
+
+@router.get("/participants/{participant_id}/agreement-supports")
+async def list_participant_agreement_supports(
+    participant_id: str,
+    start: Optional[str] = Query(default=None),
+    end: Optional[str] = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    """The supports on a participant's sent or active agreements, with hours
+    delivered, booked and left, for the Create shift support picker. Given a
+    proposed start and end, each line also carries its rostering warnings."""
+    org_id = _require_org_read(current_user)
+    supabase = get_supabase_admin()
+    found = (
+        supabase.table("participants").select("id").eq("id", participant_id)
+        .eq("organization_id", org_id).limit(1).execute()
+    ).data
+    if not found:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    s_dt = _parse_dt(start)
+    e_dt = _parse_dt(end)
+    local_date = shift_task_service.local_shift_date(s_dt, participant_id, org_id) if s_dt else None
+    return agreement_support_service.list_participant_supports(
+        participant_id, org_id, start=s_dt, end=e_dt or s_dt, local_date=local_date,
+    )
 
 
 @router.get("/participants/{participant_id}/tasks")

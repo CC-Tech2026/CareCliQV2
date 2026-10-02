@@ -1,13 +1,13 @@
 """Service agreements: the signed document is the source of record for a
-participant's plan management type, negotiated (override) rates, and the
+participant's plan management type, negotiated rates, and the
 price-adjustment/GST clauses — not separately-set flags with no link back to
 what was actually signed. Schema: migration 217.
 
 NF2F, Provider Travel, and short-notice-cancellation claim generation stay
 out of scope here — see markdown/NDIS_CLAIM_TYPES_BACKLOG.md item 1 for why
-that's still correctly dormant. This module only captures agreement data and
-wires negotiated rates to ndis_price_items overrides; it does not generate
-any of those claim types.
+that's still correctly dormant. This module only captures agreement data; a
+line's negotiated rate stays on the line (never in the organisation's price
+list) and doesn't generate any of those claim types.
 """
 
 from __future__ import annotations
@@ -323,20 +323,22 @@ async def add_service_agreement_support(
 
     negotiated_rate = data.get("negotiated_rate")
     if negotiated_rate is not None:
-        # The real mechanism for is_override going forward: a negotiated
-        # rate tied to a real signed document, applied through the same
-        # effective-dated path a manual price edit uses (so it gets the same
-        # backdate-vs-invoiced-period protection edit_item_price() already
-        # has, instead of a second, parallel price-writing path). Raises —
-        # and nothing gets written to service_agreement_supports — if the
-        # item code doesn't exist in this org's catalogue.
-        await ndis_pricing_service.edit_item_price(
-            user,
-            item_code=support_item_code,
-            price_national=float(negotiated_rate),
-            effective_date=agreement.get("start_date"),
-            reason=f"Negotiated rate per service agreement {service_agreement_id}",
+        # One participant's agreed rate belongs on their agreement line only.
+        # It used to be written into the organisation's price list (an
+        # is_override row), which changed the price for every participant.
+        # It's checked against the NDIS price limit on the agreement's start date.
+        rate = float(negotiated_rate)
+        if rate < 0:
+            raise HTTPException(status_code=422, detail="The agreed rate can't be negative.")
+        limit_cents = ndis_pricing_service.price_limit_cents(
+            ndis_pricing_service.load_price_limit_rows([support_item_code]),
+            support_item_code, agreement.get("start_date") or date.today(),
         )
+        if limit_cents is not None and round(rate * 100) > limit_cents:
+            raise HTTPException(
+                status_code=422,
+                detail=f"${rate:,.2f} is above the NDIS price limit of ${limit_cents / 100:,.2f} for {support_item_code}.",
+            )
 
     payload = {
         "service_agreement_id": service_agreement_id,

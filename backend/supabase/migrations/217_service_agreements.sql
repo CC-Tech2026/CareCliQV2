@@ -87,10 +87,11 @@ CREATE TABLE IF NOT EXISTS public.service_agreement_supports (
     -- application-side, not a DB constraint.
     support_item_code           TEXT        NOT NULL,
 
-    -- If set, this is what should create/update the corresponding
-    -- ndis_price_items row with is_override = true for this org and item —
-    -- a real negotiated rate tied to a real signed document. Not wired up by
-    -- this migration; see the file header.
+    -- The rate this participant agreed for this line's own item code. It
+    -- stays on the line: it must never be written into the organisation's
+    -- price list (ndis_price_items.is_override), which would change the
+    -- price for every participant. (Comment corrected after release; the
+    -- column definition is unchanged.)
     negotiated_rate              NUMERIC(10, 2),
 
     frequency                    TEXT        CHECK (frequency IN ('weekly', 'fortnightly', 'monthly', 'as_scheduled')),

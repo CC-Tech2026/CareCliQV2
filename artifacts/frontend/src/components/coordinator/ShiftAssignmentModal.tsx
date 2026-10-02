@@ -15,7 +15,9 @@ import {
   getParticipantTasks,
   getAvailableWorkers,
   getParticipantPriceItemOptions,
+  getParticipantAgreementSupports,
   getShiftPayEstimate,
+  type AgreementSupport,
   type WorkerStats,
   type ParticipantTask,
   type GoalsAndTasksValidation,
@@ -135,6 +137,7 @@ export function ShiftAssignmentModal({
   const [isShadowShift, setIsShadowShift] = useState(false);
   const [shadowOfWorkerId, setShadowOfWorkerId] = useState("");
   const [expectedPriceItemCode, setExpectedPriceItemCode] = useState("");
+  const [agreementSupportId, setAgreementSupportId] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -279,6 +282,41 @@ export function ShiftAssignmentModal({
     },
   );
 
+  // The supports on the participant's sent or signed agreements, with hours
+  // used. Given the shift's times, each line also says what would go wrong
+  // (outside the agreement dates, unsigned, over the agreed hours).
+  const shiftWindow = (() => {
+    if (!scheduledStart || !scheduledEnd) return undefined;
+    try {
+      return {
+        start: datetimeLocalValueToUtcIso(scheduledStart, participantZone),
+        end: datetimeLocalValueToUtcIso(scheduledEnd, participantZone),
+      };
+    } catch {
+      return undefined;
+    }
+  })();
+  const agreementSupportsQuery = useOrgQuery<AgreementSupport[]>(
+    [orgId, "participant-agreement-supports", selectedParticipantId, shiftWindow?.start, shiftWindow?.end],
+    {
+      queryFn: () => getParticipantAgreementSupports(selectedParticipantId, shiftWindow),
+      enabled: !!selectedParticipantId,
+      staleTime: 30_000,
+    },
+  );
+  useEffect(() => {
+    setAgreementSupportId("");
+  }, [selectedParticipantId]);
+  const chooseAgreementSupport = (line: AgreementSupport) => {
+    if (agreementSupportId === line.id) {
+      setAgreementSupportId("");
+      if (expectedPriceItemCode === line.support_item_code) setExpectedPriceItemCode("");
+      return;
+    }
+    setAgreementSupportId(line.id);
+    setExpectedPriceItemCode(line.support_item_code);
+  };
+
   const isManagingDirector = user?.role === "managing_director";
   const payEstimateQuery = useOrgQuery<PayEstimate>(
     [
@@ -361,6 +399,7 @@ export function ShiftAssignmentModal({
         selected_task_ids:
           selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
         expected_price_item_code: expectedPriceItemCode || undefined,
+        service_agreement_support_id: agreementSupportId || undefined,
       };
       if (selectedWorkerId) {
         return assignShift({
@@ -425,6 +464,7 @@ export function ShiftAssignmentModal({
     setIsShadowShift(false);
     setShadowOfWorkerId("");
     setExpectedPriceItemCode("");
+    setAgreementSupportId("");
   };
 
   const handleSetDuration = (hours: number) => {
@@ -821,6 +861,64 @@ export function ShiftAssignmentModal({
             )}
           </section>
 
+          {/* Agreed support */}
+          {selectedParticipantId && agreementSupportsQuery.data && (
+            <section aria-label="Agreed support">
+              <p className="mb-2 flex items-baseline gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-[0.08em]" style={{ color: MUTED }}>Agreed support</span>
+                <span className="text-[11px]" style={{ color: MUTED }}>From {firstName ? `${firstName}'s` : "the"} service agreement</span>
+              </p>
+              {agreementSupportsQuery.data.length === 0 ? (
+                <p className="text-[12px]" style={{ color: MUTED }}>
+                  No sent or signed service agreement yet. You can still set the NDIS item under More options.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {agreementSupportsQuery.data.map((line) => {
+                    const on = agreementSupportId === line.id;
+                    return (
+                      <div key={line.id}>
+                        <button
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => chooseAgreementSupport(line)}
+                          className="flex w-full items-start gap-2.5 rounded-lg border px-3 py-2 text-left text-[12px]"
+                          style={{ borderColor: on ? "#16A34A" : BORDER, background: on ? "rgba(22,163,74,0.05)" : "white" }}
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold" style={{ color: TEXT }}>
+                              {line.item_name ?? line.support_item_code}
+                            </span>
+                            <span className="block text-[11px]" style={{ color: MUTED }}>
+                              {line.support_item_code}
+                              {line.agreement_number ? ` · ${line.agreement_number}` : ""}
+                              {line.agreement_status === "pending_signature" ? " · Not signed yet" : ""}
+                              {!line.in_current_catalogue ? " · No longer in the NDIS price guide" : ""}
+                            </span>
+                          </span>
+                          <AgreementHours line={line} />
+                        </button>
+                        {on && line.warnings.length > 0 && (
+                          <ul className="mt-1.5 space-y-1 rounded-lg px-3 py-2 text-[12px]" style={{ background: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" }}>
+                            {line.warnings.map((w) => (
+                              <li key={w} className="flex items-start gap-1.5">
+                                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                                <span>{w}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <p className="text-[11px]" style={{ color: MUTED }}>
+                    Hours count against the support you choose. Booked shows the next 4 weeks.
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Shift tasks */}
           {goalsTasksValid && (tasksQuery.data ?? []).length > 0 && (
             <section aria-label="Shift tasks">
@@ -1019,6 +1117,32 @@ function avatarColour(name: string) {
 }
 function initialsOf(name: string) {
   return name.split(" ").map((p) => p[0]).filter(Boolean).join("").slice(0, 2).toUpperCase() || "?";
+}
+
+const hoursText = (n: number) => `${Number(n.toFixed(2))}h`;
+
+/** Hours used against an agreement line. Lines billed per unit (transport,
+ * consumables) aren't counted in hours, so they say so instead. */
+function AgreementHours({ line }: { line: AgreementSupport }) {
+  if (!line.counted) {
+    return <span className="shrink-0 text-right text-[11px]" style={{ color: MUTED }}>Per {line.unit === "E" ? "item" : "unit"}, not counted in hours</span>;
+  }
+  const over = line.left_hours != null && line.left_hours < 0;
+  return (
+    <span className="shrink-0 text-right text-[11px] leading-snug" style={{ color: MUTED }}>
+      <span className="block">
+        {hoursText(line.delivered_hours)} used · {hoursText(line.booked_soon_hours)} booked
+        {line.booked_later_hours > 0 ? ` · ${hoursText(line.booked_later_hours)} later` : ""}
+      </span>
+      {line.left_hours != null && line.hours_allocated != null ? (
+        <span className="block font-semibold" style={{ color: over ? "var(--cc-status-danger)" : TEXT }}>
+          {over ? `${hoursText(-line.left_hours)} over` : `${hoursText(line.left_hours)} left`} of {hoursText(line.hours_allocated)}
+        </span>
+      ) : (
+        <span className="block">No hours set</span>
+      )}
+    </span>
+  );
 }
 
 /** Estimated NDIS billing for the expected item, and (for the MD) projected

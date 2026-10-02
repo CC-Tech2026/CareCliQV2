@@ -661,6 +661,7 @@ export type AssignShiftPayload = {
   is_shadow_shift?: boolean;
   shadow_of_worker_id?: string;
   expected_price_item_code?: string;
+  service_agreement_support_id?: string;
 };
 
 export type AssignShiftResult = {
@@ -668,6 +669,7 @@ export type AssignShiftResult = {
   shift: Record<string, unknown>;
   credential_status: CredentialStatus;
   message: string;
+  agreement_warnings?: string[];
 };
 
 export type WorkerCredentialStatusResponse = {
@@ -850,6 +852,7 @@ export type BulkShiftPayload = {
   worker_id?: string;
   confirm_conflicts?: boolean;
   expected_price_item_code?: string;
+  service_agreement_support_id?: string;
 };
 
 export type BulkShiftResult = {
@@ -859,6 +862,7 @@ export type BulkShiftResult = {
   shifts: CoordinatorShiftRecord[];
   skipped: Array<{ date: string; reason: string; conflicts: ConflictItem[] }>;
   conflicts_summary: Array<{ shift_id: string; date: string; conflicts: ConflictItem[] }>;
+  agreement_warnings?: string[];
 };
 
 export type WorkerAvailability = {
@@ -1013,8 +1017,9 @@ export function createUnassignedShift(payload: {
   shift_type?: string;
   duty_type?: string;
   expected_price_item_code?: string;
+  service_agreement_support_id?: string;
 }) {
-  return jsonFetch<{ shift_id: string; shift: CoordinatorShiftRecord }>(
+  return jsonFetch<{ shift_id: string; shift: CoordinatorShiftRecord; agreement_warnings?: string[] }>(
     "/api/coordinator/shifts/unassigned",
     {
       method: "POST",
@@ -1879,6 +1884,44 @@ export function getShiftPriceItemOptions(shiftId: string) {
 export function getParticipantPriceItemOptions(participantId: string) {
   return jsonFetch<ShiftPriceItemOption[]>(
     `/api/coordinator/participants/${encodeURIComponent(participantId)}/price-items`
+  );
+}
+
+/** One line of a participant's sent or active service agreement, with the
+ *  hours used against it. Lines billed per unit have counted=false and no
+ *  hour figures. */
+export type AgreementSupport = {
+  id: string;
+  service_agreement_id: string;
+  agreement_number: string | null;
+  agreement_status: "pending_signature" | "active";
+  start_date: string | null;
+  end_date: string | null;
+  support_item_code: string;
+  item_name: string | null;
+  unit: string;
+  frequency: string | null;
+  location: string | null;
+  group_codes: string[];
+  in_current_catalogue: boolean;
+  counted: boolean;
+  hours_allocated: number | null;
+  delivered_hours: number;
+  booked_soon_hours: number;
+  booked_later_hours: number;
+  left_hours: number | null;
+  warnings: string[];
+};
+
+export function getParticipantAgreementSupports(
+  participantId: string,
+  shift?: { start: string; end: string },
+) {
+  const query = shift
+    ? `?start=${encodeURIComponent(shift.start)}&end=${encodeURIComponent(shift.end)}`
+    : "";
+  return jsonFetch<AgreementSupport[]>(
+    `/api/coordinator/participants/${encodeURIComponent(participantId)}/agreement-supports${query}`
   );
 }
 
