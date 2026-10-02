@@ -31,6 +31,7 @@ from ..services.funding_service import (
     require_active_plan_for_participant,
 )
 from ..services import roster_eligibility_service
+from ..services import shift_task_service
 from ..services.notification_service import (
     notify_certification_expiry,
     notify_coordinator_message,
@@ -1985,127 +1986,6 @@ async def delete_shift_credential_requirement(
     return None
 
 
-# ── Helper: Auto-generate task instances from templates ─────────────────────
-async def _generate_tasks_from_templates(
-    supabase,
-    participant_id: str,
-    shift_id: str,
-    shift_type: str,
-    shift_date: date,
-    org_id: str,
-):
-    """
-    Auto-generate participant_tasks from matching templates and link via shift_tasks.
-
-    CARECLIQV2-330/331: participant_tasks is the definition (no shift_id);
-    shift_tasks is the shift association. Returns list of created task ids.
-    """
-    try:
-        # Get active task templates for this participant
-        templates_resp = (
-            supabase.table("participant_task_templates")
-            .select("*")
-            .eq("participant_id", participant_id)
-            .eq("organization_id", org_id)
-            .eq("status", "active")
-            .execute()
-        )
-        templates = templates_resp.data or []
-        
-        if not templates:
-            return []
-        
-        # Filter templates that match this shift type
-        matching_templates = []
-        for template in templates:
-            primary = template.get("primary_shift_type") or ""
-            additional = template.get("additional_shift_types") or []
-            
-            if primary.lower() == shift_type.lower() or shift_type.lower() in [s.lower() for s in additional]:
-                matching_templates.append(template)
-        
-        if not matching_templates:
-            return []
-        
-        # Check recurrence rules for each matching template
-        tasks_to_create = []
-        now = datetime.now(timezone.utc).isoformat()
-        
-        for template in matching_templates:
-            recurrence_type = template.get("recurrence_type") or "one_off"
-            recurrence_weekdays = template.get("recurrence_weekdays") or []
-            
-            # Check if task should be created for this shift date
-            should_create = False
-            
-            if recurrence_type == "one_off":
-                should_create = True
-            elif recurrence_type == "recurring":
-                # Always recurring (daily or weekly handled by recurrence_frequency)
-                should_create = True
-            elif recurrence_type == "specific_weekdays":
-                # Only create if today is one of the specified weekdays
-                weekday = shift_date.weekday()  # 0=Monday, 6=Sunday
-                # Convert to 0=Sunday format for compatibility
-                iso_weekday = (weekday + 1) % 7
-                should_create = iso_weekday in recurrence_weekdays
-            
-            if should_create:
-                tasks_to_create.append({
-                    "participant_id": participant_id,
-                    "organization_id": org_id,
-                    "name": template.get("name"),
-                    "description": template.get("description"),
-                    "goal_id": template.get("linked_goal_id"),
-                    "status": "pending",
-                    "is_mandatory": template.get("is_mandatory", False),
-                    "evidence_required": template.get("evidence_required") or "none",
-                    "created_at": now,
-                    "updated_at": now,
-                })
-        
-        # Create definitions, then link via shift_tasks (normalized).
-        if tasks_to_create:
-            try:
-                result = supabase.table("participant_tasks").insert(tasks_to_create).execute()
-                created = result.data or []
-                created_ids = [str(row["id"]) for row in created if row.get("id")]
-                if created_ids:
-                    shift_task_records = [
-                        {
-                            "shift_id": shift_id,
-                            "task_id": task_id,
-                            "organization_id": org_id,
-                            "sort_order": idx,
-                            "completed": False,
-                        }
-                        for idx, task_id in enumerate(created_ids, start=1)
-                    ]
-                    try:
-                        supabase.table("shift_tasks").insert(shift_task_records).execute()
-                    except Exception as link_exc:
-                        logger.warning(
-                            "Failed to link auto-generated tasks for shift %s: %s",
-                            shift_id,
-                            link_exc,
-                        )
-                logger.info(
-                    "Auto-generated %s tasks for shift %s",
-                    len(created_ids),
-                    shift_id,
-                )
-                return created_ids
-            except Exception as create_exc:
-                logger.warning(f"Failed to auto-generate tasks for shift {shift_id}: {create_exc}")
-                return []
-        
-        return []
-    
-    except Exception as exc:
-        logger.warning(f"Task generation failed: {exc}")
-        return []
-
-
 @router.post("/shifts")
 async def assign_shift(
     body: AssignShiftBody,
@@ -2274,55 +2154,13 @@ async def assign_shift(
             except Exception as exc:
                 logger.warning("Failed to derive sleepover segments for shift %s: %s", shift_id, exc)
 
-        # Auto-generate participant_tasks from matching templates (+ shift_tasks links)
-        generated_task_ids: list[str] = []
-        try:
-            shift_date = scheduled_start.date()
-            generated_task_ids = await _generate_tasks_from_templates(
-                supabase,
-                body.participant_id,
-                shift_id,
-                shift_type,
-                shift_date,
-                org_id,
-            )
-            logger.info(
-                "Shift %s: generated %s task definitions from templates",
-                shift_id,
-                len(generated_task_ids),
-            )
-        except Exception as gen_exc:
-            logger.warning(f"Task auto-generation for shift {shift_id} failed: {gen_exc}")
-        
-        # Save coordinator-selected tasks for this shift (dedupe vs auto-generated)
-        shift_tasks_warning = None
-        if body.selected_task_ids:
-            try:
-                selected_ids = []
-                seen = set(generated_task_ids)
-                for task_id in body.selected_task_ids:
-                    tid = str(task_id)
-                    if tid in seen:
-                        continue
-                    seen.add(tid)
-                    selected_ids.append(tid)
-                if selected_ids:
-                    base_order = len(generated_task_ids)
-                    shift_task_records = [
-                        {
-                            "shift_id": shift_id,
-                            "task_id": task_id,
-                            "organization_id": org_id,
-                            "sort_order": base_order + idx,
-                            "completed": False,
-                        }
-                        for idx, task_id in enumerate(selected_ids, start=1)
-                    ]
-                    supabase.table("shift_tasks").insert(shift_task_records).execute()
-            except Exception as task_exc:
-                logger.warning(f"Failed to save shift tasks: {task_exc}")
-                shift_tasks_warning = f"Failed to save selected shift tasks: {task_exc}"
-        
+        # Care-plan template tasks + the coordinator's ticked tasks — the same
+        # rules for every way a shift is created (shift_task_service).
+        task_result = shift_task_service.attach_tasks_to_new_shift(
+            supabase, shift={**shift_payload, **shift}, org_id=org_id, selected_task_ids=body.selected_task_ids,
+        )
+        shift_tasks_warning = task_result["warning"]
+
         # Send notification to worker about new shift
         try:
             await notify_shift_change(
@@ -2338,10 +2176,7 @@ async def assign_shift(
             "shift": shift,
             "credential_status": cred_status,
             "message": "Shift assigned successfully",
-            "tasks_linked": len(generated_task_ids) + (
-                len([t for t in (body.selected_task_ids or []) if str(t) not in set(generated_task_ids)])
-                if body.selected_task_ids else 0
-            ),
+            "tasks_linked": len(task_result["generated"]) + len(task_result["selected"]),
             **({"warning": shift_tasks_warning} if shift_tasks_warning else {}),
         }
     
@@ -3695,6 +3530,8 @@ class BulkShiftBody(BaseModel):
     # Applied to every occurrence generated by this bulk request — see
     # AssignShiftBody.expected_price_item_code.
     expected_price_item_code: Optional[str] = None
+    # Linked to every occurrence, alongside the care-plan template tasks.
+    selected_task_ids: Optional[list[str]] = None
 
 
 @router.post("/shifts/bulk")
@@ -3799,6 +3636,12 @@ async def bulk_create_shifts(
                 result = _insert_shift_with_legacy_fallback(supabase, payload)
                 inserted = (result.data or [None])[0] or payload
                 created.append(inserted)
+                # One at a time, so one-off/daily/weekly templates see the
+                # occurrences already created in this batch.
+                shift_task_service.attach_tasks_to_new_shift(
+                    supabase, shift={**payload, **inserted}, org_id=org_id,
+                    selected_task_ids=body.selected_task_ids,
+                )
                 conflicts_summary.append({
                     "shift_id": shift_id,
                     "date": shift_date.isoformat(),
@@ -3843,6 +3686,12 @@ class CreateUnassignedShiftBody(BaseModel):
     shift_type: str = "standard_support"
     duty_type: Optional[str] = None  # SCHADS duty type — 'disability_services' | 'general_sacs'
     expected_price_item_code: Optional[str] = None
+    # The create-shift form sends these for unassigned shifts too; they were
+    # silently dropped, so a shift filled later had no tasks or sleepover.
+    selected_task_ids: Optional[list[str]] = None
+    is_sleepover: bool = False
+    sleepover_start: Optional[str] = None
+    sleepover_end: Optional[str] = None
 
 
 @router.post("/shifts/unassigned")
@@ -3898,13 +3747,33 @@ async def create_unassigned_shift(
         "updated_at": now_iso,
         "care_coordinator_id": _resolve_care_coordinator_id(supabase, body.participant_id, org_id),
         "expected_price_item_code": body.expected_price_item_code,
+        "is_sleepover": bool(body.is_sleepover and body.sleepover_start and body.sleepover_end),
     }
     result = _insert_shift_with_legacy_fallback(supabase, payload)
     shift = (result.data or [None])[0] or payload
+
+    if payload["is_sleepover"]:
+        try:
+            _derive_sleepover_segments(
+                supabase, shift_id, s_dt,
+                parse_shift_datetime(body.sleepover_start), parse_shift_datetime(body.sleepover_end),
+                e_dt,
+            )
+        except Exception as exc:
+            logger.warning("Failed to derive sleepover segments for shift %s: %s", shift_id, exc)
+
+    task_result = shift_task_service.attach_tasks_to_new_shift(
+        supabase, shift={**payload, **shift}, org_id=org_id, selected_task_ids=body.selected_task_ids,
+    )
     # Mark as unassigned in response for UI purposes
     if shift:
         shift["is_unassigned"] = True
-    return {"shift_id": shift_id, "shift": shift}
+    return {
+        "shift_id": shift_id,
+        "shift": shift,
+        "tasks_linked": len(task_result["generated"]) + len(task_result["selected"]),
+        **({"warning": task_result["warning"]} if task_result["warning"] else {}),
+    }
 
 
 @router.get("/shifts/overdue-unassigned")

@@ -47,9 +47,22 @@ def test_fallback_tasks_shape():
     assert "Personal Hygiene" in labels
     assert "Documentation / Notes" in labels
     assert "Health & Wellness Check" in labels
-    # Health & Wellness is now mandatory (coordinators need post-therapy observations)
-    mandatory = [t for t in shift_service.FALLBACK_SHIFT_TASKS if t.get("mandatory")]
-    assert len(mandatory) == 5
+    # Generic suggestions, not this participant's care plan: never mandatory,
+    # so they can't stop a worker ending a shift.
+    assert not [t for t in shift_service.FALLBACK_SHIFT_TASKS if t.get("mandatory")]
+
+
+_MANDATORY_LABELS = {"Personal Hygiene", "Meal Preparation", "Medication Administration",
+                     "Health & Wellness Check", "Documentation / Notes"}
+
+
+def _mandatory_tasks():
+    """Six tasks, five mandatory — for the mandatory-task rules, which don't
+    depend on where a checklist came from."""
+    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    for task in tasks:
+        task["mandatory"] = task["label"] in _MANDATORY_LABELS
+    return tasks
 
 
 def test_matches_filter_today():
@@ -453,7 +466,7 @@ def test_start_session_by_id_updates_start_time(mock_admin, mock_get_shift, _moc
 
 
 def test_mandatory_tasks_complete():
-    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    tasks = _mandatory_tasks()
     assert shift_service._mandatory_tasks_complete(tasks) is False
     for task in tasks:
         if task.get("mandatory") or int(task.get("order") or 0) <= 4:
@@ -464,7 +477,7 @@ def test_mandatory_tasks_complete():
 
 @patch("backend.app.services.shift_service.get_shift_by_id")
 def test_update_shift_tasks_rejects_mandatory_without_evidence(mock_get):
-    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    tasks = _mandatory_tasks()
     tasks[0]["completed"] = True
     mock_get.return_value = _sample_shift(tasks=tasks)
     with pytest.raises(ValueError, match="Mandatory task"):
@@ -476,7 +489,7 @@ def test_update_shift_tasks_rejects_mandatory_without_evidence(mock_get):
 @patch("backend.app.services.shift_service.get_supabase_admin")
 @patch("backend.app.services.shift_service.get_shift_by_id")
 def test_end_shift_completes_shift(mock_get, mock_admin, mock_session, _mock_signature):
-    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    tasks = _mandatory_tasks()
     for task in tasks:
         if task.get("mandatory") or int(task.get("order") or 0) <= 4:
             task["completed"] = True
@@ -509,7 +522,7 @@ def test_end_shift_force_with_incomplete_tasks_records_reason(mock_get, mock_adm
     """Worker override: incomplete mandatory tasks allowed through with force=True,
     but only when a reason is given (enforced at the API layer) - the service records
     it as force_ended + end_reason for the coordinator's shift-verification queue."""
-    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    tasks = _mandatory_tasks()
     shift = _sample_shift(
         status="in_progress",
         clocked_in_at=datetime.now(timezone.utc).isoformat(),
@@ -542,7 +555,7 @@ def test_end_shift_system_initiated_skips_signature_and_marks_auto_ended(mock_ge
     sign, so system_initiated bypasses the signature requirement entirely and the
     validation blob is distinctly marked auto_ended (never confused with a worker's
     own force-ended shift)."""
-    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    tasks = _mandatory_tasks()
     shift = _sample_shift(
         status="in_progress",
         clocked_in_at=datetime.now(timezone.utc).isoformat(),
@@ -575,7 +588,7 @@ def test_end_shift_incomplete_tasks_sets_24h_documentation_deadline(mock_get, mo
     """Ending with incomplete mandatory tasks starts a 24h documentation
     deadline from clock-in (not from now/scheduled_end) - the worker still
     owes the documentation, they just get a window to come back and finish it."""
-    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    tasks = _mandatory_tasks()
     clocked_in_at = datetime(2026, 1, 1, 9, 0, 0, tzinfo=timezone.utc)
     shift = _sample_shift(
         status="in_progress",
@@ -608,7 +621,7 @@ def test_end_shift_incomplete_tasks_sets_24h_documentation_deadline(mock_get, mo
 def test_end_shift_complete_tasks_does_not_set_documentation_deadline(mock_get, mock_admin, _mock_signature):
     """force=True with tasks that are actually complete (e.g. a worker signs
     off with everything done) must not start a bogus documentation deadline."""
-    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    tasks = _mandatory_tasks()
     for task in tasks:
         if task.get("mandatory") or int(task.get("order") or 0) <= 4:
             task["completed"] = True
@@ -640,7 +653,7 @@ def test_end_shift_complete_tasks_does_not_set_documentation_deadline(mock_get, 
 def test_update_shift_tasks_clears_documentation_pending_once_complete(mock_get):
     """The 24h-deadline flag clears itself the moment the worker finishes the
     mandatory tasks - they shouldn't have to find some separate 'mark done' action."""
-    tasks = copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS)
+    tasks = _mandatory_tasks()
     for task in tasks:
         if task.get("mandatory") or int(task.get("order") or 0) <= 4:
             task["completed"] = True
@@ -1032,7 +1045,7 @@ def test_clock_in_with_gps_verification(mock_admin, _mock_coords, _mock_ack, _mo
             "clocked_in_at": datetime.now(timezone.utc).isoformat(),
             "clock_in_method": "gps",
             "clock_in_verified": True,
-            "tasks": copy.deepcopy(shift_service.FALLBACK_SHIFT_TASKS),
+            "tasks": _mandatory_tasks(),
         }]
     )
 

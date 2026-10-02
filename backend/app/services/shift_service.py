@@ -46,9 +46,10 @@ class ShiftNotScheduledToday(Exception):
     """Shift scheduled_start is not on the current calendar day (CARECLIQV2-90)."""
 
 
-# Fallback task list — used only when participant_task_templates returns no rows for this org.
-# These values are intentionally kept in sync with migration 088 system defaults.
-# Health & Wellness Check is mandatory: coordinators need post-therapy/appointment observations.
+# Fallback task list — used only when the participant has no templates that fit the shift.
+# Labels kept in sync with migration 088 system defaults. None are mandatory: they aren't
+# from this participant's care plan ("Medication Administration" for someone with no
+# medications), so they're suggestions and must never stop a worker ending the shift.
 FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
     {
         "task_id": "fallback_personal_hygiene",
@@ -59,7 +60,7 @@ FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
         "completed_at": None,
         "note": "",
         "order": 1,
-        "mandatory": True,
+        "mandatory": False,
         "goal_id": None,
         "goal_title": None,
         "outcome_tip": "Participant completed hygiene routine with appropriate support.",
@@ -74,7 +75,7 @@ FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
         "completed_at": None,
         "note": "",
         "order": 2,
-        "mandatory": True,
+        "mandatory": False,
         "goal_id": None,
         "goal_title": None,
         "outcome_tip": "Meals prepared safely with participant involvement where possible.",
@@ -89,7 +90,7 @@ FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
         "completed_at": None,
         "note": "",
         "order": 3,
-        "mandatory": True,
+        "mandatory": False,
         "goal_id": None,
         "goal_title": None,
         "outcome_tip": "Medications taken as prescribed with no adverse reactions noted.",
@@ -104,7 +105,7 @@ FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
         "completed_at": None,
         "note": "",
         "order": 4,
-        "mandatory": True,
+        "mandatory": False,
         "goal_id": None,
         "goal_title": None,
         "outcome_tip": "Participant wellbeing observed and any concerns documented.",
@@ -134,7 +135,7 @@ FALLBACK_SHIFT_TASKS: list[dict[str, Any]] = [
         "completed_at": None,
         "note": "",
         "order": 6,
-        "mandatory": True,
+        "mandatory": False,
         "goal_id": None,
         "goal_title": None,
         "outcome_tip": "Progress notes capture what was done and participant response.",
@@ -2128,6 +2129,7 @@ def _load_tasks_from_templates(
     participant_id: str,
     organization_id: str,
     shift_type: Optional[str],
+    scheduled_start: Any = None,
 ) -> list[dict[str, Any]]:
     """Build the worker-facing task list from participant_task_templates.
 
@@ -2143,7 +2145,7 @@ def _load_tasks_from_templates(
         # System defaults for this org (participant_id IS NULL, is_custom = FALSE)
         sys_resp = (
             supabase.table("participant_task_templates")
-            .select("id, name, description, is_mandatory, linked_goal_id, primary_shift_type, additional_shift_types, sort_order, category, evidence_required")
+            .select("id, name, description, is_mandatory, linked_goal_id, primary_shift_type, additional_shift_types, recurrence_type, recurrence_weekdays, sort_order, category, evidence_required")
             .eq("organization_id", organization_id)
             .eq("is_custom", False)
             .is_("participant_id", "null")
@@ -2156,7 +2158,7 @@ def _load_tasks_from_templates(
         # Participant-specific templates
         pt_resp = (
             supabase.table("participant_task_templates")
-            .select("id, name, description, is_mandatory, linked_goal_id, primary_shift_type, additional_shift_types, sort_order, category, evidence_required")
+            .select("id, name, description, is_mandatory, linked_goal_id, primary_shift_type, additional_shift_types, recurrence_type, recurrence_weekdays, sort_order, category, evidence_required")
             .eq("organization_id", organization_id)
             .eq("participant_id", participant_id)
             .eq("status", "active")
@@ -2169,20 +2171,14 @@ def _load_tasks_from_templates(
         if not all_rows:
             return _default_tasks_copy()
 
-        # Filter by shift_type when known
-        norm_type = (shift_type or "").strip().lower()
-        if norm_type:
-            def _matches(row: dict) -> bool:
-                primary = (row.get("primary_shift_type") or "").lower()
-                additional = [s.lower() for s in (row.get("additional_shift_types") or [])]
-                return (
-                    primary in ("", "all")
-                    or primary == norm_type
-                    or norm_type in additional
-                )
-            filtered = [r for r in all_rows if _matches(r)]
-            if filtered:
-                all_rows = filtered
+        # Same shift-type and weekday rules as shift creation. If nothing fits,
+        # the generic suggestions — not every template the participant has.
+        from .shift_task_service import local_shift_date, template_fits_shift
+
+        local_date = local_shift_date(scheduled_start, participant_id, organization_id)
+        all_rows = [r for r in all_rows if template_fits_shift(r, shift_type, local_date)]
+        if not all_rows:
+            return _default_tasks_copy()
 
         tasks: list[dict[str, Any]] = []
         for idx, row in enumerate(all_rows, start=1):
@@ -2338,6 +2334,7 @@ def _resolve_shift_checklist_tasks(
         str(shift.get("participant_id") or ""),
         organization_id,
         str(shift.get("shift_type") or ""),
+        shift.get("scheduled_start"),
     )
 
 
