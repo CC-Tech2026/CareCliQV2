@@ -5,6 +5,7 @@ import type { ShiftVerificationQueueItem } from "@/services/coordinatorService";
 const state = vi.hoisted(() => ({
   toast: vi.fn(),
   confirm: vi.fn(),
+  reverse: vi.fn(),
   message: vi.fn(),
   search: "",
 }));
@@ -40,6 +41,8 @@ vi.mock("@/services/coordinatorService", () => ({
   getShiftVerificationQueue: vi.fn(),
   getShiftPriceItemOptions: vi.fn(),
   confirmShiftVerification: state.confirm,
+  getRecentShiftVerifications: vi.fn(),
+  reverseShiftVerification: state.reverse,
   sendShiftMessage: state.message,
 }));
 
@@ -83,13 +86,50 @@ const queue: ShiftVerificationQueueItem[] = [
     timezone: "Australia/Adelaide",
     checks,
   },
+  {
+    shift_id: "s3",
+    worker_id: "w3",
+    worker_name: "Mia Chen",
+    participant_name: "Jack Nguyen",
+    scheduled_start: "2026-09-30T00:00:00Z",
+    scheduled_end: "2026-09-30T02:00:00Z",
+    clocked_in_at: "2026-09-30T00:00:00Z",
+    clocked_out_at: "2026-09-30T02:30:00Z",
+    timezone: "Australia/Adelaide",
+    session_note: "Went to the library and practised reading.",
+    checks: {
+      ...checks,
+      note: { present: true, flagged: false },
+      extra_time: {
+        worked_minutes: 150, scheduled_minutes: 120, extra_minutes: 30, billable_minutes: 120,
+        capped_at_scheduled: true, extra_time_approved: false, flagged: true,
+      },
+    } as ShiftVerificationQueueItem["checks"],
+  },
+];
+const recent = [
+  {
+    shift_id: "v1",
+    worker_name: "Priya Sharma",
+    participant_name: "Noah Patel",
+    scheduled_start: "2026-09-28T23:30:00Z",
+    price_item_code: "01_011_0107_1_1",
+    billed_amount: 280.92,
+    billed_minutes: 240,
+    verified_at: "2026-09-29T06:00:00Z",
+    verified_by_name: "Sarah Coordinator",
+    invoiced: false,
+  },
+  { shift_id: "v2", worker_name: "Ben Ito", participant_name: "Ava Lee", verified_at: "2026-09-29T06:00:00Z", invoiced: true },
 ];
 vi.mock("@/hooks/useOrgQuery", () => ({
   useOrgQuery: (key: string[]) => ({
     data:
       key[0] === "shift-verification-queue"
         ? queue
-        : [{ item_code: "01_011_0107_1_1", name: "Personal care", unit: "H", price_national: 70.23 }],
+        : key[0] === "shift-verifications-recent"
+          ? recent
+          : [{ item_code: "01_011_0107_1_1", name: "Personal care", unit: "H", price_national: 70.23 }],
     isLoading: false,
     isError: false,
     refetch: vi.fn(),
@@ -122,7 +162,9 @@ it("approves with the expected price item and keeps the shift listed as approved
   state.confirm.mockResolvedValue({ billed_amount: 279.75 });
   render(<CoordinatorVerificationPage />);
   fireEvent.click(screen.getByRole("button", { name: /Approve shift/ }));
-  await waitFor(() => expect(state.confirm).toHaveBeenCalledWith("s1", "01_011_0107_1_1"));
+  await waitFor(() =>
+    expect(state.confirm).toHaveBeenCalledWith("s1", "01_011_0107_1_1", { approveExtraTime: false, extraTimeReason: "" }),
+  );
   await waitFor(() =>
     expect(state.toast).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Shift approved", description: expect.stringContaining("Liam Carter") }),
@@ -154,4 +196,58 @@ it("filters the list by worker", () => {
   fireEvent.change(screen.getByLabelText("Worker"), { target: { value: "w2" } });
   expect(screen.queryByRole("button", { name: /Priya Sharma · Liam Carter/ })).toBeNull();
   expect(screen.getByRole("button", { name: /Ben Ito · Ava Lee/ })).toBeTruthy();
+});
+
+it("won't approve a shift without a progress note", () => {
+  state.search = "shiftId=s2";
+  render(<CoordinatorVerificationPage />);
+  expect(screen.getByText(/A progress note is needed/)).toBeTruthy();
+  expect((screen.getByRole("button", { name: /Approve shift/ }) as HTMLButtonElement).disabled).toBe(true);
+  // The worker can still be asked to write it.
+  expect((screen.getByRole("button", { name: "Request changes" }) as HTMLButtonElement).disabled).toBe(false);
+});
+
+it("bills extra time only when approved with a reason", async () => {
+  state.search = "shiftId=s3";
+  state.confirm.mockResolvedValue({ billed_amount: 175.58 });
+  render(<CoordinatorVerificationPage />);
+  expect(screen.getAllByText("Worked 30 min longer than scheduled").length).toBeGreaterThan(0);
+  const approve = () => screen.getByRole("button", { name: /Approve shift/ }) as HTMLButtonElement;
+  expect(approve().disabled).toBe(false); // billed at the scheduled 2h
+  fireEvent.click(screen.getByLabelText("Approve the extra 30 min"));
+  expect(approve().disabled).toBe(true); // needs a reason
+  fireEvent.change(screen.getByLabelText("Reason for the extra time"), { target: { value: "Appointment ran late" } });
+  fireEvent.click(approve());
+  await waitFor(() =>
+    expect(state.confirm).toHaveBeenCalledWith("s3", "01_011_0107_1_1", {
+      approveExtraTime: true,
+      extraTimeReason: "Appointment ran late",
+    }),
+  );
+});
+
+it("reverses a recent verification with a reason", async () => {
+  state.reverse.mockResolvedValue({ shift_id: "v1", refunded_amount: 280.92, reversed_at: "2026-09-30T00:00:00Z" });
+  render(<CoordinatorVerificationPage />);
+  fireEvent.change(screen.getByLabelText("Status"), { target: { value: "verified" } });
+  expect(screen.getByText(/Verified by Sarah Coordinator/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Reverse verification" }));
+  const confirm = () => screen.getByRole("button", { name: "Reverse and refund" }) as HTMLButtonElement;
+  expect(confirm().disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("Why is this verification being reversed?"), {
+    target: { value: "Wrong support item" },
+  });
+  fireEvent.click(confirm());
+  await waitFor(() => expect(state.reverse).toHaveBeenCalledWith("v1", "Wrong support item"));
+  await waitFor(() =>
+    expect(state.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Verification reversed" })),
+  );
+});
+
+it("doesn't offer to reverse a shift that's already invoiced", () => {
+  render(<CoordinatorVerificationPage />);
+  fireEvent.change(screen.getByLabelText("Status"), { target: { value: "verified" } });
+  fireEvent.click(screen.getByRole("button", { name: /Ben Ito · Ava Lee/ }));
+  expect(screen.getByText(/Already on an invoice/)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Reverse verification" })).toBeNull();
 });

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
-from ..services import shift_verification_service
+from ..services import audit_service, shift_verification_service
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,14 @@ def _require_coordinator(user: dict) -> str:
 
 class VerifyShiftRequest(BaseModel):
     price_item_code: str
+    # A shift worked longer than scheduled is billed at the scheduled time
+    # unless the coordinator approves the extra, with a reason.
+    approve_extra_time: bool = False
+    extra_time_reason: Optional[str] = Field(default=None, max_length=500)
+
+
+class ReverseVerificationRequest(BaseModel):
+    reason: str = Field(min_length=5, max_length=500)
 
 
 @router.get("/shifts/verification-queue")
@@ -68,6 +78,45 @@ async def post_verify_shift(
             coordinator_id=coordinator_id,
             price_item_code=body.price_item_code,
             org_id=org_id,
+            approve_extra_time=body.approve_extra_time,
+            extra_time_reason=body.extra_time_reason,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/shifts/verified")
+async def get_recent_verifications(
+    days: int = Query(default=30, ge=1, le=365),
+    current_user: dict = Depends(get_current_user),
+):
+    """Recently verified shifts, with whether each can still be reversed."""
+    org_id = _require_coordinator(current_user)
+    return shift_verification_service.list_recent_verifications(org_id, days)
+
+
+@router.post("/shifts/{shift_id}/verification/reverse")
+async def post_reverse_verification(
+    shift_id: str,
+    body: ReverseVerificationRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Undo a verification made in error: refunds the plan budget and puts
+    the shift back in the queue. Refused once the shift is on an invoice."""
+    org_id = _require_coordinator(current_user)
+    coordinator_id = str(get_user_id(current_user) or "")
+    try:
+        result = await shift_verification_service.reverse_verification(
+            shift_id=shift_id, coordinator_id=coordinator_id, org_id=org_id, reason=body.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    await audit_service.log_action(
+        action_type="shift.verification_reversed",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=coordinator_id,
+        organization_id=org_id,
+        details={"reason": body.reason, "refunded_amount": result.get("refunded_amount")},
+    )
+    return result

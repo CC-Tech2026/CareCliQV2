@@ -3459,7 +3459,7 @@ async def shift_margin(
         raise HTTPException(status_code=404, detail="Shift not found")
 
     from ..services import ndis_pricing_service, schads_engine
-    from ..services.shift_verification_service import _actual_minutes
+    from ..services.shift_verification_service import billable_minutes
 
     completion_date = (shift.get("clocked_out_at") or shift.get("scheduled_end") or "")[:10]
     # location_type intentionally omitted (defaults to "national") — this org
@@ -3471,9 +3471,10 @@ async def shift_margin(
         if str(price.get("unit") or "").upper() == "E":
             billed_cents = round(rate * 100)
         else:
-            actual_minutes = _actual_minutes(shift)
-            if actual_minutes:
-                billed_cents = round((actual_minutes / 60) * rate * 100)
+            # Same minutes verify_shift() bills: worked, capped at scheduled.
+            minutes = billable_minutes(shift)["billable_minutes"]
+            if minutes:
+                billed_cents = round((minutes / 60) * rate * 100)
 
     pay_result = schads_engine.calculate_shift_pay(shift, dry_run=True)
     pay_cents = pay_result["total_cents"]

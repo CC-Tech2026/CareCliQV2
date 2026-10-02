@@ -18,7 +18,10 @@ import {
   confirmShiftVerification,
   getShiftPriceItemOptions,
   getShiftVerificationQueue,
+  getRecentShiftVerifications,
+  reverseShiftVerification,
   sendShiftMessage,
+  type RecentShiftVerification,
   type ShiftVerificationQueueItem,
 } from "@/services/coordinatorService";
 import {
@@ -69,11 +72,17 @@ export default function CoordinatorVerificationPage() {
   const orgId = user?.organizationId ?? "__no_org__";
   const initial = new URLSearchParams(useSearch()).get("shiftId");
   const [selectedId, setSelectedId] = useState<string | null>(initial);
-  const [statusFilter, setStatusFilter] = useState<"review" | "all">("review");
+  const [statusFilter, setStatusFilter] = useState<"review" | "all" | "verified">("review");
   const [workerFilter, setWorkerFilter] = useState("all");
   const [approved, setApproved] = useState<Record<string, Approved>>({});
+  const [selectedVerifiedId, setSelectedVerifiedId] = useState<string | null>(null);
   const query = useOrgQuery(["shift-verification-queue"], {
     queryFn: getShiftVerificationQueue,
+  });
+  const showVerified = statusFilter === "verified";
+  const recent = useOrgQuery(["shift-verifications-recent"], {
+    queryFn: () => getRecentShiftVerifications(30),
+    enabled: showVerified,
   });
   const queue = query.data ?? [];
 
@@ -103,6 +112,12 @@ export default function CoordinatorVerificationPage() {
     items.find((item) => item.shift_id === selectedId) ??
     (!selectedId ? filtered[0] : undefined);
   const todayKey = appLocalDateKey(new Date().toISOString());
+  const workerFilterName = workers.find(([id]) => id === workerFilter)?.[1];
+  const recentItems = (recent.data ?? []).filter(
+    (v) => workerFilter === "all" || v.worker_name === workerFilterName,
+  );
+  const selectedVerified =
+    recentItems.find((v) => v.shift_id === selectedVerifiedId) ?? recentItems[0];
 
   return (
     <div className="space-y-5 pb-8">
@@ -134,11 +149,12 @@ export default function CoordinatorVerificationPage() {
                 <span className="sr-only">{translate("schedule.filterStatus")}</span>
                 <select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as "review" | "all")}
+                  onChange={(e) => setStatusFilter(e.target.value as "review" | "all" | "verified")}
                   className="min-h-10 w-full rounded-lg border border-cc-border bg-cc-surface px-2 text-sm font-semibold text-cc-text"
                 >
                   <option value="review">{translate("schedule.status.review")}</option>
                   <option value="all">{translate("schedule.allShifts")}</option>
+                  <option value="verified">{translate("schedule.recentlyVerified")}</option>
                 </select>
               </label>
               <label className="text-[11px] font-semibold text-cc-muted">
@@ -155,6 +171,47 @@ export default function CoordinatorVerificationPage() {
                 </select>
               </label>
             </div>
+            {showVerified ? (
+              <ul className="max-h-[40vh] divide-y divide-cc-border overflow-y-auto lg:max-h-[68vh]">
+                {recentItems.map((v) => {
+                  const active = selectedVerified?.shift_id === v.shift_id;
+                  return (
+                    <li key={v.shift_id}>
+                      <button
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setSelectedVerifiedId(v.shift_id)}
+                        className={
+                          "flex w-full items-start gap-3 border-l-[3px] px-3 py-3 text-left transition-colors " +
+                          (active ? "border-l-cc-plum bg-cc-soft" : "border-l-transparent hover:bg-cc-soft/60")
+                        }
+                      >
+                        <WorkerAvatar name={v.worker_name} stage="completed" size="sm" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-cc-text">
+                            {v.worker_name} · {v.participant_name}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-cc-muted">
+                            {[
+                              v.scheduled_start
+                                ? formatAppDate(v.scheduled_start, null, { weekday: "short", day: "numeric", month: "short" })
+                                : null,
+                              v.billed_amount != null ? money(v.billed_amount) : null,
+                            ].filter(Boolean).join(" · ")}
+                          </span>
+                        </span>
+                        <ScheduleStatusPill stage="approved" />
+                      </button>
+                    </li>
+                  );
+                })}
+                {!recentItems.length && (
+                  <li className="p-4 text-sm text-cc-muted">
+                    {translate(recent.isLoading ? "common.loading" : "schedule.noRecentVerifications")}
+                  </li>
+                )}
+              </ul>
+            ) : (
             <ul className="max-h-[40vh] divide-y divide-cc-border overflow-y-auto lg:max-h-[68vh]">
               {filtered.map((item) => {
                 const active = selected?.shift_id === item.shift_id;
@@ -194,9 +251,34 @@ export default function CoordinatorVerificationPage() {
                 <li className="p-4 text-sm text-cc-muted">{translate("schedule.nothingToReview")}</li>
               )}
             </ul>
+            )}
           </aside>
           <section aria-live="polite" className="min-w-0">
-            {selected ? (
+            {showVerified ? (
+              selectedVerified ? (
+                <VerifiedShift
+                  key={selectedVerified.shift_id}
+                  verification={selectedVerified}
+                  onReversed={(amount) => {
+                    void qc.invalidateQueries({ queryKey: [orgId, "shift-verifications-recent"] });
+                    void qc.invalidateQueries({ queryKey: [orgId, "shift-verification-queue"] });
+                    setApproved((prev) => {
+                      const next = { ...prev };
+                      delete next[selectedVerified.shift_id];
+                      return next;
+                    });
+                    toast({
+                      title: translate("schedule.reversedToast"),
+                      description: translateParams("schedule.reversedToastDetail", { amount: money(amount) }),
+                    });
+                  }}
+                />
+              ) : (
+                <p className="rounded-2xl border border-cc-border bg-cc-surface p-6 text-sm text-cc-muted">
+                  {translate(recent.isLoading ? "common.loading" : "schedule.noRecentVerifications")}
+                </p>
+              )
+            ) : selected ? (
               <ShiftReview
                 key={selected.shift_id}
                 item={selected}
@@ -242,6 +324,15 @@ function ShiftReview({
   const [priceTouched, setPriceTouched] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
   const [changesText, setChangesText] = useState("");
+  const [approveExtra, setApproveExtra] = useState(false);
+  const [extraReason, setExtraReason] = useState("");
+
+  // A shift can't be approved (and billed) without its progress note. Older
+  // backends don't send checks.note, so fall back to the note text itself.
+  const noteMissing = item.checks?.note ? !item.checks.note.present : !item.session_note?.trim();
+  const extra = item.checks?.extra_time;
+  const extraMinutes = Math.round(extra?.extra_minutes ?? 0);
+  const extraReasonMissing = approveExtra && extraReason.trim().length < 5;
 
   const priceItems = useOrgQuery(["shift-price-items", item.shift_id], {
     queryFn: () => getShiftPriceItemOptions(item.shift_id),
@@ -257,7 +348,11 @@ function ShiftReview({
   }, [options, item.expected_price_item_code, priceTouched, priceItemCode]);
 
   const approve = useMutation({
-    mutationFn: () => confirmShiftVerification(item.shift_id, priceItemCode),
+    mutationFn: () =>
+      confirmShiftVerification(item.shift_id, priceItemCode, {
+        approveExtraTime: extraMinutes > 0 && approveExtra,
+        extraTimeReason: extraReason,
+      }),
     onSuccess: (result) => {
       onApproved(result.billed_amount);
       const warning = result.expected_item_warning || result.day_type_warning;
@@ -304,13 +399,16 @@ function ShiftReview({
   const score = item.compliance_score;
   const { evidence, hours_sanity, force_ended } = item.checks ?? ({} as ShiftVerificationQueueItem["checks"]);
   const warnings = [
+    noteMissing ? translate("schedule.noteRequired") : null,
+    extraMinutes > 0 ? translateParams("schedule.extraTime", { minutes: String(extraMinutes) }) : null,
     evidence?.mandatory_without_evidence
       ? translateParams("schedule.mandatoryNoEvidence", { count: String(evidence.mandatory_without_evidence) })
       : null,
     evidence?.flagged
       ? `${translate("schedule.lowCompliance")}${evidence.compliance_score != null ? ` (${Math.round(evidence.compliance_score)}%)` : ""}`
       : null,
-    hours_sanity?.flagged ? hours_sanity.reason || null : null,
+    // Longer than scheduled is covered by the extra-time warning above.
+    hours_sanity?.flagged && extraMinutes === 0 ? hours_sanity.reason || null : null,
     force_ended?.force_ended ? force_ended.reason || translate("schedule.systemEnded") : null,
   ].filter((w): w is string => !!w);
 
@@ -460,6 +558,45 @@ function ShiftReview({
           </section>
         )}
 
+        {!approved && extraMinutes > 0 && (
+          <section className="rounded-xl border border-cc-border p-4">
+            <h3 className="text-sm font-semibold text-cc-text">
+              {translateParams("schedule.extraTime", { minutes: String(extraMinutes) })}
+            </h3>
+            <p className="mt-1 text-sm text-cc-muted">
+              {translate("schedule.extraTimeBilled")}
+              {extra?.scheduled_minutes != null && extra?.worked_minutes != null && (
+                <>
+                  {" "}
+                  {translate("schedule.billed")}: {formatDuration(approveExtra ? extra.worked_minutes : extra.scheduled_minutes)}
+                </>
+              )}
+            </p>
+            <label className="mt-3 flex min-h-11 items-center gap-2 text-sm font-semibold text-cc-text">
+              <input
+                type="checkbox"
+                checked={approveExtra}
+                onChange={(e) => setApproveExtra(e.target.checked)}
+                disabled={approve.isPending}
+                className="h-4 w-4 accent-[var(--cc-plum)]"
+              />
+              {translateParams("schedule.approveExtraTime", { minutes: String(extraMinutes) })}
+            </label>
+            {approveExtra && (
+              <label className="mt-2 block text-sm font-semibold text-cc-text">
+                {translate("schedule.extraTimeReason")}
+                <textarea
+                  value={extraReason}
+                  onChange={(e) => setExtraReason(e.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  className="mt-1.5 w-full rounded-lg border border-cc-border bg-cc-surface p-2 text-sm font-normal"
+                />
+              </label>
+            )}
+          </section>
+        )}
+
         {!approved && (
           <label className="block text-sm font-semibold text-cc-text">
             {translate("schedule.priceItem")}
@@ -537,10 +674,15 @@ function ShiftReview({
                 {translate("schedule.requestChanges")}
               </button>
             )}
+            {noteMissing && (
+              <p className="me-auto flex min-h-11 items-center text-sm text-cc-muted">
+                {translate("schedule.noteMissing")}
+              </p>
+            )}
             <button
               type="button"
               onClick={() => approve.mutate()}
-              disabled={!priceItemCode || approve.isPending}
+              disabled={!priceItemCode || approve.isPending || noteMissing || extraReasonMissing}
               className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-cc-plum px-5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {approve.isPending ? (
@@ -553,6 +695,117 @@ function ShiftReview({
           </>
         )}
       </footer>
+    </article>
+  );
+}
+
+function VerifiedShift({
+  verification: v,
+  onReversed,
+}: {
+  verification: RecentShiftVerification;
+  onReversed: (refunded: number) => void;
+}) {
+  const { translate, translateParams } = useAccessibility();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const reverse = useMutation({
+    mutationFn: () => reverseShiftVerification(v.shift_id, reason),
+    onSuccess: (result) => {
+      setOpen(false);
+      onReversed(result.refunded_amount);
+    },
+    onError: (err: unknown) =>
+      toast({
+        title: translate("schedule.reverseFailed"),
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      }),
+  });
+  const rows: Array<[string, string | null]> = [
+    [translate("schedule.priceItem"), v.price_item_code ?? null],
+    [
+      translate("schedule.billed"),
+      [v.billed_amount != null ? money(v.billed_amount) : null, formatDuration(v.billed_minutes)]
+        .filter(Boolean)
+        .join(" · ") || null,
+    ],
+    [translate("schedule.status.verified"), formatAppDate(v.verified_at, null, { day: "numeric", month: "short", year: "numeric" })],
+  ];
+
+  return (
+    <article className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface shadow-sm">
+      <header className="flex flex-wrap items-start gap-3 p-5">
+        <WorkerAvatar name={v.worker_name} stage="completed" />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-bold text-cc-text">{v.worker_name}</h2>
+          <p className="mt-0.5 text-sm text-cc-muted">
+            {[
+              translateParams("schedule.withParticipant", { participant: v.participant_name || "" }),
+              v.verified_by_name ? translateParams("schedule.verifiedBy", { name: v.verified_by_name }) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+        <ScheduleStatusPill stage="approved" />
+      </header>
+      <dl className="grid grid-cols-1 gap-px border-y border-cc-border bg-cc-border sm:grid-cols-3">
+        {rows.map(([label, value]) => (
+          <div key={label} className="bg-cc-panel px-4 py-3">
+            <dt className="text-[11px] text-cc-muted">{label}</dt>
+            <dd className="mt-0.5 text-sm font-semibold tabular-nums text-cc-text">{value ?? translate("schedule.notRecorded")}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="space-y-3 p-5">
+        {v.invoiced ? (
+          <p role="note" className="text-sm text-cc-muted">{translate("schedule.invoicedCantReverse")}</p>
+        ) : open ? (
+          <div className="rounded-xl border border-cc-border p-3">
+            <label className="block text-sm font-semibold text-cc-text">
+              {translate("schedule.reverseReason")}
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                maxLength={500}
+                className="mt-1.5 w-full rounded-lg border border-cc-border bg-cc-surface p-2 text-sm font-normal"
+              />
+            </label>
+            <div className="mt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="min-h-11 rounded-full px-4 text-sm font-semibold text-cc-muted"
+              >
+                {translate("common.cancel")}
+              </button>
+              <button
+                type="button"
+                disabled={reason.trim().length < 5 || reverse.isPending}
+                onClick={() => reverse.mutate()}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {reverse.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />}
+                {translate("schedule.reverseConfirm")}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+      {!v.invoiced && !open && (
+        <footer className="flex justify-end border-t border-cc-border bg-cc-panel px-5 py-3">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="min-h-11 rounded-full border border-cc-border bg-cc-surface px-5 text-sm font-semibold text-cc-text"
+          >
+            {translate("schedule.reverse")}
+          </button>
+        </footer>
+      )}
     </article>
   );
 }

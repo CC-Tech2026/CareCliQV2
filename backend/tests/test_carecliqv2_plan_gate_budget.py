@@ -154,16 +154,16 @@ async def test_verify_shift_records_budget_usage():
     ), patch.object(
         shift_verification_service,
         "_get_session_for_shift",
-        return_value={"id": "session-1"},
+        return_value={"id": "session-1", "compliance_input_text": "Supported Liam with lunch and a walk."},
     ), patch.object(
         shift_verification_service,
         "compute_verification_checks",
         return_value={},
     ), patch.object(
         shift_verification_service,
-        "record_verified_shift_budget_usage",
-        return_value={"id": "bu-1"},
-    ) as record_usage:
+        "_apply_budget_change",
+        return_value=135.12,
+    ) as charge:
         result = await shift_verification_service.verify_shift(
             shift_id="shift-1",
             coordinator_id="coord-1",
@@ -173,8 +173,10 @@ async def test_verify_shift_records_budget_usage():
 
     assert result["billed_amount"] > 0
     assert len(result["task_completions"]) == 2
-    record_usage.assert_called_once()
-    call_kwargs = record_usage.call_args.kwargs
-    assert call_kwargs["shift_verification_id"] == "ver-1"
+    # The budget and its ledger row are written by one call.
+    charge.assert_called_once()
+    call_kwargs = charge.call_args.kwargs
+    assert call_kwargs["verification_id"] == "ver-1"
     assert call_kwargs["plan_id"] == "plan-1"
     assert call_kwargs["hourly_rate"] == pytest.approx(67.56)
+    assert call_kwargs["amount"] == pytest.approx(135.12)  # 2 h worked = 2 h scheduled

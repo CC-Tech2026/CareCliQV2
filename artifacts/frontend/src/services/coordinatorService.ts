@@ -1779,10 +1779,31 @@ export type ShiftVerificationForceEndedCheck = {
   reason?: string | null;
 };
 
+export type ShiftVerificationNoteCheck = {
+  present: boolean;
+  flagged: boolean;
+  reason?: string | null;
+};
+
+/** Time worked vs scheduled. Billed at the scheduled time unless extra is approved. */
+export type ShiftVerificationExtraTimeCheck = {
+  worked_minutes: number | null;
+  scheduled_minutes: number | null;
+  extra_minutes: number;
+  billable_minutes: number | null;
+  capped_at_scheduled: boolean;
+  extra_time_approved: boolean;
+  flagged: boolean;
+  reason?: string | null;
+};
+
 export type ShiftVerificationChecks = {
   evidence: ShiftVerificationEvidenceCheck;
   hours_sanity: ShiftVerificationHoursCheck;
   force_ended: ShiftVerificationForceEndedCheck;
+  /** Missing until the backend change is deployed. */
+  note?: ShiftVerificationNoteCheck;
+  extra_time?: ShiftVerificationExtraTimeCheck;
   any_flagged: boolean;
   computed_at: string;
 };
@@ -1837,6 +1858,7 @@ export type VerifyShiftResult = {
   hourly_rate_applied: number;
   support_category: string;
   new_used_amount: number;
+  billing?: ShiftVerificationExtraTimeCheck & { extra_time_reason?: string | null };
   day_type_warning?: string;
   expected_item_warning?: string;
 };
@@ -1860,13 +1882,51 @@ export function getParticipantPriceItemOptions(participantId: string) {
   );
 }
 
-export function confirmShiftVerification(shiftId: string, priceItemCode: string) {
+export function confirmShiftVerification(
+  shiftId: string,
+  priceItemCode: string,
+  options: { approveExtraTime?: boolean; extraTimeReason?: string } = {},
+) {
   return jsonFetch<VerifyShiftResult>(
     `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/verify`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ price_item_code: priceItemCode }),
+      body: JSON.stringify({
+        price_item_code: priceItemCode,
+        approve_extra_time: !!options.approveExtraTime,
+        extra_time_reason: options.extraTimeReason?.trim() || null,
+      }),
+    }
+  );
+}
+
+export type RecentShiftVerification = {
+  shift_id: string;
+  participant_name?: string | null;
+  worker_name?: string | null;
+  scheduled_start?: string | null;
+  price_item_code?: string | null;
+  billed_amount?: number | null;
+  billed_minutes?: number | null;
+  extra_time_approved?: boolean;
+  verified_at: string;
+  verified_by_name?: string | null;
+  /** On an invoice already — cancel the invoice before reversing. */
+  invoiced: boolean;
+};
+
+export function getRecentShiftVerifications(days = 30) {
+  return jsonFetch<RecentShiftVerification[]>(`/api/coordinator/shifts/verified?days=${days}`);
+}
+
+export function reverseShiftVerification(shiftId: string, reason: string) {
+  return jsonFetch<{ shift_id: string; refunded_amount: number; reversed_at: string }>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/verification/reverse`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: reason.trim() }),
     }
   );
 }

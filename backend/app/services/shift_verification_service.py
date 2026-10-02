@@ -83,21 +83,51 @@ def _scheduled_minutes(shift: dict[str, Any]) -> Optional[float]:
 
 
 def _actual_minutes(shift: dict[str, Any]) -> Optional[float]:
+    """Time actually worked: clock-in to clock-out. shifts.duration_minutes is
+    set from the *scheduled* times when the shift is created and never
+    updated, so it's only a fallback for old rows with no clock times —
+    reading it first billed the scheduled length and made the hours check
+    compare the schedule with itself."""
+    clocked_in = shift.get("clocked_in_at")
+    clocked_out = shift.get("clocked_out_at")
+    if clocked_in and clocked_out:
+        try:
+            minutes = (parse_shift_datetime(clocked_out) - parse_shift_datetime(clocked_in)).total_seconds() / 60
+            if minutes > 0:
+                return minutes
+        except Exception:
+            pass
     duration = shift.get("duration_minutes")
     if duration is not None:
         try:
             return float(duration)
         except Exception:
             pass
-    clocked_in = shift.get("clocked_in_at")
-    clocked_out = shift.get("clocked_out_at")
-    if not clocked_in or not clocked_out:
-        return None
-    try:
-        delta = parse_shift_datetime(clocked_out) - parse_shift_datetime(clocked_in)
-        return delta.total_seconds() / 60
-    except Exception:
-        return None
+    return None
+
+
+def billable_minutes(shift: dict[str, Any], approve_extra_time: bool = False) -> dict[str, Any]:
+    """Minutes to bill: the time worked, but no more than scheduled unless a
+    coordinator approves the extra time. Shorter shifts bill what was worked."""
+    worked = _actual_minutes(shift)
+    scheduled = _scheduled_minutes(shift)
+    extra = max(0.0, worked - scheduled) if worked is not None and scheduled else 0.0
+    # Whole minutes: a few seconds over the schedule isn't "extra time".
+    has_extra = round(extra) >= 1
+    if worked is None:
+        billable = None
+    elif has_extra and not approve_extra_time:
+        billable = scheduled
+    else:
+        billable = worked
+    return {
+        "worked_minutes": round(worked, 1) if worked is not None else None,
+        "scheduled_minutes": round(scheduled, 1) if scheduled is not None else None,
+        "extra_minutes": round(extra, 1) if has_extra else 0,
+        "billable_minutes": round(billable, 1) if billable is not None else None,
+        "capped_at_scheduled": bool(has_extra and not approve_extra_time),
+        "extra_time_approved": bool(has_extra and approve_extra_time),
+    }
 
 
 def _completion_date_for_shift(shift: dict[str, Any]) -> str:
@@ -325,14 +355,37 @@ def compute_verification_checks(
 
     hours_check = _hours_sanity_check(shift)
 
+    # A shift can't be verified (and billed) without the worker's progress note.
+    note_present = bool(session_note_text(session))
+    note_check = {
+        "present": note_present,
+        "flagged": not note_present,
+        "reason": None if note_present else "No progress note has been written for this shift.",
+    }
+
+    billing = billable_minutes(shift)
+    extra_time_check = {
+        **billing,
+        "flagged": billing["extra_minutes"] > 0,
+        "reason": (
+            f"Worked {round(billing['extra_minutes'])} min longer than scheduled — billed at the "
+            "scheduled time unless you approve the extra time."
+            if billing["extra_minutes"] > 0
+            else None
+        ),
+    }
+
     any_flagged = bool(
         evidence_check["flagged"] or force_ended_check["flagged"] or hours_check["flagged"]
+        or note_check["flagged"] or extra_time_check["flagged"]
     )
 
     return {
         "evidence": evidence_check,
         "hours_sanity": hours_check,
         "force_ended": force_ended_check,
+        "note": note_check,
+        "extra_time": extra_time_check,
         "any_flagged": any_flagged,
         "computed_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -381,6 +434,94 @@ _SHIFT_COLUMNS = (
 )
 
 
+def _is_missing_column(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "reversed_at" in text or "42703" in text or "does not exist" in text
+
+
+def _apply_budget_change(
+    *,
+    budget: dict[str, Any],
+    plan_id: str,
+    amount: float,
+    category: str,
+    hourly_rate: float,
+    duration_minutes: int,
+    description: str,
+    verification_id: Optional[str],
+    session_id: Optional[str],
+) -> float:
+    """Move plan_budgets.used_amount by `amount` (negative to refund) and write
+    the matching budget_usage ledger row in one transaction (233,
+    apply_plan_budget_change). Returns the new used amount."""
+    supabase = get_supabase_admin()
+    try:
+        result = supabase.rpc("apply_plan_budget_change", {
+            "p_budget_id": str(budget["id"]),
+            "p_amount": round(amount, 2),
+            "p_category": category,
+            "p_hourly_rate": round(hourly_rate, 2),
+            "p_duration_minutes": int(duration_minutes),
+            "p_description": description,
+            "p_verification_id": verification_id,
+            "p_session_id": session_id,
+        }).execute()
+        value = result.data[0] if isinstance(result.data, list) and result.data else result.data
+        if isinstance(value, dict):
+            value = next(iter(value.values()), None)
+        return float(value) if value is not None else round(float(budget.get("used_amount") or 0) + amount, 2)
+    except Exception as exc:
+        if "apply_plan_budget_change" not in str(exc) and "PGRST202" not in str(exc):
+            raise
+        # Migration 233 not applied yet: the old two-step write.
+        logger.warning("apply_plan_budget_change unavailable, using non-atomic budget update: %s", exc)
+    new_used = round(float(budget.get("used_amount") or 0) + amount, 2)
+    supabase.table("plan_budgets").update({"used_amount": new_used}).eq("id", budget["id"]).execute()
+    supabase.table("budget_usage").insert({
+        "plan_id": plan_id,
+        "session_id": session_id,
+        "category": category,
+        "amount": round(amount, 2),
+        "hourly_rate": round(hourly_rate, 2),
+        "duration_minutes": int(duration_minutes),
+        "description": description,
+        "shift_verification_id": verification_id,
+    }).execute()
+    return new_used
+
+
+def _active_verified_shift_ids(org_id: str) -> set[str]:
+    """Shifts with a verification that hasn't been reversed (233). Before that
+    migration there are no reversals, so every verification is active."""
+    supabase = get_supabase_admin()
+    try:
+        rows = (
+            supabase.table("shift_verifications").select("shift_id")
+            .eq("organization_id", org_id).is_("reversed_at", "null").execute()
+        ).data
+    except Exception as exc:
+        if not _is_missing_column(exc):
+            raise
+        rows = supabase.table("shift_verifications").select("shift_id").eq("organization_id", org_id).execute().data
+    return {str(row.get("shift_id")) for row in _safe_rows(rows)}
+
+
+def _active_verification(shift_id: str) -> Optional[dict[str, Any]]:
+    supabase = get_supabase_admin()
+    columns = "id, shift_id, organization_id, participant_id, support_category, billed_amount, hourly_rate_applied, checks_run"
+    try:
+        rows = (
+            supabase.table("shift_verifications").select(columns)
+            .eq("shift_id", shift_id).is_("reversed_at", "null").limit(1).execute()
+        ).data
+    except Exception as exc:
+        if not _is_missing_column(exc):
+            raise
+        rows = supabase.table("shift_verifications").select(columns).eq("shift_id", shift_id).limit(1).execute().data
+    found = _safe_rows(rows)
+    return found[0] if found else None
+
+
 def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
     """Completed shifts in this org that have no shift_verifications row yet."""
     supabase = get_supabase_admin()
@@ -397,15 +538,7 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
     if not shifts:
         return []
 
-    verified_result = (
-        supabase.table("shift_verifications")
-        .select("shift_id")
-        .eq("organization_id", org_id)
-        .execute()
-    )
-    verified_shift_ids = {
-        str(row.get("shift_id")) for row in _safe_rows(verified_result.data)
-    }
+    verified_shift_ids = _active_verified_shift_ids(org_id)
 
     pending = [s for s in shifts if str(s.get("id")) not in verified_shift_ids]
     if not pending:
@@ -546,10 +679,14 @@ async def verify_shift(
     coordinator_id: str,
     price_item_code: str,
     org_id: str,
+    approve_extra_time: bool = False,
+    extra_time_reason: Optional[str] = None,
 ) -> dict[str, Any]:
     """Recompute checks server-side, resolve the coordinator-chosen price
     item, insert the audit row, and deduct from plan_budgets. Rejects shifts
-    that are not completed or are already verified."""
+    that are not completed, are already verified, or have no progress note.
+    Bills the time worked, capped at the scheduled time unless the
+    coordinator approves the extra time with a reason."""
     supabase = get_supabase_admin()
 
     shift_result = (
@@ -570,14 +707,19 @@ async def verify_shift(
 
     completion_date = _completion_date_for_shift(shift)
 
-    existing = (
-        supabase.table("shift_verifications")
-        .select("id")
-        .eq("shift_id", shift_id)
-        .execute()
-    )
-    if _safe_rows(existing.data):
+    if _active_verification(shift_id):
         raise ValueError("This shift has already been verified.")
+
+    session = _get_session_for_shift(shift)
+    if not session_note_text(session):
+        raise ValueError(
+            "This shift has no progress note. Ask the worker to write it before the shift is verified."
+        )
+
+    billing = billable_minutes(shift, approve_extra_time=approve_extra_time)
+    reason = (extra_time_reason or "").strip()
+    if billing["extra_time_approved"] and len(reason) < 5:
+        raise ValueError("Give a reason for approving the extra time (at least 5 characters).")
 
     participant_id = shift.get("participant_id")
     if not participant_id:
@@ -634,23 +776,24 @@ async def verify_shift(
     # dollar amounts — same convention as billing.tsx, NdisPriceEditor.tsx and
     # billing_service.py; plan_budgets amounts are also plain dollars.
     hourly_rate = float(price.get("effective_price") or 0)
-    actual_minutes = _actual_minutes(shift)
-    if actual_minutes is None or actual_minutes <= 0:
+    billed_minutes = billing["billable_minutes"]
+    if billed_minutes is None or billed_minutes <= 0:
         raise ValueError(
-            "Shift has no usable actual duration (clock times or duration_minutes "
-            "is missing or invalid) — cannot bill. Check the shift record."
+            "Shift has no usable worked time (clock-in/clock-out missing or invalid) — "
+            "cannot bill. Check the shift record."
         )
     # "E" (per-event) items are a flat fee regardless of how long the shift
     # ran — e.g. a $735.80 establishment fee stays $735.80, not scaled by
-    # hours worked the way an "H" (hourly) item's rate is. actual_minutes is
+    # hours worked the way an "H" (hourly) item's rate is. billed_minutes is
     # still tracked below for the shift's own duration record either way.
     if str(price.get("unit") or "").upper() == "E":
         billed_amount = round(hourly_rate, 2)
     else:
-        billed_amount = round((actual_minutes / 60) * hourly_rate, 2)
+        billed_amount = round((billed_minutes / 60) * hourly_rate, 2)
 
-    session = _get_session_for_shift(shift)
     checks = compute_verification_checks(shift, session)
+    # What was billed and why — part of the audit snapshot.
+    checks["billing"] = {**billing, "extra_time_reason": reason or None}
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -664,44 +807,55 @@ async def verify_shift(
             f"Participant's plan has no '{category}' budget line for this price item's support category."
         )
 
-    insert_result = (
-        supabase.table("shift_verifications")
-        .insert(
-            {
-                "shift_id": shift_id,
-                "organization_id": org_id,
-                "participant_id": str(participant_id),
-                "checks_run": checks,
-                "price_item_code": price.get("item_code"),
-                "support_category": category,
-                "hourly_rate_applied": hourly_rate,
-                "billed_amount": billed_amount,
-                "verified_by": coordinator_id,
-                "verified_at": now,
-            }
+    try:
+        insert_result = (
+            supabase.table("shift_verifications")
+            .insert(
+                {
+                    "shift_id": shift_id,
+                    "organization_id": org_id,
+                    "participant_id": str(participant_id),
+                    "checks_run": checks,
+                    "price_item_code": price.get("item_code"),
+                    "support_category": category,
+                    "hourly_rate_applied": hourly_rate,
+                    "billed_amount": billed_amount,
+                    "verified_by": coordinator_id,
+                    "verified_at": now,
+                }
+            )
+            .execute()
         )
-        .execute()
-    )
+    except Exception as exc:
+        # The database allows one active verification per shift — a second
+        # click (or another coordinator) got there first.
+        if "duplicate" in str(exc).lower() or "23505" in str(exc):
+            raise ValueError("This shift has already been verified.") from exc
+        raise
     verification_rows = _safe_rows(insert_result.data)
     verification = verification_rows[0] if verification_rows else None
+    if not verification or not verification.get("id"):
+        raise ValueError("The verification couldn't be saved. Nothing was charged — try again.")
 
-    current_used = float(matching_budget.get("used_amount") or 0)
-    new_used = round(current_used + billed_amount, 2)
-    supabase.table("plan_budgets").update({"used_amount": new_used}).eq(
-        "id", matching_budget["id"]
-    ).execute()
-
-    if verification and verification.get("id"):
-        record_verified_shift_budget_usage(
+    session_id = str(session.get("id")) if session and session.get("id") else None
+    item_code = str(price.get("item_code") or price_item_code)
+    try:
+        new_used = _apply_budget_change(
+            budget=matching_budget,
             plan_id=str(plan["id"]),
-            shift_verification_id=str(verification["id"]),
-            session_id=str(session.get("id")) if session and session.get("id") else None,
-            category=category,
             amount=billed_amount,
+            category=category,
             hourly_rate=hourly_rate,
-            duration_minutes=int(round(actual_minutes)),
-            price_item_code=str(price.get("item_code") or price_item_code),
+            duration_minutes=int(round(billed_minutes)),
+            description=f"Shift verification: {item_code} ({int(round(billed_minutes))} min)",
+            verification_id=str(verification["id"]),
+            session_id=session_id,
         )
+    except Exception as exc:
+        # Don't leave a verified shift whose budget was never charged.
+        supabase.table("shift_verifications").delete().eq("id", str(verification["id"])).execute()
+        logger.error("Budget charge failed for shift %s; verification rolled back: %s", shift_id, exc)
+        raise ValueError("The plan budget couldn't be charged, so the shift wasn't verified. Try again.") from exc
 
     task_completions = _upsert_task_completions_for_verified_shift(
         supabase,
@@ -709,9 +863,9 @@ async def verify_shift(
         participant_id=str(participant_id),
         organization_id=org_id,
         coordinator_id=coordinator_id,
-        price_item_code=str(price.get("item_code") or price_item_code),
+        price_item_code=item_code,
         billed_amount=billed_amount,
-        actual_minutes=actual_minutes,
+        actual_minutes=billed_minutes,
         verified_at=now,
         completion_date=completion_date,
     )
@@ -723,6 +877,7 @@ async def verify_shift(
         "hourly_rate_applied": hourly_rate,
         "support_category": category,
         "new_used_amount": new_used,
+        "billing": checks["billing"],
         "task_completions": task_completions,
     }
     if day_type_warning:
@@ -730,3 +885,155 @@ async def verify_shift(
     if expected_item_warning:
         result["expected_item_warning"] = expected_item_warning
     return result
+
+
+async def reverse_verification(
+    shift_id: str,
+    coordinator_id: str,
+    org_id: str,
+    reason: str,
+) -> dict[str, Any]:
+    """Undo a verification made in error (wrong support item, wrong time).
+
+    Refuses once any of the shift's billed work is on an invoice — cancel the
+    invoice first. Otherwise refunds the plan budget (a negative ledger row,
+    so budget_usage stays append-only), returns the shift's task completions
+    to "submitted", and marks the verification reversed. The row stays as
+    history and the shift goes back into the verification queue."""
+    reason = (reason or "").strip()
+    if len(reason) < 5:
+        raise ValueError("Give a reason for reversing this verification (at least 5 characters).")
+
+    supabase = get_supabase_admin()
+    try:
+        supabase.table("shift_verifications").select("reversed_at").limit(1).execute()
+    except Exception as exc:
+        if _is_missing_column(exc):
+            # Without migration 233 the reversal can't be recorded — stop
+            # before refunding anything.
+            raise ValueError("Reversing verifications needs database migration 233. Apply it first.") from exc
+        raise
+
+    verification = _active_verification(shift_id)
+    if not verification or str(verification.get("organization_id") or "") != str(org_id):
+        raise ValueError("This shift has no verification to reverse.")
+
+    invoiced = _safe_rows(
+        supabase.table("task_completions").select("id, invoice_id")
+        .eq("shift_id", shift_id).not_.is_("invoice_id", "null").limit(1).execute().data
+    )
+    if invoiced:
+        raise ValueError("This shift is already on an invoice. Cancel that invoice first, then reverse the verification.")
+
+    # Refund the plan that was actually charged (from the verification's own
+    # ledger row), not whatever plan is current now.
+    charges = _safe_rows(
+        supabase.table("budget_usage").select("plan_id, category, amount, session_id")
+        .eq("shift_verification_id", str(verification["id"])).execute().data
+    )
+    charged = round(sum(float(c.get("amount") or 0) for c in charges), 2)
+    if charged > 0:
+        plan_id = str(charges[0]["plan_id"])
+        category = str(charges[0].get("category") or verification.get("support_category") or "")
+        budget_rows = _safe_rows(
+            supabase.table("plan_budgets").select("id, used_amount")
+            .eq("plan_id", plan_id).eq("category", category).limit(1).execute().data
+        )
+        if not budget_rows:
+            raise ValueError("The plan budget this shift was charged to no longer exists — reverse it manually.")
+        _apply_budget_change(
+            budget=budget_rows[0],
+            plan_id=plan_id,
+            amount=-charged,
+            category=category,
+            hourly_rate=float(verification.get("hourly_rate_applied") or 0),
+            duration_minutes=0,
+            description=f"Reversal of shift verification: {reason}",
+            verification_id=str(verification["id"]),
+            session_id=charges[0].get("session_id"),
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    supabase.table("task_completions").update({
+        "status": "submitted",
+        "evidence_verified": False,
+        "verified_by": None,
+        "verified_at": None,
+        "billed_amount": None,
+        "price_item_code": None,
+        "updated_at": now,
+    }).eq("shift_id", shift_id).eq("status", "verified").is_("invoice_id", "null").execute()
+
+    supabase.table("shift_verifications").update({
+        "reversed_at": now,
+        "reversed_by": coordinator_id,
+        "reversal_reason": reason,
+    }).eq("id", str(verification["id"])).execute()
+
+    return {"shift_id": shift_id, "verification_id": verification["id"], "refunded_amount": charged, "reversed_at": now}
+
+
+def list_recent_verifications(org_id: str, days: int = 30) -> list[dict[str, Any]]:
+    """Verifications in the last `days`, newest first, with what's needed to
+    decide whether one can still be reversed (not yet on an invoice)."""
+    from datetime import timedelta
+
+    supabase = get_supabase_admin()
+    since = (datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 365)))).isoformat()
+    columns = "id, shift_id, participant_id, price_item_code, billed_amount, verified_by, verified_at, checks_run"
+    try:
+        rows = _safe_rows(
+            supabase.table("shift_verifications").select(columns)
+            .eq("organization_id", org_id).is_("reversed_at", "null")
+            .gte("verified_at", since).order("verified_at", desc=True).limit(200).execute().data
+        )
+    except Exception as exc:
+        if not _is_missing_column(exc):
+            raise
+        rows = _safe_rows(
+            supabase.table("shift_verifications").select(columns)
+            .eq("organization_id", org_id).gte("verified_at", since)
+            .order("verified_at", desc=True).limit(200).execute().data
+        )
+    if not rows:
+        return []
+
+    shift_ids = [str(r["shift_id"]) for r in rows]
+    shifts = {
+        str(s["id"]): s for s in _safe_rows(
+            supabase.table("shifts").select("id, participant_name, worker_id, scheduled_start")
+            .in_("id", shift_ids).eq("organization_id", org_id).execute().data
+        )
+    }
+    invoiced = {
+        str(t["shift_id"]) for t in _safe_rows(
+            supabase.table("task_completions").select("shift_id")
+            .in_("shift_id", shift_ids).not_.is_("invoice_id", "null").execute().data
+        )
+    }
+    user_ids = sorted({str(x) for r in rows for x in (r.get("verified_by"),) if x}
+                      | {str(s.get("worker_id")) for s in shifts.values() if s.get("worker_id")})
+    names = {
+        str(u["id"]): u.get("full_name") for u in _safe_rows(
+            supabase.table("users").select("id, full_name").in_("id", user_ids).execute().data
+        )
+    } if user_ids else {}
+
+    out = []
+    for r in rows:
+        shift = shifts.get(str(r["shift_id"]), {})
+        billing = (r.get("checks_run") or {}).get("billing") or {}
+        out.append({
+            "shift_id": r["shift_id"],
+            "participant_name": shift.get("participant_name"),
+            "worker_name": names.get(str(shift.get("worker_id") or "")),
+            "scheduled_start": shift.get("scheduled_start"),
+            "price_item_code": r.get("price_item_code"),
+            "billed_amount": r.get("billed_amount"),
+            "billed_minutes": billing.get("billable_minutes"),
+            "extra_time_approved": bool(billing.get("extra_time_approved")),
+            "verified_at": r.get("verified_at"),
+            "verified_by_name": names.get(str(r.get("verified_by") or "")),
+            "invoiced": str(r["shift_id"]) in invoiced,
+        })
+    return out
