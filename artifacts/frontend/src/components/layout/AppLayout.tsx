@@ -149,7 +149,7 @@ const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
 // (the route itself already allows them in — this just makes it visible).
 const GRANT_NAV_ITEMS: Record<string, NavItem> = {
   governance_vault: { href: "/md/vault", label: "Documents & Audit Vault", icon: FolderLock },
-  executive_dashboard: { href: "/md/executive", label: "Strategic Insights", icon: BarChart3 },
+  executive_dashboard: { href: "/md/executive", label: "Performance review", icon: BarChart3 },
   onboarding_program_design: { href: "/md/onboarding/training", label: "Competency & Training", icon: GraduationCap },
 };
 

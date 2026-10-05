@@ -409,6 +409,7 @@ export default function MDStaffPage() {
     setPendingWorkerId(workerId);
     const tab = params.get("tab");
     if (
+      tab === "shifts" ||
       tab === "credentials" ||
       tab === "documents" ||
       tab === "availability" ||

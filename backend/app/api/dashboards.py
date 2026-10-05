@@ -764,6 +764,14 @@ async def _md_dashboard_payload(
         "goal_achievement_rate": goal_rate,
         "workers_at_risk": workers_at_risk[:10],
         "workers_needing_attention": workers_at_risk[:10],
+        "documentation_summary": {
+            "sample_size": len(sessions),
+            "scored": sum(1 for s in sessions if s.get("compliance_score") is not None),
+            "unscored": sum(1 for s in sessions if s.get("compliance_score") is None),
+            "on_target": sum(1 for s in sessions if s.get("compliance_score") is not None and float(s["compliance_score"]) >= 85),
+            "needs_review": sum(1 for s in sessions if s.get("compliance_score") is not None and 60 <= float(s["compliance_score"]) < 85),
+            "priority_review": sum(1 for s in sessions if s.get("compliance_score") is not None and float(s["compliance_score"]) < 60),
+        },
         "common_issues": common_issues,
         "org_alerts": org_alerts,
         "team_compliance_breakdown": {

@@ -50,6 +50,16 @@ function defaultRouteForSource(source: string | undefined): string {
   return "/md/compliance";
 }
 
+export function attentionRoute(alert: HubComplianceAlert, fallback = defaultRouteForSource): string {
+  const id = encodeURIComponent;
+  if (alert.source === "incidents" && alert.incident_id) return "/incidents/" + id(alert.incident_id);
+  if (alert.source === "invoices" && alert.invoice_id) return "/billing?workspace=invoices&invoiceId=" + id(alert.invoice_id);
+  if (alert.source === "participants" && alert.participant_id) return "/patients?id=" + id(alert.participant_id) + "&tab=overview";
+  if (alert.source === "shifts" && alert.shift_id) return "/md/schedule?shiftId=" + id(alert.shift_id);
+  if (alert.worker_id && ["credentials", "worker-compliance", "worker-notes"].includes(alert.source || "")) return "/md/staff?workerId=" + id(alert.worker_id) + "&tab=" + (alert.source === "credentials" ? "credentials" : "shifts");
+  return fallback(alert.source);
+}
+
 /** Worker names/scores are already fetched by the parent's MDData call — this just
  *  reshapes them into the same alert row shape so they render in one consistent
  *  list instead of a second, differently-styled card. */
@@ -63,11 +73,12 @@ function workersAtRiskToAlerts(
 ): HubComplianceAlert[] {
   return workers.map((w) => ({
     id: `worker-${w.id}`,
-    title: `${w.full_name}: ${w.compliance_score}% compliance`,
+    worker_id: w.id,
+    title: `${w.full_name}: ${w.compliance_score}% documentation`,
     detail: `Below the 85% threshold across ${w.sessions} session${w.sessions === 1 ? "" : "s"}.`,
     severity: w.compliance_score < 70 ? "critical" : "high",
     affected_staff: [w.full_name],
-    action_label: "View Worker",
+    action_label: "Review shift documentation",
     source: "worker-compliance",
     category: "exposure",
   }));
@@ -83,9 +94,7 @@ function AlertRow({
   routeForSource: (source: string | undefined) => string;
 }) {
   const { color, soft } = severityColors(alert.severity);
-  const go = () => onNavigate(alert.source === "participants" && alert.participant_id
-    ? `/patients?id=${encodeURIComponent(alert.participant_id)}&tab=overview`
-    : routeForSource(alert.source));
+  const go = () => onNavigate(attentionRoute(alert, routeForSource));
   return (
     // A plain div (not <button>) so the title/detail text stays selectable and
     // copyable - wrapping the whole row in a <button> blocked click-drag text
@@ -470,15 +479,15 @@ export function GovernanceTriage({
           <EmptyState message="All caught up. Nothing needs action right now." />
         ) : (
           <div
-            className="flex-1 divide-y overflow-y-auto"
+            className="max-h-[36rem] flex-1 divide-y overflow-y-auto"
             style={{ borderColor: BORDER }}
           >
-            {all.slice(0, 6).map((a) => {
+            {all.map((a) => {
               const { color } = severityColors(a.severity);
               return (
                 <button
                   key={a.id}
-                  onClick={() => onNavigate(routeForSource(a.source))}
+                  onClick={() => onNavigate(attentionRoute(a, routeForSource))}
                   className="w-full px-5 py-3.5 text-left transition-colors hover:bg-cc-soft"
                 >
                   <p
@@ -499,6 +508,7 @@ export function GovernanceTriage({
                   >
                     {a.detail}
                   </p>
+                  <span className="mt-2 flex items-center gap-1 text-xs font-semibold text-cc-plum">{a.action_label || "Review details"}<ArrowRight size={12} /></span>
                 </button>
               );
             })}

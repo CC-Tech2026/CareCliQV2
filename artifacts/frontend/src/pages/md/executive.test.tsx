@@ -59,7 +59,7 @@ it("keeps the overview available when only the trend fails", async () => {
   );
   render(<MDExecutivePage />);
   expect(
-    await screen.findByRole("heading", { name: "Organisation at a glance" }),
+    await screen.findByRole("heading", { name: "Performance review" }),
   ).toBeTruthy();
   expect(screen.getByText("Compliance trend unavailable")).toBeTruthy();
   expect(
@@ -82,7 +82,7 @@ it("retries a failed overview without a page reload", async () => {
   const retry = await screen.findByRole("button", { name: "Try again" });
   fireEvent.click(retry);
   expect(
-    await screen.findByRole("heading", { name: "Organisation at a glance" }),
+    await screen.findByRole("heading", { name: "Performance review" }),
   ).toBeTruthy();
 });
 it("shows failed action items and recovers on retry", async () => {

@@ -113,6 +113,7 @@ async def _incident_clock_alerts(org_id: str, current_user: dict) -> list[dict]:
             "affected_staff": [],
             "action_label": "Open Incident",
             "source": "incidents",
+            "incident_id": str(inc["id"]),
             "category": "urgent",
         })
 
@@ -159,6 +160,7 @@ async def _invoice_aging_alerts(org_id: str) -> list[dict]:
             "affected_staff": [],
             "action_label": "View Invoice",
             "source": "invoices",
+            "invoice_id": str(row["id"]),
             "category": "urgent",
             "_days_overdue": days_overdue,
         })
@@ -238,63 +240,29 @@ async def get_compliance_alerts(current_user: dict = Depends(get_current_user)):
             pass
         return "valid"
 
-    type_groups: dict[str, list[dict]] = {}
+    alerts = []
     for row in rows:
         live = _live_status(row)
         if live not in ("expired", "expiring"):
             continue
         label = row.get("credential_type") or row.get("title") or "Credential"
-        type_groups.setdefault(label, []).append({**row, "_live_status": live})
-
-    alerts = []
-    for label, creds in type_groups.items():
-        count = len(creds)
-        staff_names = [
-            names_by_id.get(str(c["user_id"]), "Team member")
-            for c in creds
-            if c.get("user_id")
-        ]
-
-        min_days: int | None = None
-        any_expired = False
-        for c in creds:
-            exp = c.get("expiry_date")
-            if exp:
-                try:
-                    d = date.fromisoformat(str(exp)[:10])
-                    days = (d - today).days
-                    if min_days is None or days < min_days:
-                        min_days = days
-                    if days < 0:
-                        any_expired = True
-                except Exception:
-                    pass
-
-        if any_expired:
-            severity = "critical"
-        elif min_days is not None and min_days <= 14:
-            severity = "critical"
-        else:
-            severity = "high"
-
-        due_date_str: str | None = None
-        if min_days is not None:
-            due_date_str = (today + timedelta(days=min_days)).isoformat()
-
-        noun = "credential" if count == 1 else "credentials"
-        subj = "1 team member has" if count == 1 else f"{count} team members have"
-        detail = f"{subj} {label} {noun} that {'is' if count == 1 else 'are'} {'expired' if any_expired else 'expiring soon'}."
-        if any_expired:
-            detail += " Immediate action required."
-
+        worker_id = str(row.get("user_id") or "")
+        name = names_by_id.get(worker_id, "Team member")
+        expiry = str(row.get("expiry_date") or "")[:10]
+        try:
+            days = (date.fromisoformat(expiry) - today).days if expiry else None
+        except ValueError:
+            days = None
         alerts.append({
-            "id": f"cred-{label.lower().replace(' ', '-').replace('/', '-')}",
-            "title": f"{label} {'Expired' if any_expired else 'Expiring'}",
-            "detail": detail,
-            "severity": severity,
-            "due_date": due_date_str,
-            "affected_staff": staff_names[:5],
-            "action_label": "Review Credentials",
+            "id": f"cred-{row['id']}",
+            "credential_id": str(row["id"]),
+            "worker_id": worker_id,
+            "title": f"{name}: {label}",
+            "detail": f"Expired on {expiry}. Review the credential and arrange renewal." if live == "expired" else f"Expires on {expiry}. Follow up renewal before expiry.",
+            "severity": "critical" if live == "expired" or (days is not None and days <= 14) else "high",
+            "due_date": expiry or None,
+            "affected_staff": [name],
+            "action_label": "Review staff credential",
             "source": "credentials",
             "category": "exposure",
         })

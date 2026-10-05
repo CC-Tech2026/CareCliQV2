@@ -89,8 +89,8 @@ const MD_NAV_GROUPS = [
     label: "Governance & Strategy",
     items: [
       { href: "/hub", label: "Executive Hub", icon: LayoutDashboard },
-      { href: "/md/executive", label: "Strategic Insights", icon: BarChart3 },
-      { href: "/reports", label: "Reports & insights", icon: BarChart3 },
+      { href: "/md/executive", label: "Performance review", icon: BarChart3 },
+      { href: "/reports", label: "Report library", icon: BarChart3 },
     ],
   },
   {

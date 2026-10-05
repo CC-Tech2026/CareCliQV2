@@ -471,9 +471,10 @@ export default function MDExecutivePage() {
                 className="mt-2 flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl"
                 style={{ color: TEXT }}
               >
-                {data.branch ? `${data.branch.name} at a glance` : "Organisation at a glance"}
-                <SectionInfo text="A governance view across compliance, workforce health, and service delivery for the whole organisation." />
+                {data.branch ? `${data.branch.name}: performance review` : "Performance review"}
+                <SectionInfo text="Compare performance against targets and review trends across service delivery, workforce and quality." />
               </h1>
+              <p className="mt-2 max-w-2xl text-sm text-cc-muted">Review trends, compare results with targets and identify where leadership attention is needed. Use the Report library for detailed records and exports.</p>
               {multiBranch && (
                 <label className="mt-2 flex items-center gap-2 text-[11px] font-semibold" style={{ color: MUTED }}>
                   Branch
@@ -514,7 +515,8 @@ export default function MDExecutivePage() {
             className="mt-4 flex flex-wrap gap-2"
           >
             {[
-              ["Master schedule", "/md/schedule"],
+              ["Daily priorities", "/hub"],
+              ["Report library", "/reports"],
               ["Staff directory", "/md/staff"],
               ["Document vault", "/md/vault"],
               ["NDIS invoices", "/md/financial"],
@@ -533,7 +535,7 @@ export default function MDExecutivePage() {
               onClick={retry}
               className="min-h-11 rounded-lg px-3 text-sm font-medium text-cc-plum hover:bg-cc-soft"
             >
-              Refresh overview
+              Refresh performance
             </button>
           </nav>
         </header>

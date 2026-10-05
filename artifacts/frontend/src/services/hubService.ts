@@ -10,6 +10,9 @@ export type HubComplianceAlert = {
   affected_staff?: string[];
   action_label: string;
   source?: string;
+  incident_id?: string;
+  invoice_id?: string;
+  credential_id?: string;
   participant_id?: string;
   shift_id?: string;
   worker_id?: string;

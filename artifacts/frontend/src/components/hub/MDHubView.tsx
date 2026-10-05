@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -50,15 +50,8 @@ const BLUE = "#2A5C8A";
 // categorical mark at this saturation, so the ring uses this sky blue instead.
 const SKY = "#0EA5E9";
 
-// Same placeholder caseload assumption used by the Screening capacity check
-// in Participant Onboarding — no live staffing-capacity feed exists yet, so
-// this estimates total capacity as active staff × a reasonable caseload.
-const CASELOAD_PER_WORKER = 6;
-
-// UI-only placeholder for the waiting-list cards until a real referral has
-// been logged through the public form — see the read effect below.
-
 interface MDData {
+  documentation_summary?: { sample_size: number; scored: number; unscored: number; on_target: number; needs_review: number; priority_review: number };
   active_participants: number;
   active_staff: number;
   support_workers: number;
@@ -253,6 +246,7 @@ function ActiveStaffCard({
           <p className="mt-3 text-[11px]" style={{ color: MUTED }}>{retentionRate}% retention · {formatNumber(total)} active in total</p>
         </div>
       </div>
+      <span className="flex w-full items-center justify-between border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-plum">Open staff directory<ArrowRight size={14} /></span>
     </button>
   );
 }
@@ -332,6 +326,7 @@ function ExecutiveMetric({
       style={{ borderColor: BORDER, background: SURFACE }}
     >
       {content}
+      <span className="flex w-full items-center justify-between gap-2 border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-plum">{label === "Support visits" ? "Review the schedule" : "Review participant outcomes"}<ArrowRight size={14} /></span>
     </button>
   );
 }
@@ -353,306 +348,45 @@ function ParticipantStat({ label, value, color }: { label: string; value: number
 /** A single real count, not a comparison or a ratio against a limit — a plain
  *  stat tile is the right form here, not a chart (see dataviz "is it even a
  *  chart?"). Sits above the participant overview it's a stage of. */
-function WaitlistCard({ count, onNavigate }: { count: number; onNavigate: () => void }) {
-  return (
-    <button
-      onClick={onNavigate}
-      className="grid h-full w-full grid-rows-[auto_1fr] rounded-2xl border px-6 py-5 text-left transition-colors hover:bg-cc-soft"
-      style={{ borderColor: BORDER, background: SURFACE }}
-    >
-      <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: count > 0 ? AMBER + "1F" : SOFT }}>
-          <Clock size={16} style={{ color: count > 0 ? AMBER : MUTED }} />
-        </span>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>Participants Waiting List</p>
-          <p className="text-[11px]" style={{ color: MUTED }}>New enquiries not yet screened</p>
-        </div>
-      </div>
-      <div className="flex items-center justify-center">
-        <p className="text-[40px] font-black leading-none tracking-tight" style={{ color: count > 0 ? AMBER : TEXT }}>{formatNumber(count)}</p>
-      </div>
-    </button>
-  );
-}
-
-/** Sits beside WaitlistCard — total weekly hours the same enquiry-stage
- *  people have requested, from the referral form's hours field. Additive
- *  (sum of what's known), not an estimate — enquiries logged without hours
- *  captured (e.g. via the staff-side manual form) simply contribute 0. */
-function WaitlistHoursCard({ hours }: { hours: number }) {
-  return (
-    <div
-      className="grid h-full w-full grid-rows-[auto_1fr] rounded-2xl border px-6 py-5"
-      style={{ borderColor: BORDER, background: SURFACE }}
-    >
-      <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: hours > 0 ? BLUE + "1F" : SOFT }}>
-          <Timer size={16} style={{ color: hours > 0 ? BLUE : MUTED }} />
-        </span>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>Hours in demand</p>
-          <p className="text-[11px]" style={{ color: MUTED }}>Requested, waiting list</p>
-        </div>
-      </div>
-      <div className="flex items-center justify-center">
-        <p className="text-[40px] font-black leading-none tracking-tight" style={{ color: TEXT }}>
-          {formatNumber(hours)}<span className="ml-1.5 text-[20px] font-bold" style={{ color: MUTED }}>h</span>
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/** Sits beside Hours in demand, so the two can be read against each other at
- *  a glance. Spare hours this week = each active worker's stated maximum
- *  weekly hours (less unavailability days) minus hours already rostered.
- *  Reliable (part-time/full-time) and casual capacity get their own rings,
- *  not one blended figure, since casual hours aren't guaranteed. */
-function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
-  const angleRad = ((angleDeg - 90) * Math.PI) / 180;
-  return { x: cx + r * Math.cos(angleRad), y: cy + r * Math.sin(angleRad) };
-}
-
-/** SVG arc path for a ring segment from 0deg to `sweepDeg`, clockwise from
- *  the top — used instead of a plain <circle> so a dash texture (the
- *  "segmented gauge" look) only applies within the filled portion, not the
- *  whole 360°. */
-function describeArc(cx: number, cy: number, r: number, sweepDeg: number): string {
-  const clamped = Math.min(359.9, Math.max(0, sweepDeg));
-  const start = polarToCartesian(cx, cy, r, clamped);
-  const end = polarToCartesian(cx, cy, r, 0);
-  const largeArcFlag = clamped > 180 ? 1 : 0;
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
-}
-
-/** Two concentric smooth rings against a shared scale, each its own color —
- *  same job as the "Speed Statistic" reference (two arcs + a center
- *  readout), adapted to two reliability tiers instead of two speeds. Solid
- *  strokes, not dashed — a dash pattern stretched around a short arc at
- *  this size reads as lumpy/organic rather than a clean gauge.
- *
- *  Interactive: clicking a ring extends a short leader line outward from its
- *  edge, ending in a small label showing that ring's exact figure — the
- *  center total stays put either way. Each ring's callout toggles
- *  independently, so both can be open at once. */
-function DualRingGauge({
-  outerValue,
-  innerValue,
-  max,
-  outerColor,
-  innerColor,
-  outerCallout,
-  innerCallout,
-  centerValue,
-  centerLabel,
-  size = 156,
-  stroke = 12,
-  gap = 9,
-}: {
-  outerValue: number;
-  innerValue: number;
-  max: number;
-  outerColor: string;
-  innerColor: string;
-  /** Text shown in the popped-out label when that ring is clicked, e.g. "40 hrs/wk". */
-  outerCallout: string;
-  innerCallout: string;
-  centerValue: string;
-  centerLabel: string;
-  size?: number;
-  stroke?: number;
-  gap?: number;
+export function DemandCapacityPanel({ data, loading, error, onRetry, onNavigate }: {
+  data?: MdDemandCapacity; loading: boolean; error: boolean;
+  onRetry: () => void; onNavigate: (path: string) => void;
 }) {
-  const arrowId = useId();
-  const [outerOpen, setOuterOpen] = useState(false);
-  const [innerOpen, setInnerOpen] = useState(false);
-
-  const center = size / 2;
-  const outerRadius = (size - stroke) / 2;
-  const innerRadius = outerRadius - stroke - gap;
-  const outerSweep = 360 * Math.max(0, Math.min(1, outerValue / max));
-  const innerSweep = 360 * Math.max(0, Math.min(1, innerValue / max));
-
-  // Leader lines point outward from the midpoint of each ring's filled arc,
-  // both reaching the same outer radius so the inner one's line visibly
-  // crosses past the outer ring rather than getting lost near the center.
-  const calloutRadius = outerRadius + 16;
-  const outerMidAngle = outerSweep / 2;
-  const innerMidAngle = innerSweep / 2;
-  const outerAnchor = polarToCartesian(center, center, outerRadius, outerMidAngle);
-  const outerTip = polarToCartesian(center, center, calloutRadius, outerMidAngle);
-  const innerAnchor = polarToCartesian(center, center, innerRadius, innerMidAngle);
-  const innerTip = polarToCartesian(center, center, calloutRadius, innerMidAngle);
-
-  const padding = 32; // room for the callout labels to sit outside the ring itself
-  const canvas = size + padding * 2;
-  const shift = padding;
-
-  function CalloutLabel({ point, color, text, onRingLeft }: { point: { x: number; y: number }; color: string; text: string; onRingLeft: boolean }) {
-    return (
-      <div
-        className="pointer-events-none absolute z-10 flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-black shadow-sm"
-        style={{
-          left: point.x + shift,
-          top: point.y + shift,
-          transform: `translate(${onRingLeft ? "-100%" : "0%"}, -50%) translateX(${onRingLeft ? "-6px" : "6px"})`,
-          borderColor: color,
-          background: SURFACE,
-          color,
-        }}
-      >
-        {text}
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative" style={{ width: canvas, height: canvas }}>
-      <svg
-        width={canvas}
-        height={canvas}
-        viewBox={`0 0 ${canvas} ${canvas}`}
-        className="absolute inset-0"
-      >
-        <defs>
-          <marker id={`${arrowId}-outer`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" fill={outerColor} />
-          </marker>
-          <marker id={`${arrowId}-inner`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" fill={innerColor} />
-          </marker>
-        </defs>
-        <g transform={`translate(${shift} ${shift})`}>
-          <circle cx={center} cy={center} r={outerRadius} fill="none" stroke={SOFT} strokeWidth={stroke} />
-          <circle cx={center} cy={center} r={innerRadius} fill="none" stroke={SOFT} strokeWidth={stroke} />
-          <path
-            d={describeArc(center, center, outerRadius, outerSweep)}
-            fill="none"
-            stroke={outerColor}
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            style={{ cursor: outerValue > 0 ? "pointer" : "default" }}
-            onClick={() => outerValue > 0 && setOuterOpen((v) => !v)}
-          />
-          <path
-            d={describeArc(center, center, innerRadius, innerSweep)}
-            fill="none"
-            stroke={innerColor}
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            style={{ cursor: innerValue > 0 ? "pointer" : "default" }}
-            onClick={() => innerValue > 0 && setInnerOpen((v) => !v)}
-          />
-          <text x={center} y={center - 6} textAnchor="middle" style={{ fill: TEXT, fontSize: 26, fontWeight: 900 }}>{centerValue}</text>
-          <text x={center} y={center + 14} textAnchor="middle" style={{ fill: MUTED, fontSize: 9, fontWeight: 700 }}>{centerLabel}</text>
-
-          {outerOpen && (
-            <>
-              <circle cx={outerAnchor.x} cy={outerAnchor.y} r={3} fill={outerColor} />
-              <line x1={outerAnchor.x} y1={outerAnchor.y} x2={outerTip.x} y2={outerTip.y} stroke={outerColor} strokeWidth={1.5} markerEnd={`url(#${arrowId}-outer)`} />
-            </>
-          )}
-          {innerOpen && (
-            <>
-              <circle cx={innerAnchor.x} cy={innerAnchor.y} r={3} fill={innerColor} />
-              <line x1={innerAnchor.x} y1={innerAnchor.y} x2={innerTip.x} y2={innerTip.y} stroke={innerColor} strokeWidth={1.5} markerEnd={`url(#${arrowId}-inner)`} />
-            </>
-          )}
-        </g>
-      </svg>
-
-      {outerOpen && <CalloutLabel point={outerTip} color={outerColor} text={outerCallout} onRingLeft={outerTip.x < center} />}
-      {innerOpen && <CalloutLabel point={innerTip} color={innerColor} text={innerCallout} onRingLeft={innerTip.x < center} />}
+  if (error) return <div role="alert" className="rounded-xl border border-cc-border bg-cc-surface p-5 text-sm">
+    <p>Enquiries and available hours could not be loaded.</p>
+    <button type="button" onClick={onRetry} className="mt-3 min-h-11 font-semibold text-cc-plum">Try again</button>
+  </div>;
+  if (loading || !data) return <div role="status" className="rounded-xl border border-cc-border bg-cc-surface p-5 text-sm text-cc-muted">Loading enquiries and available hours...</div>;
+  const reliable = Math.round(data.capacity.reliable_hours);
+  const casual = Math.round(data.capacity.casual_hours);
+  const cards = [
+    { title: "Enquiries to review", value: formatNumber(data.waitlist.count), detail: data.waitlist.count > 0 ? "Awaiting initial screening" : "No enquiries awaiting screening", action: "Review participant intake", path: "/onboard-participant", icon: Clock },
+    { title: "Requested support", value: formatNumber(data.waitlist.hours) + " h", detail: "Weekly hours requested by the waiting list", action: "Review support requests", path: "/onboard-participant", icon: Timer },
+    { title: "Available this week", value: formatNumber(reliable + casual) + " h", detail: reliable + " h permanent staff / " + casual + " h casual staff", action: "Review staff availability", path: "/md/schedule", icon: Zap },
+  ];
+  return <section aria-label="Demand and capacity" className="space-y-3">
+    <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-base font-semibold text-cc-text">Plan your next move</h2><span className="text-xs text-cc-muted">Enquiries and this week's capacity</span></div>
+    <div className="grid gap-3 md:grid-cols-3">
+      {cards.map(({ title, value, detail, action, path, icon: Icon }) => <button key={title} type="button" onClick={() => onNavigate(path)} className="group flex min-w-0 flex-col rounded-xl border border-cc-border bg-cc-surface p-4 text-left transition-colors hover:border-cc-plum focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum">
+        <div className="flex w-full items-center justify-between gap-2"><span className="text-sm font-medium text-cc-muted">{title}</span><Icon size={16} className="shrink-0 text-cc-plum" /></div>
+        <p className="mt-4 text-3xl font-semibold tracking-tight text-cc-text">{value}</p>
+        <p className="mb-4 mt-2 text-xs leading-relaxed text-cc-muted">{detail}</p>
+        <span className="mt-auto flex w-full items-center justify-between gap-2 border-t border-cc-border pt-3 text-xs font-semibold text-cc-plum">{action}<ArrowRight size={14} className="shrink-0 transition-transform group-hover:translate-x-1" /></span>
+      </button>)}
     </div>
-  );
-}
-
-/** Dummy numbers for now — no rostering/availability feed backs this yet;
- *  the real version needs actual worker availability + shift-offer
- *  acceptance data, which is a backend job for later. Reliable and casual
- *  capacity get their own ring (not summed into the visual encoding) since
- *  they carry different confidence — the center total is a convenience
- *  readout, and the info popover spells out the two components it hides. */
-function AvailableHoursCard({
-  capacity,
-  loading,
-}: {
-  capacity?: MdDemandCapacity["capacity"];
-  loading: boolean;
-}) {
-  const reliable = Math.round(capacity?.reliable_hours ?? 0);
-  const casual = Math.round(capacity?.casual_hours ?? 0);
-  const withoutAvailability = capacity?.workers_without_availability ?? 0;
-  // At least 10 so an empty week doesn't divide by zero in the gauge.
-  const max = Math.max(10, Math.ceil((Math.max(reliable, casual) * 1.25) / 10) * 10);
-  return (
-    <div className="flex h-full w-full flex-col rounded-2xl border px-6 py-5" style={{ borderColor: BORDER, background: SURFACE }}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cc-plum-soft)" }}>
-            <Zap size={16} style={{ color: PLUM }} />
-          </span>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>Available hours</p>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button type="button" aria-label="What does available hours mean?" className="flex h-3.5 w-3.5 items-center justify-center rounded-full hover:opacity-70" style={{ color: MUTED }}>
-                    <Info size={12} />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent side="top" align="start" className="w-[280px] space-y-2.5 p-3.5 text-[11px] leading-relaxed">
-                  <p><strong style={{ color: PLUM }}>Reliable spare capacity</strong> — {reliable} hrs this week from part-time and full-time staff: their stated maximum weekly hours, less leave, less what's already rostered. Safe to plan against.</p>
-                  <p><strong style={{ color: SKY }}>Casual spare capacity</strong> — ~{casual} hrs this week from casual staff (and anyone without an employment type set). Not guaranteed — don't commit new participants against this alone.</p>
-                  {withoutAvailability > 0 && (
-                    <p style={{ color: MUTED }}>{withoutAvailability} active worker{withoutAvailability === 1 ? " hasn't" : "s haven't"} set their availability, so {withoutAvailability === 1 ? "isn't" : "aren't"} counted.</p>
-                  )}
-                </PopoverContent>
-              </Popover>
-            </div>
-            <p className="text-[11px]" style={{ color: MUTED }}>{loading ? "Loading…" : "Spare hours this week, by reliability"}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-3 flex items-center gap-4">
-        <span className="flex items-center gap-1.5 text-[10px] font-bold" style={{ color: MUTED }}>
-          <span className="h-2 w-2 rounded-full" style={{ background: PLUM }} /> Reliable
-        </span>
-        <span className="flex items-center gap-1.5 text-[10px] font-bold" style={{ color: MUTED }}>
-          <span className="h-2 w-2 rounded-full" style={{ background: SKY }} /> Casual
-        </span>
-      </div>
-
-      <div className="mt-2 flex flex-1 items-center justify-center">
-        <DualRingGauge
-          outerValue={reliable}
-          innerValue={casual}
-          max={max}
-          outerColor={PLUM}
-          innerColor={SKY}
-          outerCallout={`${reliable} hrs/wk`}
-          innerCallout={`~${casual} hrs/wk`}
-          centerValue={`${reliable + casual}`}
-          centerLabel="hrs available this week"
-        />
-      </div>
-    </div>
-  );
+    <p className="text-xs leading-relaxed text-cc-muted">Available hours are based on recorded availability and rostered work. Confirm worker suitability and casual availability before offering support.{data.capacity.workers_without_availability > 0 && " " + data.capacity.workers_without_availability + " workers have no availability recorded and are excluded."}</p>
+  </section>;
 }
 
 function ParticipantOverviewCard({
   total,
   bySex,
   byPlanStatus,
-  capacity,
   onNavigate,
 }: {
   total: number;
   bySex: MDData["participants_by_sex"] | null | undefined;
   byPlanStatus: MDData["participants_by_plan_status"] | null | undefined;
-  capacity: { used: number; total: number };
   onNavigate: () => void;
 }) {
   const sex = bySex ?? { male: 0, female: 0, unspecified: 0 };
@@ -674,7 +408,6 @@ function ParticipantOverviewCard({
         <div>
           <p className="text-[40px] font-black leading-none tracking-tight" style={{ color: PLUM }}>{formatNumber(total)}</p>
           <p className="mt-1 text-[11px]" style={{ color: MUTED }}>Total participants</p>
-          <CapacityMeter used={capacity.used} total={capacity.total} />
           <div className="mt-4 flex items-center gap-6">
             <ParticipantStat label="Male" value={sex.male} />
             <ParticipantStat label="Female" value={sex.female} />
@@ -872,6 +605,40 @@ function ComplianceCard({
   );
 }
 
+export function DocumentationInsights({ data, onNavigate }: { data: Pick<MDData, "documentation_summary" | "compliance_score" | "compliance_target" | "common_issues" | "workers_at_risk">; onNavigate: (path: string) => void }) {
+  const summary = data.documentation_summary;
+  const gap = Math.max(0, data.compliance_target - data.compliance_score);
+  const issues = (data.common_issues ?? []).filter(issue => issue.count > 0).slice(0, 5);
+  const maxCount = Math.max(1, ...issues.map(issue => issue.count));
+  const bands = summary ? [
+    { label: "On target (85% or above)", count: summary.on_target, color: GREEN },
+    { label: "Needs review (60% to 84%)", count: summary.needs_review, color: AMBER },
+    { label: "Priority review (below 60%)", count: summary.priority_review, color: RED },
+    { label: "Not scored", count: summary.unscored, color: MUTED },
+  ] : [];
+  return <section aria-label="Documentation quality and follow-up" className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
+    <header className="border-b border-cc-border p-5"><h2 className="text-base font-semibold text-cc-text">Documentation quality: where to focus</h2><p className="mt-1 text-sm text-cc-muted">Based on the latest available session records, up to 400. Scores describe documentation checks, not overall regulatory compliance.</p></header>
+    <div className="grid gap-6 p-5 lg:grid-cols-2">
+      <div>
+        <p className="text-sm font-semibold text-cc-text">{summary?.scored ? (gap > 0 ? gap + " percentage points below the " + data.compliance_target + "% target" : "Average score meets the " + data.compliance_target + "% target") : "Scored documentation is not yet available"}</p>
+        {summary && <>
+          <p className="mt-2 text-sm text-cc-muted">{summary.priority_review + summary.needs_review} of {summary.scored} scored sessions are below 85%. {summary.unscored} sessions have no score and are shown separately.</p>
+          <div role="img" aria-label={bands.map(band => band.label + ": " + band.count).join("; ")} className="mt-4 flex h-5 overflow-hidden rounded bg-cc-soft">{bands.map(band => <span key={band.label} style={{ background: band.color, width: (summary.sample_size ? band.count / summary.sample_size * 100 : 0) + "%" }} />)}</div>
+          <dl className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">{bands.map(band => <div key={band.label} className="flex items-center justify-between gap-2 text-xs"><dt className="flex items-center gap-2 text-cc-muted"><span className="h-2 w-2 rounded-full" style={{ background: band.color }} />{band.label}</dt><dd className="font-semibold text-cc-text">{band.count}</dd></div>)}</dl>
+        </>}
+        <h3 className="mt-6 text-sm font-semibold text-cc-text">Follow up with staff</h3>
+        <div className="mt-2 divide-y divide-cc-border">{(data.workers_at_risk ?? []).slice(0, 4).map(worker => <button type="button" key={worker.id} onClick={() => onNavigate("/md/staff?workerId=" + encodeURIComponent(worker.id) + "&tab=shifts")} className="flex min-h-12 w-full items-center justify-between gap-3 py-3 text-left text-sm"><span><span className="font-semibold text-cc-text">{worker.full_name}</span><span className="mt-1 block text-xs text-cc-muted">{worker.compliance_score}% across {worker.sessions} sessions. Review shift documentation.</span></span><ArrowRight size={16} className="shrink-0 text-cc-plum" /></button>)}</div>
+        {!data.workers_at_risk?.length && <p className="mt-2 text-xs text-cc-muted">No staff follow-up items returned in this snapshot.</p>}
+      </div>
+      <div><h3 className="text-sm font-semibold text-cc-text">Most frequently recorded issues</h3><p className="mt-1 text-xs leading-relaxed text-cc-muted">Mentions in rule flags, recommendations and compliance notes. One session may contribute more than once; these are not confirmed root causes.</p>
+        <div className="mt-4 space-y-4">{issues.map(issue => <div key={issue.issue}><div className="mb-1.5 flex justify-between gap-3 text-xs"><span className="text-cc-text">{issue.issue}</span><span className="shrink-0 font-semibold text-cc-muted">{issue.count} mentions</span></div><div className="h-2 rounded bg-cc-soft"><div className="h-full rounded bg-cc-plum" style={{ width: issue.count / maxCount * 100 + "%" }} /></div></div>)}</div>
+        {!issues.length && <p className="mt-4 text-sm text-cc-muted">No recurring issues were returned. Review individual records before drawing conclusions.</p>}
+        <button type="button" onClick={() => onNavigate("/md/service-delivery")} className="mt-5 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-cc-plum">Investigate delivery quality<ArrowRight size={14} /></button>
+      </div>
+    </div>
+  </section>;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Compliance trend                                                           */
 /* -------------------------------------------------------------------------- */
@@ -886,7 +653,6 @@ function ComplianceTrend({
   const { translate, translateParams } = useAccessibility();
 
   const chartData = trend
-    .filter((item) => item.avg_score !== null)
     .slice(-13)
     .map((item) => ({
       week: item.week.replace(/^\d{4}-/, ""),
@@ -894,8 +660,8 @@ function ComplianceTrend({
       sessions: item.session_count,
     }));
 
-  if (chartData.length < 2) {
-    return null;
+  if (chartData.filter(item => item.score !== null).length < 2) {
+    return <p className="rounded-xl border border-cc-border p-4 text-sm text-cc-muted">A trend will appear once at least two weeks have scored documentation.</p>;
   }
 
   return (
@@ -915,14 +681,14 @@ function ComplianceTrend({
             className="text-[14px] font-black"
             style={{ color: TEXT }}
           >
-            Compliance trend
+            Documentation quality over time
           </h2>
 
           <p
             className="mt-1 text-[11px]"
             style={{ color: MUTED }}
           >
-            Average session compliance over recent weeks
+            Weekly average of recorded session documentation scores. Compare with the target; this is not an audit compliance rating.
           </p>
         </div>
 
@@ -939,6 +705,7 @@ function ComplianceTrend({
         </div>
       </div>
 
+      <details className="mx-5 mt-4 text-xs text-cc-muted"><summary className="cursor-pointer font-semibold">View weekly figures</summary><div className="mt-2 overflow-x-auto"><table className="w-full text-left"><thead><tr><th className="py-2">Week</th><th>Average score</th><th>Sessions</th></tr></thead><tbody>{chartData.map(point => <tr key={point.week}><td className="py-1">{point.week}</td><td>{point.score === null ? "Not scored" : point.score + "%"}</td><td>{point.sessions}</td></tr>)}</tbody></table></div></details>
       <div className="px-2 pb-4 pt-4 sm:px-5">
         <ResponsiveContainer width="100%" height={220}>
           <LineChart
@@ -967,7 +734,7 @@ function ComplianceTrend({
             />
 
             <YAxis
-              domain={[50, 100]}
+              domain={[0, 100]}
               tick={{
                 fontSize: 9,
                 fill: MUTED,
@@ -1411,24 +1178,21 @@ export function MDHubView() {
       return response.json();
     },
   });
-  // A missing trend shouldn't hide the rest of the hub.
   const trendQuery = useOrgQuery<{ trend?: TrendPoint[] }>(COMPLIANCE_TREND_KEY, {
     queryFn: async () => {
       const response = await apiFetch("/api/dashboard/compliance-trend");
-      if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+      if (!response.ok) throw new Error("Could not load documentation trend");
       return response.json();
-    },
-    retry: false,
+    }, retry: false,
   });
   const data = overviewQuery.data ?? null;
-  const trend = trendQuery.data?.trend ?? EMPTY_TREND;
   const loading = overviewQuery.isLoading;
   const error = overviewQuery.isError;
   // Real enquiries and this week's spare staff hours (was placeholder numbers).
   const demandQuery = useOrgQuery<MdDemandCapacity>(["md", "demand-capacity"], {
     queryFn: getMdDemandCapacity,
   });
-  const waitlist = demandQuery.data?.waitlist ?? { count: 0, hours: 0 };
+
 
   /* ------------------------------------------------------------------------ */
   /* Loading                                                                  */
@@ -1520,22 +1284,17 @@ export function MDHubView() {
       {/* GovernanceTriage). Revenue moves below "How we're tracking".       */}
       {/* ------------------------------------------------------------------ */}
 
-      <div className="grid items-stretch gap-5 lg:grid-cols-[1fr_360px]">
-        <div className="flex flex-col gap-5">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <WaitlistCard count={waitlist.count} onNavigate={() => navigate("/onboard-participant")} />
-            <WaitlistHoursCard hours={waitlist.hours} />
-            <AvailableHoursCard capacity={demandQuery.data?.capacity} loading={demandQuery.isLoading} />
-          </div>
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="order-2 flex min-w-0 flex-col gap-5 xl:order-1">
+          <DemandCapacityPanel data={demandQuery.data} loading={demandQuery.isLoading} error={demandQuery.isError} onRetry={() => { void demandQuery.refetch(); }} onNavigate={navigate} />
           <ParticipantOverviewCard
             total={data.active_participants}
             bySex={data.participants_by_sex}
             byPlanStatus={data.participants_by_plan_status}
-            capacity={{ used: data.active_participants, total: data.active_staff * CASELOAD_PER_WORKER }}
             onNavigate={() => navigate("/patients")}
           />
         </div>
-        <GovernanceTriage variant="sidebar" onNavigate={navigate} workersAtRisk={data.workers_at_risk} />
+        <div className="order-1 min-w-0 xl:order-2"><GovernanceTriage variant="sidebar" onNavigate={navigate} workersAtRisk={data.workers_at_risk} /></div>
       </div>
 
       {/* ------------------------------------------------------------------ */}
@@ -1567,11 +1326,7 @@ export function MDHubView() {
             value={formatNumber(data.sessions_this_week)}
             detail="This week"
             onClick={() => navigate("/md/schedule")}
-            breakdown={[
-              { label: "Compliant", value: data.team_compliance_breakdown.compliant, color: GREEN },
-              { label: "At risk", value: data.team_compliance_breakdown.at_risk, color: AMBER },
-              { label: "Non-compliant", value: data.team_compliance_breakdown.non_compliant, color: RED },
-            ]}
+
           />
 
           <ExecutiveMetric
@@ -1583,19 +1338,12 @@ export function MDHubView() {
           />
         </div>
 
-        <ComplianceCard
-          score={data.compliance_score}
-          target={data.compliance_target}
-          onNavigate={navigate}
-        />
+        <DocumentationInsights data={data} onNavigate={navigate} />
+        {trendQuery.isError ? <div role="alert" className="rounded-xl border border-cc-border p-4 text-sm">Documentation trend could not be loaded. <button type="button" className="font-semibold text-cc-plum" onClick={() => void trendQuery.refetch()}>Try again</button></div> : trendQuery.isLoading ? <p role="status" className="text-sm text-cc-muted">Loading documentation trend...</p> : <ComplianceTrend trend={trendQuery.data?.trend ?? []} target={data.compliance_target} />}
 
-        <ComplianceTrend
-          trend={trend}
-          target={data.compliance_target}
-        />
+        <button type="button" onClick={() => navigate("/md/executive")} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-cc-border bg-cc-surface px-5 py-3 text-left text-sm font-semibold text-cc-plum">Review performance and longer-term trends<ArrowRight size={16} /></button>
       </div>
 
-      <RevenueChart />
 
       <FinancialSummary
         onNavigate={() => navigate("/md/financial")}
