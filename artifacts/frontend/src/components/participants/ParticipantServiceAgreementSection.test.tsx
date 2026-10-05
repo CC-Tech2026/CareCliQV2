@@ -191,3 +191,24 @@ it("during onboarding builds the agreement for the intake, before the participan
   state.queryFn?.();
   expect(vi.mocked(jsonFetch)).toHaveBeenCalledWith("/api/participant-intakes/i-1/service-agreements");
 });
+
+it("shows what each line has used, and flags a code the price guide no longer lists", () => {
+  state.data = [{
+    ...agreement,
+    service_agreement_supports: [
+      {
+        ...agreement.service_agreement_supports[0],
+        usage: { counted: true, delivered_hours: 18, booked_hours: 6, left_hours: 28, billed: 1264.14 },
+      },
+      {
+        ...agreement.service_agreement_supports[0], id: "l2", support_item_code: "04_590_0125_6_1",
+        item_name: "Activity Based Transport", unit: "E", in_current_catalogue: false,
+        usage: { counted: false, delivered_hours: null, booked_hours: null, left_hours: null, billed: 19.8 },
+      },
+    ],
+  }];
+  render(<ParticipantServiceAgreementSection participantId="p-1" />);
+  expect(screen.getByText("18h used · 6h booked · 28h left · $1,264.14 billed")).toBeTruthy();
+  expect(screen.getByText("Not counted in hours · $19.80 billed")).toBeTruthy();
+  expect(screen.getByText(/04_590_0125_6_1 is no longer in the NDIS price guide/)).toBeTruthy();
+});

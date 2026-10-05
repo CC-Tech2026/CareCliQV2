@@ -34,6 +34,16 @@ type AgreementSupport = {
   rate?: number | null;
   /** False when the NDIS price guide no longer lists this code. */
   in_current_catalogue?: boolean | null;
+  /** Sent or signed agreements: hours delivered and booked against the
+   *  line, what's left, and what's been billed. Per-unit lines aren't
+   *  counted in hours. */
+  usage?: {
+    counted: boolean;
+    delivered_hours: number | null;
+    booked_hours: number | null;
+    left_hours: number | null;
+    billed: number;
+  } | null;
 };
 
 type SignedDocument = {
@@ -133,6 +143,24 @@ function hoursPerPeriod(
     return `${Math.round(support.total_hours_allocated / weeks)} hours a week`;
   }
   return "As scheduled";
+}
+
+const hours = (n: number) => `${Number(n.toFixed(2))}h`;
+
+/** "18h used · 6h booked · 28h left · $1,324.44 billed" */
+function usageText(usage: NonNullable<AgreementSupport["usage"]>) {
+  const parts = usage.counted
+    ? [
+        `${hours(usage.delivered_hours ?? 0)} used`,
+        `${hours(usage.booked_hours ?? 0)} booked`,
+        usage.left_hours == null
+          ? null
+          : usage.left_hours < 0
+            ? `${hours(-usage.left_hours)} over`
+            : `${hours(usage.left_hours)} left`,
+      ]
+    : ["Not counted in hours"];
+  return [...parts, `${money(usage.billed)} billed`].filter(Boolean).join(" · ");
 }
 
 function Fact({ label, value }: { label: string; value: React.ReactNode }) {
@@ -519,6 +547,11 @@ export function ParticipantServiceAgreementSection({
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
+                    {s.usage && (
+                      <p className="mt-0.5 text-xs tabular-nums text-cc-muted">
+                        {usageText(s.usage)}
+                      </p>
+                    )}
                     {s.in_current_catalogue === false && (
                       <p className="mt-0.5 text-xs" style={{ color: "var(--cc-status-danger)" }}>
                         {s.support_item_code} is no longer in the NDIS price guide. Start a new agreement with the current code.

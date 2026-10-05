@@ -116,9 +116,10 @@ def _rows(resp: Any) -> list[dict[str, Any]]:
 
 def line_usage(line_ids: list[str], org_id: str, *, now: Optional[datetime] = None,
                exclude_shift_id: Optional[str] = None) -> dict[str, dict[str, float]]:
-    """line id -> minutes delivered, booked in the next four weeks, booked later."""
+    """line id -> minutes delivered, booked in the next four weeks, booked
+    later, and dollars billed at verification."""
     now = now or datetime.now(timezone.utc)
-    usage = {lid: {"delivered": 0.0, "booked_soon": 0.0, "booked_later": 0.0} for lid in line_ids}
+    usage = {lid: {"delivered": 0.0, "booked_soon": 0.0, "booked_later": 0.0, "billed": 0.0} for lid in line_ids}
     if not line_ids:
         return usage
     supabase = get_supabase_admin()
@@ -130,21 +131,23 @@ def line_usage(line_ids: list[str], org_id: str, *, now: Optional[datetime] = No
     shifts = [s for s in shifts if str(s.get("id")) != str(exclude_shift_id or "")]
     completed_ids = [str(s["id"]) for s in shifts if s.get("status") == "completed"]
     billed: dict[str, float] = {}
+    billed_amount: dict[str, float] = {}
     if completed_ids:
         try:
             verifications = _rows(
-                supabase.table("shift_verifications").select("shift_id, checks_run")
+                supabase.table("shift_verifications").select("shift_id, checks_run, billed_amount")
                 .in_("shift_id", completed_ids).is_("reversed_at", "null").execute()
             )
         except Exception:  # migration 233 not applied: no reversals yet
             verifications = _rows(
-                supabase.table("shift_verifications").select("shift_id, checks_run")
+                supabase.table("shift_verifications").select("shift_id, checks_run, billed_amount")
                 .in_("shift_id", completed_ids).execute()
             )
         for v in verifications:
             minutes = ((v.get("checks_run") or {}).get("billing") or {}).get("billable_minutes")
             if minutes is not None:
                 billed[str(v["shift_id"])] = float(minutes)
+            billed_amount[str(v["shift_id"])] = float(v.get("billed_amount") or 0)
     soon_until = now + timedelta(days=BOOKED_WINDOW_DAYS)
     for s in shifts:
         bucket = usage.get(str(s.get("service_agreement_support_id")))
@@ -153,6 +156,7 @@ def line_usage(line_ids: list[str], org_id: str, *, now: Optional[datetime] = No
         if s.get("status") == "completed":
             worked = _minutes(s.get("clocked_in_at"), s.get("clocked_out_at")) or _minutes(s.get("scheduled_start"), s.get("scheduled_end"))
             bucket["delivered"] += billed.get(str(s["id"]), worked)
+            bucket["billed"] += billed_amount.get(str(s["id"]), 0.0)
         elif s.get("status") in _OPEN_SHIFT_STATUSES:
             start = _parse(s.get("scheduled_start"))
             key = "booked_soon" if start is None or start <= soon_until else "booked_later"

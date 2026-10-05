@@ -559,6 +559,10 @@ async def create_invoice(user: dict, data: dict) -> dict:
                 "unit": item.get("unit"),
                 "service_date_from": item.get("service_date_from"),
                 "service_date_to": item.get("service_date_to"),
+                # The service agreement line it was delivered under (step 3d).
+                "service_agreement_support_id": item.get("service_agreement_support_id"),
+                "service_agreement_id": item.get("service_agreement_id"),
+                "agreement_number": item.get("agreement_number"),
             })
         if not generated_line_items:
             raise HTTPException(
@@ -1070,7 +1074,12 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
             "unit_price": unit_price,
             "gst_applicable": bool(item.get("gst_applicable", False)),
             "line_total": line_total,
+            "agreement_number": item.get("agreement_number") or "",
         })
+    # The service agreements the lines were delivered under (step 3d).
+    agreement_numbers = ", ".join(dict.fromkeys(
+        str(item["agreement_number"]) for item in raw_items if item.get("agreement_number")
+    ))
 
     # ── Totals ─────────────────────────────────────────────────────────────
     invoice_total = int(invoice.get("total_cents") or 0) / 100
@@ -1114,7 +1123,10 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
         "plan_management_type": pmt_display,
         "plan_management_code": pmt_code,
         "support_category": support_category,
-        "service_agreement_ref": plan_number,
+        # Was labelled "Service Agreement" but always held the NDIS plan
+        # number; the agreement itself now has its own field.
+        "plan_number": plan_number,
+        "service_agreement_ref": agreement_numbers,
         "claim_reference": invoice.get("claim_reference") or "",
         # Line items
         "line_items": template_items,

@@ -85,10 +85,10 @@ def test_hours_delivered_booked_soon_and_later():
         _shift("later", "unassigned", "2026-12-01T00:00:00+00:00", 5),
         _shift("cancelled", "cancelled", "2026-10-11T00:00:00+00:00", 8),
     ]
-    verifications = [{"shift_id": "verified", "checks_run": {"billing": {"billable_minutes": 120}}}]
+    verifications = [{"shift_id": "verified", "checks_run": {"billing": {"billable_minutes": 120}}, "billed_amount": 147.16}]
     with patch.object(svc, "get_supabase_admin", return_value=_usage_db(shifts, verifications)):
         usage = svc.line_usage(["line-1"], ORG, now=NOW)["line-1"]
-    assert usage == {"delivered": 120 + 150, "booked_soon": 240, "booked_later": 300}
+    assert usage == {"delivered": 120 + 150, "booked_soon": 240, "booked_later": 300, "billed": 147.16}
 
 
 # ── Rostering warnings ───────────────────────────────────────────────────

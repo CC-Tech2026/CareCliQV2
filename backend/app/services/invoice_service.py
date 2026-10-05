@@ -81,7 +81,8 @@ def get_completed_tasks_for_period(
                 evidence_type,
                 evidence_verified,
                 price_item_code,
-                billed_amount
+                billed_amount,
+                shift_id
                 """
             )
             .eq("participant_id", participant_id)
@@ -166,7 +167,9 @@ def get_completed_tasks_for_period(
                     return version
             return {}
 
+        lines_by_shift = _agreement_lines_for_shifts(supabase, completions, organization_id)
         for row in completions:
+            row["agreement_line"] = lines_by_shift.get(str(row.get("shift_id") or ""))
             row["participant_tasks"] = tasks_by_id.get(str(row.get("task_id")), {})
             price_item_code = row.get("price_item_code")
             row["ndis_price_items"] = (
@@ -180,27 +183,76 @@ def get_completed_tasks_for_period(
         raise InvoiceGenerationError(f"Task query failed: {e}")
 
 
+def _agreement_lines_for_shifts(
+    supabase: Any, completions: List[Dict[str, Any]], organization_id: str,
+) -> Dict[str, Dict[str, Any]]:
+    """shift id -> the service agreement line it delivered (step 3d), so each
+    invoice line can be traced back to what was agreed."""
+    shift_ids = sorted({str(c["shift_id"]) for c in completions if c.get("shift_id")})
+    if not shift_ids:
+        return {}
+    try:
+        shifts = (
+            supabase.table("shifts").select("id, service_agreement_support_id")
+            .in_("id", shift_ids).eq("organization_id", organization_id).execute()
+        ).data or []
+        line_ids = sorted({str(s["service_agreement_support_id"]) for s in shifts if s.get("service_agreement_support_id")})
+        if not line_ids:
+            return {}
+        lines = (
+            supabase.table("service_agreement_supports")
+            .select("id, support_item_code, service_agreement_id, service_agreements(agreement_number)")
+            .in_("id", line_ids).execute()
+        ).data or []
+    except Exception as exc:  # before migration 235, or a lookup failure: untraced lines
+        logger.warning("Agreement lines for invoice lookup failed: %s", exc)
+        return {}
+    by_id = {}
+    for line in lines:
+        agreement = line.get("service_agreements") or {}
+        if isinstance(agreement, list):
+            agreement = agreement[0] if agreement else {}
+        by_id[str(line["id"])] = {
+            "service_agreement_support_id": str(line["id"]),
+            "service_agreement_id": line.get("service_agreement_id"),
+            "agreement_number": agreement.get("agreement_number"),
+        }
+    return {
+        str(s["id"]): by_id[str(s["service_agreement_support_id"])]
+        for s in shifts if str(s.get("service_agreement_support_id") or "") in by_id
+    }
+
+
 def aggregate_line_items(
     completions: List[Dict[str, Any]]
 ) -> Dict[str, Dict[str, Any]]:
     """
-    Group task completions by price item code and aggregate.
+    Group task completions by price item code (and, when the shift delivered
+    a service agreement line, by that line too) and aggregate.
     
     Returns:
-        Dict keyed by price_item_code with aggregated quantities and totals
+        Dict keyed by price_item_code (or "code::line id" for agreement
+        lines) with aggregated quantities and totals
     """
     line_items: Dict[str, Dict[str, Any]] = {}
     
     for completion in completions:
-        price_code = completion.get("price_item_code")
-        if not price_code:
+        code = completion.get("price_item_code")
+        if not code:
             logger.warning(f"Task completion {completion.get('id')} has no price item code")
             continue
+        agreement_line = completion.get("agreement_line") or {}
+        line_id = agreement_line.get("service_agreement_support_id")
+        price_code = f"{code}::{line_id}" if line_id else code
             
         if price_code not in line_items:
             price_item = completion.get("ndis_price_items", {}) or {}
             line_items[price_code] = {
-                "price_item_code": price_code,
+                "price_item_code": code,
+                # What was agreed, so the line can be traced to the agreement.
+                "service_agreement_support_id": line_id,
+                "service_agreement_id": agreement_line.get("service_agreement_id"),
+                "agreement_number": agreement_line.get("agreement_number"),
                 "description": price_item.get("name", "Unknown Service"),
                 "support_category": price_item.get("support_category_name"),
                 "day_type": price_item.get("day_type"),

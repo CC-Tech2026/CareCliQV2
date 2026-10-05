@@ -183,6 +183,20 @@ def list_service_agreements_for_profile(
             current = current_codes(codes)
         except Exception:
             logger.warning("Current catalogue check failed for participant %s", participant_id, exc_info=True)
+    # How much of each line has been used (step 3d): hours delivered and
+    # booked against it, and what's been billed. Drafts have nothing yet.
+    usage: dict[str, dict[str, float]] = {}
+    used_line_ids = [
+        str(s["id"]) for a in agreements if a.get("status") != "draft"
+        for s in (a.get("service_agreement_supports") or []) if s.get("id")
+    ]
+    if used_line_ids:
+        try:
+            from .agreement_support_service import line_usage
+
+            usage = line_usage(used_line_ids, organization_id)
+        except Exception:
+            logger.warning("Agreement usage lookup failed for participant %s", participant_id, exc_info=True)
     for agreement in agreements:
         agreement["service_agreement_supports"] = sorted(
             agreement.get("service_agreement_supports") or [], key=lambda sup: sup.get("sort_order") or 0,
@@ -197,6 +211,21 @@ def list_service_agreements_for_profile(
             support["in_current_catalogue"] = (
                 str(support.get("support_item_code")) in current if current is not None else None
             )
+            used = usage.get(str(support.get("id")))
+            if used is not None:
+                counted = str(support.get("unit") or "H").upper() in {"H", "HOUR", "HR"}
+                allocated = support.get("total_hours_allocated")
+                booked = round((used["booked_soon"] + used["booked_later"]) / 60, 2)
+                delivered = round(used["delivered"] / 60, 2)
+                support["usage"] = {
+                    "counted": counted,
+                    "delivered_hours": delivered if counted else None,
+                    "booked_hours": booked if counted else None,
+                    "left_hours": (
+                        round(float(allocated) - delivered - booked, 2) if counted and allocated is not None else None
+                    ),
+                    "billed": round(used["billed"], 2),
+                }
 
     signed_document = None
     # The PDF signed on the onboarding board, for agreements recorded

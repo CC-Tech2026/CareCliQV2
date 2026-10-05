@@ -145,7 +145,7 @@
       padding: 8px 12px;
       border-right: 1px solid #e2e8f0;
       vertical-align: top;
-      width: 25%;
+      width: 20%;
     }
     .info-strip-cell-last { border-right: none; }
     .info-strip-label {
@@ -362,6 +362,10 @@
     <td class="info-strip-cell">
       <div class="info-strip-label">Support Category</div>
       <div class="info-strip-value">{{ support_category or '—' }}</div>
+    </td>
+    <td class="info-strip-cell">
+      <div class="info-strip-label">NDIS Plan</div>
+      <div class="info-strip-value">{{ plan_number or '—' }}</div>
     </td>
     <td class="info-strip-cell">
       <div class="info-strip-label">Service Agreement</div>
