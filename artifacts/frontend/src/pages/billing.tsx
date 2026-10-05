@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearch } from "wouter";
 import {
   Check,
   Loader2,
@@ -443,6 +444,8 @@ function Card({
 }
 
 export default function Billing() {
+  const urlSearch = useSearch();
+  const linkedInvoiceId = new URLSearchParams(urlSearch).get("invoiceId");
   const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -475,6 +478,14 @@ export default function Billing() {
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [invoiceFilter, setInvoiceFilter] = useState<InvoiceFilter>("all");
   const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!linkedInvoiceId) return;
+    setWorkspaceState("invoices");
+    setInvoiceSearch(linkedInvoiceId);
+    setInvoiceFilter("all");
+    setOpenInvoiceId(linkedInvoiceId);
+    setInvoicePage(1);
+  }, [linkedInvoiceId]);
   useEffect(() => setInvoicePage(1), [invoiceSearch, invoiceFilter]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busyInvoice, setBusyInvoice] = useState<string | null>(null);
@@ -890,7 +901,7 @@ export default function Billing() {
   // any invoice; the Revenue report is for totals.
   const paidInRegister = true;
   const activeInvoices = invoices.filter(
-    (invoice) => paidInRegister || invoice.status !== "paid",
+    (invoice) => invoice.id === linkedInvoiceId || paidInRegister || invoice.status !== "paid",
   );
   const filteredInvoices = activeInvoices.filter(
     (invoice) =>

@@ -417,3 +417,12 @@ it("requires deliberate review before finalising a draft", async () => {
       .mock.calls.every(([, init]) => !init || init.method !== "POST"),
   ).toBe(true);
 });
+
+it("opens an invoice linked from an attention item with its details expanded", async () => {
+  window.history.replaceState(null, "", "/billing?workspace=invoices&invoiceId=a");
+  render(<Billing />);
+  await screen.findByText("Alex Morgan");
+  expect((screen.getByRole("textbox", { name: "Search invoices" }) as HTMLInputElement).value).toBe("a");
+  expect(screen.getByText("Community participation")).toBeTruthy();
+  expect(screen.getByRole("row", { name: /INV-101/ }).getAttribute("aria-expanded")).toBe("true");
+});
