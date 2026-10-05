@@ -78,6 +78,7 @@ vi.mock("@/lib/api-fetch", () => ({
                   quantity: 1,
                   unit_amount_cents: 12500,
                   line_total_cents: 12500,
+                  agreement_number: "SA-2026-0001",
                 },
               ],
             },
@@ -169,6 +170,8 @@ describe("coordinator invoice workspace", () => {
     expect(screen.queryByText("Community participation")).toBeNull();
     fireEvent.click(screen.getByText("Alex Morgan"));
     expect(screen.getByText("Community participation")).toBeTruthy();
+    // Traced to the service agreement it was delivered under.
+    expect(screen.getByText(/Agreement SA-2026-0001/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "New invoice" }));
     await waitFor(() =>
       expect(screen.getByTestId("select-billing-participant")).toBeTruthy(),

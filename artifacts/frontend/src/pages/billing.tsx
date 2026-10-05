@@ -95,6 +95,8 @@ export interface Invoice {
     service_date?: string | null;
     location_type?: string | null;
     line_total_cents: number;
+    /** The service agreement the line was delivered under (verified shifts). */
+    agreement_number?: string | null;
   }>;
 }
 
@@ -170,6 +172,11 @@ function InvoiceRecord({ invoice }: { invoice: Invoice }) {
               <p className="break-all text-xs text-cc-muted">
                 {item.item_code || "No NDIS item code"}
               </p>
+              {item.agreement_number && (
+                <p className="text-xs text-cc-muted">
+                  Service agreement {item.agreement_number}
+                </p>
+              )}
               <p className="text-cc-muted">
                 Service: {item.service_date || "Not recorded"}
               </p>
@@ -1745,6 +1752,7 @@ export default function Billing() {
                                         <p className="break-all text-xs text-cc-muted">
                                           {[
                                             item.item_code,
+                                            item.agreement_number ? `Agreement ${item.agreement_number}` : null,
                                             item.service_date ? `Service ${item.service_date}` : null,
                                             item.location_type ? item.location_type.replaceAll("_", " ") : null,
                                             `${item.quantity} × ${cents(item.unit_amount_cents, invoice.currency)}`,
