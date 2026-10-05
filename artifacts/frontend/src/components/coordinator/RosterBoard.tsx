@@ -21,7 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { format, addDays, isToday, parseISO, differenceInMinutes, eachDayOfInterval, getDay } from "date-fns";
 import {
-  AlertTriangle, CheckCircle2, ChevronRight, Clock3, GripVertical,
+  AlertTriangle, ChevronRight, Clock3, GripVertical,
   Loader2, Minus, Plus, User2, Users, XCircle, MinusCircle,
 } from "lucide-react";
 import {
@@ -510,26 +510,21 @@ export function RosterBoard({
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {/* Unassigned tray — horizontal shelf */}
-        <div
-          className="rounded-2xl border p-3"
-          style={{ borderColor: unassigned.length > 0 ? "#F3A8C4" : BORDER, background: unassigned.length > 0 ? "#FFF9FB" : "white" }}
-        >
-          <div className="mb-2 flex items-center gap-2">
-            <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
-              {translateParams("coordinator.dnd.unassigned", { count: String(unassigned.length) })}
-            </p>
-          </div>
-          {unassigned.length === 0 ? (
-            <div className="flex items-center gap-2 py-1.5">
-              <CheckCircle2 size={16} style={{ color: "#16A34A" }} />
-              <p className="text-[12px] font-bold" style={{ color: "#16A34A" }}>{translate("coordinator.dnd.allAssigned")}</p>
+        {unassigned.length > 0 && (
+          <div
+            className="rounded-2xl border p-3"
+            style={{ borderColor: "#F3A8C4", background: "#FFF9FB" }}
+          >
+            <div className="mb-2 flex items-center gap-2">
+              <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
+                {translateParams("coordinator.dnd.unassigned", { count: String(unassigned.length) })}
+              </p>
             </div>
-          ) : (
             <div className="flex flex-wrap gap-2">
               {unassigned.map((s) => <div key={s.id} className="w-52"><ShiftCard shift={s} colorBy={colorBy} onClick={() => setDetailShift(s)} /></div>)}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Worker × day grid */}
         <div className="rounded-2xl border bg-white overflow-auto" style={{ borderColor: BORDER }}>

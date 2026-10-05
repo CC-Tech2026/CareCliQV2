@@ -9,7 +9,7 @@ import {
 import {
   CalendarDays, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Clock3, Loader2,
   Plus, Users2, User2, AlertCircle, AlertTriangle, LayoutGrid, Settings2,
-  Activity, Search, RefreshCw,
+  Activity, Search, RefreshCw, ClipboardCheck,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
@@ -404,24 +404,27 @@ export default function CoordinatorRosteringPage() {
   const assignWorker   = workers.find((w) => w.id === workerFilter) ?? null;
   const periodLabel    = viewMode === "month"
     ? format(currentMonth, "MMMM yyyy")
-    : `${format(weekStart, "d MMM")} – ${format(addDays(weekStart, 6), "d MMM yyyy")}`;
+    : `${format(weekStart, "d MMM")} to ${format(addDays(weekStart, 6), "d MMM yyyy")}`;
+
+  const rosterLoading = shiftsQuery.isLoading || workersQuery.isLoading;
+  const rosterError = shiftsQuery.isError || workersQuery.isError;
+  const pendingValue = <span aria-label={translate("common.loading")} className="inline-block h-5 w-8 animate-pulse rounded bg-muted" />;
 
   return (
-    <div className="space-y-4 pb-12">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="min-w-0 space-y-4 pb-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>Schedule</p>
-          <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
-            {translate("coordinator.rostering.title")}
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight" style={{ color: TEXT }}>
+            {translate("nav.schedule")}
             <SectionInfo text="Build and adjust the shift roster for your team, week by week or month by month." />
           </h1>
         </div>
         {pageTab === "roster" ? (
-        <div className="flex items-center gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
           <Button
             onClick={() => setTeamPanelOpen(true)}
             variant="outline"
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold"
             style={{ borderColor: BORDER, color: MUTED }}
           >
             <Users2 size={14} /> {translate("coordinator.rostering.team")}
@@ -429,28 +432,28 @@ export default function CoordinatorRosteringPage() {
           <Button
             onClick={() => setBulkOpen(true)}
             variant="outline"
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold"
             style={{ borderColor: BORDER, color: MUTED }}
           >
             <LayoutGrid size={14} /> {translate("coordinator.rostering.recurring")}
           </Button>
           <Button
             onClick={() => setAssignOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white"
+            className="col-span-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-white"
             style={{ background: "var(--cc-cta)" }}
           >
             <Plus size={15} /> {translate("coordinator.rostering.createShift")}
           </Button>
         </div>
         ) : pageTab === "live" ? (
-        <div className="flex items-center gap-2">
-          <div className="relative">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className="relative min-w-0 flex-1">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: MUTED }} />
             <input
               value={liveSearch}
               onChange={(e) => setLiveSearch(e.target.value)}
               placeholder="Search worker or participant…"
-              className="h-9 pl-8 pr-3 rounded-xl border text-[13px] outline-none w-56 focus:w-72 transition-all"
+              className="h-9 pl-8 pr-3 rounded-xl border text-[13px] outline-none w-full sm:w-64"
               style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }}
             />
           </div>
@@ -467,67 +470,38 @@ export default function CoordinatorRosteringPage() {
         ) : null}
       </div>
 
-      {/* Page-level tabs: Roster | Live Monitor - same raised-pill language as
-          the onboarding area switcher (OnboardingAreaSwitcher: rounded-top
-          active tab flush with the panel below, circular icon badge, flat
-          unelevated inactive tab), adapted to local state instead of a route
-          change since both live on this one page.
-
-          Tabs + panel are wrapped together in one div rather than left as
-          two siblings of the page's space-y-4 container - that utility puts
-          a margin between every child, which put a visible gap between the
-          tab and the panel it's supposed to sit flush against, breaking the
-          "one continuous shape" illusion (the rounded-top-only tab looked
-          like an isolated, oddly-clipped shape floating on its own instead
-          of merging into the panel below). */}
-      <div>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-      <div role="tablist" className="flex items-end gap-3">
-        {SCHEDULE_TABS.map((tab) => {
-          const active = pageTab === tab.id;
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={active ? "true" : "false"}
-              onClick={() => setPageTab(tab.id)}
-              className="relative flex items-center gap-2 px-6 py-3 text-[14px] font-black transition-opacity"
-              style={{
-                borderRadius: active ? "14px 14px 0 0" : "0",
-                background: active ? "var(--cc-surface)" : "transparent",
-                color: TEXT,
-                opacity: active ? 1 : 0.75,
-              }}
-            >
-              <span
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
-                style={{ background: PLUM }}
-              >
-                <Icon size={13} style={{ color: "#fff" }} />
-              </span>
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-      <Link href="/coordinator/verification" className="mb-2 inline-flex min-h-11 items-center rounded-full border border-cc-border bg-cc-surface px-4 text-sm font-semibold text-cc-plum">{translate("schedule.verification")}</Link>
-      </div>
-      <div className="rounded-2xl rounded-tl-none" style={{ background: "var(--cc-surface)", padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      <div className="min-w-0 space-y-4">
+        <nav aria-label={translate("nav.schedule")} className="grid grid-cols-3 items-stretch gap-1 border-b border-cc-border sm:flex">
+          {SCHEDULE_TABS.map((tab) => {
+            const active = pageTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button key={tab.id} type="button" aria-pressed={active} onClick={() => setPageTab(tab.id)}
+                className={"inline-flex min-h-11 min-w-0 items-center justify-center gap-2 border-b-2 px-2 text-xs font-semibold sm:px-3 sm:text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] " + (active ? "border-cc-plum text-cc-plum" : "border-transparent text-muted-foreground hover:bg-muted/50")}>
+                <Icon size={16} aria-hidden="true" className="hidden shrink-0 sm:block" />
+                {tab.label}
+              </button>
+            );
+          })}
+          <Link href="/coordinator/verification" className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 border-b-2 border-transparent px-2 text-xs font-semibold text-muted-foreground sm:px-3 sm:text-sm hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px]">
+            <ClipboardCheck size={16} aria-hidden="true" className="hidden shrink-0 sm:block" />
+            {translate("schedule.verification")}
+          </Link>
+        </nav>
+        <div className="flex min-w-0 flex-col gap-4">
 
       {pageTab === "live" && <CoordinatorLivePage embedded externalSearch={liveSearch} />}
 
       {pageTab === "roster" && (
       <>
       {/* Flat inline stat strip, not a repeated card grid */}
-      <StatCardGroup fill>
-        <StatCard label={translate("coordinator.rostering.today")} value={shiftsToday.length} icon={<CalendarDays size={16} />} />
-        <StatCard label={translate("coordinator.rostering.activeNow")} value={activeShifts.length} tone="info" icon={<Activity size={16} />} onClick={() => setPageTab("live")} />
-        <StatCard label={translate("coordinator.rostering.upcoming")} value={scheduledCount} tone="brand" icon={<Clock3 size={16} />} />
+      <StatCardGroup fill className="grid grid-cols-2 gap-3 sm:flex [&>div]:min-w-0">
+        <StatCard label={translate("coordinator.rostering.today")} value={shiftsQuery.isLoading ? pendingValue : shiftsQuery.isError ? "?" : shiftsToday.length} icon={<CalendarDays size={16} />} />
+        <StatCard label={translate("coordinator.rostering.activeNow")} value={shiftsQuery.isLoading ? pendingValue : shiftsQuery.isError ? "?" : activeShifts.length} tone="info" icon={<Activity size={16} />} onClick={() => setPageTab("live")} />
+        <StatCard label={translate("coordinator.rostering.upcoming")} value={shiftsQuery.isLoading ? pendingValue : shiftsQuery.isError ? "?" : scheduledCount} tone="brand" icon={<Clock3 size={16} />} />
         <StatCard
-          label={workersQuery.isLoading ? translate("coordinator.rostering.loadingTeam") : translate("coordinator.rostering.teamMembers")}
-          value={workers.length}
+          label={translate("coordinator.rostering.teamMembers")}
+          value={workersQuery.isLoading ? pendingValue : workersQuery.isError ? "?" : workers.length}
           icon={<Users2 size={16} />}
           href="/team"
         />
@@ -563,7 +537,7 @@ export default function CoordinatorRosteringPage() {
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             title={translate("coordinator.rostering.previousPeriod")}
             onClick={handlePrev}
@@ -572,7 +546,7 @@ export default function CoordinatorRosteringPage() {
           >
             <ChevronLeft size={15} />
           </button>
-          <span className="min-w-[160px] text-center text-[13px] font-black" style={{ color: TEXT }}>{periodLabel}</span>
+          <span className="min-w-0 text-center text-[13px] font-black" style={{ color: TEXT }}>{periodLabel}</span>
           <button
             title={translate("coordinator.rostering.nextPeriod")}
             onClick={handleNext}
@@ -590,7 +564,7 @@ export default function CoordinatorRosteringPage() {
           </button>
         </div>
 
-        <div className="ml-auto flex flex-wrap gap-2">
+        <div className="flex w-full gap-2 sm:ml-auto sm:w-auto">
           <Select value={workerFilter} onValueChange={setWorkerFilter}>
             <SelectTrigger className="h-8 flex-1 sm:w-[170px] rounded-lg text-[12px]" style={{ borderColor: BORDER }}>
               <SelectValue placeholder={translate("coordinator.rostering.allWorkers")} />
@@ -618,21 +592,24 @@ export default function CoordinatorRosteringPage() {
         {shiftsQuery.isLoading && <Loader2 className="h-4 w-4 animate-spin" style={{ color: MUTED }} />}
       </div>
 
-      {shiftsQuery.error && (
-        <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+      {rosterError && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
           <AlertCircle size={15} className="shrink-0" />
           {translate("coordinator.rostering.loadError")}
+          <Button variant="outline" size="sm" onClick={() => { void shiftsQuery.refetch(); void workersQuery.refetch(); }}>{translate("common.retry")}</Button>
         </div>
       )}
 
-      {viewMode === "month" && (
+      {rosterLoading && !rosterError && <div role="status" className="flex min-h-48 items-center justify-center gap-2 rounded-xl border border-cc-border bg-cc-surface text-sm text-muted-foreground"><Loader2 size={18} className="animate-spin" />{translate("common.loading")}</div>}
+
+      {!rosterLoading && !rosterError && viewMode === "month" && (
         <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
           <MonthGrid month={currentMonth} shifts={shifts} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
           <DayPanel day={selectedDay} shifts={shifts} workers={workers} onAssign={() => setAssignOpen(true)} />
         </div>
       )}
 
-      {viewMode === "roster" && (
+      {!rosterLoading && !rosterError && viewMode === "roster" && (
         <RosterBoard
           newShiftId={newShiftId}
           weekStart={weekStart}
