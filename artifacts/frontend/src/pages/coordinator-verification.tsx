@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   confirmShiftVerification,
   getShiftPriceItemOptions,
+  getShiftVerificationPreview,
   getShiftVerificationQueue,
   getRecentShiftVerifications,
   reverseShiftVerification,
@@ -326,6 +327,7 @@ function ShiftReview({
   const [changesText, setChangesText] = useState("");
   const [approveExtra, setApproveExtra] = useState(false);
   const [extraReason, setExtraReason] = useState("");
+  const [agreementReason, setAgreementReason] = useState("");
 
   // A shift can't be approved (and billed) without its progress note. Older
   // backends don't send checks.note, so fall back to the note text itself.
@@ -340,18 +342,52 @@ function ShiftReview({
     staleTime: 60_000,
   });
   const options = priceItems.data ?? [];
+
+  // What approving would bill, checked against the service agreement: the
+  // code the times worked suggest, the line it counts against, the rate and
+  // the NDIS limit, and anything that needs a reason.
+  const approveExtraTime = extraMinutes > 0 && approveExtra;
+  const preview = useOrgQuery(["shift-verification-preview", item.shift_id, priceItemCode, approveExtraTime], {
+    queryFn: () => getShiftVerificationPreview(item.shift_id, { priceItemCode: priceItemCode || undefined, approveExtraTime }),
+    enabled: !approved,
+    staleTime: 30_000,
+  });
+  const agreementCheck = preview.data?.agreement ?? null;
+  const suggestedCode = agreementCheck?.suggested_code ?? null;
+  const issues = agreementCheck?.issues ?? [];
+  const agreementReasonMissing = issues.length > 0 && agreementReason.trim().length < 5;
+  const overLimit = !!preview.data?.over_limit;
+
   useEffect(() => {
-    if (priceTouched || priceItemCode) return;
+    if (priceTouched || priceItemCode || preview.isLoading) return;
+    if (suggestedCode) {
+      setPriceItemCode(suggestedCode);
+      return;
+    }
     const expected = item.expected_price_item_code;
     if (expected && options.some((o) => o.item_code === expected)) setPriceItemCode(expected);
     else if (options.length === 1) setPriceItemCode(options[0].item_code);
-  }, [options, item.expected_price_item_code, priceTouched, priceItemCode]);
+  }, [options, item.expected_price_item_code, priceTouched, priceItemCode, preview.isLoading, suggestedCode]);
+
+  const rateText = (() => {
+    const rate = preview.data?.rate;
+    if (rate == null) return null;
+    if (preview.data?.unit === "E") return money(rate); // a flat fee, not hourly
+    const key =
+      preview.data?.rate_source === "agreement"
+        ? "schedule.rateAgreed"
+        : preview.data?.rate_source === "organization_override"
+          ? "schedule.rateOrganisation"
+          : "schedule.rateCatalogue";
+    return translateParams(key, { rate: money(rate) });
+  })();
 
   const approve = useMutation({
     mutationFn: () =>
       confirmShiftVerification(item.shift_id, priceItemCode, {
-        approveExtraTime: extraMinutes > 0 && approveExtra,
+        approveExtraTime,
         extraTimeReason: extraReason,
+        agreementReason,
       }),
     onSuccess: (result) => {
       onApproved(result.billed_amount);
@@ -597,31 +633,107 @@ function ShiftReview({
           </section>
         )}
 
+        {!approved && preview.data && (agreementCheck || rateText) && (
+          <section aria-label={translate("schedule.agreement")} className="rounded-xl border border-cc-border p-4 text-sm">
+            <h3 className="font-semibold text-cc-text">{translate("schedule.agreement")}</h3>
+            {agreementCheck && agreementCheck.bands.length > 0 && (
+              <p className="mt-1 text-cc-muted">
+                {translateParams("schedule.workedBands", {
+                  bands: agreementCheck.bands.map((b) => translate(`schedule.band.${b}`)).join(", "),
+                })}
+              </p>
+            )}
+            {agreementCheck?.crosses_bands && <p className="mt-1 text-cc-muted">{translate("schedule.higherLimit")}</p>}
+            {agreementCheck?.matched_line && (
+              <p className="mt-2 text-cc-text">
+                {translateParams("schedule.countsAgainst", {
+                  support:
+                    (agreementCheck.matched_line.item_name ?? agreementCheck.matched_line.support_item_code) +
+                    (agreementCheck.matched_line.agreement_number ? ` (${agreementCheck.matched_line.agreement_number})` : ""),
+                })}
+              </p>
+            )}
+            {agreementCheck?.line_changed && agreementCheck.stored_line_id && (
+              <p className="mt-1 text-cc-muted">{translate("schedule.movedLine")}</p>
+            )}
+            {rateText && (
+              <p className="mt-2 font-semibold tabular-nums text-cc-text">
+                {rateText}
+                {preview.data.price_limit != null && (
+                  <span className="font-normal text-cc-muted">
+                    {" · "}
+                    {translateParams("schedule.priceLimit", { limit: money(preview.data.price_limit) })}
+                  </span>
+                )}
+              </p>
+            )}
+            {overLimit && (
+              <p role="alert" className="mt-2 flex items-start gap-1.5 text-red-700 dark:text-red-300">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden /> {translate("schedule.overLimit")}
+              </p>
+            )}
+            {agreementCheck?.band_warning && (
+              <p className="mt-2 flex items-start gap-1.5 text-amber-800 dark:text-amber-200">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden /> {agreementCheck.band_warning}
+              </p>
+            )}
+            {issues.length > 0 && (
+              <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+                <p className="font-semibold">{translate("schedule.outsideAgreement")}</p>
+                <ul className="mt-1 list-disc ps-6">
+                  {issues.map((issue) => <li key={issue.code}>{issue.message}</li>)}
+                </ul>
+                <label className="mt-2 block font-semibold text-cc-text">
+                  {translate("schedule.agreementReason")}
+                  <textarea
+                    value={agreementReason}
+                    onChange={(e) => setAgreementReason(e.target.value)}
+                    rows={2}
+                    maxLength={500}
+                    disabled={approve.isPending}
+                    className="mt-1.5 w-full rounded-lg border border-cc-border bg-cc-surface p-2 text-sm font-normal"
+                  />
+                </label>
+              </div>
+            )}
+          </section>
+        )}
+
         {!approved && (
-          <label className="block text-sm font-semibold text-cc-text">
-            {translate("schedule.priceItem")}
-            <select
-              value={priceItemCode}
-              onChange={(e) => {
-                setPriceTouched(true);
-                setPriceItemCode(e.target.value);
-              }}
-              disabled={priceItems.isLoading || approve.isPending}
-              className="mt-1.5 min-h-11 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm font-normal"
-            >
-              <option value="">
-                {translate(priceItems.isLoading ? "schedule.loadingPriceItems" : "schedule.pickPriceItem")}
-              </option>
-              {options.map((o) => (
-                <option key={o.item_code} value={o.item_code}>
-                  {o.item_code}: {o.name || o.support_purpose || ""}
-                  {o.price_national != null
-                    ? ` (${money(o.price_national)}${o.unit === "E" ? "" : "/hr"})`
-                    : ""}
+          <div>
+            <label className="block text-sm font-semibold text-cc-text">
+              {translate("schedule.priceItem")}
+              <select
+                value={priceItemCode}
+                onChange={(e) => {
+                  setPriceTouched(true);
+                  setPriceItemCode(e.target.value);
+                }}
+                disabled={priceItems.isLoading || approve.isPending}
+                className="mt-1.5 min-h-11 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm font-normal"
+              >
+                <option value="">
+                  {translate(priceItems.isLoading ? "schedule.loadingPriceItems" : "schedule.pickPriceItem")}
                 </option>
-              ))}
-            </select>
-          </label>
+                {/* The suggested code can be one the organisation hasn't loaded;
+                    it still prices from the NDIS catalogue. */}
+                {priceItemCode && !options.some((o) => o.item_code === priceItemCode) && (
+                  <option value={priceItemCode}>{priceItemCode}</option>
+                )}
+                {options.map((o) => (
+                  <option key={o.item_code} value={o.item_code}>
+                    {o.item_code}: {o.name || o.support_purpose || ""}
+                    {o.price_national != null
+                      ? ` (${money(o.price_national)}${o.unit === "E" ? "" : "/hr"})`
+                      : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {suggestedCode && priceItemCode === suggestedCode && (
+              <p className="mt-1 text-xs text-cc-muted">{translate("schedule.suggestedCode")}</p>
+            )}
+          </div>
         )}
 
         {changesOpen && !approved && (
@@ -682,7 +794,10 @@ function ShiftReview({
             <button
               type="button"
               onClick={() => approve.mutate()}
-              disabled={!priceItemCode || approve.isPending || noteMissing || extraReasonMissing}
+              disabled={
+                !priceItemCode || approve.isPending || noteMissing || extraReasonMissing ||
+                agreementReasonMissing || overLimit || preview.isFetching
+              }
               className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-cc-plum px-5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {approve.isPending ? (

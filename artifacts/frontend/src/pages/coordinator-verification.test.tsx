@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   reverse: vi.fn(),
   message: vi.fn(),
   search: "",
+  preview: null as unknown,
 }));
 vi.mock("wouter", () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
@@ -40,6 +41,7 @@ vi.mock("@/contexts/AccessibilityContext", async () => {
 vi.mock("@/services/coordinatorService", () => ({
   getShiftVerificationQueue: vi.fn(),
   getShiftPriceItemOptions: vi.fn(),
+  getShiftVerificationPreview: vi.fn(),
   confirmShiftVerification: state.confirm,
   getRecentShiftVerifications: vi.fn(),
   reverseShiftVerification: state.reverse,
@@ -129,8 +131,11 @@ vi.mock("@/hooks/useOrgQuery", () => ({
         ? queue
         : key[0] === "shift-verifications-recent"
           ? recent
-          : [{ item_code: "01_011_0107_1_1", name: "Personal care", unit: "H", price_national: 70.23 }],
+          : key[0] === "shift-verification-preview"
+            ? state.preview
+            : [{ item_code: "01_011_0107_1_1", name: "Personal care", unit: "H", price_national: 70.23 }],
     isLoading: false,
+    isFetching: false,
     isError: false,
     refetch: vi.fn(),
   }),
@@ -142,6 +147,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   state.search = "";
+  state.preview = null;
 });
 
 it("opens the shift named in the link and shows its review detail", () => {
@@ -163,7 +169,7 @@ it("approves with the expected price item and keeps the shift listed as approved
   render(<CoordinatorVerificationPage />);
   fireEvent.click(screen.getByRole("button", { name: /Approve shift/ }));
   await waitFor(() =>
-    expect(state.confirm).toHaveBeenCalledWith("s1", "01_011_0107_1_1", { approveExtraTime: false, extraTimeReason: "" }),
+    expect(state.confirm).toHaveBeenCalledWith("s1", "01_011_0107_1_1", { approveExtraTime: false, extraTimeReason: "", agreementReason: "" }),
   );
   await waitFor(() =>
     expect(state.toast).toHaveBeenCalledWith(
@@ -222,8 +228,70 @@ it("bills extra time only when approved with a reason", async () => {
     expect(state.confirm).toHaveBeenCalledWith("s3", "01_011_0107_1_1", {
       approveExtraTime: true,
       extraTimeReason: "Appointment ran late",
+      agreementReason: "",
     }),
   );
+});
+
+const preview = (over: Record<string, unknown> = {}, agreement: Record<string, unknown> = {}) => ({
+  price_item_code: "01_013_0107_1_1",
+  rate: 103.54,
+  rate_source: "platform",
+  unit: "H",
+  price_limit: 103.54,
+  over_limit: false,
+  agreement: {
+    bands: ["saturday", "sunday"],
+    crosses_bands: true,
+    suggested_code: "01_013_0107_1_1",
+    billed_code: "01_013_0107_1_1",
+    band_warning: null,
+    stored_line_id: "line-wd",
+    matched_line: {
+      id: "line-sat", service_agreement_id: "sa-1", agreement_number: "SA-0001",
+      support_item_code: "01_013_0107_1_1", item_name: "Assistance With Self-Care Activities - Standard - Saturday",
+    },
+    line_changed: true,
+    agreed_rate: null,
+    issues: [{ code: "unsigned", message: "The agreement hasn't been signed yet." }],
+    ...agreement,
+  },
+  ...over,
+});
+
+it("bills the code the times suggest, against the matched agreement line, with a reason when outside it", async () => {
+  state.search = "shiftId=s1";
+  state.preview = preview();
+  state.confirm.mockResolvedValue({ billed_amount: 414.16 });
+  render(<CoordinatorVerificationPage />);
+
+  expect(screen.getByText("Worked: Saturday, Sunday")).toBeTruthy();
+  expect(screen.getByText(/the higher price limit applies to all of it/)).toBeTruthy();
+  expect(screen.getByText("Counts against Assistance With Self-Care Activities - Standard - Saturday (SA-0001)")).toBeTruthy();
+  expect(screen.getByText(/Moved from the support it was rostered on/)).toBeTruthy();
+  expect(screen.getByText("$103.54/hr NDIS price")).toBeTruthy();
+  expect(screen.getByText("Suggested from the times worked")).toBeTruthy();
+  expect((screen.getByLabelText("NDIS price item") as HTMLSelectElement).value).toBe("01_013_0107_1_1");
+
+  const approve = () => screen.getByRole("button", { name: /Approve shift/ }) as HTMLButtonElement;
+  expect(screen.getByText("The agreement hasn't been signed yet.")).toBeTruthy();
+  expect(approve().disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("Reason for billing it anyway"), { target: { value: "Signed copy arriving by post" } });
+  fireEvent.click(approve());
+  await waitFor(() =>
+    expect(state.confirm).toHaveBeenCalledWith("s1", "01_013_0107_1_1", {
+      approveExtraTime: false, extraTimeReason: "", agreementReason: "Signed copy arriving by post",
+    }),
+  );
+});
+
+it("won't approve a rate above the NDIS price limit", () => {
+  state.search = "shiftId=s1";
+  state.preview = preview({ rate: 110, rate_source: "agreement", over_limit: true }, { issues: [] });
+  render(<CoordinatorVerificationPage />);
+  expect(screen.getByText("$110.00/hr agreed rate")).toBeTruthy();
+  expect(screen.getByRole("alert").textContent).toMatch(/above the NDIS price limit/);
+  expect((screen.getByRole("button", { name: /Approve shift/ }) as HTMLButtonElement).disabled).toBe(true);
 });
 
 it("reverses a recent verification with a reason", async () => {

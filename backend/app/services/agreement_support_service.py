@@ -262,6 +262,154 @@ def list_participant_supports(
     return out
 
 
+# ── Verification (stage 3c) ───────────────────────────────────────────────
+
+# An agreement that has since expired or ended still covers the shifts
+# delivered while it ran.
+_VERIFY_STATUSES = ("pending_signature", "active", "expired", "ended")
+
+
+def _verification_lines(participant_id: str, org_id: str) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    agreements = _rows(
+        get_supabase_admin().table("service_agreements")
+        .select("id, agreement_number, status, start_date, end_date, service_agreement_supports(*)")
+        .eq("organization_id", org_id).eq("participant_id", participant_id)
+        .in_("status", list(_VERIFY_STATUSES)).execute()
+    )
+    return [(a, line) for a in agreements for line in (a.get("service_agreement_supports") or [])]
+
+
+def _covers(agreement: dict[str, Any], day: date) -> bool:
+    start, end = str(agreement.get("start_date") or "")[:10], str(agreement.get("end_date") or "")[:10]
+    return (not start or day.isoformat() >= start) and (not end or day.isoformat() <= end)
+
+
+def _pick(candidates: list[tuple[dict, dict]], day: date) -> Optional[tuple[dict, dict]]:
+    """One line, or None when it would be a guess. Lines on an agreement that
+    covers the shift's date win over lines on other agreements."""
+    covering = [c for c in candidates if _covers(c[0], day)]
+    pool = covering or candidates
+    return pool[0] if len(pool) == 1 else None
+
+
+def assess_for_verification(
+    shift: dict[str, Any],
+    *,
+    billed_code: Optional[str],
+    local_start: datetime,
+    local_end: datetime,
+    holidays: set[str],
+    billable_minutes: Optional[float],
+) -> dict[str, Any]:
+    """Re-match a finished shift to its agreement line using the actual date
+    and times, and say what needs a reason before it's billed.
+
+    The time band picks the code within the shift's support (its stored
+    line, else its expected item). The billed code then finds the line:
+    an exact code first (the line stored at rostering wins a tie), else the
+    one line whose support contains it. Several lines and none exact is
+    never guessed. The agreed rate applies only to the line's own code."""
+    from . import ndis_time_band_service as bands_svc
+
+    participant_id = str(shift.get("participant_id") or "")
+    org_id = str(shift.get("organization_id") or "")
+    stored_id = str(shift.get("service_agreement_support_id") or "") or None
+    day = local_start.date()
+
+    lines = _verification_lines(participant_id, org_id)
+    stored = next(((a, l) for a, l in lines if str(l["id"]) == stored_id), None)
+    bands = bands_svc.support_bands(local_start, local_end, holidays)
+
+    reference = (stored[1]["support_item_code"] if stored else None) or shift.get("expected_price_item_code")
+    catalogue = _catalogue(None)
+    by_code = {str(r["item_code"]): r for r in catalogue}
+    suggested = None
+    if reference:
+        group = support_groups([str(reference)], catalogue)[str(reference)]
+        chosen = bands_svc.choose_code(group, bands)
+        suggested = chosen["item_code"] if chosen else str(reference)
+    billed = billed_code or suggested
+    billed_item = by_code.get(str(billed)) if billed else None
+    billed_band = bands_svc.item_band(billed_item) if billed_item else None
+    band_warning = None
+    if billed_band and bands and billed_band not in bands:
+        band_warning = (
+            f"{billed} is priced for {bands_svc.BAND_LABELS[billed_band]}, but the shift ran "
+            f"{bands_svc.bands_label(bands)}."
+        )
+
+    match = None
+    ambiguous = False
+    if billed and lines:
+        exact = [(a, l) for a, l in lines if str(l["support_item_code"]) == str(billed)]
+        if exact:
+            match = stored if stored in exact else _pick(exact, day)
+            ambiguous = match is None
+        else:
+            groups = support_groups([str(l["support_item_code"]) for _, l in lines], catalogue)
+            in_group = [(a, l) for a, l in lines if str(billed) in {g["item_code"] for g in groups[str(l["support_item_code"])]}]
+            match = _pick(in_group, day)
+            ambiguous = match is None and len(in_group) > 1
+
+    issues: list[dict[str, str]] = []
+    if not lines:
+        issues.append({"code": "no_agreement", "message": "This participant has no sent or signed service agreement."})
+    elif match is None:
+        issues.append({
+            "code": "no_line",
+            "message": (
+                f"{billed} matches more than one support on the agreement, so it can't be counted against one."
+                if ambiguous else f"{billed or 'The billed item'} isn't a support on this participant's agreement."
+            ),
+        })
+
+    matched_line = None
+    agreed_rate = None
+    if match:
+        agreement, line = match
+        if not _covers(agreement, day):
+            issues.append({"code": "outside_dates", "message": (
+                f"The shift ({day.isoformat()}) is outside the agreement dates "
+                f"({str(agreement.get('start_date') or '')[:10]} to {str(agreement.get('end_date') or 'open')[:10]})."
+            )})
+        if agreement.get("status") == "pending_signature":
+            issues.append({"code": "unsigned", "message": "The agreement hasn't been signed yet."})
+        allocated = line.get("total_hours_allocated")
+        unit = str(line.get("unit") or (by_code.get(str(line["support_item_code"])) or {}).get("unit") or "H").upper()
+        if allocated is not None and unit in HOUR_UNITS and billable_minutes:
+            used = line_usage([str(line["id"])], org_id, exclude_shift_id=str(shift.get("id")))[str(line["id"])]
+            total = _hours(used["delivered"] + used["booked_soon"] + used["booked_later"] + float(billable_minutes))
+            if total > float(allocated) + 0.001:
+                issues.append({"code": "over_hours", "message": (
+                    f"With every booking up to the agreement end, this support is "
+                    f"{round(total - float(allocated), 2):g}h over the {float(allocated):g}h agreed."
+                )})
+        if str(billed) == str(line["support_item_code"]) and line.get("negotiated_rate") is not None:
+            agreed_rate = float(line["negotiated_rate"])
+        matched_line = {
+            "id": str(line["id"]),
+            "service_agreement_id": str(agreement["id"]),
+            "agreement_number": agreement.get("agreement_number"),
+            "support_item_code": line["support_item_code"],
+            "item_name": (by_code.get(str(line["support_item_code"])) or {}).get("name"),
+        }
+
+    return {
+        "bands": bands,
+        "bands_label": bands_svc.bands_label(bands),
+        "crosses_bands": len(bands) > 1,
+        "suggested_code": suggested,
+        "billed_code": billed,
+        "billed_band": billed_band,
+        "band_warning": band_warning,
+        "stored_line_id": stored_id,
+        "matched_line": matched_line,
+        "line_changed": bool(matched_line and matched_line["id"] != stored_id),
+        "agreed_rate": agreed_rate,
+        "issues": issues,
+    }
+
+
 def resolve_line_for_shift(
     supabase, *, line_id: str, participant_id: str, org_id: str
 ) -> dict[str, Any]:

@@ -163,7 +163,11 @@ async def test_verify_shift_records_budget_usage():
         shift_verification_service,
         "_apply_budget_change",
         return_value=135.12,
-    ) as charge:
+    ) as charge, patch.object(
+        shift_verification_service, "_agreement_assessment", return_value=None,
+    ), patch.object(
+        shift_verification_service, "_price_limit", return_value=None,
+    ):
         result = await shift_verification_service.verify_shift(
             shift_id="shift-1",
             coordinator_id="coord-1",

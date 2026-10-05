@@ -1866,6 +1866,8 @@ export type VerifyShiftResult = {
   billing?: ShiftVerificationExtraTimeCheck & { extra_time_reason?: string | null };
   day_type_warning?: string;
   expected_item_warning?: string;
+  agreement?: VerificationAgreementCheck & { reason?: string | null };
+  rate_source?: string;
 };
 
 export function getShiftVerificationQueue() {
@@ -1928,7 +1930,7 @@ export function getParticipantAgreementSupports(
 export function confirmShiftVerification(
   shiftId: string,
   priceItemCode: string,
-  options: { approveExtraTime?: boolean; extraTimeReason?: string } = {},
+  options: { approveExtraTime?: boolean; extraTimeReason?: string; agreementReason?: string } = {},
 ) {
   return jsonFetch<VerifyShiftResult>(
     `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/verify`,
@@ -1939,8 +1941,61 @@ export function confirmShiftVerification(
         price_item_code: priceItemCode,
         approve_extra_time: !!options.approveExtraTime,
         extra_time_reason: options.extraTimeReason?.trim() || null,
+        agreement_reason: options.agreementReason?.trim() || null,
       }),
     }
+  );
+}
+
+export type NdisTimeBand =
+  | "weekday_daytime"
+  | "weekday_evening"
+  | "weekday_night"
+  | "saturday"
+  | "sunday"
+  | "public_holiday";
+
+/** The shift checked against its service agreement at verification. */
+export type VerificationAgreementCheck = {
+  bands: NdisTimeBand[];
+  crosses_bands: boolean;
+  suggested_code: string | null;
+  billed_code: string | null;
+  band_warning: string | null;
+  stored_line_id: string | null;
+  matched_line: {
+    id: string;
+    service_agreement_id: string;
+    agreement_number: string | null;
+    support_item_code: string;
+    item_name: string | null;
+  } | null;
+  line_changed: boolean;
+  agreed_rate: number | null;
+  issues: Array<{ code: string; message: string }>;
+};
+
+/** What verifying would bill, before anything is charged. */
+export type VerificationPreview = {
+  price_item_code: string | null;
+  agreement: VerificationAgreementCheck | null;
+  rate: number | null;
+  rate_source: "agreement" | "organization_override" | "platform" | string | null;
+  unit?: string | null;
+  price_limit: number | null;
+  over_limit: boolean;
+};
+
+export function getShiftVerificationPreview(
+  shiftId: string,
+  options: { priceItemCode?: string; approveExtraTime?: boolean } = {},
+) {
+  const params = new URLSearchParams();
+  if (options.priceItemCode) params.set("price_item_code", options.priceItemCode);
+  if (options.approveExtraTime) params.set("approve_extra_time", "true");
+  const query = params.toString();
+  return jsonFetch<VerificationPreview>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/verification/preview${query ? `?${query}` : ""}`
   );
 }
 

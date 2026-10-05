@@ -18,11 +18,15 @@ PRICE_ITEM_CODE = "01_011_0107_1_1"
 @pytest.fixture(autouse=True)
 def _note_and_budget():
     """These tests are about pricing: every shift has its progress note, and
-    the budget charge (tested in test_shift_verification_safety.py) is stubbed."""
+    the budget charge (tested in test_shift_verification_safety.py) and the
+    agreement and price-limit checks (test_agreement_verification.py) are
+    stubbed."""
     with patch.object(
         shift_verification_service, "_get_session_for_shift",
         return_value={"id": "session-1", "compliance_input_text": "Supported Liam with lunch."},
-    ), patch.object(shift_verification_service, "_apply_budget_change", return_value=0.0):
+    ), patch.object(shift_verification_service, "_apply_budget_change", return_value=0.0), \
+         patch.object(shift_verification_service, "_agreement_assessment", return_value=None), \
+         patch.object(shift_verification_service, "_price_limit", return_value=None):
         yield
 
 

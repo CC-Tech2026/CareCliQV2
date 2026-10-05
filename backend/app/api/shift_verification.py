@@ -33,6 +33,9 @@ class VerifyShiftRequest(BaseModel):
     # unless the coordinator approves the extra, with a reason.
     approve_extra_time: bool = False
     extra_time_reason: Optional[str] = Field(default=None, max_length=500)
+    # Needed when the shift is outside the service agreement (no agreement,
+    # not an agreed support, outside its dates, unsigned, over its hours).
+    agreement_reason: Optional[str] = Field(default=None, max_length=500)
 
 
 class ReverseVerificationRequest(BaseModel):
@@ -80,9 +83,29 @@ async def post_verify_shift(
             org_id=org_id,
             approve_extra_time=body.approve_extra_time,
             extra_time_reason=body.extra_time_reason,
+            agreement_reason=body.agreement_reason,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/shifts/{shift_id}/verification/preview")
+async def get_verification_preview(
+    shift_id: str,
+    price_item_code: Optional[str] = Query(default=None),
+    approve_extra_time: bool = Query(default=False),
+    current_user: dict = Depends(get_current_user),
+):
+    """What verifying would bill, before anything is charged: the suggested
+    time-of-day code, the agreement line, anything needing a reason, the
+    rate and the NDIS price limit."""
+    org_id = _require_coordinator(current_user)
+    try:
+        return await shift_verification_service.preview_verification(
+            shift_id, org_id, price_item_code=price_item_code, approve_extra_time=approve_extra_time,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @router.get("/shifts/verified")

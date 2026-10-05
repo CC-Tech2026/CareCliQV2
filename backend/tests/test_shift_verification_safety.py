@@ -14,6 +14,15 @@ PLAN = {"id": "plan-1", "plan_budgets": [{"id": "budget-1", "category": "core", 
 NOTE = {"id": "session-1", "compliance_input_text": "Supported Liam to cook lunch and walk to the park."}
 
 
+@pytest.fixture(autouse=True)
+def _no_agreement_or_limit_lookups():
+    """The agreement and price-limit checks are tested in
+    test_agreement_verification.py."""
+    with patch.object(svc, "_agreement_assessment", return_value=None), \
+         patch.object(svc, "_price_limit", return_value=None):
+        yield
+
+
 def _shift(clock_in="2026-09-01T09:00:00+00:00", clock_out="2026-09-01T11:00:00+00:00", **kw):
     return {
         "id": "shift-1", "organization_id": "org-1", "participant_id": "p-1", "worker_id": "w-1",

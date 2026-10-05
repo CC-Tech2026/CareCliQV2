@@ -9,12 +9,12 @@ per completed shift, sourced from the real NDIS price catalogue.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from ..core.ndis_categories import support_category_number_label
 from ..core.timezone import app_today, parse_shift_datetime, participant_timezone
-from . import ndis_pricing_service
+from . import agreement_support_service, ndis_pricing_service
 from .funding_service import get_plan_for_participant, record_verified_shift_budget_usage
 from .schads_engine import _day_type, _get_public_holidays
 from .shift_validation_service import compute_shift_validation
@@ -430,8 +430,47 @@ def _get_session_for_shift(shift: dict[str, Any]) -> Optional[dict[str, Any]]:
 _SHIFT_COLUMNS = (
     "id, organization_id, participant_id, participant_name, worker_id, "
     "scheduled_start, scheduled_end, clocked_in_at, clocked_out_at, "
-    "duration_minutes, status, session_id, tasks, expected_price_item_code, clock_in_verified, clock_in_method, shift_type"
+    "duration_minutes, status, session_id, tasks, expected_price_item_code, clock_in_verified, clock_in_method, shift_type, "
+    "service_agreement_support_id"
 )
+
+
+def _agreement_assessment(
+    shift: dict[str, Any], billed_code: Optional[str], billing: dict[str, Any]
+) -> Optional[dict[str, Any]]:
+    """The shift checked against the participant's service agreement, using
+    the time it's billed for: from clock-in (else the scheduled start) for
+    the billable minutes."""
+    start_raw = shift.get("clocked_in_at") or shift.get("scheduled_start")
+    minutes = billing.get("billable_minutes") or _scheduled_minutes(shift)
+    if not start_raw or not minutes:
+        return None
+    tz = participant_timezone(shift, organization_id=shift.get("organization_id"))
+    start = parse_shift_datetime(start_raw).astimezone(tz)
+    return agreement_support_service.assess_for_verification(
+        shift,
+        billed_code=billed_code,
+        local_start=start,
+        local_end=start + timedelta(minutes=float(minutes)),
+        holidays=_get_public_holidays(get_supabase_admin()),
+        billable_minutes=billing.get("billable_minutes"),
+    )
+
+
+def _rate_for(price: dict[str, Any], assessment: Optional[dict[str, Any]]) -> tuple[float, str]:
+    """The rate billed and where it came from: the participant's agreed rate
+    for the line's own code, else the organisation's price, else the
+    catalogue (resolve_price already orders those two)."""
+    if assessment and assessment.get("agreed_rate") is not None:
+        return float(assessment["agreed_rate"]), "agreement"
+    return float(price.get("effective_price") or 0), str(price.get("price_source") or "catalogue")
+
+
+def _price_limit(item_code: str, on: str) -> Optional[float]:
+    cents = ndis_pricing_service.price_limit_cents(
+        ndis_pricing_service.load_price_limit_rows([item_code]), item_code, on,
+    )
+    return cents / 100 if cents is not None else None
 
 
 def _is_missing_column(exc: Exception) -> bool:
@@ -681,12 +720,17 @@ async def verify_shift(
     org_id: str,
     approve_extra_time: bool = False,
     extra_time_reason: Optional[str] = None,
+    agreement_reason: Optional[str] = None,
 ) -> dict[str, Any]:
     """Recompute checks server-side, resolve the coordinator-chosen price
     item, insert the audit row, and deduct from plan_budgets. Rejects shifts
     that are not completed, are already verified, or have no progress note.
     Bills the time worked, capped at the scheduled time unless the
-    coordinator approves the extra time with a reason."""
+    coordinator approves the extra time with a reason.
+
+    Checks the shift against the service agreement (stage 3c): anything
+    outside it needs a reason, the agreed rate applies to the line's own
+    code, and no rate above the NDIS price limit is charged."""
     supabase = get_supabase_admin()
 
     shift_result = (
@@ -721,6 +765,22 @@ async def verify_shift(
     if billing["extra_time_approved"] and len(reason) < 5:
         raise ValueError("Give a reason for approving the extra time (at least 5 characters).")
 
+    agreement_check_error: Optional[str] = None
+    try:
+        assessment = _agreement_assessment(shift, price_item_code, billing)
+    except Exception as exc:
+        # Don't stop verification, but record that the check didn't run.
+        logger.warning("Agreement check failed for shift %s: %s", shift_id, exc, exc_info=True)
+        assessment = None
+        agreement_check_error = str(exc)[:300]
+    agreement_reason = (agreement_reason or "").strip()
+    if assessment and assessment["issues"] and len(agreement_reason) < 5:
+        raise ValueError(
+            "This shift doesn't match the service agreement: "
+            + " ".join(issue["message"] for issue in assessment["issues"])
+            + " Give a reason to bill it anyway (at least 5 characters)."
+        )
+
     participant_id = shift.get("participant_id")
     if not participant_id:
         raise ValueError("Shift has no linked participant — cannot verify.")
@@ -738,24 +798,28 @@ async def verify_shift(
         raise ValueError(f"Price item '{price_item_code}' could not be resolved.")
 
     day_type_warning: Optional[str] = None
-    try:
-        # schads_engine._day_type returns lowercase snake_case
-        # ("weekday"/"saturday"/"sunday"/"public_holiday"); ndis_price_items.day_type
-        # is free-text from the imported Price Guide (e.g. "Weekday", "Public Holiday")
-        # — normalise both before comparing so casing/spacing never triggers a
-        # false-positive warning.
-        actual_day_type = _day_type(date.fromisoformat(completion_date), _get_public_holidays(supabase))
-        expected_day_type_raw = price.get("day_type")
-        expected_day_type = (
-            str(expected_day_type_raw).strip().lower().replace(" ", "_") if expected_day_type_raw else None
-        )
-        if expected_day_type and actual_day_type and expected_day_type != actual_day_type:
-            day_type_warning = (
-                f"Selected item '{price_item_code}' is priced as {expected_day_type_raw}, "
-                f"but the shift's service date ({completion_date}) is a {actual_day_type.replace('_', ' ')}."
+    if assessment and assessment.get("billed_band"):
+        # A time-banded item: checked against every band the shift ran in.
+        day_type_warning = assessment.get("band_warning")
+    else:
+        try:
+            # schads_engine._day_type returns lowercase snake_case
+            # ("weekday"/"saturday"/"sunday"/"public_holiday"); ndis_price_items.day_type
+            # is free-text from the imported Price Guide (e.g. "Weekday", "Public Holiday")
+            # — normalise both before comparing so casing/spacing never triggers a
+            # false-positive warning.
+            actual_day_type = _day_type(date.fromisoformat(completion_date), _get_public_holidays(supabase))
+            expected_day_type_raw = price.get("day_type")
+            expected_day_type = (
+                str(expected_day_type_raw).strip().lower().replace(" ", "_") if expected_day_type_raw else None
             )
-    except Exception:
-        logger.warning("shift_verification: day-type check failed for shift %s", shift_id, exc_info=True)
+            if expected_day_type and actual_day_type and expected_day_type != actual_day_type:
+                day_type_warning = (
+                    f"Selected item '{price_item_code}' is priced as {expected_day_type_raw}, "
+                    f"but the shift's service date ({completion_date}) is a {actual_day_type.replace('_', ' ')}."
+                )
+        except Exception:
+            logger.warning("shift_verification: day-type check failed for shift %s", shift_id, exc_info=True)
 
     expected_item_warning: Optional[str] = None
     expected_price_item_code = shift.get("expected_price_item_code")
@@ -775,7 +839,15 @@ async def verify_shift(
     # ndis_price_items prices (and resolve_price's effective_price) are plain
     # dollar amounts — same convention as billing.tsx, NdisPriceEditor.tsx and
     # billing_service.py; plan_budgets amounts are also plain dollars.
-    hourly_rate = float(price.get("effective_price") or 0)
+    hourly_rate, rate_source = _rate_for(price, assessment)
+    item_code = str(price.get("item_code") or price_item_code)
+    # Checked before anything is charged; invoicing and claims check again.
+    limit = _price_limit(item_code, completion_date)
+    if limit is not None and round(hourly_rate * 100) > round(limit * 100):
+        raise ValueError(
+            f"The rate for {item_code} (${hourly_rate:.2f}) is above the NDIS price limit of ${limit:.2f}. "
+            "Nothing was charged. Correct the rate first."
+        )
     billed_minutes = billing["billable_minutes"]
     if billed_minutes is None or billed_minutes <= 0:
         raise ValueError(
@@ -793,7 +865,11 @@ async def verify_shift(
 
     checks = compute_verification_checks(shift, session)
     # What was billed and why — part of the audit snapshot.
-    checks["billing"] = {**billing, "extra_time_reason": reason or None}
+    checks["billing"] = {**billing, "extra_time_reason": reason or None, "rate_source": rate_source}
+    if assessment:
+        checks["agreement"] = {**assessment, "reason": agreement_reason or None}
+    elif agreement_check_error:
+        checks["agreement"] = {"check_failed": agreement_check_error}
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -838,7 +914,6 @@ async def verify_shift(
         raise ValueError("The verification couldn't be saved. Nothing was charged — try again.")
 
     session_id = str(session.get("id")) if session and session.get("id") else None
-    item_code = str(price.get("item_code") or price_item_code)
     try:
         new_used = _apply_budget_change(
             budget=matching_budget,
@@ -856,6 +931,16 @@ async def verify_shift(
         supabase.table("shift_verifications").delete().eq("id", str(verification["id"])).execute()
         logger.error("Budget charge failed for shift %s; verification rolled back: %s", shift_id, exc)
         raise ValueError("The plan budget couldn't be charged, so the shift wasn't verified. Try again.") from exc
+
+    # Hours count against the line the actual times matched; the change is
+    # already recorded in checks_run.agreement.
+    if assessment and assessment.get("line_changed"):
+        try:
+            supabase.table("shifts").update(
+                {"service_agreement_support_id": assessment["matched_line"]["id"]}
+            ).eq("id", shift_id).execute()
+        except Exception as exc:
+            logger.warning("Could not move shift %s to its matched agreement line: %s", shift_id, exc)
 
     task_completions = _upsert_task_completions_for_verified_shift(
         supabase,
@@ -884,7 +969,51 @@ async def verify_shift(
         result["day_type_warning"] = day_type_warning
     if expected_item_warning:
         result["expected_item_warning"] = expected_item_warning
+    if "agreement" in checks:
+        result["agreement"] = checks["agreement"]
+    result["rate_source"] = rate_source
     return result
+
+
+async def preview_verification(
+    shift_id: str,
+    org_id: str,
+    price_item_code: Optional[str] = None,
+    approve_extra_time: bool = False,
+) -> dict[str, Any]:
+    """What verifying would bill, before anything is charged: the code the
+    time band suggests, the agreement line it counts against, anything that
+    needs a reason, the rate and where it comes from, and the price limit."""
+    supabase = get_supabase_admin()
+    shift = (_safe_rows(supabase.table("shifts").select(_SHIFT_COLUMNS).eq("id", shift_id).execute().data) or [None])[0]
+    if not shift or str(shift.get("organization_id") or "") != str(org_id):
+        raise ValueError("Shift not found.")
+    billing = billable_minutes(shift, approve_extra_time=approve_extra_time)
+    assessment = _agreement_assessment(shift, price_item_code, billing)
+    code = price_item_code or (assessment or {}).get("suggested_code") or shift.get("expected_price_item_code")
+    out: dict[str, Any] = {
+        "price_item_code": code,
+        "agreement": assessment,
+        "rate": None,
+        "rate_source": None,
+        "price_limit": None,
+        "over_limit": False,
+    }
+    if not code:
+        return out
+    completion_date = _completion_date_for_shift(shift)
+    price = await ndis_pricing_service.resolve_price(code, org_id, as_of_date=completion_date)
+    if price:
+        rate, source = _rate_for(price, assessment)
+        limit = _price_limit(str(code), completion_date)
+        out.update({
+            "rate": rate,
+            "rate_source": source,
+            "unit": price.get("unit"),
+            "price_limit": limit,
+            "over_limit": limit is not None and round(rate * 100) > round(limit * 100),
+        })
+    return out
 
 
 async def reverse_verification(
