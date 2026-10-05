@@ -1,18 +1,23 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { ParticipantServiceAgreementSection } from "./ParticipantServiceAgreementSection";
+import { jsonFetch } from "@/services/http";
 
 const state = vi.hoisted(() => ({
   data: [] as unknown[],
   isError: false,
+  queryFn: null as null | (() => unknown),
 }));
 vi.mock("@/hooks/useOrgQuery", () => ({
-  useOrgQuery: () => ({
-    data: state.data,
-    isLoading: false,
-    isError: state.isError,
-    refetch: vi.fn(),
-  }),
+  useOrgQuery: (key: unknown[], opts: { queryFn: () => unknown }) => {
+    if (key.includes("service-agreements")) state.queryFn = opts.queryFn;
+    return {
+      data: state.data,
+      isLoading: false,
+      isError: state.isError,
+      refetch: vi.fn(),
+    };
+  },
 }));
 vi.mock("@/services/http", () => ({ jsonFetch: vi.fn() }));
 vi.mock("@/contexts/AuthContext", () => ({
@@ -176,4 +181,13 @@ it("flags an expired signing link", () => {
   render(<ParticipantServiceAgreementSection participantId="p-1" />);
   expect(screen.getByText("Signing link expired")).toBeTruthy();
   expect(screen.getByRole("button", { name: /Send new link/ })).toBeTruthy();
+});
+
+
+it("during onboarding builds the agreement for the intake, before the participant exists", () => {
+  render(<ParticipantServiceAgreementSection intakeId="i-1" participantName="Liam" />);
+  expect(screen.getByText(/Build Liam's service agreement with the supports they'll receive/)).toBeTruthy();
+  expect(screen.getByText(/signed before they can be made active/)).toBeTruthy();
+  state.queryFn?.();
+  expect(vi.mocked(jsonFetch)).toHaveBeenCalledWith("/api/participant-intakes/i-1/service-agreements");
 });

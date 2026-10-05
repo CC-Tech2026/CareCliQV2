@@ -854,6 +854,7 @@ def load_org_data(org_id: str) -> OrgData:
         sb.table("service_agreements")
         .select("id, participant_id, agreement_number, status, start_date, end_date, signed_date")
         .eq("organization_id", org_id)
+        .not_.is_("participant_id", "null")  # still on an onboarding intake
     )
     data.consents = _rows(
         sb.table("plan_meeting_sessions")

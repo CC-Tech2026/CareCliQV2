@@ -11,6 +11,7 @@ import {
   createAgreementDraft,
   updateAgreementDraft,
   type AgreementDraftInput,
+  type AgreementOwner,
   type PlanManagementType,
   type SupportFrequency,
   type SupportLocation,
@@ -80,7 +81,7 @@ const selectClass = "h-9 w-full rounded-xl border border-cc-border bg-cc-surface
 export function ServiceAgreementBuilder({
   open,
   onOpenChange,
-  participantId,
+  owner,
   participantName,
   agreementId,
   defaults,
@@ -88,7 +89,8 @@ export function ServiceAgreementBuilder({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  participantId: string;
+  /** The participant, or during onboarding their intake. */
+  owner: AgreementOwner;
   participantName: string;
   /** Set when editing an existing draft. */
   agreementId?: string | null;
@@ -195,7 +197,7 @@ export function ServiceAgreementBuilder({
     setSaving(true);
     try {
       if (agreementId) await updateAgreementDraft(agreementId, draft);
-      else await createAgreementDraft(participantId, draft);
+      else await createAgreementDraft(owner, draft);
       toast({ title: agreementId ? "Draft updated" : "Draft agreement created" });
       onSaved();
       onOpenChange(false);

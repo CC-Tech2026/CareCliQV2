@@ -10,8 +10,10 @@ import { jsonFetch } from "@/services/http";
 import {
   cancelAgreementEsign,
   deleteAgreementDraft,
+  agreementsPath,
   openAgreementDocument,
   type AgreementEsignStatus,
+  type AgreementOwner,
 } from "@/services/serviceAgreementService";
 import { EmailAgreementDialog } from "./EmailAgreementDialog";
 import { ServiceAgreementBuilder, type BuilderDefaults } from "./ServiceAgreementBuilder";
@@ -142,16 +144,23 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
 
 /** The participant's service agreements: build one from the NDIS price
  * catalogue, send it for signature, sign it on screen, and see the signed
- * schedule of supports, terms and PDF. Agreements signed through onboarding
- * are recorded here too. */
+ * schedule of supports, terms and PDF. During onboarding (intakeId) the
+ * same agreement is built against the intake, and moves onto the
+ * participant when they're made active. */
 export function ParticipantServiceAgreementSection({
   participantId,
+  intakeId,
   participantName = "the participant",
   participantEmail,
   defaults = {},
+  onChanged,
 }: {
-  participantId: string;
+  participantId?: string;
+  /** Onboarding: the agreement belongs to the intake until activation. */
+  intakeId?: string;
   participantName?: string;
+  /** Called after anything changes (built, sent, signed, deleted). */
+  onChanged?: () => void;
   /** Pre-fills the address when emailing an agreement for signature. */
   participantEmail?: string | null;
   /** Prefills a new agreement (plan dates, plan management). */
@@ -168,18 +177,17 @@ export function ParticipantServiceAgreementSection({
   const [signing, setSigning] = useState(false);
   const [emailing, setEmailing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const owner: AgreementOwner = intakeId
+    ? { kind: "intake", id: intakeId }
+    : { kind: "participant", id: participantId ?? "" };
   const { data, isLoading, isError, refetch } = useOrgQuery<ServiceAgreement[]>(
-    ["participant", participantId, "service-agreements"],
-    {
-      queryFn: () =>
-        jsonFetch(
-          `/api/participants/${encodeURIComponent(participantId)}/service-agreements`,
-        ),
-    },
+    [owner.kind, owner.id, "service-agreements"],
+    { queryFn: () => jsonFetch(agreementsPath(owner)) },
   );
 
   const changed = () => {
     void refetch();
+    onChanged?.();
     // The vault and audit readiness both read agreement status.
     void queryClient.invalidateQueries({ queryKey: [orgId, "audit-readiness"] });
     void queryClient.invalidateQueries({ queryKey: [orgId, "md-vault"] });
@@ -222,7 +230,7 @@ export function ParticipantServiceAgreementSection({
     <ServiceAgreementBuilder
       open={builder.open}
       onOpenChange={(open) => setBuilder((b) => ({ ...b, open }))}
-      participantId={participantId}
+      owner={owner}
       participantName={participantName}
       agreementId={builder.agreementId}
       defaults={builder.defaults}
@@ -235,8 +243,9 @@ export function ParticipantServiceAgreementSection({
     return (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-cc-muted">
-          No service agreement recorded yet. Build one here, or agreements signed
-          through participant onboarding appear automatically.
+          {intakeId
+            ? `Build ${participantName}'s service agreement with the supports they'll receive. It has to be signed before they can be made active.`
+            : "No service agreement recorded yet. Build one here, or agreements signed through participant onboarding appear automatically."}
         </p>
         <Button className="gap-1.5" onClick={newAgreement}>
           <Plus size={15} /> New agreement

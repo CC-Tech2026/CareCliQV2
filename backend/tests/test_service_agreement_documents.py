@@ -174,39 +174,80 @@ async def test_only_drafts_can_be_edited_or_deleted():
             await docs.delete_draft(ORG, "a1", "u1")
 
 
-def test_onboarding_agreement_is_recorded_once():
-    intake = {
-        "id": "i1", "organization_id": ORG, "provider_signed_at": "2026-09-30T01:00:00Z",
-        "family_signed_at": "2026-09-30T01:05:00Z", "family_signed_name": "Liam Carter",
-        "provider_signed_name": "Maria", "plan_start_date": "2026-10-01", "plan_end_date": "2027-09-30",
-        "service_agreement_document_path": "org-1/i1/x.pdf", "web_intake": {"funding_type": "plan_managed", "plan_manager_org": "Clearview"},
-    }
-    client = MagicMock()
-    client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
-    with patch.object(docs, "get_supabase_admin", return_value=client), \
-         patch.object(docs, "_insert_with_number", return_value={"id": "a9"}) as insert, \
-         patch.object(docs, "mark_plan_agreement_signed") as mark:
-        assert docs.from_intake(intake, "p1") == {"id": "a9"}
+class _Q:
+    """A chainable Supabase query stub returning fixed rows."""
+
+    def __init__(self, rows):
+        self.rows = rows
+        self.calls = []
+
+    def __getattr__(self, name):
+        def call(*args, **kwargs):
+            self.calls.append((name, args))
+            return self
+        return call
+
+    def execute(self):
+        return MagicMock(data=self.rows)
+
+
+@pytest.mark.asyncio
+async def test_an_onboarding_agreement_is_built_for_the_intake():
+    data = {"plan_management_type": "plan-managed", "start_date": "2026-10-01", "end_date": "2027-09-30", "supports": []}
+    with patch.object(docs, "_priced_lines", new=AsyncMock(return_value=[])),          patch.object(docs, "_insert_with_number", return_value={"id": "a1"}) as insert,          patch.object(docs, "_replace_lines"),          patch.object(docs.audit_service, "log_action", new=AsyncMock()),          patch.object(docs, "get_agreement", return_value={"id": "a1"}):
+        await docs.create_draft(None, ORG, "u1", data, intake_id="i1")
     payload = insert.call_args.args[0]
-    assert payload["status"] == "active" and payload["intake_id"] == "i1"
-    assert payload["plan_management_type"] == "plan-managed" and payload["plan_manager_name"] == "Clearview"
-    assert (payload["document_bucket"], payload["document_path"]) == ("participant-intake-files", "org-1/i1/x.pdf")
-    mark.assert_called_once()
-
-    client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[{"id": "a9"}])
-    with patch.object(docs, "get_supabase_admin", return_value=client), \
-         patch.object(docs, "_insert_with_number") as insert:
-        docs.from_intake(intake, "p1")
-    insert.assert_not_called()
-    # Unsigned intake: nothing to record.
-    assert docs.from_intake({"id": "i2", "organization_id": ORG}, "p1") is None
+    assert (payload["participant_id"], payload["intake_id"]) == (None, "i1")
+    with pytest.raises(ValueError):
+        await docs.create_draft(None, ORG, "u1", data)
 
 
-def test_onboarding_agreement_never_guesses_plan_management():
-    intake = {"id": "i3", "organization_id": ORG, "family_signed_at": "2026-09-30T01:05:00Z", "web_intake": {}}
+@pytest.mark.asyncio
+async def test_signing_an_onboarding_agreement_moves_the_intake_on():
+    existing = {"id": "a1", "agreement_number": "SA-2026-0001", "participant_id": None, "intake_id": "i1",
+                "start_date": "2026-10-01", "end_date": "2027-09-30"}
     client = MagicMock()
-    client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
-    with patch.object(docs, "get_supabase_admin", return_value=client), \
-         patch.object(docs, "_insert_with_number") as insert:
-        assert docs.from_intake(intake, "p1") is None
-    insert.assert_not_called()
+    with patch.object(docs, "render_agreement_pdf", return_value=b"%PDF"),          patch.object(docs, "get_supabase_admin", return_value=client),          patch.object(docs, "mark_plan_agreement_signed") as mark,          patch.object(docs, "_intake_signed") as intake_signed,          patch.object(docs.audit_service, "log_action", new=AsyncMock()):
+        await docs.finalise_signature(
+            ORG, existing, "u1", method="in_person",
+            provider={"name": "Maria", "png": PNG, "at": "2026-10-01T00:00:00Z"},
+            participant={"name": "Liam Carter", "png": PNG, "at": "2026-10-01T00:00:00Z"},
+        )
+    # No participant yet, so no NDIS plan to mark; the intake moves to signed.
+    mark.assert_not_called()
+    assert intake_signed.call_args.args[:2] == (ORG, "i1")
+
+
+def test_only_a_signed_agreement_with_supports_lets_onboarding_finish():
+    rows = [{"id": "a1", "status": "active", "service_agreement_supports": []},
+            {"id": "a2", "status": "active", "service_agreement_supports": [{"id": "l1"}]}]
+    client = MagicMock()
+    client.table.return_value = _Q(rows)
+    with patch.object(docs, "get_supabase_admin", return_value=client):
+        assert docs.signed_intake_agreement(ORG, "i1")["id"] == "a2"
+    client.table.return_value = _Q(rows[:1])
+    with patch.object(docs, "get_supabase_admin", return_value=client):
+        assert docs.signed_intake_agreement(ORG, "i1") is None
+
+
+def test_activation_moves_the_agreement_onto_the_participant():
+    rows = [{"id": "a1", "status": "active", "start_date": "2026-10-01", "end_date": "2027-09-30",
+             "participant_signed_at": "2026-10-01T00:00:00Z"},
+            {"id": "a2", "status": "draft", "start_date": "2026-10-01", "end_date": None}]
+    client = MagicMock()
+    query = _Q(rows)
+    client.table.return_value = query
+    with patch.object(docs, "get_supabase_admin", return_value=client),          patch.object(docs, "mark_plan_agreement_signed") as mark:
+        assert docs.attach_intake_agreements(ORG, "i1", "p1") == rows
+    assert query.calls[0][0] == "update" and query.calls[0][1][0]["participant_id"] == "p1"
+    # Only the signed one marks the NDIS plan signed.
+    mark.assert_called_once_with(ORG, "p1", "2026-10-01", "2027-09-30", "2026-10-01T00:00:00Z")
+
+
+def test_the_document_names_the_person_on_the_intake_before_activation():
+    client = MagicMock()
+    client.table.return_value = _Q([{"full_name": "Liam Carter", "ndis_number": "430", "web_intake": {"date_of_birth": "2001-02-03"}}])
+    with patch.object(docs, "get_supabase_admin", return_value=client):
+        assert docs.party(ORG, {"participant_id": None, "intake_id": "i1"}) == {
+            "full_name": "Liam Carter", "ndis_number": "430", "date_of_birth": "2001-02-03",
+        }

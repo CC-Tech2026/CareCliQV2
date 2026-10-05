@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
-  Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users, Upload,
+  Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users,
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
   SlidersHorizontal, X, AlertTriangle,
 } from "lucide-react";
@@ -17,15 +17,15 @@ import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/com
 import { SectionInfo } from "@/components/ui/section-info";
 import { MeetGreetCapture } from "@/components/onboarding/MeetGreetCapture";
 import {
-  listParticipantIntakes, createParticipantIntake, updateParticipantIntake, uploadSignedServiceAgreement,
+  listParticipantIntakes, createParticipantIntake, updateParticipantIntake,
   type ParticipantIntake, type IntakeStatus, type EnquirySource, type ServiceCategory, type FundingType,
   type NextOfKinEntry, type WebIntakeForm, type ScreeningManualChecks,
   GENDER_OPTIONS, PRONOUN_OPTIONS,
 } from "@/services/participantIntakeService";
-import { SignatureCanvas, useSignatureCanvasState } from "@/components/shifts/SignatureCanvas";
 import { useBranches } from "@/hooks/useBranches";
 import { ParticipantRecordCards } from "@/components/participants/ParticipantRecordCards";
 import { ParticipantServiceAgreementSection } from "@/components/participants/ParticipantServiceAgreementSection";
+import type { BuilderDefaults } from "@/components/participants/ServiceAgreementBuilder";
 import { GrantResultNotice, PortalAccessCard } from "@/components/participant-portal/PortalAccessCard";
 import {
   IDENTITY_METHOD_OPTIONS,
@@ -1184,6 +1184,14 @@ export default function ParticipantOnboardingBoard() {
       });
   }
 
+  // Signing the onboarding agreement moves the intake to "signed" on the
+  // server, so reload rather than guess.
+  function reloadIntakes() {
+    listParticipantIntakes()
+      .then(setIntakes)
+      .catch((err: Error) => toast({ title: "Couldn't refresh", description: err.message, variant: "destructive" }));
+  }
+
   // Merges into local state only — for results already persisted server-side
   // through their own endpoint (the signed-document upload), so it doesn't
   // also fire a redundant PATCH.
@@ -1214,6 +1222,7 @@ export default function ParticipantOnboardingBoard() {
         onBack={() => navigate("/onboard-participant")}
         onUpdate={(patch) => updateIntake(selected.id, patch)}
         onLocalUpdate={(patch) => applyLocalPatch(selected.id, patch)}
+        onReload={reloadIntakes}
         currentCaseload={currentCaseload}
         totalCapacity={totalCapacity}
       />
@@ -1848,7 +1857,7 @@ function ScreeningChecklist({
 }
 
 function IntakeDetail({
-  intake, onBack, onUpdate, onLocalUpdate, currentCaseload, totalCapacity,
+  intake, onBack, onUpdate, onLocalUpdate, onReload, currentCaseload, totalCapacity,
 }: {
   intake: Intake;
   onBack: () => void;
@@ -1857,6 +1866,8 @@ function IntakeDetail({
    *  persisted server-side through its own endpoint (the document upload),
    *  so it doesn't also fire a redundant PATCH. */
   onLocalUpdate: (patch: Partial<Intake>) => void;
+  /** Reload the board after something changed server-side. */
+  onReload: () => void;
   /** Active caseload vs. total capacity across current support workers — drives the Screening capacity check. */
   currentCaseload: number;
   totalCapacity: number;
@@ -1866,10 +1877,6 @@ function IntakeDetail({
   const [terminateOpen, setTerminateOpen] = useState(false);
   const [terminateReason, setTerminateReason] = useState("");
   const [notes, setNotes] = useState(intake.meet_greet_notes ?? "");
-  const [providerName, setProviderName] = useState(intake.provider_signed_name ?? "");
-  const [familyName, setFamilyName] = useState(intake.family_signed_name ?? "");
-  const providerSignature = useSignatureCanvasState();
-  const familySignature = useSignatureCanvasState();
   const [activating, setActivating] = useState(false);
   // Portal invite sent straight after activation — the participant's own
   // login only. Representatives need recorded authority, so they're invited
@@ -1877,7 +1884,6 @@ function IntakeDetail({
   const [invitePortal, setInvitePortal] = useState(Boolean(intake.email));
   const [portalIdentityMethod, setPortalIdentityMethod] = useState<PortalIdentityMethod>("participant_dob");
   const [portalGrant, setPortalGrant] = useState<GrantResult | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [boardSubtitle, setBoardSubtitle] = useState(intake.board_subtitle ?? "");
 
   // Intake form: read-only by default (showing whatever's saved), only
@@ -1981,45 +1987,7 @@ function IntakeDetail({
 
   function saveMeetGreetAndContinue() {
     onUpdate({ meet_greet_notes: notes.trim(), status: "awaiting_signatures" });
-    toast({ title: "Sent for signature", description: "Service agreement is ready for both signatures." });
-  }
-
-  function saveSignatureDraft() {
-    onUpdate({
-      provider_signed_name: providerName.trim() || undefined,
-      family_signed_name: familyName.trim() || undefined,
-      provider_signature_png: providerSignature.signaturePng || undefined,
-      family_signature_png: familySignature.signaturePng || undefined,
-    });
-    toast({ title: "Draft saved" });
-  }
-
-  async function uploadSignedDocument(file: File) {
-    try {
-      const updated = await uploadSignedServiceAgreement(intake.id, file);
-      onLocalUpdate({
-        service_agreement_document_url: updated.service_agreement_document_url,
-        service_agreement_document_name: updated.service_agreement_document_name,
-      });
-      toast({ title: "Document uploaded", description: file.name });
-    } catch (err) {
-      toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" });
-    }
-  }
-
-  function markSigned() {
-    if (!providerName.trim() || !familyName.trim() || !providerSignature.hasStroke || !familySignature.hasStroke) return;
-    const now = new Date().toISOString();
-    onUpdate({
-      status: "signed",
-      provider_signed_name: providerName.trim(),
-      provider_signed_at: now,
-      provider_signature_png: providerSignature.signaturePng,
-      family_signed_name: familyName.trim(),
-      family_signed_at: now,
-      family_signature_png: familySignature.signaturePng,
-    });
-    toast({ title: "Service agreement" });
+    toast({ title: "Moved to Service Agreement", description: "Build the agreement with its supports and have it signed." });
   }
 
   async function activate() {
@@ -2053,10 +2021,6 @@ function IntakeDetail({
     }
     setActivating(false);
   }
-
-  const signLink = intake.status === "awaiting_signatures"
-    ? `${window.location.origin}/participant-onboarding-sign?intake=${intake.id}`
-    : null;
 
   return (
     <div className="space-y-5 pb-10">
@@ -2247,82 +2211,25 @@ function IntakeDetail({
                     <p className="text-sm font-black" style={{ color: TEXT }}>Service Agreement</p>
                   </div>
                   <div className="p-5 space-y-3">
-                    <div className="rounded-lg p-3 flex items-center justify-between gap-3" style={{ background: SOFT }}>
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="h-8 w-8 rounded-lg shrink-0 flex items-center justify-center" style={{ background: "var(--cc-bg)", color: PLUM }}>
-                          <Upload size={15} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-black" style={{ color: TEXT }}>Signed document</p>
-                          <p className="text-[11px] truncate" style={{ color: MUTED }}>
-                            {intake.service_agreement_document_name || "Generated automatically once both parties sign below — or upload your own instead"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {intake.service_agreement_document_url && (
-                          <a href={intake.service_agreement_document_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline px-1.5" style={{ color: PLUM }}>View</a>
-                        )}
-                        <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={() => fileInputRef.current?.click()}>
-                          <Upload size={13} /> {intake.service_agreement_document_url ? "Replace" : "Upload instead"}
-                        </Button>
-                      </div>
-                    </div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="application/pdf,image/jpeg,image/png"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) uploadSignedDocument(file);
-                        e.target.value = "";
-                      }}
+                    {/* The participant's real service agreement, with the
+                        supports they'll receive. It has to be signed (in
+                        person or by email) before they can be made active;
+                        signing moves this step on by itself. */}
+                    <ParticipantServiceAgreementSection
+                      intakeId={intake.id}
+                      participantName={intake.full_name}
+                      participantEmail={intake.email}
+                      defaults={agreementDefaults(intake)}
+                      onChanged={onReload}
                     />
-
-                    {intake.status === "awaiting_signatures" ? (
-                      <>
-                        <div className="grid sm:grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Provider signatory</label>
-                            <Input value={providerName} onChange={(e) => setProviderName(e.target.value)} placeholder="Your full name" />
-                            <SignatureCanvas minWidth={200} minHeight={90} onChange={providerSignature.onCanvasChange} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Participant / guardian signatory</label>
-                            <Input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Their full name" />
-                            <SignatureCanvas minWidth={200} minHeight={90} onChange={familySignature.onCanvasChange} />
-                          </div>
-                        </div>
-                        {signLink && (
-                          <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: WARNING_BG }}>
-                            <Mail size={14} style={{ color: WARNING }} className="shrink-0" />
-                            <p className="text-xs flex-1" style={{ color: TEXT }}>Consent form and service agreement sent to {intake.email || "the family"}.</p>
-                          </div>
-                        )}
-                        <div className="flex justify-between gap-2">
-                          <Button variant="outline" className="gap-2 rounded-lg" onClick={goBack}>
-                            <ArrowLeft size={14} /> Back
-                          </Button>
-                          <div className="flex gap-2">
-                            <Button variant="outline" className="rounded-lg" onClick={saveSignatureDraft}>
-                              Save Draft
-                            </Button>
-                            <Button
-                              variant="navy"
-                              className="gap-2 rounded-lg"
-                              onClick={markSigned}
-                              disabled={!providerName.trim() || !familyName.trim() || !providerSignature.hasStroke || !familySignature.hasStroke}
-                            >
-                              Next <PenLine size={14} />
-                            </Button>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <SignatureCard label="Provider" signedName={intake.provider_signed_name} signedAt={intake.provider_signed_at} signaturePng={intake.provider_signature_png} pendingLabel="Not yet signed" />
-                        <SignatureCard label="Participant / guardian" signedName={intake.family_signed_name} signedAt={intake.family_signed_at} signaturePng={intake.family_signature_png} pendingLabel="Not yet signed" />
+                    {intake.status === "awaiting_signatures" && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3" style={{ borderColor: BORDER }}>
+                        <Button variant="outline" className="gap-2 rounded-lg" onClick={goBack}>
+                          <ArrowLeft size={14} /> Back
+                        </Button>
+                        <p className="text-xs" style={{ color: MUTED }}>
+                          Once the agreement is signed, {intake.full_name.split(" ")[0]} can be made active.
+                        </p>
                       </div>
                     )}
 
@@ -2927,37 +2834,21 @@ function IntakeFormBlock({
   );
 }
 
-function SignatureCard({
-  label, signedName, signedAt, signaturePng, pendingLabel,
-}: {
-  label: string;
-  signedName?: string | null;
-  signedAt?: string | null;
-  signaturePng?: string | null;
-  pendingLabel: string;
-}) {
-  const signed = !!signedAt;
-  return (
-    <div
-      className="rounded-lg p-3.5 border"
-      style={{ background: signed ? SUCCESS_BG : SOFT, borderColor: signed ? "transparent" : BORDER }}
-    >
-      <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: signed ? SUCCESS : MUTED }}>{label}</p>
-      {signed ? (
-        <div className="mt-1.5">
-          <p className="text-sm font-black flex items-center gap-1.5" style={{ color: TEXT }}>
-            <CheckCircle2 size={14} style={{ color: SUCCESS }} /> {signedName}
-          </p>
-          <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>
-            Signed {new Date(signedAt!).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
-          </p>
-          {signaturePng && (
-            <img src={signaturePng} alt={`${label} signature`} className="mt-2 h-12 rounded border bg-white" style={{ borderColor: BORDER }} />
-          )}
-        </div>
-      ) : (
-        <p className="text-xs mt-1.5 flex items-center gap-1.5" style={{ color: MUTED }}><Clock3 size={13} /> {pendingLabel}</p>
-      )}
-    </div>
-  );
+const FUNDING_TO_PLAN_MANAGEMENT: Record<string, string> = {
+  ndia_managed: "NDIA-managed",
+  plan_managed: "plan-managed",
+  self_managed: "self-managed",
+};
+
+/** Prefills the onboarding agreement from what the intake already holds. */
+function agreementDefaults(intake: Intake): BuilderDefaults {
+  const web: Partial<WebIntakeForm> = intake.web_intake ?? {};
+  return {
+    plan_management_type: web.funding_type ? FUNDING_TO_PLAN_MANAGEMENT[web.funding_type] : null,
+    plan_manager_name: web.plan_manager_org || web.plan_manager_name || null,
+    plan_manager_email: web.plan_manager_email || null,
+    start_date: intake.plan_start_date || null,
+    end_date: intake.plan_end_date || null,
+  };
 }
+

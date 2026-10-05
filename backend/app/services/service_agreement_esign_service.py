@@ -147,7 +147,7 @@ async def send_for_esign(
     }).eq("id", agreement_id).eq("organization_id", org_id).execute()
 
     branding = _branding(org_id)
-    participant = documents._participant(org_id, str(existing["participant_id"]))
+    participant = documents.party(org_id, existing)
     delivery = queue_email_job(
         label=f"agreement-sign:{email}",
         send=lambda: _safe(
@@ -195,7 +195,7 @@ async def cancel_esign(org_id: str, agreement_id: str, user_id: Optional[str]) -
 
 
 _PUBLIC_COLUMNS = (
-    "id, organization_id, participant_id, agreement_number, status, start_date, end_date, "
+    "id, organization_id, participant_id, intake_id, agreement_number, status, start_date, end_date, "
     "plan_management_type, plan_manager_name, includes_price_adjustment_clause, gst_treatment_basis, "
     "cancellation_notice_hours, cancellation_fee_percentage, provider_signed_name, provider_signed_at, "
     "participant_signed_name, participant_signed_at, signer_name, signer_email, signer_relationship, "
@@ -225,7 +225,7 @@ def _by_token(token: str) -> dict[str, Any]:
 
 def _summary(agreement: dict[str, Any]) -> dict[str, Any]:
     org = documents.get_letterhead(agreement["organization_id"])
-    participant = documents._participant(agreement["organization_id"], str(agreement["participant_id"]))
+    participant = documents.party(agreement["organization_id"], agreement)
     ctx = documents.document_context(org, agreement, participant)
     return {
         "agreement_number": agreement.get("agreement_number"),
@@ -254,7 +254,7 @@ def _summary(agreement: dict[str, Any]) -> dict[str, Any]:
 def public_view(token: str) -> dict[str, Any]:
     agreement = _by_token(token)
     branding = _branding(agreement["organization_id"])
-    participant = documents._participant(agreement["organization_id"], str(agreement["participant_id"]))
+    participant = documents.party(agreement["organization_id"], agreement)
     signed = agreement.get("status") != "pending_signature"
     verified = bool(agreement.get("signing_email_verified_at"))
     view = {
@@ -378,12 +378,13 @@ def _notify_organisation(org_id: str, agreement: dict[str, Any], signed_by: str)
     to = (org.get("email") or "").strip()
     if not to:
         return
-    participant = documents._participant(org_id, str(agreement["participant_id"]))
+    participant = documents.party(org_id, agreement)
     number = agreement.get("agreement_number") or "Service agreement"
     subject = f"{number} signed by {signed_by}"
     body = (
         f"{signed_by} has signed service agreement {number} for {participant.get('full_name') or 'a participant'}.\n\n"
-        "The signed copy is on the participant's record in CareCliQ and in the Documents & Audit Vault."
+        "The signed copy is on the participant's record (or their onboarding record, until they're made active) "
+        "in CareCliQ and in the Documents & Audit Vault."
     )
     queue_email_job(label=f"agreement-signed:{to}", send=lambda: _safe(send_email, to_email=to, subject=subject, text_body=body))
 

@@ -89,16 +89,19 @@ async def create_service_agreement(
     return agreement
 
 
-def list_service_agreements(participant_id: str, organization_id: str) -> list[dict[str, Any]]:
+def list_service_agreements(
+    participant_id: Optional[str], organization_id: str, *, intake_id: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    """A participant's agreements, or with intake_id the ones built during
+    that onboarding (before the participant exists)."""
     supabase = get_supabase_admin()
-    result = (
+    query = (
         supabase.table("service_agreements")
         .select("*, service_agreement_supports(*)")
         .eq("organization_id", organization_id)
-        .eq("participant_id", participant_id)
-        .order("start_date", desc=True)
-        .execute()
     )
+    query = query.eq("intake_id", intake_id) if intake_id else query.eq("participant_id", participant_id)
+    result = query.order("start_date", desc=True).execute()
     return result.data or []
 
 
@@ -135,14 +138,17 @@ def _esign_summary(agreement: dict[str, Any]) -> None:
     }
 
 
-def list_service_agreements_for_profile(participant_id: str, organization_id: str) -> list[dict[str, Any]]:
+def list_service_agreements_for_profile(
+    participant_id: Optional[str], organization_id: str, *, intake_id: Optional[str] = None,
+) -> list[dict[str, Any]]:
     """list_service_agreements() plus what the participant profile shows:
     each support line's NDIS item name, unit and standard (platform) rate,
     and — on the most recent agreement — the signed Service Agreement PDF
     from the participant's onboarding record, with who signed it and when.
+    With intake_id, the agreements built during that onboarding instead.
     Enrichment is best-effort: a lookup failure leaves the field None rather
     than failing the whole list."""
-    agreements = list_service_agreements(participant_id, organization_id)
+    agreements = list_service_agreements(participant_id, organization_id, intake_id=intake_id)
     if not agreements:
         return agreements
     supabase = get_supabase_admin()
@@ -181,38 +187,41 @@ def list_service_agreements_for_profile(participant_id: str, organization_id: st
             support["standard_rate"] = item.get("price_national") if item else None
 
     signed_document = None
-    try:
-        from .participant_intake_service import BUCKET as INTAKE_BUCKET
+    # The PDF signed on the onboarding board, for agreements recorded
+    # before onboarding built the agreement itself.
+    if participant_id and not intake_id:
+        try:
+            from .participant_intake_service import BUCKET as INTAKE_BUCKET
 
-        intake = (
-            supabase.table("participant_intakes")
-            .select(
-                "service_agreement_document_path, service_agreement_document_name, provider_signed_name, provider_signed_at, "
-                "family_signed_name, family_signed_at"
+            intake = (
+                supabase.table("participant_intakes")
+                .select(
+                    "service_agreement_document_path, service_agreement_document_name, provider_signed_name, provider_signed_at, "
+                    "family_signed_name, family_signed_at"
+                )
+                .eq("organization_id", organization_id)
+                .eq("participant_id", participant_id)
+                .order("updated_at", desc=True)
+                .limit(1)
+                .execute()
+                .data
+                or []
             )
-            .eq("organization_id", organization_id)
-            .eq("participant_id", participant_id)
-            .order("updated_at", desc=True)
-            .limit(1)
-            .execute()
-            .data
-            or []
-        )
-        if intake and intake[0].get("service_agreement_document_path"):
-            row = intake[0]
-            signed = supabase.storage.from_(INTAKE_BUCKET).create_signed_url(
-                row["service_agreement_document_path"], SIGNED_DOCUMENT_URL_SECONDS
-            )
-            signed_document = {
-                "name": row.get("service_agreement_document_name"),
-                "url": signed.get("signedURL") or signed.get("signed_url"),
-                "provider_signed_name": row.get("provider_signed_name"),
-                "provider_signed_at": row.get("provider_signed_at"),
-                "family_signed_name": row.get("family_signed_name"),
-                "family_signed_at": row.get("family_signed_at"),
-            }
-    except Exception:
-        logger.warning("Signed agreement lookup failed for participant %s", participant_id, exc_info=True)
+            if intake and intake[0].get("service_agreement_document_path"):
+                row = intake[0]
+                signed = supabase.storage.from_(INTAKE_BUCKET).create_signed_url(
+                    row["service_agreement_document_path"], SIGNED_DOCUMENT_URL_SECONDS
+                )
+                signed_document = {
+                    "name": row.get("service_agreement_document_name"),
+                    "url": signed.get("signedURL") or signed.get("signed_url"),
+                    "provider_signed_name": row.get("provider_signed_name"),
+                    "provider_signed_at": row.get("provider_signed_at"),
+                    "family_signed_name": row.get("family_signed_name"),
+                    "family_signed_at": row.get("family_signed_at"),
+                }
+        except Exception:
+            logger.warning("Signed agreement lookup failed for participant %s", participant_id, exc_info=True)
 
     from .service_agreement_document_service import effective_status
 

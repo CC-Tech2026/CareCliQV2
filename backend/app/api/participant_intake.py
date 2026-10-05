@@ -15,7 +15,7 @@ from typing import Any, Literal, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
-from ..core.access import is_managing_director
+from ..core.access import get_user_organization_id, has_org_wide_access, is_managing_director
 from ..core.security import get_current_user
 from ..services import participant_intake_service as svc
 from ..services.organization_branding_service import get_branding
@@ -156,7 +156,15 @@ async def list_intakes(current_user: dict = Depends(get_current_user)):
 
 @router.post("", status_code=201)
 async def create_intake(body: IntakeCreateBody, current_user: dict = Depends(get_current_user)):
-    org_id = _require_md(current_user)
+    """A new enquiry on the onboarding board. New participants join only
+    through onboarding, so support coordinators can add one too; the
+    managing director takes it from there."""
+    if is_managing_director(current_user):
+        org_id = _require_md(current_user)
+    elif has_org_wide_access(current_user) and get_user_organization_id(current_user):
+        org_id = get_user_organization_id(current_user)
+    else:
+        raise HTTPException(status_code=403, detail="Support coordinator or managing director access required.")
     return svc.create_intake(
         organization_id=org_id,
         created_by=current_user.get("sub") or current_user.get("id"),
@@ -187,16 +195,3 @@ async def upload_meet_greet_recording(
     org_id = _require_md(current_user)
     raw = await file.read()
     return svc.upload_meet_greet_recording(intake_id, org_id, session_id, raw, file.content_type or "")
-
-
-@router.post("/{intake_id}/signed-document", status_code=201)
-async def upload_signed_document(
-    intake_id: str,
-    file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user),
-):
-    org_id = _require_md(current_user)
-    raw = await file.read()
-    return await svc.upload_signed_document(
-        intake_id, org_id, file.filename or "service-agreement", raw, file.content_type or "",
-    )

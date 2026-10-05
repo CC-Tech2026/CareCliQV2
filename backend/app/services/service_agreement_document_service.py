@@ -6,9 +6,11 @@ date reads as expired. Signing stores the signed PDF and marks the
 participant's NDIS plan agreement as signed, so the compliance centre, the
 vault and audit readiness all agree.
 
-Agreements signed during onboarding are recorded here too (from_intake), so
-a participant who signed on the onboarding board has an agreement on their
-record rather than just a PDF on the intake.
+During participant onboarding the agreement is built and signed against the
+intake, before the participant exists (participant_id empty, intake_id
+set). Onboarding can't make the participant active until it's signed with
+at least one support; activation then moves it onto the new participant
+(attach_intake_agreements).
 """
 
 from __future__ import annotations
@@ -237,13 +239,25 @@ def _replace_lines(agreement_id: str, lines: list[dict[str, Any]]) -> None:
     ).execute()
 
 
-async def create_draft(participant_id: str, org_id: str, user_id: Optional[str], data: dict[str, Any]) -> dict[str, Any]:
+async def create_draft(
+    participant_id: Optional[str],
+    org_id: str,
+    user_id: Optional[str],
+    data: dict[str, Any],
+    *,
+    intake_id: Optional[str] = None,
+) -> dict[str, Any]:
+    """A draft for a participant, or for an onboarding intake (participant_id
+    None) before the participant exists."""
+    if not participant_id and not intake_id:
+        raise ValueError("An agreement needs a participant or an onboarding intake.")
     fields = _agreement_fields(data)
     lines = await _priced_lines(org_id, fields["start_date"], data.get("supports") or [])
     agreement = _insert_with_number({
         **fields,
         "organization_id": org_id,
         "participant_id": participant_id,
+        "intake_id": intake_id,
         "status": "draft",
         "created_by": user_id,
     }, org_id)
@@ -252,7 +266,7 @@ async def create_draft(participant_id: str, org_id: str, user_id: Optional[str],
         action_type="service_agreement.drafted", entity_type="service_agreement", entity_id=agreement["id"],
         user_id=user_id, organization_id=org_id,
         after_state={"agreement_number": agreement.get("agreement_number"), "participant_id": participant_id,
-                     "total": round(sum(line["total_funding"] for line in lines), 2)},
+                     "intake_id": intake_id, "total": round(sum(line["total_funding"] for line in lines), 2)},
     )
     return get_agreement(org_id, agreement["id"])
 
@@ -365,7 +379,10 @@ async def finalise_signature(
         "updated_at": now,
         **(extra or {}),
     }).eq("id", agreement_id).eq("organization_id", org_id).execute()
-    mark_plan_agreement_signed(org_id, str(existing["participant_id"]), str(existing["start_date"]), existing.get("end_date"), participant["at"])
+    if existing.get("participant_id"):
+        mark_plan_agreement_signed(org_id, str(existing["participant_id"]), str(existing["start_date"]), existing.get("end_date"), participant["at"])
+    elif existing.get("intake_id"):
+        _intake_signed(org_id, str(existing["intake_id"]), provider, participant)
     await audit_service.log_action(
         action_type="service_agreement.signed", entity_type="service_agreement", entity_id=agreement_id,
         user_id=user_id, organization_id=org_id,
@@ -407,65 +424,59 @@ async def sign(
     return get_agreement(org_id, agreement_id)
 
 
-# ── Onboarding hand-over ────────────────────────────────────────────────
+# ── Onboarding ───────────────────────────────────────────────────────────
+
+# Signing the intake's agreement moves the intake on to "Ready to activate".
+_PRE_SIGNED_INTAKE_STATUSES = ("meet_greet", "awaiting_signatures")
 
 
-def from_intake(intake: dict[str, Any], participant_id: str) -> Optional[dict[str, Any]]:
-    """Record the agreement signed on the onboarding board against the new
-    participant. Idempotent per intake. Never blocks activation."""
-    if not intake.get("provider_signed_at") and not intake.get("family_signed_at"):
-        return None
-    org_id = intake["organization_id"]
-    supabase = get_supabase_admin()
+def _intake_signed(org_id: str, intake_id: str, provider: dict[str, Any], participant: dict[str, Any]) -> None:
+    """An onboarding agreement was signed, in person or by email link: the
+    intake is ready to activate, and keeps who signed it."""
     try:
-        existing = (
-            supabase.table("service_agreements").select("id").eq("intake_id", intake["id"]).limit(1).execute()
-        ).data or []
-        if existing:
-            return existing[0]
-        web = intake.get("web_intake") or {}
-        # The active agreement's plan management type drives invoice routing
-        # (billing_period_service), so never guess it: use what the intake or
-        # the participant record says, or record nothing.
-        plan_management = FUNDING_TYPE_TO_PLAN_MANAGEMENT.get(web.get("funding_type"))
-        if not plan_management:
-            row = (
-                supabase.table("participants").select("plan_management_type")
-                .eq("id", participant_id).limit(1).execute()
-            ).data or []
-            recorded = (row[0] if row else {}).get("plan_management_type")
-            plan_management = recorded if recorded in VALID_PLAN_MANAGEMENT_TYPES else None
-        if not plan_management:
-            logger.info("Intake %s has no plan management type; not recording its agreement", intake.get("id"))
-            return None
-        start = intake.get("plan_start_date") or app_today().isoformat()
-        created = _insert_with_number({
-            "organization_id": org_id,
-            "participant_id": participant_id,
-            "intake_id": intake["id"],
-            "plan_management_type": plan_management,
-            "plan_manager_name": web.get("plan_manager_org") or web.get("plan_manager_name"),
-            "plan_manager_email": web.get("plan_manager_email"),
-            "start_date": start,
-            "end_date": intake.get("plan_end_date"),
-            "status": "active",
-            "signed_by": intake.get("family_signed_name"),
-            "signed_date": str(intake.get("family_signed_at") or "")[:10] or None,
-            "provider_signed_name": intake.get("provider_signed_name"),
-            "provider_signed_at": intake.get("provider_signed_at"),
-            "provider_signature_png": intake.get("provider_signature_png"),
-            "participant_signed_name": intake.get("family_signed_name"),
-            "participant_signed_at": intake.get("family_signed_at"),
-            "participant_signature_png": intake.get("family_signature_png"),
-            "document_bucket": "participant-intake-files" if intake.get("service_agreement_document_path") else None,
-            "document_path": intake.get("service_agreement_document_path"),
-        }, org_id)
-        if intake.get("family_signed_at"):
-            mark_plan_agreement_signed(org_id, participant_id, start, intake.get("plan_end_date"), intake["family_signed_at"])
-        return created
+        (
+            get_supabase_admin().table("participant_intakes").update({
+                "status": "signed",
+                "provider_signed_name": provider["name"], "provider_signed_at": provider["at"],
+                "family_signed_name": participant["name"], "family_signed_at": participant["at"],
+                "updated_at": _now(),
+            })
+            .eq("id", intake_id).eq("organization_id", org_id)
+            .in_("status", list(_PRE_SIGNED_INTAKE_STATUSES))
+            .execute()
+        )
     except Exception as exc:
-        logger.warning("Couldn't record the onboarding service agreement for intake %s: %s", intake.get("id"), exc)
-        return None
+        logger.warning("Couldn't move intake %s on after its agreement was signed: %s", intake_id, exc)
+
+
+def signed_intake_agreement(org_id: str, intake_id: str) -> Optional[dict[str, Any]]:
+    """The intake's signed agreement with at least one support, or None.
+    Onboarding can't make the participant active without one."""
+    rows = (
+        get_supabase_admin().table("service_agreements")
+        .select("id, agreement_number, status, start_date, end_date, service_agreement_supports(id)")
+        .eq("organization_id", org_id).eq("intake_id", intake_id).eq("status", "active")
+        .order("start_date", desc=True).execute()
+    ).data or []
+    return next((r for r in rows if r.get("service_agreement_supports")), None)
+
+
+def attach_intake_agreements(org_id: str, intake_id: str, participant_id: str) -> list[dict[str, Any]]:
+    """Activation: the agreements built during onboarding become the new
+    participant's, and the signed one marks their NDIS plan signed."""
+    rows = (
+        get_supabase_admin().table("service_agreements")
+        .update({"participant_id": participant_id, "updated_at": _now()})
+        .eq("organization_id", org_id).eq("intake_id", intake_id).is_("participant_id", "null")
+        .execute()
+    ).data or []
+    for row in rows:
+        if row.get("status") == "active":
+            mark_plan_agreement_signed(
+                org_id, participant_id, str(row["start_date"]), row.get("end_date"),
+                row.get("participant_signed_at") or _now(),
+            )
+    return rows
 
 
 # ── Rendering ────────────────────────────────────────────────────────────
@@ -477,6 +488,25 @@ def _participant(org_id: str, participant_id: str) -> dict[str, Any]:
         .eq("organization_id", org_id).eq("id", participant_id).limit(1).execute()
     ).data or []
     return rows[0] if rows else {"full_name": "Participant"}
+
+
+def party(org_id: str, agreement: dict[str, Any]) -> dict[str, Any]:
+    """Who the agreement is with: the participant, or during onboarding the
+    person on the intake (their participant record doesn't exist yet)."""
+    if agreement.get("participant_id"):
+        return _participant(org_id, str(agreement["participant_id"]))
+    if agreement.get("intake_id"):
+        rows = (
+            get_supabase_admin().table("participant_intakes").select("full_name, ndis_number, web_intake")
+            .eq("organization_id", org_id).eq("id", str(agreement["intake_id"])).limit(1).execute()
+        ).data or []
+        if rows:
+            return {
+                "full_name": rows[0].get("full_name"),
+                "ndis_number": rows[0].get("ndis_number"),
+                "date_of_birth": (rows[0].get("web_intake") or {}).get("date_of_birth"),
+            }
+    return {"full_name": "Participant"}
 
 
 def document_context(org: dict[str, Any], agreement: dict[str, Any], participant: dict[str, Any]) -> dict[str, Any]:
@@ -516,7 +546,7 @@ def render_agreement_html(org_id: str, agreement: dict[str, Any]) -> str:
     from jinja2 import Environment, FileSystemLoader, select_autoescape
 
     env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=select_autoescape(["html"]))
-    context = document_context(get_letterhead(org_id), agreement, _participant(org_id, str(agreement["participant_id"])))
+    context = document_context(get_letterhead(org_id), agreement, party(org_id, agreement))
     return env.get_template("service_agreement.html").render(**context)
 
 

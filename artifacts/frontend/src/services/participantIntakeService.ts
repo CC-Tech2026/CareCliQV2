@@ -148,15 +148,6 @@ export function updateParticipantIntake(intakeId: string, patch: Partial<Partici
   });
 }
 
-export function uploadSignedServiceAgreement(intakeId: string, file: File) {
-  const formData = new FormData();
-  formData.append("file", file);
-  return jsonFetch<ParticipantIntake>(`/api/participant-intakes/${encodeURIComponent(intakeId)}/signed-document`, {
-    method: "POST",
-    body: formData,
-  });
-}
-
 /** Stores the Meet & Greet audio against the intake's consented recording session. */
 export function uploadMeetGreetRecording(intakeId: string, sessionId: string, audio: Blob) {
   const formData = new FormData();

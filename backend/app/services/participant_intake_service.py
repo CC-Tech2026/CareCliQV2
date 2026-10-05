@@ -13,7 +13,6 @@ since it's also written by the post-activation profile-edit form.
 from __future__ import annotations
 
 import logging
-import pathlib
 from datetime import date, datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -23,8 +22,6 @@ from fastapi import HTTPException
 from ..core.errors import internal_error_detail
 from ..schemas.participant import ParticipantCreate
 from . import participant_service
-from .html_pdf_render import HtmlPdfRenderError, render_html_to_pdf
-from .organization_branding_service import get_letterhead
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -38,13 +35,7 @@ RECORDING_TYPES = {
 }
 MAX_RECORDING_BYTES = 25 * 1024 * 1024
 RECORDING_URL_EXPIRY_SECONDS = 60 * 60
-_TEMPLATES_DIR = pathlib.Path(__file__).parent.parent / "templates"
 
-SERVICE_CATEGORY_LABELS = {"aged_care": "Aged Care", "disability": "Disability"}
-FUNDING_TYPE_LABELS = {"ndia_managed": "NDIA-managed", "plan_managed": "Plan-managed", "self_managed": "Self-managed"}
-SIGNING_REQUIRED_FIELDS = (
-    "provider_signed_name", "family_signed_name", "provider_signature_png", "family_signature_png",
-)
 
 STATUSES = (
     "enquiry", "screening", "declined", "withdrawn", "meet_greet",
@@ -57,22 +48,16 @@ REASON_FIELD_FOR_STATUS = {
     "inactive": "suspended_reason",
 }
 
-ALLOWED_FILE_TYPES = {
-    "application/pdf": ".pdf",
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-}
-MAX_FILE_BYTES = 20 * 1024 * 1024
 SIGNED_URL_EXPIRY_SECONDS = 7 * 24 * 60 * 60
 
 _PATCHABLE_FIELDS = {
     "full_name", "service_category", "service_hours_required", "ndis_number", "email", "phone",
     "source", "status", "decline_reason", "withdrawn_reason", "board_subtitle", "screening_checks",
     "meet_greet_notes", "plan_start_date", "plan_end_date", "total_budget",
-    "provider_signed_name", "provider_signed_at", "family_signed_name", "family_signed_at",
-    "provider_signature_png", "family_signature_png",
     "suspended_reason", "web_intake",
 }
+# Who signed is recorded by signing the service agreement itself
+# (service_agreement_document_service._intake_signed), never typed in here.
 
 
 def _now() -> str:
@@ -244,11 +229,27 @@ async def _activate_side_effects(existing: dict[str, Any], merged: dict[str, Any
     if not participant:
         raise HTTPException(status_code=502, detail="Could not create the participant record.")
     _attach_meeting_sessions(existing["id"], existing["organization_id"], participant["id"])
-    # The agreement signed on the onboarding board becomes the participant's
-    # service agreement of record (not just a PDF left on the intake).
-    from .service_agreement_document_service import from_intake
-    from_intake({**merged, "id": existing["id"], "organization_id": existing["organization_id"]}, participant["id"])
+    # The agreement built and signed during onboarding becomes the
+    # participant's service agreement of record, supports and all.
+    from .service_agreement_document_service import attach_intake_agreements
+    attach_intake_agreements(existing["organization_id"], existing["id"], participant["id"])
     return {"participant_id": participant["id"], "activated_at": _now()}
+
+
+def _require_signed_agreement(intake: dict[str, Any]) -> None:
+    """A participant can't be made active, or the intake marked signed,
+    until their service agreement is signed with at least one support."""
+    from .service_agreement_document_service import signed_intake_agreement
+
+    if not signed_intake_agreement(intake["organization_id"], intake["id"]):
+        first = (intake.get("full_name") or "this participant").split(" ")[0]
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Build {first}'s service agreement with the supports they'll receive, and have it signed, "
+                "before making them active."
+            ),
+        )
 
 
 def _attach_meeting_sessions(intake_id: str, organization_id: str, participant_id: str) -> None:
@@ -266,94 +267,6 @@ def _attach_meeting_sessions(intake_id: str, organization_id: str, participant_i
         )
     except Exception as exc:  # never block activation on this
         logger.warning("Could not attach Meet & Greet sessions for intake %s: %s", intake_id, exc)
-
-
-def _format_display_date(value: str | None) -> str | None:
-    """Renders an ISO date (no time component) as "23 Sep 2026" for display
-    on the generated PDF."""
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime("%d %b %Y")
-    except ValueError:
-        return value
-
-
-def _format_display_datetime(value: str | None, tz) -> str | None:
-    """Renders an ISO timestamp in the org's own timezone as
-    "23 Sep 2026, 2:43 pm" — the raw UTC ISO string (with milliseconds and
-    a +00:00 offset) isn't something a participant should have to read on a
-    signed document, and showing it in UTC would be the wrong clock anyway
-    for an org outside that timezone."""
-    if not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if tz is not None:
-            dt = dt.astimezone(tz)
-        return dt.strftime("%d %b %Y, %-I:%M %p")
-    except ValueError:
-        return value
-
-
-def _render_service_agreement_pdf(intake: dict[str, Any]) -> tuple[str, bytes]:
-    from jinja2 import Environment, FileSystemLoader, select_autoescape
-
-    from ..core.timezone import head_office_timezone
-
-    org = get_letterhead(intake["organization_id"])
-    tz = head_office_timezone(intake["organization_id"])
-    web_intake = intake.get("web_intake") or {}
-    context = {
-        "org": org,
-        "intake": {
-            **intake,
-            "date_of_birth": _format_display_date(web_intake.get("date_of_birth")),
-            "plan_start_date": _format_display_date(intake.get("plan_start_date")),
-            "plan_end_date": _format_display_date(intake.get("plan_end_date")),
-            "provider_signed_at": _format_display_datetime(intake.get("provider_signed_at"), tz),
-            "family_signed_at": _format_display_datetime(intake.get("family_signed_at"), tz),
-            "service_category_label": SERVICE_CATEGORY_LABELS.get(intake.get("service_category"), "—"),
-            "funding_type_label": FUNDING_TYPE_LABELS.get(web_intake.get("funding_type")),
-        },
-        "provider_signature_png": intake.get("provider_signature_png"),
-        "family_signature_png": intake.get("family_signature_png"),
-        "generated_date": datetime.now(timezone.utc).strftime("%d %b %Y"),
-    }
-    env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=select_autoescape(["html"]))
-    template = env.get_template("participant_service_agreement.html")
-    html_str = template.render(**context)
-    pdf_bytes = render_html_to_pdf(html_str, base_url=str(_TEMPLATES_DIR))
-
-    safe_name = "".join(c for c in intake["full_name"] if c.isalnum() or c in " -_").strip().replace(" ", "_")
-    filename = f"service-agreement-{safe_name or intake['id']}.pdf"
-    return filename, pdf_bytes
-
-
-def _generate_and_store_service_agreement(intake: dict[str, Any]) -> dict[str, Any]:
-    """Called when a PATCH moves status to "signed" — bakes both typed names
-    and drawn signatures into an actual agreement PDF, so an MD no longer has
-    to print/sign/scan a paper copy. Overwrites any manually-uploaded document,
-    since the e-signature captured here is now the authoritative record."""
-    try:
-        filename, pdf_bytes = _render_service_agreement_pdf(intake)
-    except HtmlPdfRenderError as exc:
-        raise HTTPException(status_code=502, detail=internal_error_detail("Could not generate the service agreement", exc))
-
-    supabase = get_supabase_admin()
-    path = f"{intake['organization_id']}/{intake['id']}/{uuid4().hex}.pdf"
-    try:
-        supabase.storage.from_(BUCKET).upload(path, pdf_bytes, {"content-type": "application/pdf", "upsert": "true"})
-        signed = supabase.storage.from_(BUCKET).create_signed_url(path, SIGNED_URL_EXPIRY_SECONDS)
-        url = signed.get("signedURL") or signed.get("signed_url")
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=internal_error_detail("Participant intake storage is not configured", exc))
-
-    return {
-        "service_agreement_document_path": path,
-        "service_agreement_document_url": url,
-        "service_agreement_document_name": filename,
-    }
 
 
 async def update_intake(
@@ -383,18 +296,17 @@ async def update_intake(
     reason_field = REASON_FIELD_FOR_STATUS.get(new_status) if new_status else None
     if reason_field and not (merged.get(reason_field) or "").strip():
         raise HTTPException(status_code=422, detail=f"{reason_field.replace('_', ' ').capitalize()} is required.")
-    if new_status == "signed":
-        missing = [f for f in SIGNING_REQUIRED_FIELDS if not (merged.get(f) or "").strip()]
-        if missing:
-            raise HTTPException(status_code=422, detail=f"Missing before signing: {', '.join(missing)}.")
+    # Signing the agreement moves the intake to "signed" by itself; either
+    # way, neither step happens without a signed agreement with supports.
+    # Reactivating a suspended participant doesn't need a new one.
+    if new_status == "signed" or (new_status == "active" and not existing.get("participant_id")):
+        _require_signed_agreement(existing)
 
     update: dict[str, Any] = dict(patch)
     if new_status == "active":
         update.update(await _activate_side_effects(existing, merged, current_user))
     elif new_status == "inactive":
         update["suspended_at"] = _now()
-    elif new_status == "signed":
-        update.update(_generate_and_store_service_agreement(merged))
 
     update["updated_at"] = _now()
     resp = (
@@ -464,45 +376,3 @@ def upload_meet_greet_recording(
         .execute()
     )
     return _with_fresh_document_url((result.data or [{}])[0])
-
-
-async def upload_signed_document(
-    intake_id: str,
-    organization_id: str,
-    filename: str,
-    file_bytes: bytes,
-    content_type: str,
-) -> dict[str, Any]:
-    get_intake(intake_id, organization_id)
-    if content_type not in ALLOWED_FILE_TYPES:
-        raise HTTPException(status_code=422, detail="Document file must be PDF or image (JPEG/PNG).")
-    if len(file_bytes) > MAX_FILE_BYTES:
-        raise HTTPException(status_code=413, detail="Document file must be 20MB or smaller.")
-
-    supabase = get_supabase_admin()
-    ext = ALLOWED_FILE_TYPES[content_type]
-    path = f"{organization_id}/{intake_id}/{uuid4().hex}{ext}"
-    try:
-        supabase.storage.from_(BUCKET).upload(path, file_bytes, {"content-type": content_type, "upsert": "true"})
-        signed = supabase.storage.from_(BUCKET).create_signed_url(path, SIGNED_URL_EXPIRY_SECONDS)
-        url = signed.get("signedURL") or signed.get("signed_url")
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=internal_error_detail("Participant intake storage is not configured", exc))
-
-    result = (
-        supabase.table(TABLE)
-        .update({
-            "service_agreement_document_path": path,
-            "service_agreement_document_url": url,
-            "service_agreement_document_name": filename,
-            "updated_at": _now(),
-        })
-        .eq("id", intake_id)
-        .eq("organization_id", organization_id)
-        .execute()
-    )
-    return result.data[0] if result.data else {
-        "service_agreement_document_path": path,
-        "service_agreement_document_url": url,
-        "service_agreement_document_name": filename,
-    }

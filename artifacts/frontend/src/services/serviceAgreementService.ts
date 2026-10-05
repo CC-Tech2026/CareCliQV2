@@ -27,11 +27,22 @@ export type AgreementDraftInput = {
   supports: AgreementLineInput[];
 };
 
-export function createAgreementDraft(participantId: string, draft: AgreementDraftInput) {
-  return jsonFetch<{ id: string }>(
-    `/api/participants/${encodeURIComponent(participantId)}/service-agreements/drafts`,
-    { method: "POST", body: JSON.stringify(draft) },
-  );
+/** Who an agreement is with: a participant, or during onboarding their
+ *  intake (the participant record doesn't exist until activation, which
+ *  moves the agreement onto it). */
+export type AgreementOwner = { kind: "participant"; id: string } | { kind: "intake"; id: string };
+
+export function agreementsPath(owner: AgreementOwner) {
+  return owner.kind === "intake"
+    ? `/api/participant-intakes/${encodeURIComponent(owner.id)}/service-agreements`
+    : `/api/participants/${encodeURIComponent(owner.id)}/service-agreements`;
+}
+
+export function createAgreementDraft(owner: AgreementOwner, draft: AgreementDraftInput) {
+  return jsonFetch<{ id: string }>(`${agreementsPath(owner)}/drafts`, {
+    method: "POST",
+    body: JSON.stringify(draft),
+  });
 }
 
 export function updateAgreementDraft(agreementId: string, draft: AgreementDraftInput) {

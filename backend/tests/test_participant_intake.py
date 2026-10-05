@@ -10,6 +10,8 @@ from backend.app.services import participant_intake_service as svc
 
 MD_USER = {"id": "u-md", "sub": "u-md", "organization_id": "org-1", "role": "managing_director"}
 COORDINATOR_USER = {"id": "u-c", "sub": "u-c", "organization_id": "org-1", "role": "support_coordinator"}
+DOCS = "backend.app.services.service_agreement_document_service"
+SIGNED = {"id": "sa-1", "status": "active", "service_agreement_supports": [{"id": "line-1"}]}
 
 
 # ── Router-level access gating ────────────────────────────────────────────
@@ -125,7 +127,7 @@ async def test_activate_requires_date_of_birth():
         "id": "i-1", "organization_id": "org-1", "status": "signed", "full_name": "Sam",
         "ndis_number": "123", "web_intake": {},
     }
-    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing):
+    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing),          patch(f"{DOCS}.signed_intake_agreement", return_value=SIGNED):
         with pytest.raises(HTTPException) as exc:
             await svc.update_intake("i-1", "org-1", {"status": "active"}, MD_USER)
     assert exc.value.status_code == 422
@@ -146,9 +148,11 @@ async def test_activate_creates_the_real_participant_record_and_links_it():
 
     with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing), \
          patch("backend.app.services.participant_intake_service.get_supabase_admin", return_value=supabase), \
-         patch("backend.app.services.participant_service.create_participant", new=AsyncMock(return_value={"id": "p-new"})) as create_participant:
+         patch("backend.app.services.participant_service.create_participant", new=AsyncMock(return_value={"id": "p-new"})) as create_participant,          patch(f"{DOCS}.signed_intake_agreement", return_value=SIGNED),          patch(f"{DOCS}.attach_intake_agreements", return_value=[SIGNED]) as attach:
         result = await svc.update_intake("i-1", "org-1", {"status": "active"}, MD_USER)
 
+    # The agreement signed during onboarding becomes the participant's.
+    attach.assert_called_once_with("org-1", "i-1", "p-new")
     create_participant.assert_awaited_once()
     create_body = create_participant.await_args.args[0]
     assert create_body.full_name == "Sam Rivera"
@@ -166,43 +170,46 @@ async def test_sign_requires_awaiting_signatures_status():
 
 
 @pytest.mark.asyncio
-async def test_sign_requires_both_names_and_both_signatures():
-    existing = {"id": "i-1", "organization_id": "org-1", "status": "awaiting_signatures", "full_name": "Sam"}
-    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing):
+async def test_no_one_is_made_active_without_a_signed_agreement_with_supports():
+    existing = {
+        "id": "i-1", "organization_id": "org-1", "status": "signed", "full_name": "Sam Rivera",
+        "web_intake": {"date_of_birth": "1990-01-01"},
+    }
+    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing),          patch(f"{DOCS}.signed_intake_agreement", return_value=None),          patch("backend.app.services.participant_service.create_participant", new=AsyncMock()) as create_participant:
         with pytest.raises(HTTPException) as exc:
-            await svc.update_intake("i-1", "org-1", {
-                "status": "signed", "provider_signed_name": "Alex Director",
-            }, MD_USER)
-    assert exc.value.status_code == 422
+            await svc.update_intake("i-1", "org-1", {"status": "active"}, MD_USER)
+    assert exc.value.status_code == 409
+    assert "Build Sam's service agreement" in exc.value.detail
+    create_participant.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_sign_generates_and_stores_the_service_agreement_pdf():
-    existing = {
-        "id": "i-1", "organization_id": "org-1", "status": "awaiting_signatures", "full_name": "Sam Rivera",
-        "ndis_number": "1", "web_intake": {},
-    }
-    patch_body = {
-        "status": "signed",
-        "provider_signed_name": "Alex Director", "provider_signed_at": "2026-09-23T00:00:00Z",
-        "family_signed_name": "Sam Rivera", "family_signed_at": "2026-09-23T00:00:00Z",
-        "provider_signature_png": "data:image/png;base64,AAA", "family_signature_png": "data:image/png;base64,BBB",
-    }
-    updated_row = {**existing, **patch_body, "service_agreement_document_url": "https://example.com/agreement.pdf"}
+async def test_the_signed_step_needs_the_agreement_signed_first():
+    existing = {"id": "i-1", "organization_id": "org-1", "status": "awaiting_signatures", "full_name": "Sam"}
     table = MagicMock()
-    table.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[updated_row])
+    table.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[{**existing, "status": "signed"}])
     supabase = MagicMock()
     supabase.table.return_value = table
+    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing),          patch(f"{DOCS}.signed_intake_agreement", return_value=None):
+        with pytest.raises(HTTPException) as exc:
+            await svc.update_intake("i-1", "org-1", {"status": "signed"}, MD_USER)
+    assert exc.value.status_code == 409
+    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing),          patch("backend.app.services.participant_intake_service.get_supabase_admin", return_value=supabase),          patch(f"{DOCS}.signed_intake_agreement", return_value=SIGNED):
+        result = await svc.update_intake("i-1", "org-1", {"status": "signed"}, MD_USER)
+    assert result["status"] == "signed"
 
-    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing), \
-         patch("backend.app.services.participant_intake_service.get_supabase_admin", return_value=supabase), \
-         patch("backend.app.services.participant_intake_service._render_service_agreement_pdf", return_value=("agreement.pdf", b"%PDF-fake")) as render_mock:
-        result = await svc.update_intake("i-1", "org-1", patch_body, MD_USER)
 
-    render_mock.assert_called_once()
-    assert result["service_agreement_document_url"] == "https://example.com/agreement.pdf"
-    stored_update = table.update.call_args.args[0]
-    assert stored_update["service_agreement_document_name"] == "agreement.pdf"
+@pytest.mark.asyncio
+async def test_coordinators_can_add_an_enquiry_but_not_run_onboarding():
+    with patch("backend.app.api.participant_intake.svc.create_intake", return_value={"id": "i-9"}) as create:
+        await participant_intake.create_intake(participant_intake.IntakeCreateBody(full_name="Ava Lee"), current_user=COORDINATOR_USER)
+    assert create.call_args.kwargs["organization_id"] == "org-1"
+    with pytest.raises(HTTPException) as exc:
+        await participant_intake.create_intake(
+            participant_intake.IntakeCreateBody(full_name="Ava Lee"),
+            current_user={"id": "u-w", "organization_id": "org-1", "role": "support_worker"},
+        )
+    assert exc.value.status_code == 403
 
 
 @pytest.mark.asyncio

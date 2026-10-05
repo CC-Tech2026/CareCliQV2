@@ -8,9 +8,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
-from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
+from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access, is_managing_director
 from ..core.security import get_current_user
-from ..services import participant_service, service_agreement_service
+from ..services import participant_intake_service, participant_service, service_agreement_service
 from ..services import service_agreement_document_service as documents
 from ..services import service_agreement_esign_service as esign
 
@@ -148,13 +148,43 @@ def _clean(agreement: dict) -> dict:
     return agreement
 
 
+def _require_intake(intake_id: str, current_user: dict) -> str:
+    """Onboarding is the managing director's: only they manage an
+    agreement that still belongs to an intake."""
+    if not is_managing_director(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing Director access required.")
+    org_id = _org_access(current_user)
+    participant_intake_service.get_intake(intake_id, org_id)  # 404 when not this org's
+    return org_id
+
+
 async def _agreement_access(agreement_id: str, current_user: dict) -> str:
     """Org match plus access to the agreement's participant (a coordinator
-    only sees their own participants)."""
+    only sees their own participants), or for an agreement still on an
+    onboarding intake, the managing director."""
     org_id = _org_access(current_user)
     agreement = documents.get_agreement(org_id, agreement_id)
-    await _require_coordinator_participant(str(agreement["participant_id"]), current_user)
+    if agreement.get("participant_id"):
+        await _require_coordinator_participant(str(agreement["participant_id"]), current_user)
+    else:
+        _require_intake(str(agreement["intake_id"]), current_user)
     return org_id
+
+
+@router.get("/participant-intakes/{intake_id}/service-agreements")
+async def list_intake_service_agreements(intake_id: str, current_user: dict = Depends(get_current_user)):
+    """The agreements built during this onboarding, before the participant
+    exists. Activation moves them onto the participant."""
+    org_id = _require_intake(intake_id, current_user)
+    return service_agreement_service.list_service_agreements_for_profile(None, org_id, intake_id=intake_id)
+
+
+@router.post("/participant-intakes/{intake_id}/service-agreements/drafts", status_code=201)
+async def create_intake_agreement_draft(intake_id: str, body: AgreementDraft, current_user: dict = Depends(get_current_user)):
+    org_id = _require_intake(intake_id, current_user)
+    return _clean(await documents.create_draft(
+        None, org_id, get_user_id(current_user), body.model_dump(mode="json"), intake_id=intake_id,
+    ))
 
 
 @router.post("/participants/{participant_id}/service-agreements/drafts", status_code=201)

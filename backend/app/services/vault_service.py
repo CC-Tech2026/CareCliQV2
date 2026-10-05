@@ -1110,6 +1110,8 @@ def _list_participant_agreements(org_id: str, patients: dict[str, str]) -> list[
             .select("id, participant_id, agreement_number, status, start_date, end_date, signed_date, sent_at, created_at")
             .eq("organization_id", org_id)
             .neq("status", "draft")
+            # Still on an onboarding intake: listed once the participant is active.
+            .not_.is_("participant_id", "null")
             .limit(500)
             .execute()
         ).data or []

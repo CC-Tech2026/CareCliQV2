@@ -2,7 +2,9 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useCreateParticipant, type CreateParticipantBody } from "@workspace/api-client-react";
+import { useState } from "react";
+import { createParticipantIntake, type WebIntakeForm } from "@/services/participantIntakeService";
+import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
@@ -77,7 +79,8 @@ export default function ParticipantNew() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { translate } = useAccessibility();
-  const createParticipant = useCreateParticipant();
+  const { user } = useAuth();
+  const [saving, setSaving] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -99,24 +102,48 @@ export default function ParticipantNew() {
     .toUpperCase();
   const planTone = PLAN_STATUS_TONE[watched.plan_status] ?? PLAN_STATUS_TONE.active;
 
+  // New participants join through onboarding: this adds an enquiry, and
+  // the participant becomes active only once their service agreement is
+  // signed there.
   async function onSubmit(data: FormValues) {
-    const payload: Record<string, unknown> = { ...data };
-    if (!payload.email)                      delete payload.email;
-    if (!payload.phone)                      delete payload.phone;
-    if (!payload.primary_disability)         delete payload.primary_disability;
-    if (!payload.allergies)                  delete payload.allergies;
-    if (!payload.communication_preferences)  delete payload.communication_preferences;
-    if (!payload.plan_start_date)            delete payload.plan_start_date;
-    if (!payload.plan_end_date)              delete payload.plan_end_date;
-    if (!payload.total_budget)               delete payload.total_budget;
-
+    const notes = [
+      data.allergies?.trim() ? `Allergies: ${data.allergies.trim()}` : null,
+      data.communication_preferences?.trim() ? `Communication: ${data.communication_preferences.trim()}` : null,
+      data.total_budget ? `Total plan budget: $${data.total_budget}` : null,
+    ].filter(Boolean).join("\n");
+    const webIntake: WebIntakeForm = {
+      submitted_at: new Date().toISOString(),
+      submitted_by: user?.full_name || "Support coordinator",
+      date_of_birth: data.date_of_birth,
+      gender: data.biological_sex && data.biological_sex !== "unspecified" ? data.biological_sex : undefined,
+      plan_status: data.plan_status || undefined,
+      plan_start: data.plan_start_date || undefined,
+      plan_end: data.plan_end_date || undefined,
+      referral_source: "coordinator_referral",
+      presenting_needs: data.primary_disability?.trim() ? [data.primary_disability.trim()] : [],
+      notes: notes || undefined,
+    };
+    setSaving(true);
     try {
-      await createParticipant.mutateAsync({ data: payload as unknown as CreateParticipantBody });
-      toast({ title: translate("patients.toast.added") });
-      navigate("/patients");
+      const intake = await createParticipantIntake({
+        full_name: data.full_name.trim(),
+        ndis_number: data.ndis_number.trim(),
+        email: data.email?.trim() || "",
+        phone: data.phone?.trim() || "",
+        source: "coordinator_referral",
+        service_category: "disability",
+        web_intake: webIntake,
+      });
+      toast({
+        title: translate("patients.toast.addedToOnboarding"),
+        description: user?.role === "managing_director" ? undefined : translate("patients.toast.addedToOnboardingDetail"),
+      });
+      navigate(user?.role === "managing_director" ? `/onboard-participant?intake=${intake.id}` : "/patients");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : translate("patients.toast.addFailed");
       toast({ title: msg, variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -144,7 +171,7 @@ export default function ParticipantNew() {
         </div>
         <div>
           <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>{translate("patients.addTitle")}</h1>
-          <p className="text-[13px]" style={{ color: T2 }}>{translate("patients.addSubtitle")}</p>
+          <p className="text-[13px]" style={{ color: T2 }}>{translate("patients.onboardingNotice")}</p>
         </div>
       </div>
 
@@ -304,15 +331,15 @@ export default function ParticipantNew() {
                 </button>
                 <button
                   type="submit"
-                  disabled={createParticipant.isPending}
+                  disabled={saving}
                   data-testid="button-add-participant"
                   className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
                   style={{ background: "var(--cc-cta)" }}
                 >
-                  {createParticipant.isPending
+                  {saving
                     ? <Loader2 size={14} className="animate-spin" />
                     : <UserPlus size={14} />}
-                  {translate("patients.addButton")}
+                  {translate("patients.addButtonOnboarding")}
                 </button>
               </div>
             </div>

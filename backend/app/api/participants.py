@@ -94,7 +94,9 @@ async def create_participant(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Create participant within current user's organization.
+    Closed: new participants join through participant onboarding, which
+    won't make them active until their service agreement is signed. Add
+    them as an onboarding enquiry (POST /participant-intakes) instead.
     """
 
     if not has_org_wide_access(current_user):
@@ -102,20 +104,13 @@ async def create_participant(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only support coordinators can create participants",
         )
-
-    try:
-        return await participant_service.create_participant(
-            body,
-            current_user,
-        )
-
-    except Exception as exc:
-        logger.exception("create_participant failed")
-
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        )
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "New participants join through onboarding, so their service agreement is signed before "
+            "they're active. Add them as an onboarding enquiry instead."
+        ),
+    )
 
 
 @router.get("/dashboard-stats")
