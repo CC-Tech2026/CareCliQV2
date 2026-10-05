@@ -266,6 +266,49 @@ def list_participant_supports(
     return out
 
 
+# ── How strict the organisation is (migration 239) ───────────────────────
+
+CHECK_LEVELS = ("warn", "reason", "strict")
+
+
+def check_level(org_id: str) -> str:
+    """warn: show what's outside the agreement, no reason needed; reason:
+    a reason is needed to bill it (the default); strict: also no rostering
+    on a day no signed agreement covers."""
+    try:
+        row = (_rows(
+            get_supabase_admin().table("organizations").select("agreement_check_level")
+            .eq("organization_id", org_id).limit(1).execute()
+        ) or [{}])[0]
+        if row.get("agreement_check_level") in CHECK_LEVELS:
+            return row["agreement_check_level"]
+    except Exception as exc:  # before migration 239: the default
+        logger.debug("agreement_check_level unavailable: %s", exc)
+    return "reason"
+
+
+def rostering_gate(participant_id: str, org_id: str) -> Optional[list[dict[str, Any]]]:
+    """In strict mode, the participant's signed agreements with supports
+    (possibly none); otherwise None, meaning rostering isn't held back."""
+    if check_level(org_id) != "strict":
+        return None
+    agreements = _rows(
+        get_supabase_admin().table("service_agreements")
+        .select("id, start_date, end_date, service_agreement_supports(id)")
+        .eq("organization_id", org_id).eq("participant_id", participant_id).eq("status", "active").execute()
+    )
+    return [a for a in agreements if a.get("service_agreement_supports")]
+
+
+def covers_any(agreements: list[dict[str, Any]], day: Optional[date]) -> bool:
+    return day is not None and any(_covers(a, day) for a in agreements)
+
+
+STRICT_BLOCK_MESSAGE = (
+    "No signed service agreement covers {day}. Your organisation requires one before a shift is rostered."
+)
+
+
 # ── Tasks by support (stage 3b) ───────────────────────────────────────────
 
 _CATALOGUE_TTL_SECONDS = 300

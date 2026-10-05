@@ -774,7 +774,9 @@ async def verify_shift(
         assessment = None
         agreement_check_error = str(exc)[:300]
     agreement_reason = (agreement_reason or "").strip()
-    if assessment and assessment["issues"] and len(agreement_reason) < 5:
+    # "warn" organisations see the issues but bill without a reason.
+    check_level = agreement_support_service.check_level(org_id)
+    if assessment and assessment["issues"] and check_level != "warn" and len(agreement_reason) < 5:
         raise ValueError(
             "This shift doesn't match the service agreement: "
             + " ".join(issue["message"] for issue in assessment["issues"])
@@ -867,7 +869,7 @@ async def verify_shift(
     # What was billed and why — part of the audit snapshot.
     checks["billing"] = {**billing, "extra_time_reason": reason or None, "rate_source": rate_source}
     if assessment:
-        checks["agreement"] = {**assessment, "reason": agreement_reason or None}
+        checks["agreement"] = {**assessment, "reason": agreement_reason or None, "check_level": check_level}
     elif agreement_check_error:
         checks["agreement"] = {"check_failed": agreement_check_error}
 
@@ -994,6 +996,8 @@ async def preview_verification(
     out: dict[str, Any] = {
         "price_item_code": code,
         "agreement": assessment,
+        # Whether anything outside the agreement needs a reason to bill.
+        "reason_required": agreement_support_service.check_level(org_id) != "warn",
         "rate": None,
         "rate_source": None,
         "price_limit": None,

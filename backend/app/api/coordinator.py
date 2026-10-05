@@ -2003,7 +2003,16 @@ def _agreement_line_for_new_shift(
     """Fields to store for the agreement line a new shift delivers, and its
     rostering warnings (outside the agreement dates, unsigned, hours over).
     Refuses a line that isn't on this participant's agreement; the warnings
-    never block."""
+    never block. An organisation set to strict also refuses a shift on a
+    day no signed agreement covers."""
+    gate = agreement_support_service.rostering_gate(participant_id, org_id)
+    if gate is not None:
+        day = shift_task_service.local_shift_date(start, participant_id, org_id)
+        if not agreement_support_service.covers_any(gate, day):
+            raise HTTPException(
+                status_code=409,
+                detail=agreement_support_service.STRICT_BLOCK_MESSAGE.format(day=day.isoformat() if day else "that day"),
+            )
     if not line_id:
         return {}, []
     line = agreement_support_service.resolve_line_for_shift(
@@ -3635,6 +3644,8 @@ async def bulk_create_shifts(
         if not body.expected_price_item_code:
             agreement_fields["expected_price_item_code"] = line["support_item_code"]
     care_coordinator_id = _resolve_care_coordinator_id(supabase, body.participant_id, org_id)
+    # Strict organisations: occurrences no signed agreement covers are skipped.
+    agreement_gate = agreement_support_service.rostering_gate(body.participant_id, org_id)
 
     for week in range(body.weeks):
         for dow in sorted(set(body.days_of_week)):
@@ -3651,6 +3662,14 @@ async def bulk_create_shifts(
             ).astimezone(timezone.utc)
             if shift_end_dt <= shift_start_dt:
                 shift_end_dt += timedelta(days=1)
+
+            if agreement_gate is not None and not agreement_support_service.covers_any(agreement_gate, shift_date):
+                skipped.append({
+                    "date": shift_date.isoformat(),
+                    "reason": "No signed service agreement covers this day",
+                    "conflicts": [],
+                })
+                continue
 
             conflicts: list[dict] = []
             if body.worker_id:

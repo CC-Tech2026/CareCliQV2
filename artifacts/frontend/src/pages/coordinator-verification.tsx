@@ -355,7 +355,9 @@ function ShiftReview({
   const agreementCheck = preview.data?.agreement ?? null;
   const suggestedCode = agreementCheck?.suggested_code ?? null;
   const issues = agreementCheck?.issues ?? [];
-  const agreementReasonMissing = issues.length > 0 && agreementReason.trim().length < 5;
+  // Organisations set to "warn only" bill without a reason.
+  const reasonRequired = preview.data?.reason_required !== false;
+  const agreementReasonMissing = reasonRequired && issues.length > 0 && agreementReason.trim().length < 5;
   const overLimit = !!preview.data?.over_limit;
 
   useEffect(() => {
@@ -684,7 +686,7 @@ function ShiftReview({
                   {issues.map((issue) => <li key={issue.code}>{issue.message}</li>)}
                 </ul>
                 <label className="mt-2 block font-semibold text-cc-text">
-                  {translate("schedule.agreementReason")}
+                  {translate(reasonRequired ? "schedule.agreementReason" : "schedule.agreementReasonOptional")}
                   <textarea
                     value={agreementReason}
                     onChange={(e) => setAgreementReason(e.target.value)}

@@ -193,6 +193,45 @@ async def save_organisation_settings(
     return after
 
 
+class AgreementChecksBody(BaseModel):
+    level: str = Field(pattern="^(warn|reason|strict)$")
+
+
+@router.get("/agreement-checks")
+async def get_agreement_checks(current_user: dict = Depends(get_current_user)):
+    """How strictly shifts are held to the service agreement (migration
+    239): warn, reason (the default) or strict."""
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
+    from ..services.agreement_support_service import check_level
+
+    return {"level": check_level(org_id)}
+
+
+@router.put("/agreement-checks")
+async def save_agreement_checks(body: AgreementChecksBody, current_user: dict = Depends(get_current_user)):
+    if not is_managing_director(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the managing director can change this.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
+    from ..services.agreement_support_service import check_level
+
+    before = check_level(org_id)
+    try:
+        get_supabase_admin().table("organizations").update({"agreement_check_level": body.level}) \
+            .eq("organization_id", org_id).execute()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="This setting needs database migration 239. Apply it first.") from exc
+    await log_action(
+        action_type="organization.agreement_check_level_updated", entity_type="organization", entity_id=org_id,
+        user_id=get_user_id(current_user), organization_id=org_id,
+        before_state={"level": before}, after_state={"level": body.level},
+    )
+    return {"level": body.level}
+
+
 @router.get("/practitioner", response_model=PractitionerSettings)
 async def get_practitioner_settings(
     current_user: dict = Depends(get_current_user),

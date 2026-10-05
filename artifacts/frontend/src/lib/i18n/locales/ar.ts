@@ -96,6 +96,7 @@ export const ar: Dict = {
   "schedule.overLimit": "هذا السعر أعلى من الحد الأقصى لسعر NDIS. صحّح السعر قبل التحقق.",
   "schedule.outsideAgreement": "خارج اتفاقية الخدمة",
   "schedule.agreementReason": "سبب الفوترة رغم ذلك",
+  "schedule.agreementReasonOptional": "السبب (اختياري)",
   "schedule.billed": "المُفوتر",
   "schedule.recentlyVerified": "تم التحقق مؤخراً",
   "schedule.noRecentVerifications": "لم يتم التحقق من أي وردية خلال آخر 30 يوماً",

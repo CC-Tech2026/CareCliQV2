@@ -96,6 +96,7 @@ export const vi: Dict = {
   "schedule.overLimit": "Mức giá này vượt giá trần NDIS. Hãy sửa mức giá trước khi xác minh.",
   "schedule.outsideAgreement": "Ngoài thỏa thuận dịch vụ",
   "schedule.agreementReason": "Lý do vẫn lập hóa đơn",
+  "schedule.agreementReasonOptional": "Lý do (không bắt buộc)",
   "schedule.billed": "Đã tính phí",
   "schedule.recentlyVerified": "Đã xác minh gần đây",
   "schedule.noRecentVerifications": "Không có ca nào được xác minh trong 30 ngày qua",

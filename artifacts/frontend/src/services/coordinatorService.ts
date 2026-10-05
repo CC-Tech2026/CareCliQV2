@@ -1990,6 +1990,9 @@ export type VerificationPreview = {
   unit?: string | null;
   price_limit: number | null;
   over_limit: boolean;
+  /** False when the organisation is set to warn only: issues are shown,
+   *  no reason is needed to bill. */
+  reason_required?: boolean;
 };
 
 export function getShiftVerificationPreview(

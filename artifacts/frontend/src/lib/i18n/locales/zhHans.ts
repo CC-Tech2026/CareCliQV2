@@ -96,6 +96,7 @@ export const zhHans: Dict = {
   "schedule.overLimit": "该费率高于NDIS价格上限。请先更正费率再核实。",
   "schedule.outsideAgreement": "超出服务协议",
   "schedule.agreementReason": "仍然计费的原因",
+  "schedule.agreementReasonOptional": "原因（可选）",
   "schedule.billed": "计费",
   "schedule.recentlyVerified": "最近核实",
   "schedule.noRecentVerifications": "过去 30 天内没有已核实的班次",

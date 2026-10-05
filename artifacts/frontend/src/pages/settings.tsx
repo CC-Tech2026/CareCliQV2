@@ -79,6 +79,7 @@ import { getRememberDevicePreference } from "@/lib/auth-session";
 import { submitImprovementFeedback } from "@/services/improvementFeedbackService";
 import { cn } from "@/lib/utils";
 import { OrganisationDetailsCard } from "@/components/settings/OrganisationDetailsCard";
+import { AgreementCheckCard } from "@/components/settings/AgreementCheckCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
@@ -2481,6 +2482,12 @@ export default function Settings() {
                 Printed on invoices and service agreements, and sent with NDIA claims.
               </p>
               <OrganisationDetailsCard profileAbn={providerPristine.abn} />
+            </PanelCard>
+
+            {/* How strictly shifts are held to each participant's service
+                agreement at rostering and verification (migration 239). */}
+            <PanelCard label="Shifts outside the service agreement">
+              <AgreementCheckCard />
             </PanelCard>
 
             {/* Single-office timezone picker — hidden once a second branch

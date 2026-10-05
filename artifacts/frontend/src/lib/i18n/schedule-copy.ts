@@ -94,6 +94,7 @@ export const scheduleCopy = {
   overLimit: ["This rate is above the NDIS price limit. Correct the rate before verifying.", "Mức giá này vượt giá trần NDIS. Hãy sửa mức giá trước khi xác minh.", "هذا السعر أعلى من الحد الأقصى لسعر NDIS. صحّح السعر قبل التحقق.", "该费率高于NDIS价格上限。请先更正费率再核实。"],
   outsideAgreement: ["Outside the service agreement", "Ngoài thỏa thuận dịch vụ", "خارج اتفاقية الخدمة", "超出服务协议"],
   agreementReason: ["Reason for billing it anyway", "Lý do vẫn lập hóa đơn", "سبب الفوترة رغم ذلك", "仍然计费的原因"],
+  agreementReasonOptional: ["Reason (optional)", "Lý do (không bắt buộc)", "السبب (اختياري)", "原因（可选）"],
   billed: ["Billed", "Đã tính phí", "المُفوتر", "计费"],
   recentlyVerified: ["Recently verified", "Đã xác minh gần đây", "تم التحقق مؤخراً", "最近核实"],
   noRecentVerifications: ["No shifts verified in the last 30 days", "Không có ca nào được xác minh trong 30 ngày qua", "لم يتم التحقق من أي وردية خلال آخر 30 يوماً", "过去 30 天内没有已核实的班次"],

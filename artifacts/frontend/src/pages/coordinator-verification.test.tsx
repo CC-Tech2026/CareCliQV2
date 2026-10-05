@@ -285,6 +285,16 @@ it("bills the code the times suggest, against the matched agreement line, with a
   );
 });
 
+it("bills without a reason when the organisation is set to warn only", () => {
+  state.search = "shiftId=s1";
+  state.preview = { ...preview(), reason_required: false };
+  render(<CoordinatorVerificationPage />);
+  // The issue is still shown; the reason is optional.
+  expect(screen.getByText("The agreement hasn't been signed yet.")).toBeTruthy();
+  expect(screen.getByLabelText("Reason (optional)")).toBeTruthy();
+  expect((screen.getByRole("button", { name: /Approve shift/ }) as HTMLButtonElement).disabled).toBe(false);
+});
+
 it("won't approve a rate above the NDIS price limit", () => {
   state.search = "shiftId=s1";
   state.preview = preview({ rate: 110, rate_source: "agreement", over_limit: true }, { issues: [] });

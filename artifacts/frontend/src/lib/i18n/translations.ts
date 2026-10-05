@@ -97,6 +97,7 @@ export const en: Dict = {
   "schedule.overLimit": "This rate is above the NDIS price limit. Correct the rate before verifying.",
   "schedule.outsideAgreement": "Outside the service agreement",
   "schedule.agreementReason": "Reason for billing it anyway",
+  "schedule.agreementReasonOptional": "Reason (optional)",
   "schedule.billed": "Billed",
   "schedule.recentlyVerified": "Recently verified",
   "schedule.noRecentVerifications": "No shifts verified in the last 30 days",
