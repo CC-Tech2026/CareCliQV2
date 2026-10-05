@@ -5344,6 +5344,42 @@ class TaskTemplateBody(BaseModel):
     assigned_worker_id: Optional[str] = None
     linked_goal_id: Optional[str] = None
     status: str = "active"  # 'active', 'paused', 'archived'
+    # NDIS support item codes this task is for (step 3b); none = any support.
+    support_item_codes: list[str] = Field(default_factory=list)
+
+
+def _template_support_codes(codes: list[str], already: Optional[list[str]] = None) -> list[str]:
+    """Codes a template is for. A newly added code must be in the current
+    NDIS price guide; one already on the template may stay, so a template
+    with a retired code can still be edited (it's flagged for updating)."""
+    clean = list(dict.fromkeys(str(c).strip() for c in codes if str(c).strip()))
+    new = [c for c in clean if c not in set(already or [])]
+    unknown = sorted(set(new) - agreement_support_service.current_codes(new))
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Not in the current NDIS price guide: {', '.join(unknown)}.")
+    return clean
+
+
+def _embedded(value: Any) -> dict:
+    """A PostgREST embedded row comes back as an object or a one-item list."""
+    if isinstance(value, list):
+        value = value[0] if value else None
+    return value if isinstance(value, dict) else {}
+
+
+def _flag_retired(templates: list[dict]) -> list[dict]:
+    """Each template's codes that have dropped out of the NDIS price guide."""
+    codes = [c for t in templates for c in (t.get("support_item_codes") or [])]
+    if not codes:
+        return templates
+    try:
+        current = agreement_support_service.current_codes(codes)
+    except Exception as exc:
+        logger.warning("Retired code check failed: %s", exc)
+        return templates
+    for t in templates:
+        t["retired_codes"] = [c for c in (t.get("support_item_codes") or []) if c not in current]
+    return templates
 
 
 @router.get("/participants/{participant_id}/task-templates")
@@ -5379,8 +5415,8 @@ async def list_task_templates(
             .execute()
         )
         return {
-            "system_tasks": sys_resp.data or [],
-            "custom_tasks": custom_resp.data or [],
+            "system_tasks": _flag_retired(sys_resp.data or []),
+            "custom_tasks": _flag_retired(custom_resp.data or []),
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=internal_error_detail("Task templates fetch failed", exc))
@@ -5423,6 +5459,7 @@ async def create_task_template(
         "assigned_worker_id": body.assigned_worker_id,
         "linked_goal_id": body.linked_goal_id,
         "status": body.status,
+        "support_item_codes": _template_support_codes(body.support_item_codes),
     }
     try:
         resp = supabase.table("participant_task_templates").insert(payload).execute()
@@ -5463,6 +5500,13 @@ async def update_task_template(
         "linked_goal_id": body.linked_goal_id,
         "status": body.status,
     }
+    existing = (
+        supabase.table("participant_task_templates").select("support_item_codes")
+        .eq("id", template_id).eq("organization_id", org_id).limit(1).execute()
+    ).data or []
+    update["support_item_codes"] = _template_support_codes(
+        body.support_item_codes, (existing[0].get("support_item_codes") if existing else None) or [],
+    )
     try:
         resp = supabase.table("participant_task_templates").update(update).eq("id", template_id).eq("organization_id", org_id).execute()
         return (resp.data or [update])[0]
@@ -5607,19 +5651,26 @@ async def list_participant_tasks(
     org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
-        q = (
-            supabase.table("participant_tasks")
-            .select("*, ndis_goals(name)")
-            .eq("participant_id", participant_id)
-            .eq("organization_id", org_id)
-        )
-        if status:
-            q = q.eq("status", status)
-        if goal_id:
-            q = q.eq("goal_id", goal_id)
-        
-        resp = q.order("created_at", desc=True).execute()
-        tasks = resp.data or []
+        def _tasks(columns: str) -> list[dict]:
+            q = (
+                supabase.table("participant_tasks")
+                .select(columns)
+                .eq("participant_id", participant_id)
+                .eq("organization_id", org_id)
+            )
+            if status:
+                q = q.eq("status", status)
+            if goal_id:
+                q = q.eq("goal_id", goal_id)
+            return q.order("created_at", desc=True).execute().data or []
+
+        # The supports each task's template is for (migration 238), so Create
+        # shift can tick the tasks for the support being delivered.
+        try:
+            tasks = _tasks("*, ndis_goals(name), participant_task_templates(support_item_codes)")
+        except Exception as exc:
+            logger.warning("Task support codes unavailable: %s", exc)
+            tasks = _tasks("*, ndis_goals(name)")
         
         # Format response to include goal_name
         formatted = []
@@ -5636,6 +5687,7 @@ async def list_participant_tasks(
                 "status": task.get("status"),
                 "is_mandatory": task.get("is_mandatory"),
                 "support_category": task.get("support_category"),
+                "support_item_codes": _embedded(task.get("participant_task_templates")).get("support_item_codes") or [],
                 "completed_at": task.get("completed_at"),
                 "created_at": task.get("created_at"),
             })

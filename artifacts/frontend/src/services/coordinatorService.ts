@@ -1570,6 +1570,10 @@ export type TaskTemplate = {
   assigned_worker_id?: string | null;
   linked_goal_id?: string | null;
   status?: string;
+  /** NDIS support item codes this task is for; none = any support. */
+  support_item_codes?: string[];
+  /** Read-only: codes the NDIS price guide no longer lists, to update. */
+  retired_codes?: string[];
 };
 
 export type TaskTemplatesResponse = {
@@ -1708,6 +1712,8 @@ export type ParticipantTask = {
   status: "pending" | "in_progress" | "completed";
   is_mandatory?: boolean;
   support_category?: string | null;
+  /** From the task's template: the supports it's for (none = any). */
+  support_item_codes?: string[];
   shift_type?: string | null;  // morning, afternoon, night, anytime
   category?: string | null;  // personal_care, medication, etc.
   priority?: string | null;  // low, medium, high

@@ -1920,6 +1920,13 @@ def get_shift_detail_for_worker(
         active_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
     if active_goals:
         payload["active_goals"] = active_goals
+    # The support this shift delivers (step 3b), so the note can describe it.
+    try:
+        from .agreement_support_service import support_for_worker
+
+        payload["agreed_support"] = support_for_worker(get_supabase_admin(), shift)
+    except Exception as exc:
+        logger.debug("agreed support lookup failed: %s", exc)
     primary_contact = (payload.get("profile") or {}).get("emergency_contact")
     if primary_contact:
         payload["primary_contact"] = primary_contact

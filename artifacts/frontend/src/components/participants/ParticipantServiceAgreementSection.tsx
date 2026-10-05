@@ -32,6 +32,8 @@ type AgreementSupport = {
   location: string | null;
   quantity?: number | null;
   rate?: number | null;
+  /** False when the NDIS price guide no longer lists this code. */
+  in_current_catalogue?: boolean | null;
 };
 
 type SignedDocument = {
@@ -517,6 +519,11 @@ export function ParticipantServiceAgreementSection({
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
+                    {s.in_current_catalogue === false && (
+                      <p className="mt-0.5 text-xs" style={{ color: "var(--cc-status-danger)" }}>
+                        {s.support_item_code} is no longer in the NDIS price guide. Start a new agreement with the current code.
+                      </p>
+                    )}
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold tabular-nums text-cc-text">

@@ -311,11 +311,15 @@ export function ShiftAssignmentModal({
     if (agreementSupportId === line.id) {
       setAgreementSupportId("");
       if (expectedPriceItemCode === line.support_item_code) setExpectedPriceItemCode("");
+      setSelectedTaskIds((tasksQuery.data ?? []).map((task) => task.id));
       return;
     }
     setAgreementSupportId(line.id);
     setExpectedPriceItemCode(line.support_item_code);
+    // The tasks for this support (or for any support) start ticked.
+    setSelectedTaskIds((tasksQuery.data ?? []).filter((task) => taskFitsSupport(task, line)).map((task) => task.id));
   };
+  const chosenLine = (agreementSupportsQuery.data ?? []).find((line) => line.id === agreementSupportId);
 
   const isManagingDirector = user?.role === "managing_director";
   const payEstimateQuery = useOrgQuery<PayEstimate>(
@@ -927,7 +931,11 @@ export function ShiftAssignmentModal({
                 <span className="text-[11px]" style={{ color: MUTED }}>From {firstName ? `${firstName}'s` : "the"} care plan</span>
               </p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {(tasksQuery.data ?? []).map((task) => {
+                {[...(tasksQuery.data ?? [])]
+                  // With a support chosen, its tasks come first; the rest
+                  // are other care-plan tasks that can still be added.
+                  .sort((a, b) => (chosenLine ? Number(taskFitsSupport(b, chosenLine)) - Number(taskFitsSupport(a, chosenLine)) : 0))
+                  .map((task) => {
                   const on = selectedTaskIds.includes(task.id);
                   const when = task.is_mandatory ? "Required" : TASK_TIME_LABELS[task.shift_type ?? ""];
                   return (
@@ -945,6 +953,9 @@ export function ShiftAssignmentModal({
                         }
                       />
                       <span className="min-w-0 flex-1 truncate" style={{ color: TEXT }} title={task.goal_name ?? undefined}>{task.name}</span>
+                      {chosenLine && !taskFitsSupport(task, chosenLine) && (
+                        <span className="shrink-0 text-[10px]" style={{ color: MUTED }}>Other support</span>
+                      )}
                       {when && <span className="shrink-0 text-[10px]" style={{ color: MUTED }}>{when}</span>}
                     </label>
                   );
@@ -1117,6 +1128,14 @@ function avatarColour(name: string) {
 }
 function initialsOf(name: string) {
   return name.split(" ").map((p) => p[0]).filter(Boolean).join("").slice(0, 2).toUpperCase() || "?";
+}
+
+/** A task is for a support when its template names no supports (any), or
+ *  one of its codes is in that support's group (time-of-day versions
+ *  count as the same support). */
+function taskFitsSupport(task: ParticipantTask, line: AgreementSupport) {
+  const codes = task.support_item_codes ?? [];
+  return codes.length === 0 || codes.some((code) => code === line.support_item_code || line.group_codes.includes(code));
 }
 
 const hoursText = (n: number) => `${Number(n.toFixed(2))}h`;

@@ -175,6 +175,14 @@ def list_service_agreements_for_profile(
                 items.setdefault(str(row["item_code"]), row)  # newest price first
         except Exception:
             logger.warning("Support item lookup failed for participant %s", participant_id, exc_info=True)
+    current: Optional[set[str]] = None
+    if codes:
+        try:
+            from .agreement_support_service import current_codes
+
+            current = current_codes(codes)
+        except Exception:
+            logger.warning("Current catalogue check failed for participant %s", participant_id, exc_info=True)
     for agreement in agreements:
         agreement["service_agreement_supports"] = sorted(
             agreement.get("service_agreement_supports") or [], key=lambda sup: sup.get("sort_order") or 0,
@@ -185,6 +193,10 @@ def list_service_agreements_for_profile(
             support["item_name"] = support.get("item_name") or (item.get("name") if item else None)
             support["unit"] = support.get("unit") or (item.get("unit") if item else None)
             support["standard_rate"] = item.get("price_national") if item else None
+            # A code the NDIS price guide no longer lists is flagged to update.
+            support["in_current_catalogue"] = (
+                str(support.get("support_item_code")) in current if current is not None else None
+            )
 
     signed_document = None
     # The PDF signed on the onboarding board, for agreements recorded

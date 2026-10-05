@@ -52,6 +52,13 @@ def run(source_path: str) -> None:
         "Platform schedule loaded: schedule_id=%s financial_year=%s effective_date=%s items_loaded=%d",
         result["schedule_id"], result["financial_year"], result["effective_date"], result["items_loaded"],
     )
+    if result.get("codes_retired"):
+        logger.warning(
+            "Codes no longer in the guide, retired from %s: %s. Still in use: %s",
+            result["effective_date"], ", ".join(result["codes_retired"]), result.get("retired_in_use"),
+        )
+    if result.get("retire_note"):
+        logger.warning(result["retire_note"])
     if result.get("validation_errors"):
         logger.warning("Validation errors (items skipped, not fatal): %s", result["validation_errors"])
 

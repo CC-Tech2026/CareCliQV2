@@ -89,6 +89,8 @@ export type WorkerShift = {
   requires_safety_ack?: boolean;
   profile?: ParticipantProfile;
   active_goals?: Array<string | { id?: string; title?: string; description?: string }>;
+  /** The support this shift delivers, from the service agreement (or the expected NDIS item). */
+  agreed_support?: { name: string | null; item_code: string; from_agreement: boolean } | null;
   tasks?: ShiftTask[];
   session_id?: string | null;
   session_status?: string | null;

@@ -7,7 +7,10 @@ A participant's active templates apply to a shift when:
 - for "specific_weekdays", the shift's *local* weekday is listed (0=Sunday);
 - for "one_off", it hasn't already been on another shift;
 - for "recurring" + "daily" / "weekly", it isn't already on another shift
-  that day / that week (Monday–Sunday, local time).
+  that day / that week (Monday–Sunday, local time);
+- when the shift delivers an agreement line, the template is for that
+  support (one of its support item codes is in the line's support group) or
+  for any support (no codes).
 
 Each template has one participant_tasks row per participant (found by
 task_template_id, migration 234), linked to every shift it's on through
@@ -173,6 +176,7 @@ def generate_template_tasks(
     shift_type: Optional[str],
     scheduled_start: Any,
     org_id: str,
+    support_line_id: Optional[str] = None,
 ) -> list[str]:
     """Link the participant's applicable template tasks to a new shift.
     Returns the linked task ids (in template order)."""
@@ -182,7 +186,14 @@ def generate_template_tasks(
         .eq("status", "active").order("sort_order").execute()
     )
     local_date = local_shift_date(scheduled_start, participant_id, org_id)
-    fitting = [t for t in templates if template_fits_shift(t, shift_type, local_date)]
+    from . import agreement_support_service
+
+    support_codes = agreement_support_service.line_support_codes(supabase, support_line_id)
+    fitting = [
+        t for t in templates
+        if template_fits_shift(t, shift_type, local_date)
+        and agreement_support_service.fits_support(t.get("support_item_codes"), support_codes)
+    ]
     if not fitting:
         return []
 
@@ -231,6 +242,7 @@ def attach_tasks_to_new_shift(
             shift_type=shift.get("shift_type"),
             scheduled_start=shift.get("scheduled_start"),
             org_id=org_id,
+            support_line_id=shift.get("service_agreement_support_id"),
         )
     except Exception as exc:
         logger.warning("Task generation for shift %s failed: %s", shift_id, exc)

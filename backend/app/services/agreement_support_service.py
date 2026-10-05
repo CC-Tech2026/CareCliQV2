@@ -262,6 +262,74 @@ def list_participant_supports(
     return out
 
 
+# ── Tasks by support (stage 3b) ───────────────────────────────────────────
+
+_CATALOGUE_TTL_SECONDS = 300
+_catalogue_cache: dict[str, Any] = {"at": 0.0, "rows": None}
+
+
+def catalogue_cached() -> list[dict[str, Any]]:
+    """The current catalogue, kept for a few minutes: a recurring series
+    looks up its support once per shift."""
+    import time
+
+    if _catalogue_cache["rows"] is None or time.monotonic() - _catalogue_cache["at"] > _CATALOGUE_TTL_SECONDS:
+        _catalogue_cache.update(rows=_catalogue(None), at=time.monotonic())
+    return _catalogue_cache["rows"]
+
+
+def current_codes(codes: list[str]) -> set[str]:
+    """Which of these codes are in the current NDIS price guide."""
+    codes = sorted({str(c) for c in codes if c})
+    return {str(r["item_code"]) for r in _catalogue(codes)} if codes else set()
+
+
+def line_support_codes(supabase, line_id: Optional[str]) -> Optional[set[str]]:
+    """Every code in an agreement line's support (its own code included), or
+    None when the shift has no line, so nothing is filtered."""
+    if not line_id:
+        return None
+    row = (_rows(
+        supabase.table("service_agreement_supports").select("support_item_code").eq("id", line_id).limit(1).execute()
+    ) or [None])[0]
+    if not row:
+        return None
+    code = str(row["support_item_code"])
+    group = support_groups([code], catalogue_cached())[code]
+    return {code} | {str(g["item_code"]) for g in group}
+
+
+def support_for_worker(supabase, shift: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """What the shift is for, as the worker sees it: the agreed support's
+    name without its day and time words ("Assistance With Self-Care
+    Activities - Standard"), from the shift's agreement line, else its
+    expected item."""
+    code = None
+    line_id = shift.get("service_agreement_support_id")
+    if line_id:
+        row = (_rows(
+            supabase.table("service_agreement_supports").select("support_item_code").eq("id", line_id).limit(1).execute()
+        ) or [None])[0]
+        code = (row or {}).get("support_item_code")
+    code = code or shift.get("expected_price_item_code")
+    if not code:
+        return None
+    item = next((r for r in catalogue_cached() if str(r["item_code"]) == str(code)), None)
+    name = str((item or {}).get("name") or "")
+    if name and "sleepover" not in name.lower():
+        name = re.sub(r"\s*-\s*(-\s*)+", " - ", _DAY_TIME_WORDS.sub("", name))
+        name = re.sub(r"\s{2,}", " ", name).strip(" -")
+    return {"name": name or None, "item_code": str(code), "from_agreement": bool(line_id)}
+
+
+def fits_support(template_codes: Optional[list[str]], support_codes: Optional[set[str]]) -> bool:
+    """A template with no codes is for any support; otherwise one of its
+    codes must be in the shift's support. No support on the shift: any."""
+    if support_codes is None or not template_codes:
+        return True
+    return any(str(c) in support_codes for c in template_codes)
+
+
 # ── Verification (stage 3c) ───────────────────────────────────────────────
 
 # An agreement that has since expired or ended still covers the shifts

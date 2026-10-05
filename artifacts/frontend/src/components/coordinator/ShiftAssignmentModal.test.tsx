@@ -308,4 +308,35 @@ describe("ShiftAssignmentModal", () => {
     );
     vi.mocked(service.getParticipantAgreementSupports).mockResolvedValue([]);
   });
+
+  it("ticks the tasks for the agreed support and leaves the others unticked", async () => {
+    const service = await import("@/services/coordinatorService");
+    vi.mocked(service.getParticipantTasks).mockResolvedValue([
+      { id: "t-shower", name: "Shower", participant_id: "p-1", status: "pending", support_item_codes: ["01_013_0107_1_1"] },
+      { id: "t-pool", name: "Swimming", participant_id: "p-1", status: "pending", support_item_codes: ["04_104_0125_6_1"] },
+      { id: "t-any", name: "Check in with family", participant_id: "p-1", status: "pending", support_item_codes: [] },
+    ] as never);
+    vi.mocked(service.getParticipantAgreementSupports).mockResolvedValue([{
+      id: "line-1", service_agreement_id: "sa-1", agreement_number: "SA-1", agreement_status: "active",
+      start_date: "2026-07-01", end_date: "2027-06-30", support_item_code: "01_011_0107_1_1",
+      item_name: "Assistance With Self-Care Activities - Standard - Weekday Daytime", unit: "H", frequency: null, location: null,
+      group_codes: ["01_011_0107_1_1", "01_013_0107_1_1"], in_current_catalogue: true, counted: true,
+      hours_allocated: 52, delivered_hours: 0, booked_soon_hours: 0, booked_later_hours: 0, left_hours: 52, warnings: [],
+    }] as never);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ShiftAssignmentModal open={true} onOpenChange={vi.fn()} workers={mockWorkers} initialParticipantId="p-1" initialDate="2026-10-05" />
+      </QueryClientProvider>
+    );
+    const box = async (name: string) =>
+      (await screen.findByText(name)).closest("label")!.querySelector("input") as HTMLInputElement;
+    expect((await box("Swimming")).checked).toBe(true); // all ticked before a support is chosen
+    fireEvent.click(await screen.findByRole("button", { name: /Self-Care Activities/ }));
+    expect((await box("Shower")).checked).toBe(true);  // Saturday code: same support
+    expect((await box("Check in with family")).checked).toBe(true);  // any support
+    expect((await box("Swimming")).checked).toBe(false);
+    expect(screen.getByText("Other support")).toBeTruthy();
+    vi.mocked(service.getParticipantTasks).mockResolvedValue([]);
+    vi.mocked(service.getParticipantAgreementSupports).mockResolvedValue([]);
+  });
 });

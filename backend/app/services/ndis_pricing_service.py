@@ -739,6 +739,30 @@ async def load_platform_price_schedule(
 
     schedule_id = schedule_result.data[0]["id"]
 
+    # ── Codes the new guide no longer lists (step 3b) ──────────
+    # Anything in the file counts as listed, priced or not (quote-only items
+    # are skipped above but are still current). A file listing under half
+    # of today's codes is treated as partial and retires nothing.
+    listed = {
+        str(i.get("item_code") or "").strip()
+        for c in support_categories for i in c.get("items", [])
+    } - {""}
+    active = _active_platform_codes(supabase)
+    missing = sorted(active - listed)
+    retired: list[str] = []
+    retire_note = None
+    if missing and len(listed) >= len(active) / 2:
+        for i in range(0, len(missing), _LIMIT_CODE_CHUNK):
+            supabase.table("platform_ndis_price_items").update(
+                {"valid_to": effective_date.isoformat() + "T00:00:00Z"}
+            ).in_("item_code", missing[i:i + _LIMIT_CODE_CHUNK]).is_("valid_to", "null").execute()
+        retired = missing
+    elif missing:
+        retire_note = (
+            f"This file lists {len(listed)} codes against {len(active)} current ones, so it looks partial: "
+            "no codes were retired."
+        )
+
     # ── Close out prior active versions of these item codes ─────
     incoming_item_codes = sorted({item["item_code"] for item in items_to_insert})
     supabase.table("platform_ndis_price_items").update(
@@ -769,6 +793,7 @@ async def load_platform_price_schedule(
             "effective_date": effective_date.isoformat(),
             "source_document": source_document,
             "items_loaded": len(items_to_insert),
+            "codes_retired": retired,
         },
     )
 
@@ -778,7 +803,49 @@ async def load_platform_price_schedule(
         "effective_date": effective_date.isoformat(),
         "items_loaded": len(items_to_insert),
         "validation_errors": validation_errors,
+        "codes_retired": retired,
+        "retire_note": retire_note,
+        # Templates and agreement lines still on a retired code are flagged
+        # on screen for each organisation to update.
+        "retired_in_use": retired_codes_in_use(retired),
     }
+
+
+def _active_platform_codes(supabase) -> set[str]:
+    codes: set[str] = set()
+    start = 0
+    while True:
+        page = (
+            supabase.table("platform_ndis_price_items").select("item_code")
+            .is_("valid_to", "null").range(start, start + 999).execute()
+        ).data or []
+        codes |= {str(r["item_code"]) for r in page if r.get("item_code")}
+        if len(page) < 1000:
+            return codes
+        start += 1000
+
+
+def retired_codes_in_use(codes: list[str]) -> dict[str, int]:
+    """How many active task templates and sent or signed agreement lines
+    still use these codes, across organisations."""
+    if not codes:
+        return {"task_templates": 0, "agreement_lines": 0}
+    supabase = get_supabase_admin()
+    try:
+        templates = (
+            supabase.table("participant_task_templates").select("id")
+            .overlaps("support_item_codes", codes).eq("status", "active").execute()
+        ).data or []
+    except Exception as exc:  # migration 238 not applied
+        logger.warning("Template retired-code check skipped: %s", exc)
+        templates = []
+    lines = (
+        supabase.table("service_agreement_supports")
+        .select("id, service_agreements!inner(status)")
+        .in_("support_item_code", codes)
+        .in_("service_agreements.status", ["pending_signature", "active"]).execute()
+    ).data or []
+    return {"task_templates": len(templates), "agreement_lines": len(lines)}
 
 
 # ── Price Editing (Single Item) ────────────────────────────────────────────

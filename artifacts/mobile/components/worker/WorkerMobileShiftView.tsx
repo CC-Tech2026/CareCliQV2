@@ -1211,6 +1211,16 @@ function WorkerMobileShiftContent({
               ? formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end, shift.timezone)
               : "Time TBC"}
           </Text>
+          {shift.agreed_support?.name ? (
+            <Text
+              style={[
+                styles.scheduledTime,
+                { color: colors.foreground, fontFamily: FontFamily.interMedium },
+              ]}
+            >
+              Support: {shift.agreed_support.name}
+            </Text>
+          ) : null}
 
           {shift.participant_address && (
             <Pressable

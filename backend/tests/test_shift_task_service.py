@@ -138,6 +138,37 @@ def test_other_shift_types_get_nothing():
     ) == []
 
 
+def test_a_shift_for_an_agreed_support_gets_that_supports_tasks():
+    from backend.app.services import agreement_support_service
+
+    db = FakeDB(templates=[
+        _template("t-care", name="Shower", support_item_codes=["01_013_0107_1_1"]),   # self-care, Saturday code
+        _template("t-pool", name="Swimming", support_item_codes=["04_104_0125_6_1"]),  # community access
+        _template("t-any", name="Check in with family", support_item_codes=[]),
+    ])
+    db.data["shifts"].append({"id": "s1", "organization_id": ORG, "scheduled_start": "2026-10-04T23:30:00+00:00"})
+    self_care = {"01_011_0107_1_1", "01_013_0107_1_1", "01_015_0107_1_1"}
+    with patch.object(agreement_support_service, "line_support_codes", return_value=self_care) as lookup:
+        linked = tasks.generate_template_tasks(
+            db, participant_id=PARTICIPANT, shift_id="s1", shift_type="morning",
+            scheduled_start="2026-10-04T23:30:00+00:00", org_id=ORG, support_line_id="line-1",
+        )
+    lookup.assert_called_once_with(db, "line-1")
+    names = {t["name"] for t in db.data["participant_tasks"] if t["id"] in linked}
+    # The Saturday code is the same support as the weekday line; any-support
+    # tasks come along; community access doesn't.
+    assert names == {"Shower", "Check in with family"}
+
+
+def test_support_matching_rules():
+    from backend.app.services.agreement_support_service import fits_support
+
+    assert fits_support([], {"01_011_0107_1_1"})            # no codes: any support
+    assert fits_support(["04_104_0125_6_1"], None)           # shift with no line: anything
+    assert fits_support(["01_013_0107_1_1"], {"01_011_0107_1_1", "01_013_0107_1_1"})
+    assert not fits_support(["04_104_0125_6_1"], {"01_011_0107_1_1"})
+
+
 # ── Frequency ────────────────────────────────────────────────────────────
 
 def test_one_off_goes_on_the_first_shift_only():

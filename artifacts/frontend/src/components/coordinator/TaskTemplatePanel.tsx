@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TimePicker } from "@/components/ui/time-picker";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { listCurrentNdisCatalogue, type NdisCatalogueItem } from "@/services/ndisService";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -82,7 +85,14 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
     category: template?.category ?? "",
     priority: template?.priority ?? "medium",
     linked_goal_id: template?.linked_goal_id ?? goal?.id ?? "",
+    support_item_codes: template?.support_item_codes ?? [],
   });
+  const catalogue = useOrgQuery<NdisCatalogueItem[]>(["ndis", "current-catalogue"], {
+    queryFn: listCurrentNdisCatalogue,
+    staleTime: 10 * 60_000,
+  });
+  const itemName = (code: string) => (catalogue.data ?? []).find((i) => i.item_code === code)?.name;
+  const retired = new Set(template?.retired_codes ?? []);
 
   const mut = useMutation({
     mutationFn: () => {
@@ -99,6 +109,7 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
         category: form.category || null,
         priority: form.priority,
         linked_goal_id: form.linked_goal_id || goal?.id || null,
+        support_item_codes: form.support_item_codes,
         status: "active" as const,
         evidence_required: "none" as const,
         is_mandatory: false,
@@ -193,6 +204,51 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
             className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
             style={{ border: `1px solid ${BORDER}`, color: TEXT }}
           />
+        </div>
+
+        {/* The supports this task is for (none = any support) */}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.supports")}</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {form.support_item_codes.length === 0 && (
+              <span className="rounded-full px-2.5 py-1 text-[11px]" style={{ background: SOFT, color: MUTED }}>
+                {translate("coordinator.taskTemplate.supportsAny")}
+              </span>
+            )}
+            {form.support_item_codes.map((code) => (
+              <span
+                key={code}
+                className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px]"
+                style={{ borderColor: retired.has(code) ? CORAL : BORDER, color: retired.has(code) ? CORAL : TEXT }}
+              >
+                {itemName(code) ? `${itemName(code)} (${code})` : code}
+                <button
+                  type="button"
+                  aria-label={translateParams("coordinator.taskTemplate.removeSupport", { code })}
+                  onClick={() => setForm((f) => ({ ...f, support_item_codes: f.support_item_codes.filter((c) => c !== code) }))}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+          </div>
+          {[...retired].filter((code) => form.support_item_codes.includes(code)).map((code) => (
+            <p key={code} className="text-[11px]" style={{ color: CORAL }}>
+              {translateParams("coordinator.taskTemplate.retired", { code })}
+            </p>
+          ))}
+          <SearchableSelect
+            value=""
+            onValueChange={(code) =>
+              code && setForm((f) => ({ ...f, support_item_codes: f.support_item_codes.includes(code) ? f.support_item_codes : [...f.support_item_codes, code] }))
+            }
+            options={(catalogue.data ?? []).map((i) => ({ value: i.item_code, label: `${i.name} (${i.item_code})`, keywords: `${i.item_code} ${i.name}` }))}
+            placeholder={translate("coordinator.taskTemplate.addSupport")}
+            searchPlaceholder={translate("coordinator.taskTemplate.addSupport")}
+            emptyText={translate("common.noResults")}
+            disabled={!catalogue.data}
+          />
+          <p className="text-[11px]" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.supportsHelp")}</p>
         </div>
 
         {/* Shift-based section */}
@@ -396,6 +452,16 @@ export function TaskTemplatePanel({
                       {translateParams("coordinator.taskTemplate.shiftMeta", { shift: template.primary_shift_type ?? "", recurrence: template.recurrence_type ?? "" })}
                     </p>
                   )}
+                  <p className="text-[10px] mt-1" style={{ color: MUTED }}>
+                    {(template.support_item_codes ?? []).length
+                      ? (template.support_item_codes ?? []).join(", ")
+                      : translate("coordinator.taskTemplate.supportsAny")}
+                  </p>
+                  {(template.retired_codes ?? []).map((code) => (
+                    <p key={code} className="text-[10px] mt-1" style={{ color: CORAL }}>
+                      {translateParams("coordinator.taskTemplate.retired", { code })}
+                    </p>
+                  ))}
                 </div>
                 <div className="flex gap-1 ml-2 shrink-0">
                   <button
