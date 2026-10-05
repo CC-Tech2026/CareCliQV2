@@ -2187,9 +2187,15 @@ export function getPendingPlanMeetings() {
   );
 }
 
+/** Whisper picks the decoder from the file extension, so Safari's mp4 audio
+ * must not be sent as ".webm". */
+function audioFilename(audioBlob: Blob) {
+  return audioBlob.type.includes("mp4") ? "recording.m4a" : "recording.webm";
+}
+
 export function transcribePlanMeetingAudio(audioBlob: Blob): Promise<{ transcript: string }> {
   const form = new FormData();
-  form.append("audio_file", audioBlob, "recording.webm");
+  form.append("audio_file", audioBlob, audioFilename(audioBlob));
   return jsonFetch<{ transcript: string }>("/api/coordinator/plan-meetings/transcribe", {
     method: "POST",
     body: form,
@@ -2257,7 +2263,7 @@ export function transcribeAndResolveNames(
   others?: string[],
 ): Promise<Stage1ResolutionResult> {
   const form = new FormData();
-  form.append("audio_file", audioBlob, "recording.webm");
+  form.append("audio_file", audioBlob, audioFilename(audioBlob));
   if (coordinatorName) form.append("coordinator_name", coordinatorName);
   if (participantName) form.append("participant_name", participantName);
   if (others && others.length > 0) form.append("others", JSON.stringify(others));

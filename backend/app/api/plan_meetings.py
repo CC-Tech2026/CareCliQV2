@@ -510,7 +510,8 @@ async def transcribe_plan_meeting_audio(
         client = _build_openai_client()
         response = client.audio.transcriptions.create(
             model="whisper-1",
-            file=("recording.webm", file_content),
+            file=(audio_file.filename, file_content, audio_file.content_type or "audio/webm"),
+            language="en",
         )
         transcript = response.text.strip()
         
