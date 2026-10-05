@@ -168,3 +168,23 @@ async def test_quote_only_items_and_partial_files_retire_nothing():
          patch.object(pricing.audit_service, "log_action", new=AsyncMock()):
         result = await pricing.load_platform_price_schedule({"role": "super_admin"}, _guide(["01_000_0107_1_1"]))
     assert result["codes_retired"] == [] and "looks partial" in result["retire_note"]
+
+
+# ── Clock-in fallback ────────────────────────────────────────────────────
+
+def test_the_clock_in_fallback_follows_the_same_support_rule():
+    from backend.app.services import shift_service
+
+    templates = [
+        {"id": "t-care", "participant_id": "p-1", "name": "Shower", "support_item_codes": ["01_013_0107_1_1"]},
+        {"id": "t-pool", "participant_id": "p-1", "name": "Swimming", "support_item_codes": ["04_104_0125_6_1"]},
+        {"id": "t-any", "participant_id": "p-1", "name": "Check in with family", "support_item_codes": []},
+    ]
+    db = MagicMock()
+    # System defaults first (none), then the participant's own templates.
+    db.table.side_effect = [_Q([]), _Q(templates)]
+    with patch.object(shift_service, "get_supabase_admin", return_value=db), \
+         patch.object(supports, "line_support_codes", return_value={"01_011_0107_1_1", "01_013_0107_1_1"}) as lookup:
+        tasks = shift_service._load_tasks_from_templates("p-1", "org-1", "", None, support_line_id="line-1")
+    assert lookup.call_args.args[1] == "line-1"
+    assert [t["label"] for t in tasks] == ["Shower", "Check in with family"]

@@ -2137,6 +2137,7 @@ def _load_tasks_from_templates(
     organization_id: str,
     shift_type: Optional[str],
     scheduled_start: Any = None,
+    support_line_id: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """Build the worker-facing task list from participant_task_templates.
 
@@ -2152,7 +2153,7 @@ def _load_tasks_from_templates(
         # System defaults for this org (participant_id IS NULL, is_custom = FALSE)
         sys_resp = (
             supabase.table("participant_task_templates")
-            .select("id, name, description, is_mandatory, linked_goal_id, primary_shift_type, additional_shift_types, recurrence_type, recurrence_weekdays, sort_order, category, evidence_required")
+            .select("id, name, description, is_mandatory, linked_goal_id, primary_shift_type, additional_shift_types, recurrence_type, recurrence_weekdays, sort_order, category, evidence_required, support_item_codes")
             .eq("organization_id", organization_id)
             .eq("is_custom", False)
             .is_("participant_id", "null")
@@ -2165,7 +2166,7 @@ def _load_tasks_from_templates(
         # Participant-specific templates
         pt_resp = (
             supabase.table("participant_task_templates")
-            .select("id, name, description, is_mandatory, linked_goal_id, primary_shift_type, additional_shift_types, recurrence_type, recurrence_weekdays, sort_order, category, evidence_required")
+            .select("id, name, description, is_mandatory, linked_goal_id, primary_shift_type, additional_shift_types, recurrence_type, recurrence_weekdays, sort_order, category, evidence_required, support_item_codes")
             .eq("organization_id", organization_id)
             .eq("participant_id", participant_id)
             .eq("status", "active")
@@ -2178,12 +2179,18 @@ def _load_tasks_from_templates(
         if not all_rows:
             return _default_tasks_copy()
 
-        # Same shift-type and weekday rules as shift creation. If nothing fits,
-        # the generic suggestions — not every template the participant has.
+        # Same shift-type, weekday and support rules as shift creation. If
+        # nothing fits, the generic suggestions — not every template the
+        # participant has.
+        from .agreement_support_service import fits_support, line_support_codes
         from .shift_task_service import local_shift_date, template_fits_shift
 
         local_date = local_shift_date(scheduled_start, participant_id, organization_id)
-        all_rows = [r for r in all_rows if template_fits_shift(r, shift_type, local_date)]
+        support_codes = line_support_codes(supabase, support_line_id)
+        all_rows = [
+            r for r in all_rows
+            if template_fits_shift(r, shift_type, local_date) and fits_support(r.get("support_item_codes"), support_codes)
+        ]
         if not all_rows:
             return _default_tasks_copy()
 
@@ -2342,6 +2349,7 @@ def _resolve_shift_checklist_tasks(
         organization_id,
         str(shift.get("shift_type") or ""),
         shift.get("scheduled_start"),
+        support_line_id=shift.get("service_agreement_support_id"),
     )
 
 
