@@ -232,3 +232,57 @@ async def test_reactivating_a_suspended_participant_does_not_create_a_duplicate_
 
     create_participant.assert_not_awaited()
     assert result["status"] == "active"
+
+
+# ── Meet & Greet summary ──────────────────────────────────────────────────
+
+def _summary(*statuses):
+    return {"uncovered": [{"id": f"r1-s{n}", "text": "x", "status": s} for n, s in enumerate(statuses, start=1)]}
+
+
+@pytest.mark.asyncio
+async def test_moving_on_from_meet_and_greet_needs_everything_said_reviewed():
+    existing = {"id": "i-1", "organization_id": "org-1", "status": "meet_greet", "full_name": "Sam",
+                "meet_greet_summary": _summary("open", "included", "open")}
+    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing):
+        with pytest.raises(HTTPException) as exc:
+            await svc.update_intake("i-1", "org-1", {"status": "awaiting_signatures"}, MD_USER)
+    assert exc.value.status_code == 409
+    assert exc.value.detail.startswith("2 things said in the Meet & Greet aren't in the summary")
+
+    reviewed = {**existing, "meet_greet_summary": _summary("included", "dismissed")}
+    table = MagicMock()
+    table.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{**reviewed, "status": "awaiting_signatures"}])
+    supabase = MagicMock()
+    supabase.table.return_value = table
+    with patch("backend.app.services.participant_intake_service.get_intake", return_value=reviewed), \
+         patch("backend.app.services.participant_intake_service.get_supabase_admin", return_value=supabase):
+        result = await svc.update_intake("i-1", "org-1", {"status": "awaiting_signatures"}, MD_USER)
+    assert result["status"] == "awaiting_signatures"
+
+
+@pytest.mark.asyncio
+async def test_no_summary_means_nothing_to_review():
+    # Notes typed by hand with no summary run: nothing is held up.
+    existing = {"id": "i-1", "organization_id": "org-1", "status": "meet_greet", "full_name": "Sam"}
+    table = MagicMock()
+    table.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{**existing, "status": "awaiting_signatures"}])
+    supabase = MagicMock()
+    supabase.table.return_value = table
+    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing), \
+         patch("backend.app.services.participant_intake_service.get_supabase_admin", return_value=supabase):
+        assert (await svc.update_intake("i-1", "org-1", {"status": "awaiting_signatures"}, MD_USER))["status"] == "awaiting_signatures"
+
+
+@pytest.mark.asyncio
+async def test_the_summary_is_on_the_participants_record_for_coordinators():
+    with patch("backend.app.api.participant_intake.participant_service.get_participant_by_id", new=AsyncMock(return_value={"id": "p-1"})), \
+         patch("backend.app.api.participant_intake.svc.meet_greet_summary_for_participant", return_value={"topics": {}}) as lookup:
+        assert await participant_intake.participant_meet_greet_summary("p-1", current_user=COORDINATOR_USER) == {"topics": {}}
+    lookup.assert_called_once_with("p-1", "org-1")
+    with patch("backend.app.api.participant_intake.participant_service.get_participant_by_id", new=AsyncMock(return_value=None)):
+        with pytest.raises(HTTPException) as exc:
+            await participant_intake.participant_meet_greet_summary("p-9", current_user=COORDINATOR_USER)
+    assert exc.value.status_code == 404

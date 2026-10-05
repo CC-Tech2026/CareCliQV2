@@ -117,6 +117,7 @@ export type ParticipantIntake = {
   created_at: string;
   web_intake?: WebIntakeForm;
   screening_checks?: ScreeningManualChecks;
+  meet_greet_summary?: MeetGreetSummary | null;
 };
 
 export function listParticipantIntakes() {
@@ -149,6 +150,49 @@ export function updateParticipantIntake(intakeId: string, patch: Partial<Partici
 }
 
 /** Stores the Meet & Greet audio against the intake's consented recording session. */
+/** The Meet & Greet by topic. Every point cites the transcript lines it
+ *  came from (ids like "r1-s4", or "n2" for the typed notes). */
+export type MeetGreetTopic = "goals" | "supports" | "schedule" | "preferences" | "access_and_risk" | "people" | "other";
+export type MeetGreetSummary = {
+  generated_at: string;
+  sources: Array<{ id: string; speaker: string; text: string }>;
+  topics: Partial<Record<MeetGreetTopic, Array<{ text: string; source_ids: string[] }>>>;
+  /** The help asked for, which drafts the service agreement. Anything not
+   *  actually said is null, and named in `unverified` when it was guessed. */
+  supports: Array<{
+    description: string;
+    item_code: string | null;
+    hours_per_week: number | null;
+    frequency: "weekly" | "fortnightly" | "monthly" | "as_scheduled" | null;
+    location: "home" | "school" | "preschool" | "clinic" | "other" | null;
+    source_ids: string[];
+    unverified: string[];
+  }>;
+  /** Said, but not covered by the summary: include or dismiss each. */
+  uncovered: Array<{ id: string; speaker: string; text: string; status: "open" | "included" | "dismissed" }>;
+  dropped_points: number;
+};
+
+export function summariseMeetGreet(intakeId: string) {
+  return jsonFetch<MeetGreetSummary>(`/api/participant-intakes/${encodeURIComponent(intakeId)}/meet-greet/summary`, {
+    method: "POST",
+  });
+}
+
+export function reviewMeetGreetLine(intakeId: string, lineId: string, action: "include" | "dismiss") {
+  return jsonFetch<MeetGreetSummary>(
+    `/api/participant-intakes/${encodeURIComponent(intakeId)}/meet-greet/summary/lines/${encodeURIComponent(lineId)}`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) },
+  );
+}
+
+/** The summary from a participant's onboarding, on their record. */
+export function getParticipantMeetGreetSummary(participantId: string) {
+  return jsonFetch<MeetGreetSummary | null>(
+    `/api/participant-intakes/by-participant/${encodeURIComponent(participantId)}/meet-greet-summary`,
+  );
+}
+
 export function uploadMeetGreetRecording(intakeId: string, sessionId: string, audio: Blob) {
   const formData = new FormData();
   const ext = audio.type.includes("mp4") ? "m4a" : "webm";

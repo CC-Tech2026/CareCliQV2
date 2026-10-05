@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from ..core.access import get_user_organization_id, has_org_wide_access, is_managing_director
 from ..core.security import get_current_user
+from ..services import meet_greet_summary_service, participant_service
 from ..services import participant_intake_service as svc
 from ..services.organization_branding_service import get_branding
 
@@ -195,3 +196,40 @@ async def upload_meet_greet_recording(
     org_id = _require_md(current_user)
     raw = await file.read()
     return svc.upload_meet_greet_recording(intake_id, org_id, session_id, raw, file.content_type or "")
+
+
+# ── Meet & Greet summary ─────────────────────────────────────────────────
+# The conversation by topic, every point tied to what was said, and the
+# supports asked for, which draft the service agreement.
+
+
+class SummaryLineReview(BaseModel):
+    action: Literal["include", "dismiss"]
+
+
+@router.post("/{intake_id}/meet-greet/summary")
+async def summarise_meet_greet(intake_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    intake = svc.get_intake(intake_id, org_id)
+    return meet_greet_summary_service.summarise(intake, current_user.get("sub") or current_user.get("id"))
+
+
+@router.post("/{intake_id}/meet-greet/summary/lines/{line_id}")
+async def review_meet_greet_line(
+    intake_id: str, line_id: str, body: SummaryLineReview, current_user: dict = Depends(get_current_user),
+):
+    """Something said that the summary doesn't cover: include it word for
+    word, or dismiss it as not about the person."""
+    org_id = _require_md(current_user)
+    return meet_greet_summary_service.review_line(svc.get_intake(intake_id, org_id), line_id, body.action)
+
+
+@router.get("/by-participant/{participant_id}/meet-greet-summary")
+async def participant_meet_greet_summary(participant_id: str, current_user: dict = Depends(get_current_user)):
+    """The summary from the participant's onboarding, on their record once
+    they're active. None when they didn't come through onboarding."""
+    if not has_org_wide_access(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator or managing director access required.")
+    if not await participant_service.get_participant_by_id(participant_id, current_user):
+        raise HTTPException(status_code=404, detail="Participant not found.")
+    return svc.meet_greet_summary_for_participant(participant_id, get_user_organization_id(current_user))

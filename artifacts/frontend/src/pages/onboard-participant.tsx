@@ -16,8 +16,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { SectionInfo } from "@/components/ui/section-info";
 import { MeetGreetCapture } from "@/components/onboarding/MeetGreetCapture";
+import { MeetGreetSummaryPanel } from "@/components/onboarding/MeetGreetSummaryPanel";
 import {
   listParticipantIntakes, createParticipantIntake, updateParticipantIntake,
+  summariseMeetGreet, reviewMeetGreetLine,
   type ParticipantIntake, type IntakeStatus, type EnquirySource, type ServiceCategory, type FundingType,
   type NextOfKinEntry, type WebIntakeForm, type ScreeningManualChecks,
   GENDER_OPTIONS, PRONOUN_OPTIONS,
@@ -1878,6 +1880,33 @@ function IntakeDetail({
   const [terminateReason, setTerminateReason] = useState("");
   const [notes, setNotes] = useState(intake.meet_greet_notes ?? "");
   const [activating, setActivating] = useState(false);
+  const [summarising, setSummarising] = useState(false);
+  const [reviewingLine, setReviewingLine] = useState<string | null>(null);
+  const openSummaryLines = (intake.meet_greet_summary?.uncovered ?? []).filter((u) => u.status === "open").length;
+
+  // The conversation by topic, only from what was said; the supports asked
+  // for draft the service agreement.
+  async function summarise() {
+    setSummarising(true);
+    try {
+      onLocalUpdate({ meet_greet_summary: await summariseMeetGreet(intake.id) });
+    } catch (err) {
+      toast({ title: "Couldn't summarise the conversation", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setSummarising(false);
+    }
+  }
+
+  async function reviewLine(lineId: string, action: "include" | "dismiss") {
+    setReviewingLine(lineId);
+    try {
+      onLocalUpdate({ meet_greet_summary: await reviewMeetGreetLine(intake.id, lineId, action) });
+    } catch (err) {
+      toast({ title: "Couldn't save that", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setReviewingLine(null);
+    }
+  }
   // Portal invite sent straight after activation — the participant's own
   // login only. Representatives need recorded authority, so they're invited
   // from the Portal access card on the Active step instead.
@@ -2184,6 +2213,14 @@ function IntakeDetail({
                       coordinatorName={user?.full_name}
                       editable={intake.status === "meet_greet"}
                     />
+                    <MeetGreetSummaryPanel
+                      summary={intake.meet_greet_summary}
+                      editable={intake.status === "meet_greet"}
+                      summarising={summarising}
+                      reviewingId={reviewingLine}
+                      onSummarise={() => void summarise()}
+                      onReview={(lineId, action) => void reviewLine(lineId, action)}
+                    />
                     {intake.status === "meet_greet" && (
                       <div className="flex justify-between gap-2">
                         <Button variant="outline" className="gap-2 rounded-lg" onClick={goBack}>
@@ -2193,7 +2230,13 @@ function IntakeDetail({
                           <Button variant="outline" className="rounded-lg" onClick={saveMeetGreetDraft}>
                             Save Draft
                           </Button>
-                          <Button variant="navy" className="gap-2 rounded-lg" onClick={saveMeetGreetAndContinue}>
+                          <Button
+                            variant="navy"
+                            className="gap-2 rounded-lg"
+                            onClick={saveMeetGreetAndContinue}
+                            disabled={openSummaryLines > 0}
+                            title={openSummaryLines > 0 ? "Include or dismiss everything said that isn't in the summary first" : undefined}
+                          >
                             Next <Send size={14} />
                           </Button>
                         </div>
@@ -2215,6 +2258,13 @@ function IntakeDetail({
                         supports they'll receive. It has to be signed (in
                         person or by email) before they can be made active;
                         signing moves this step on by itself. */}
+                    {(intake.meet_greet_summary?.supports.length ?? 0) > 0 && (
+                      <p className="text-xs" style={{ color: MUTED }}>
+                        The {intake.meet_greet_summary!.supports.length} support
+                        {intake.meet_greet_summary!.supports.length === 1 ? "" : "s"} asked for at the Meet &amp; Greet
+                        {" "}fill in a new agreement. Check each one, and add anything that wasn't said, such as rates.
+                      </p>
+                    )}
                     <ParticipantServiceAgreementSection
                       intakeId={intake.id}
                       participantName={intake.full_name}
@@ -2849,6 +2899,22 @@ function agreementDefaults(intake: Intake): BuilderDefaults {
     plan_manager_email: web.plan_manager_email || null,
     start_date: intake.plan_start_date || null,
     end_date: intake.plan_end_date || null,
+    supports: (intake.meet_greet_summary?.supports ?? []).map((s) => ({
+      support_item_code: s.item_code ?? "",
+      quantity: totalHours(s.hours_per_week, intake.plan_start_date, intake.plan_end_date),
+      rate: null,
+      location: s.location,
+      frequency: s.frequency,
+      note: s.description,
+    })),
   };
+}
+
+/** Hours over the agreement from hours a week, when both dates are known;
+ *  otherwise left for the managing director. */
+function totalHours(perWeek: number | null, start?: string, end?: string): number | null {
+  if (perWeek == null || !start || !end) return null;
+  const weeks = (new Date(`${end.slice(0, 10)}T00:00:00`).getTime() - new Date(`${start.slice(0, 10)}T00:00:00`).getTime()) / (7 * 86_400_000);
+  return weeks > 0 ? Math.round(perWeek * weeks) : null;
 }
 

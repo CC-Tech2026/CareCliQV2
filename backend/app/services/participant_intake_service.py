@@ -296,6 +296,20 @@ async def update_intake(
     reason_field = REASON_FIELD_FOR_STATUS.get(new_status) if new_status else None
     if reason_field and not (merged.get(reason_field) or "").strip():
         raise HTTPException(status_code=422, detail=f"{reason_field.replace('_', ' ').capitalize()} is required.")
+    # The agreement is drafted from the Meet & Greet summary, so everything
+    # said has to be in it, or knowingly left out, before moving on.
+    if new_status == "awaiting_signatures" and current_status == "meet_greet":
+        from .meet_greet_summary_service import open_lines
+
+        waiting = open_lines(existing)
+        if waiting:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{waiting} thing{'s' if waiting != 1 else ''} said in the Meet & Greet "
+                    f"{'aren' if waiting != 1 else 'isn'}'t in the summary. Include or dismiss each one first."
+                ),
+            )
     # Signing the agreement moves the intake to "signed" by itself; either
     # way, neither step happens without a signed agreement with supports.
     # Reactivating a suspended participant doesn't need a new one.
@@ -318,6 +332,17 @@ async def update_intake(
         .execute()
     )
     return _with_fresh_document_url((resp.data or [{**existing, **update}])[0])
+
+
+def meet_greet_summary_for_participant(participant_id: str, organization_id: str) -> dict[str, Any] | None:
+    """The Meet & Greet summary from the onboarding that made this person a
+    participant, if there was one."""
+    rows = (
+        get_supabase_admin().table(TABLE).select("id, meet_greet_summary")
+        .eq("organization_id", organization_id).eq("participant_id", participant_id)
+        .not_.is_("meet_greet_summary", "null").order("updated_at", desc=True).limit(1).execute()
+    ).data or []
+    return rows[0]["meet_greet_summary"] if rows else None
 
 
 def get_intake_for_session(intake_id: str, organization_id: str) -> dict[str, Any] | None:

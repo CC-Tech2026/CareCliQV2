@@ -32,6 +32,8 @@ export type BuilderDefaults = {
     rate?: number | null;
     location?: string | null;
     frequency?: string | null;
+    /** What the person asked for, when drafted from the Meet & Greet. */
+    note?: string | null;
   }>;
 };
 
@@ -42,6 +44,7 @@ type Line = {
   rate: string;
   location: SupportLocation | "";
   frequency: SupportFrequency | "";
+  note?: string;
 };
 
 const PLAN_MANAGEMENT: Array<{ value: PlanManagementType; label: string }> = [
@@ -134,6 +137,7 @@ export function ServiceAgreementBuilder({
             rate: s.rate != null ? String(s.rate) : "",
             location: (s.location as SupportLocation) ?? "",
             frequency: (s.frequency as SupportFrequency) ?? "",
+            note: s.note ?? undefined,
           }))
         : [blankLine()],
     );
@@ -269,6 +273,9 @@ export function ServiceAgreementBuilder({
                         emptyText="No matching items."
                         disabled={!catalogue.data}
                       />
+                      {line.note && (
+                        <p className="mt-1 text-[11px] text-cc-muted">Asked for at the Meet &amp; Greet: "{line.note}"</p>
+                      )}
                       {item && (
                         <p className="mt-1 text-[11px] text-cc-muted">
                           {item.item_code} · price limit {item.price_national != null ? `${money(item.price_national)} per ${UNIT_WORDS[item.unit?.toUpperCase()]?.replace(/s$/, "") ?? "unit"}` : "quoted"}

@@ -13,6 +13,7 @@ import { ParticipantRecordsTab } from "@/components/participants/ParticipantReco
 import { ParticipantInvoiceSummary } from "@/components/participants/ParticipantInvoiceSummary";
 import { ParticipantInvoicesPanel } from "@/components/participants/ParticipantInvoicesPanel";
 import { ParticipantServiceAgreementSection } from "@/components/participants/ParticipantServiceAgreementSection";
+import { ParticipantMeetGreetSummary } from "@/components/onboarding/MeetGreetSummaryPanel";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { TaskTemplatePanel } from "@/components/coordinator/TaskTemplatePanel";
 import { SectionInfo } from "@/components/ui/section-info";
@@ -1604,6 +1605,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                 </div>
               </details>
             )}
+            {isCoordinator && id && <ParticipantMeetGreetSummary participantId={id} />}
           </>
         )}
 
