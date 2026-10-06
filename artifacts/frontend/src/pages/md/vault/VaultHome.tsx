@@ -49,12 +49,14 @@ import { useToast } from "@/hooks/use-toast";
 import {
   fetchVaultStats,
   fetchVaultFolders,
+  fetchVaultTree,
   fetchPolicyAcknowledgementStatus,
   setFolderOrder,
   fetchShareEvents,
   type VaultStats,
   type VaultFolder,
   type VaultShareEvent,
+  type VaultTreeFolder,
 } from "@/services/vaultService";
 import {
   Sheet,
@@ -520,6 +522,14 @@ export default function VaultHome() {
   const { toast } = useToast();
   const [stats, setStats] = useState<VaultStats | null>(null);
   const [folders, setFolders] = useState<VaultFolder[]>([]);
+  const [tree, setTree] = useState<VaultTreeFolder[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchVaultTree()
+      .then((data) => { if (!cancelled) setTree(data); })
+      .catch(() => { if (!cancelled) setTree([]); });
+    return () => { cancelled = true; };
+  }, []);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
@@ -709,6 +719,35 @@ export default function VaultHome() {
         </StatCardGroup>
 
         <ShareHistorySheet open={shareHistoryOpen} onOpenChange={setShareHistoryOpen} />
+
+        {tree && tree.length > 0 && (
+          <section aria-label="Organised folders" className="grid grid-cols-1 gap-8 pt-2 sm:grid-cols-3">
+            {tree.map((folder) => (
+              <button
+                key={folder.key}
+                onClick={() => navigate(`/md/vault/tree/${folder.key}`)}
+                className="group relative w-full rounded-3xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3a3ae6]"
+              >
+                <span
+                  aria-hidden="true"
+                  className="absolute left-0 top-0 h-9 w-[44%] rounded-t-2xl"
+                  style={{ background: "#2a2ae6" }}
+                />
+                <span
+                  className="relative mt-6 flex h-56 flex-col justify-between rounded-3xl p-6 text-white shadow-[0_18px_40px_-12px_rgba(30,30,230,0.45)] transition-transform duration-200 group-hover:-translate-y-1.5"
+                  style={{ background: "linear-gradient(180deg, #8584f5 0%, #4646ec 45%, #1f1fe0 100%)" }}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-mono text-xl">{folder.label}</span>
+                    <span className="mt-1 block font-mono text-xs opacity-80">
+                      {folder.count} items · {folder.subfolders.length} subfolders
+                    </span>
+                  </span>
+                </span>
+              </button>
+            ))}
+          </section>
+        )}
 
         <div id="vault-folders" className="flex scroll-mt-4 flex-wrap items-center gap-3 rounded-xl border border-cc-border bg-cc-card p-3">
           <input

@@ -69,6 +69,9 @@ class VaultDocument(TypedDict):
     # The row a document is registered under, when it isn't source_id — a
     # governance document's first version, so the ID survives new versions.
     register_source_id: NotRequired[str]
+    # The kind within a category, where one category holds several (a worker
+    # credential's type), used to file it into the organised folders.
+    subtype: NotRequired[str | None]
 
 
 GOVERNANCE_FOLDER_KEYS = (
@@ -909,6 +912,7 @@ def _list_credentials(org_id: str) -> list[VaultDocument]:
             status=row.get("status") or "pending_review",
             source_table="credentials",
             source_id=row["id"],
+            subtype=row.get("credential_type"),
             has_stored_file=bool(row.get("file_path")),
         )
         for row in (resp.data or [])
@@ -2170,6 +2174,118 @@ def get_folder_meta(org_id: str, category: str) -> dict[str, Any] | None:
         return None
     docs = _load_category_docs(org_id, category)
     return _folder_meta_from_docs(category, meta["label"], meta["group"], False, docs)
+
+
+# ── Organised folders: three top-level folders, each with subfolders ─────────
+# A view over the same documents as the flat category folders. Every document
+# lands in at most one subfolder. Governance subfolders are the categories
+# themselves; participant and staff subfolders group several categories, so
+# they're decided per document. Subfolders with no documents are left out.
+
+VAULT_TREE_TOPS: dict[str, str] = {
+    "governance": "Governance",
+    "participant": "Participant Folder",
+    "staff": "Staff Folder",
+}
+
+VAULT_TREE_SUBFOLDERS: dict[str, list[tuple[str, str]]] = {
+    "governance": [
+        (key, CATEGORY_META[key]["label"])
+        for key in (*GOVERNANCE_FOLDER_KEYS, "audit_packs")
+    ],
+    "participant": [
+        ("clinical_docs", "Clinical Docs"),
+        ("incident_reports", "Incident Reports"),
+        ("intake_docs", "Intake Docs"),
+        ("invoices", "Invoices"),
+        ("service_support", "Service A & Support P"),
+        ("behaviour_support", "Behaviour Support"),
+        ("emergency_risk", "Emergency & Risk"),
+        ("sil_docs", "SIL Docs"),
+        ("support_coordination", "Support Coordination Docs"),
+    ],
+    "staff": [
+        ("checks", "Checks (NDIS WSC, WWCC, Police Check)"),
+        ("contracts_info", "Contracts & Info"),
+        ("first_aid_cpr", "First Aid & CPR"),
+        ("id_documents", "ID Documents"),
+        ("training_qualifications", "Training & Qualifications"),
+        ("vehicle_insurance", "Vehicle Insurance & Rego"),
+    ],
+}
+
+STAFF_CREDENTIAL_SUBFOLDERS: dict[str, str] = {
+    "ndis_screening": "checks",
+    "wwcc": "checks",
+    "police_check": "checks",
+    "first_aid": "first_aid_cpr",
+    "cpr": "first_aid_cpr",
+    "drivers_licence": "id_documents",
+}
+
+
+def _tree_placement(doc: VaultDocument) -> tuple[str, str] | None:
+    category = doc["category"]
+    if category in GOVERNANCE_FOLDER_KEYS or category == "audit_packs":
+        return "governance", category
+    if category in ("session_notes", "medication_records"):
+        return "participant", "clinical_docs"
+    if category == "incident_reports":
+        return "participant", "incident_reports"
+    if category == "invoices":
+        return "participant", "invoices"
+    if category == "ndis_plans" or doc["source_table"] in ("service_agreements", "ndis_plans"):
+        return "participant", "service_support"
+    if category == "consent_onboarding":
+        if doc["person_type"] == "Participant":
+            return "participant", "intake_docs"
+        return "staff", "contracts_info"
+    if category == "worker_credentials":
+        return "staff", STAFF_CREDENTIAL_SUBFOLDERS.get(doc.get("subtype") or "", "training_qualifications")
+    return None
+
+
+def _tree_documents(org_id: str) -> dict[tuple[str, str], list[VaultDocument]]:
+    grouped: dict[tuple[str, str], list[VaultDocument]] = {}
+    for category, docs in _load_all_category_docs(org_id).items():
+        if category.startswith(CUSTOM_FOLDER_PREFIX):
+            continue
+        for doc in docs:
+            placement = _tree_placement(doc)
+            if placement:
+                grouped.setdefault(placement, []).append(doc)
+    return grouped
+
+
+def list_vault_tree(org_id: str) -> list[dict[str, Any]]:
+    grouped = _tree_documents(org_id)
+    tops: list[dict[str, Any]] = []
+    for top_key, top_label in VAULT_TREE_TOPS.items():
+        subfolders = []
+        for sub_key, sub_label in VAULT_TREE_SUBFOLDERS[top_key]:
+            count = len(grouped.get((top_key, sub_key), []))
+            if count == 0:
+                continue
+            subfolders.append({
+                "key": sub_key,
+                "label": sub_label,
+                "count": count,
+                "category": sub_key if top_key == "governance" else None,
+            })
+        tops.append({
+            "key": top_key,
+            "label": top_label,
+            "count": sum(s["count"] for s in subfolders),
+            "subfolders": subfolders,
+        })
+    return tops
+
+
+def list_tree_subfolder_documents(org_id: str, top: str, sub: str) -> list[VaultDocument]:
+    if sub not in dict(VAULT_TREE_SUBFOLDERS.get(top, [])):
+        raise HTTPException(status_code=404, detail="Unknown vault folder.")
+    docs = _tree_documents(org_id).get((top, sub), [])
+    return sorted(docs, key=lambda d: d.get("date") or "", reverse=True)
 
 
 def list_folders(org_id: str) -> list[dict[str, Any]]:

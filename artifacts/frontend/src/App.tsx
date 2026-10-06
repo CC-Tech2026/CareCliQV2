@@ -67,6 +67,7 @@ import MDCompliancePage from "@/pages/md/compliance";
 import MDAuditReadinessPage from "@/pages/md/audit-readiness";
 import MDVaultHomePage from "@/pages/md/vault/VaultHome";
 import MDVaultFolderPage from "@/pages/md/vault/VaultFolder";
+import MDVaultTreeFolderPage from "@/pages/md/vault/VaultTreeFolder";
 import MDFinancialPage from "@/pages/md/financial";
 import MDCalendarPage from "@/pages/md/md-calendar";
 import AdminDashboardPage from "@/pages/admin/dashboard";
@@ -359,6 +360,22 @@ function Router() {
         <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Governance & policy document vault">
           <MDVaultHomePage />
         </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/vault/tree/:top">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Governance & policy document vault">
+            <MDVaultTreeFolderPage top={params.top} />
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/md/vault/tree/:top/:sub">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Governance & policy document vault">
+            <MDVaultTreeFolderPage top={params.top} sub={params.sub} />
+          </ProtectedRoute>
+        )}
       </Route>
 
       <Route path="/md/vault/:category">
