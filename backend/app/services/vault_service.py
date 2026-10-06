@@ -1172,6 +1172,53 @@ def _list_plan_agreements(org_id: str, patients: dict[str, str], covered: set[st
     ]
 
 
+def _list_intake_service_agreements(org_id: str) -> list[VaultDocument]:
+    """Signed agreement PDFs stored on an onboarding intake, whether uploaded
+    by hand or generated at signing. Hidden once a structured service
+    agreement exists for that intake — that record is already listed by
+    _list_participant_agreements."""
+    try:
+        supabase = get_supabase_admin()
+        intakes = (
+            supabase.table("participant_intakes")
+            .select("id, full_name, provider_signed_at, family_signed_at, "
+                    "service_agreement_document_path, updated_at")
+            .eq("organization_id", org_id)
+            .not_.is_("service_agreement_document_path", "null")
+            .order("updated_at", desc=True)
+            .limit(300)
+            .execute()
+        ).data or []
+        structured = (
+            supabase.table("service_agreements")
+            .select("intake_id")
+            .eq("organization_id", org_id)
+            .neq("status", "draft")
+            .not_.is_("intake_id", "null")
+            .execute()
+        ).data or []
+    except Exception:
+        return []
+    superseded = {str(row["intake_id"]) for row in structured}
+    return [
+        VaultDocument(
+            id=f"intake-{row['id']}",
+            category="consent_onboarding",
+            folder_label=CATEGORY_META["consent_onboarding"]["label"],
+            title="Service agreement",
+            person_name=row.get("full_name") or "Unknown participant",
+            person_type="Participant",
+            date=str(row.get("updated_at") or ""),
+            status="signed" if row.get("provider_signed_at") and row.get("family_signed_at") else "on_file",
+            source_table="participant_intakes",
+            source_id=row["id"],
+            has_stored_file=True,
+        )
+        for row in intakes
+        if str(row["id"]) not in superseded
+    ]
+
+
 def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
     docs: list[VaultDocument] = []
     workers = _user_name_map(org_id)
@@ -1212,6 +1259,7 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
 
     docs.extend(_list_open_hire_offers(org_id))
     docs.extend(_list_participant_agreements(org_id, patients))
+    docs.extend(_list_intake_service_agreements(org_id))
 
     try:
         resp = (
@@ -1284,12 +1332,36 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
     return docs
 
 
+def _render_intake_service_agreement(org_id: str, intake_id: str) -> tuple[str, bytes]:
+    rows = (
+        get_supabase_admin()
+        .table("participant_intakes")
+        .select("id, service_agreement_document_name, service_agreement_document_path")
+        .eq("id", intake_id)
+        .eq("organization_id", org_id)
+        .limit(1)
+        .execute()
+    ).data or []
+    row = rows[0] if rows else None
+    if not row or not row.get("service_agreement_document_path"):
+        raise HTTPException(status_code=404, detail="Consent/onboarding document not found.")
+    path = row["service_agreement_document_path"]
+    data = _download_stored_file("participant-intake-files", path)
+    ext = path.rsplit(".", 1)[-1] if "." in path else "pdf"
+    name = row.get("service_agreement_document_name") or "service-agreement"
+    stem = name[: -(len(ext) + 1)] if name.lower().endswith(f".{ext.lower()}") else name
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-")
+    return f"{safe}.{ext}", data
+
+
 def _render_consent_onboarding(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
     if document_id.startswith("sa-"):
         from .service_agreement_document_service import agreement_document
         return agreement_document(org_id, document_id.removeprefix("sa-"))
     if document_id.startswith("agreement-"):
         return _render_plan_agreement(org_id, document_id.removeprefix("agreement-"), exclude_fields)
+    if document_id.startswith("intake-"):
+        return _render_intake_service_agreement(org_id, document_id.removeprefix("intake-"))
 
     hire_doc = (
         get_supabase_admin().table("employee_onboarding_documents")
@@ -1860,6 +1932,7 @@ DOC_TYPE_CODES: dict[str, str] = {
     "ndis_plans": "PLN",
     "plan_agreements": "AGR",
     "service_agreements": "AGR",
+    "participant_intakes": "AGR",
     "medication_documents": "MED",
     "medication_administrations": "MAR",
     "credentials": "CRD",
@@ -1880,6 +1953,7 @@ DOC_SOURCE_LABELS: dict[str, str] = {
     "ndis_plans": "Participant plan",
     "plan_agreements": "Recorded on the NDIS plan",
     "service_agreements": "Service agreement",
+    "participant_intakes": "Signed onboarding agreement",
     "medication_documents": "Medication upload",
     "medication_administrations": "Medication round",
     "credentials": "Worker credential",
