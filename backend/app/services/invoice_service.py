@@ -168,8 +168,10 @@ def get_completed_tasks_for_period(
             return {}
 
         lines_by_shift = _agreement_lines_for_shifts(supabase, completions, organization_id)
+        rates_by_shift = _verified_rates_for_shifts(supabase, completions, organization_id)
         for row in completions:
             row["agreement_line"] = lines_by_shift.get(str(row.get("shift_id") or ""))
+            row["rate"] = rates_by_shift.get(str(row.get("shift_id") or ""))
             row["participant_tasks"] = tasks_by_id.get(str(row.get("task_id")), {})
             price_item_code = row.get("price_item_code")
             row["ndis_price_items"] = (
@@ -223,6 +225,41 @@ def _agreement_lines_for_shifts(
     }
 
 
+def _verified_rates_for_shifts(
+    supabase: Any, completions: List[Dict[str, Any]], organization_id: str,
+) -> Dict[str, Decimal]:
+    """shift id -> the rate its verification charged (an agreed rate, the
+    organisation's price or the catalogue's). The invoice bills that rate:
+    working one back from rounded amounts gave a different unit price, and
+    sometimes one over the NDIS limit."""
+    shift_ids = sorted({str(c["shift_id"]) for c in completions if c.get("shift_id")})
+    if not shift_ids:
+        return {}
+
+    def _query(active_only: bool):
+        query = (
+            supabase.table("shift_verifications").select("shift_id, hourly_rate_applied")
+            .in_("shift_id", shift_ids).eq("organization_id", organization_id)
+        )
+        return (query.is_("reversed_at", "null") if active_only else query).execute().data or []
+
+    try:
+        try:
+            rows = _query(active_only=True)
+        except Exception as exc:  # before migration 233 nothing is reversed
+            if "reversed_at" not in str(exc) and "42703" not in str(exc):
+                raise
+            rows = _query(active_only=False)
+    except Exception as exc:
+        logger.warning("Verified rates for invoice lookup failed: %s", exc)
+        return {}
+    rates: Dict[str, Decimal] = {}
+    for row in rows:
+        if isinstance(row, dict) and row.get("shift_id") and row.get("hourly_rate_applied") is not None:
+            rates[str(row["shift_id"])] = _safe_decimal(row["hourly_rate_applied"])
+    return rates
+
+
 def aggregate_line_items(
     completions: List[Dict[str, Any]]
 ) -> Dict[str, Dict[str, Any]]:
@@ -244,11 +281,20 @@ def aggregate_line_items(
         agreement_line = completion.get("agreement_line") or {}
         line_id = agreement_line.get("service_agreement_support_id")
         price_code = f"{code}::{line_id}" if line_id else code
-            
+        # One line per rate too: shifts verified at different rates (an
+        # agreement updated mid-period, a new price guide) aren't averaged.
+        rate = completion.get("rate")
+        if rate is not None:
+            rate = _safe_decimal(rate)
+            price_code = f"{price_code}@{rate}"
+
         if price_code not in line_items:
             price_item = completion.get("ndis_price_items", {}) or {}
             line_items[price_code] = {
                 "price_item_code": code,
+                # The verified rate, billed as the unit price (None for
+                # completions that didn't come through shift verification).
+                "rate": rate,
                 # What was agreed, so the line can be traced to the agreement.
                 "service_agreement_support_id": line_id,
                 "service_agreement_id": agreement_line.get("service_agreement_id"),

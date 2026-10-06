@@ -107,6 +107,11 @@ function cents(value?: number | null, currency = "AUD") {
   );
 }
 
+/** Hours from shifts aren't whole: 140 minutes is 2.333333 h, shown 2.33. */
+function quantity(value?: number | null) {
+  return new Intl.NumberFormat("en-AU", { maximumFractionDigits: 2 }).format(value || 0);
+}
+
 export function overdueDays(
   invoice: Invoice,
   today = appLocalDateKey(new Date().toISOString()),
@@ -182,7 +187,7 @@ function InvoiceRecord({ invoice }: { invoice: Invoice }) {
                 Service: {item.service_date || "Not recorded"}
               </p>
               <p className="text-cc-muted">
-                {item.quantity} x{" "}
+                {quantity(item.quantity)} x{" "}
                 {cents(item.unit_amount_cents, invoice.currency)}
               </p>
             </div>
@@ -1766,7 +1771,7 @@ export default function Billing() {
                                             item.agreement_number ? `Agreement ${item.agreement_number}` : null,
                                             item.service_date ? `Service ${item.service_date}` : null,
                                             item.location_type ? item.location_type.replaceAll("_", " ") : null,
-                                            `${item.quantity} × ${cents(item.unit_amount_cents, invoice.currency)}`,
+                                            `${quantity(item.quantity)} × ${cents(item.unit_amount_cents, invoice.currency)}`,
                                           ]
                                             .filter(Boolean)
                                             .join(" · ")}
