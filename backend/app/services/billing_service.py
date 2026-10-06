@@ -504,6 +504,22 @@ def _single_matching_participant(org_id: str, recipient_name: str) -> dict[str, 
     return rows[0] if len(rows) == 1 else None
 
 
+def _discard_new_invoice(invoice_id: str, org_id: str) -> None:
+    """Remove an invoice created a moment ago that can't stand: release the
+    completions it linked, then delete it (cancel it if it can't be deleted)."""
+    supabase = get_supabase_admin()
+    supabase.table("task_completions").update({"invoice_id": None, "updated_at": _now_iso()}).eq(
+        "invoice_id", invoice_id
+    ).eq("organization_id", org_id).execute()
+    try:
+        supabase.table("invoices").delete().eq("id", invoice_id).eq("organization_id", org_id).execute()
+    except Exception as exc:
+        logger.warning("Could not delete invoice %s; cancelling it instead: %s", invoice_id, exc)
+        supabase.table("invoices").update({"status": "cancelled", "cancelled_at": _now_iso()}).eq(
+            "id", invoice_id
+        ).eq("organization_id", org_id).execute()
+
+
 async def create_invoice(user: dict, data: dict) -> dict:
     _require_billing_role(user)
     org_id = _require_org(user)
@@ -543,13 +559,23 @@ async def create_invoice(user: dict, data: dict) -> dict:
         generated_line_items: list[dict[str, Any]] = []
         for item in invoice_service.aggregate_line_items(preview_lines).values():
             billed_completion_ids.extend(str(i) for i in item.get("completion_ids") or [])
-            total_cents = _money_to_cents(item.get("total_price") or 0)
-            quantity = Decimal(str(item.get("quantity") or "0"))
+            # Hours to six places: 140 minutes is 2.333333, not a float's
+            # 2.3333333333333335 (the claim reads it back as hours and minutes).
+            quantity = Decimal(str(item.get("quantity") or "0")).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
             unit_amount_cents = 0
-            if quantity > 0:
+            if item.get("rate") is not None:
+                # The rate the shifts were verified at: the line is quantity x
+                # that rate, as the NDIA pays it, and the unit price matches
+                # the agreement (and stays within the price limit it was
+                # checked against).
+                unit_amount_cents = _money_to_cents(item["rate"])
+            elif quantity > 0:
                 unit_amount_cents = int(
-                    (Decimal(total_cents) / quantity).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+                    (Decimal(_money_to_cents(item.get("total_price") or 0)) / quantity).quantize(
+                        Decimal("1"), rounding=ROUND_HALF_UP
+                    )
                 )
+            total_cents = int((quantity * unit_amount_cents).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
             generated_line_items.append({
                 "description": item.get("description") or "Verified support item",
                 "quantity": float(quantity),
@@ -686,10 +712,20 @@ async def create_invoice(user: dict, data: dict) -> dict:
         # the invoice's record but not in its total) or ones with no support
         # item (never billed). The null guard stops two invoices created at
         # the same moment both claiming the same completions.
-        get_supabase_admin().table("task_completions").update({
+        linked = get_supabase_admin().table("task_completions").update({
             "invoice_id": created.get("id"),
             "updated_at": _now_iso(),
         }).in_("id", billed_completion_ids).is_("invoice_id", "null").execute()
+        linked_ids = {str(row.get("id")) for row in (linked.data or []) if isinstance(row, dict)}
+        if len(linked_ids) < len(set(billed_completion_ids)):
+            # Another invoice took some of these shifts at the same moment —
+            # this one's total includes them, so it can't stand.
+            _discard_new_invoice(str(created.get("id")), org_id)
+            raise HTTPException(
+                status_code=409,
+                detail="Some of these shifts were put on another invoice at the same moment, so this one "
+                "wasn't created. Refresh and try again.",
+            )
 
     await audit_service.log_action(
         action_type="invoice.created",

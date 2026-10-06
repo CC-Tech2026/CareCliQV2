@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Optional
 
 from ..core.ndis_categories import support_category_number_label
@@ -130,6 +131,14 @@ def billable_minutes(shift: dict[str, Any], approve_extra_time: bool = False) ->
     }
 
 
+def _split_evenly(total: int, parts: int) -> list[int]:
+    """`total` as `parts` whole numbers that add back up to it exactly — the
+    first few take the remainder. (Rounding each share on its own billed
+    141 minutes for a 140-minute shift split three ways, and drifted cents.)"""
+    base, extra = divmod(total, parts)
+    return [base + (1 if i < extra else 0) for i in range(parts)]
+
+
 def _completion_date_for_shift(shift: dict[str, Any]) -> str:
     """Calendar day the shift belongs to, in the participant's branch zone.
     (Taking .date() of the UTC instant filed anything before ~9:30 AM
@@ -240,16 +249,18 @@ def _upsert_task_completions_for_verified_shift(
     existing_rows = _safe_rows(existing_result.data)
     existing_by_task_id = {str(row.get("task_id")): row for row in existing_rows if row.get("task_id")}
 
+    # The shift's time and charge shared across its tasks so the shares add
+    # back up to exactly what was verified — the invoice counts these minutes.
     task_count = len(verified_task_ids)
-    apportioned_minutes = max(1, int(round(actual_minutes / task_count)))
-    apportioned_amount = round(billed_amount / task_count, 2)
+    minutes_shares = _split_evenly(int(round(actual_minutes)), task_count)
+    cents_shares = _split_evenly(int(round(billed_amount * 100)), task_count)
 
     upserted: list[dict[str, Any]] = []
-    for task_id in verified_task_ids:
+    for task_id, minutes_share, cents_share in zip(verified_task_ids, minutes_shares, cents_shares):
         row_payload = {
             **payload_template,
-            "duration_minutes": apportioned_minutes,
-            "billed_amount": apportioned_amount,
+            "duration_minutes": minutes_share,
+            "billed_amount": cents_share / 100,
         }
         existing = existing_by_task_id.get(task_id)
         if existing and existing.get("id"):
@@ -310,10 +321,12 @@ def _hours_sanity_check(shift: dict[str, Any]) -> dict[str, Any]:
 def compute_verification_checks(
     shift: dict[str, Any],
     session: Optional[dict[str, Any]],
+    note_text: Optional[str] = None,
 ) -> dict[str, Any]:
     """Read-only: recompute the checks shown to the coordinator. Never trust a
     client-held copy — this is called fresh both for the queue listing and
-    again server-side at confirm time."""
+    again server-side at confirm time. `note_text` is the shift's progress
+    note when the caller has looked beyond the session (_note_text_for_shift)."""
 
     end_validation = (session or {}).get("end_validation")
     if not isinstance(end_validation, dict) or not end_validation:
@@ -356,7 +369,7 @@ def compute_verification_checks(
     hours_check = _hours_sanity_check(shift)
 
     # A shift can't be verified (and billed) without the worker's progress note.
-    note_present = bool(session_note_text(session))
+    note_present = bool(note_text or session_note_text(session))
     note_check = {
         "present": note_present,
         "flagged": not note_present,
@@ -403,6 +416,24 @@ def session_note_text(session: Optional[dict[str, Any]]) -> Optional[str]:
         if text:
             return text
     return None
+
+
+def _note_text_for_shift(shift: dict[str, Any], session: Optional[dict[str, Any]]) -> Optional[str]:
+    """The shift's progress note: the session's copy, else the notes written
+    against the shift. Ending a shift copies those notes into the session,
+    but a worker can still write them afterwards (the documentation window)
+    and those only ever land in shift_visit_notes — reading the session
+    alone left such a shift unverifiable for good."""
+    text = session_note_text(session)
+    if text or not shift.get("id"):
+        return text
+    try:
+        from .shift_service import aggregate_shift_visit_notes_text
+
+        return aggregate_shift_visit_notes_text(str(shift["id"])).strip() or None
+    except Exception as exc:
+        logger.warning("Could not read the visit notes for shift %s: %s", shift.get("id"), exc)
+        return None
 
 
 def _get_session_for_shift(shift: dict[str, Any]) -> Optional[dict[str, Any]]:
@@ -604,12 +635,13 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for shift in pending:
         session = _get_session_for_shift(shift)
-        checks = compute_verification_checks(shift, session)
+        note = _note_text_for_shift(shift, session)
+        checks = compute_verification_checks(shift, session, note_text=note)
         out.append(
             {
                 "shift_id": shift.get("id"),
                 "clock_in_location_verified": shift.get("clock_in_method") == "gps" and shift.get("clock_in_verified") is True,
-                "session_note": session_note_text(session),
+                "session_note": note,
                 "tasks": [task for task in (shift.get("tasks") or []) if isinstance(task, dict)],
                 "original_language_input": (session or {}).get("original_language_input"),
                 "detected_language": (session or {}).get("detected_language"),
@@ -713,6 +745,70 @@ async def list_price_item_options_for_participant(participant_id: str, org_id: s
     return out
 
 
+def _undo_verification(
+    supabase: Any,
+    *,
+    verification: dict[str, Any],
+    shift_id: str,
+    coordinator_id: str,
+    budget: dict[str, Any],
+    plan_id: str,
+    amount: float,
+    category: str,
+    hourly_rate: float,
+    session_id: Optional[str],
+) -> bool:
+    """Back out a verification whose budget was charged but whose billing
+    record wasn't saved: refund the charge, return any completions already
+    written to "submitted", and mark the verification reversed (it stays as
+    history, like a coordinator's reversal). Returns False, changing
+    nothing, when the refund itself fails — the shift then stays verified
+    and charged, which is at least consistent."""
+    reason = "Undone automatically: the shift's billing record couldn't be saved."
+    try:
+        _apply_budget_change(
+            budget=budget,
+            plan_id=plan_id,
+            amount=-amount,
+            category=category,
+            hourly_rate=hourly_rate,
+            duration_minutes=0,
+            description=f"Reversal of shift verification: {reason}",
+            verification_id=str(verification["id"]),
+            session_id=session_id,
+        )
+    except Exception as exc:
+        logger.error("Refund failed undoing verification %s (shift %s): %s", verification.get("id"), shift_id, exc)
+        return False
+
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        supabase.table("task_completions").update({
+            "status": "submitted",
+            "evidence_verified": False,
+            "verified_by": None,
+            "verified_at": None,
+            "billed_amount": None,
+            "price_item_code": None,
+            "updated_at": now,
+        }).eq("shift_id", shift_id).eq("status", "verified").is_("invoice_id", "null").execute()
+    except Exception as exc:
+        logger.error("Could not reset task completions for shift %s: %s", shift_id, exc)
+    try:
+        supabase.table("shift_verifications").update({
+            "reversed_at": now,
+            "reversed_by": coordinator_id,
+            "reversal_reason": reason,
+        }).eq("id", str(verification["id"])).execute()
+    except Exception as exc:
+        if not _is_missing_column(exc):
+            logger.error("Could not mark verification %s reversed: %s", verification.get("id"), exc)
+        else:
+            # Before migration 233 there's no reversal to record.
+            supabase.table("shift_verifications").delete().eq("id", str(verification["id"])).execute()
+    return True
+
+
 async def verify_shift(
     shift_id: str,
     coordinator_id: str,
@@ -755,7 +851,8 @@ async def verify_shift(
         raise ValueError("This shift has already been verified.")
 
     session = _get_session_for_shift(shift)
-    if not session_note_text(session):
+    note = _note_text_for_shift(shift, session)
+    if not note:
         raise ValueError(
             "This shift has no progress note. Ask the worker to write it before the shift is verified."
         )
@@ -850,7 +947,13 @@ async def verify_shift(
             f"The rate for {item_code} (${hourly_rate:.2f}) is above the NDIS price limit of ${limit:.2f}. "
             "Nothing was charged. Correct the rate first."
         )
+    # Billed in whole minutes: the claim goes to the NDIA in hours and minutes
+    # and the invoice line is those minutes x the rate, so the plan is charged
+    # what will be claimed. (Clock times to the second billed 119.58 minutes
+    # here and 120 on the invoice.)
     billed_minutes = billing["billable_minutes"]
+    if billed_minutes is not None:
+        billed_minutes = int(Decimal(str(billed_minutes)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
     if billed_minutes is None or billed_minutes <= 0:
         raise ValueError(
             "Shift has no usable worked time (clock-in/clock-out missing or invalid) — "
@@ -863,9 +966,11 @@ async def verify_shift(
     if str(price.get("unit") or "").upper() == "E":
         billed_amount = round(hourly_rate, 2)
     else:
-        billed_amount = round((billed_minutes / 60) * hourly_rate, 2)
+        billed_amount = float(
+            (Decimal(billed_minutes) * Decimal(str(hourly_rate)) / 60).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        )
 
-    checks = compute_verification_checks(shift, session)
+    checks = compute_verification_checks(shift, session, note_text=note)
     # What was billed and why — part of the audit snapshot.
     checks["billing"] = {**billing, "extra_time_reason": reason or None, "rate_source": rate_source}
     if assessment:
@@ -944,18 +1049,54 @@ async def verify_shift(
         except Exception as exc:
             logger.warning("Could not move shift %s to its matched agreement line: %s", shift_id, exc)
 
-    task_completions = _upsert_task_completions_for_verified_shift(
-        supabase,
-        shift=shift,
-        participant_id=str(participant_id),
-        organization_id=org_id,
-        coordinator_id=coordinator_id,
-        price_item_code=item_code,
-        billed_amount=billed_amount,
-        actual_minutes=billed_minutes,
-        verified_at=now,
-        completion_date=completion_date,
-    )
+    try:
+        task_completions = _upsert_task_completions_for_verified_shift(
+            supabase,
+            shift=shift,
+            participant_id=str(participant_id),
+            organization_id=org_id,
+            coordinator_id=coordinator_id,
+            price_item_code=item_code,
+            billed_amount=billed_amount,
+            actual_minutes=billed_minutes,
+            verified_at=now,
+            completion_date=completion_date,
+        )
+    except Exception as exc:
+        # Without these rows the shift is verified and charged but never
+        # reaches an invoice. Undo it so the coordinator can simply retry.
+        logger.error("Task completions failed for shift %s; undoing the verification: %s", shift_id, exc)
+        undone = _undo_verification(
+            supabase,
+            verification=verification,
+            shift_id=shift_id,
+            coordinator_id=coordinator_id,
+            budget={**matching_budget, "used_amount": new_used},
+            plan_id=str(plan["id"]),
+            amount=billed_amount,
+            category=category,
+            hourly_rate=hourly_rate,
+            session_id=session_id,
+        )
+        if not undone:
+            raise ValueError(
+                "The shift was verified and charged, but its billing record couldn't be saved, so it "
+                "won't reach an invoice. Reverse the verification, then verify it again."
+            ) from exc
+        raise ValueError(
+            "The shift's billing record couldn't be saved, so the verification was undone and the "
+            "plan budget refunded. Try again."
+        ) from exc
+
+    if session_id and not session_note_text(session):
+        # A note written after the shift ended: keep it as the session's
+        # record too, the way ending the shift would have.
+        try:
+            supabase.table("sessions").update(
+                {"notes": note, "compliance_input_text": note, "updated_at": now}
+            ).eq("id", session_id).execute()
+        except Exception as exc:
+            logger.warning("Could not copy the late note onto session %s: %s", session_id, exc)
 
     result: dict[str, Any] = {
         "verification": verification,
