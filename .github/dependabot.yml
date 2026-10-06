@@ -9,6 +9,24 @@ updates:
     open-pull-requests-limit: 15
     labels:
       - "dependencies"
+    # The mobile app's Expo SDK (54) fixes the versions of expo, React Native
+    # and their native modules (expo/bundledNativeModules.json). Dependabot
+    # doesn't know that and proposed later-SDK versions that break the mobile
+    # build (#127, #142, #143, #150). Those move together in an SDK upgrade
+    # (`npx expo install --fix`); patch releases still come through here.
+    ignore:
+      - dependency-name: "expo"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "expo-*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "@expo/*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "react-native"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "react-native-*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "@react-native-async-storage/*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   # Python backend (root pyproject.toml)
   - package-ecosystem: "pip"
