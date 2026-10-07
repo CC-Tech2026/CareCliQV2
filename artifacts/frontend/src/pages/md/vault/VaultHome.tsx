@@ -517,6 +517,15 @@ function ShareHistorySheet({ open, onOpenChange }: { open: boolean; onOpenChange
   );
 }
 
+/** "3 gaps across 2 participants", "1 gap", or "No gaps". */
+function treeGapLine(folder: VaultTreeFolder): string {
+  if (!folder.gap_count) return "No gaps";
+  const gaps = `${folder.gap_count} ${folder.gap_count === 1 ? "gap" : "gaps"}`;
+  if (folder.gap_people == null) return gaps;
+  const noun = folder.key === "staff" ? "worker" : "participant";
+  return `${gaps} across ${folder.gap_people} ${folder.gap_people === 1 ? noun : `${noun}s`}`;
+}
+
 export default function VaultHome() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -742,6 +751,14 @@ export default function VaultHome() {
                     <span className="mt-1 block font-mono text-xs opacity-80">
                       {folder.count} items · {folder.subfolders.length} subfolders
                     </span>
+                  </span>
+                  <span
+                    className="self-start rounded-full px-2.5 py-1 text-xs font-bold"
+                    style={folder.gap_count
+                      ? { background: "var(--cc-status-danger-bg)", color: "var(--cc-status-danger)" }
+                      : { background: "rgba(255,255,255,0.18)", color: "#FFFFFF" }}
+                  >
+                    {treeGapLine(folder)}
                   </span>
                 </span>
               </button>

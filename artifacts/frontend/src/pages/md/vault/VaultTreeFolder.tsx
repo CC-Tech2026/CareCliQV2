@@ -1,35 +1,54 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
-import { ChevronRight, Folder } from "lucide-react";
+import { Link, useLocation, useSearch } from "wouter";
+import { ChevronRight, Copy } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useToast } from "@/hooks/use-toast";
-import { triggerBlobDownload } from "@/lib/vaultZip";
 import {
-  fetchDocumentFile,
+  fetchTreePeople,
   fetchTreeSubfolderDocuments,
   fetchVaultTree,
   type VaultDocument,
   type VaultTreeFolder,
+  type VaultTreePerson,
 } from "@/services/vaultService";
-import { DocumentTable } from "./components/DocumentTable";
-import { DocumentPreviewPane } from "./components/DocumentPreviewPane";
-import { ShareAuditorDialog } from "./components/ShareAuditorDialog";
-
-const NO_FIELDS = new Set<string>();
+import { TreeSubfolderGrid, StatePill, type TreeGridItem } from "./components/TreeSubfolderGrid";
+import { TreePeopleList, personHref } from "./components/TreePeopleList";
+import { TreeDocumentsPane } from "./components/TreeDocumentsPane";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SURFACE = "var(--cc-surface)";
-const PLUM = "var(--cc-plum)";
 
-export default function VaultTreeFolderPage({ top, sub }: { top: string; sub?: string }) {
+const PERSON_NOUN: Record<string, string> = { participant: "participant", staff: "worker" };
+
+function safeDecode(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+export default function VaultTreeFolderPage({
+  top,
+  sub,
+  personId: rawPersonId,
+}: {
+  top: string;
+  sub?: string;
+  personId?: string;
+}) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const params = new URLSearchParams(useSearch());
+  const byType = params.get("view") === "type";
+  const personId = rawPersonId ? safeDecode(rawPersonId) : undefined;
+  const personNoun = PERSON_NOUN[top];
+
   const [tree, setTree] = useState<VaultTreeFolder[] | null>(null);
+  const [people, setPeople] = useState<VaultTreePerson[] | null>(null);
   const [documents, setDocuments] = useState<VaultDocument[] | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [previewId, setPreviewId] = useState<string | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,13 +59,25 @@ export default function VaultTreeFolderPage({ top, sub }: { top: string; sub?: s
     return () => { cancelled = true; };
   }, []);
 
+  const needsPeople = Boolean(personNoun) && (Boolean(personId) || (!sub && !byType));
+  useEffect(() => {
+    if (!needsPeople) return;
+    let cancelled = false;
+    fetchTreePeople(top)
+      .then((rows) => { if (!cancelled) setPeople(rows); })
+      .catch((e) => {
+        if (cancelled) return;
+        setLoadError(e instanceof Error ? e.message : "Could not load this folder.");
+        setPeople([]);
+      });
+    return () => { cancelled = true; };
+  }, [top, needsPeople]);
+
   useEffect(() => {
     if (!sub) return;
     let cancelled = false;
     setDocuments(null);
-    setSelected(new Set());
-    setPreviewId(null);
-    fetchTreeSubfolderDocuments(top, sub)
+    fetchTreeSubfolderDocuments(top, sub, personId)
       .then((docs) => { if (!cancelled) setDocuments(docs); })
       .catch((e) => {
         if (cancelled) return;
@@ -54,150 +85,162 @@ export default function VaultTreeFolderPage({ top, sub }: { top: string; sub?: s
         setDocuments([]);
       });
     return () => { cancelled = true; };
-  }, [top, sub]);
+  }, [top, sub, personId]);
 
   const topFolder = tree?.find((f) => f.key === top);
-  const subFolder = topFolder?.subfolders.find((s) => s.key === sub);
+  const person = personId ? people?.find((p) => p.id === personId) : undefined;
+  const subLabel = topFolder?.subfolders.find((s) => s.key === sub)?.label ?? "";
+  const personSub = person?.subfolders.find((s) => s.key === sub);
+  const base = `/md/vault/tree/${top}`;
 
-  async function handleDownload(doc: VaultDocument) {
+  const crumbs: { label: string; href?: string }[] = [{ label: "Vault", href: "/md/vault" }];
+  if (topFolder) crumbs.push({ label: topFolder.label, href: sub && !personId && personNoun ? `${base}?view=type` : base });
+  if (personId) crumbs.push({ label: person?.name ?? "", href: personHref(top, personId) });
+  if (sub && subLabel) crumbs.push({ label: subLabel });
+  const path = crumbs.map((c) => c.label).filter(Boolean).join(" › ");
+  const title = sub ? subLabel : personId ? person?.name ?? "" : topFolder?.label ?? "";
+
+  async function copyPath() {
     try {
-      const { filename, blob } = await fetchDocumentFile(doc.category, doc.id);
-      triggerBlobDownload(blob, filename);
+      await navigator.clipboard.writeText(path);
+      toast({ title: "Path copied", description: path });
     } catch {
-      toast({ title: "Couldn't download this document", variant: "destructive" });
+      toast({ title: "Couldn't copy the path", variant: "destructive" });
     }
   }
 
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  const loading = <p className="text-[13px]" style={{ color: MUTED }}>Loading…</p>;
+  const emptyBox = (text: string) => (
+    <p className="rounded-2xl border p-6 text-center text-[13px]" style={{ borderColor: BORDER, background: SURFACE, color: MUTED }}>
+      {text}
+    </p>
+  );
 
-  function toggleAll() {
-    setSelected((prev) =>
-      documents && prev.size < documents.length ? new Set(documents.map((d) => d.id)) : new Set()
+  function body() {
+    if (sub) {
+      if (documents === null) return loading;
+      if (documents.length > 0) {
+        return <TreeDocumentsPane documents={documents} targetDescription={path} />;
+      }
+      if (personSub && (personSub.state === "missing" || personSub.state === "expired")) {
+        return emptyBox(
+          personSub.missing.length
+            ? `Nothing current on file for ${person?.name}: ${personSub.missing.join(", ")}.`
+            : `Nothing current on file. This folder is required for ${person?.name}.`
+        );
+      }
+      return emptyBox("No documents in this folder yet.");
+    }
+
+    if (personId) {
+      if (people === null) return loading;
+      if (!person) return emptyBox(`This ${personNoun} has no folder in the vault.`);
+      const items: TreeGridItem[] = person.subfolders.map((s) => ({
+        ...s,
+        href: personHref(top, person.id, s.key),
+      }));
+      return <TreeSubfolderGrid items={items} />;
+    }
+
+    if (!topFolder) return tree === null && !loadError ? loading : null;
+
+    if (!personNoun) {
+      const items: TreeGridItem[] = topFolder.subfolders.map((s) => ({
+        ...s,
+        href: s.category ? `/md/vault/${s.category}` : `${base}/${s.key}`,
+      }));
+      return <TreeSubfolderGrid items={items} />;
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="inline-flex rounded-lg border p-0.5" role="group" aria-label="View" style={{ borderColor: BORDER, background: SURFACE }}>
+          {[
+            { label: `By ${personNoun}`, active: !byType, href: base },
+            { label: "By type", active: byType, href: `${base}?view=type` },
+          ].map((opt) => (
+            <button
+              key={opt.label}
+              type="button"
+              aria-pressed={opt.active}
+              onClick={() => navigate(opt.href)}
+              className="rounded-md px-3 py-1.5 text-[13px] font-semibold"
+              style={opt.active ? { background: "var(--cc-plum-soft)", color: "var(--cc-plum)" } : { color: MUTED }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {byType ? (
+          <TreeSubfolderGrid
+            items={topFolder.subfolders.map((s) => ({
+              ...s,
+              href: `${base}/${s.key}`,
+              gapLabel: s.gap_count ? `${s.gap_count} missing` : undefined,
+            }))}
+          />
+        ) : people === null ? (
+          loading
+        ) : (
+          <TreePeopleList top={top} people={people} personNoun={personNoun} initialGapsOnly={params.get("gaps") === "1"} />
+        )}
+      </div>
     );
   }
-
-  const topLabel = topFolder?.label ?? "";
-  const subLabel = subFolder?.label ?? "";
 
   return (
     <HubLayout>
       <div className="space-y-6 pb-12">
-        <nav className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold" style={{ color: MUTED }}>
-          <Link href="/md/vault" className="hover:underline">Documents & Audit Vault</Link>
-          {topLabel && (
-            <>
-              <ChevronRight size={14} />
-              {sub ? (
-                <Link href={`/md/vault/tree/${top}`} className="hover:underline">{topLabel}</Link>
-              ) : (
-                <span style={{ color: TEXT }}>{topLabel}</span>
-              )}
-            </>
+        <div className="flex flex-wrap items-center gap-2">
+          <nav aria-label="Folder path" className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold" style={{ color: MUTED }}>
+            {crumbs.map((c, i) => (
+              <span key={i} className="flex items-center gap-1.5">
+                {i > 0 && <ChevronRight size={14} />}
+                {c.href && i < crumbs.length - 1 ? (
+                  <Link href={c.href} className="hover:underline">{c.label}</Link>
+                ) : (
+                  <span style={{ color: TEXT }}>{c.label}</span>
+                )}
+              </span>
+            ))}
+          </nav>
+          {crumbs.length > 1 && (
+            <button
+              type="button"
+              onClick={copyPath}
+              aria-label="Copy folder path"
+              title="Copy folder path"
+              className="rounded-md p-1 hover:bg-black/5"
+              style={{ color: MUTED }}
+            >
+              <Copy size={14} />
+            </button>
           )}
-          {sub && subLabel && (
-            <>
-              <ChevronRight size={14} />
-              <span style={{ color: TEXT }}>{subLabel}</span>
-            </>
-          )}
-        </nav>
+        </div>
 
-        <h1 className="text-xl font-semibold tracking-[-0.025em]" style={{ color: TEXT }}>
-          {sub ? subLabel : topLabel}
-        </h1>
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-xl font-semibold tracking-[-0.025em]" style={{ color: TEXT }}>{title}</h1>
+            {personSub && <StatePill state={personSub.state} />}
+          </div>
+          {personId && person && !sub && (
+            <p className="text-[13px]" style={{ color: MUTED }}>
+              {[person.ref, person.status === "active" ? null : person.status === "exited" ? "Exited" : "Not yet active",
+                `${person.document_count} ${person.document_count === 1 ? "document" : "documents"}`]
+                .filter(Boolean).join(" · ")}
+            </p>
+          )}
+          {sub && !personId && personNoun && (
+            <p className="text-[13px]" style={{ color: MUTED }}>Every {personNoun}'s documents in this folder.</p>
+          )}
+        </div>
 
         {loadError && (
           <p className="text-[13px] font-semibold" style={{ color: "#9A5B0A" }}>{loadError}</p>
         )}
 
-        {!sub && tree === null && !loadError && (
-          <p className="text-[13px]" style={{ color: MUTED }}>Loading…</p>
-        )}
-
-        {!sub && topFolder && (
-          topFolder.subfolders.length === 0 ? (
-            <p className="rounded-2xl border p-6 text-center text-[13px]" style={{ borderColor: BORDER, background: SURFACE, color: MUTED }}>
-              No documents in this folder yet.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {topFolder.subfolders.map((s) => (
-                <Link
-                  key={s.key}
-                  href={s.category ? `/md/vault/${s.category}` : `/md/vault/tree/${top}/${s.key}`}
-                  className="flex items-center justify-between gap-3 rounded-2xl border p-4 transition-colors hover:bg-black/5"
-                  style={{ borderColor: BORDER, background: SURFACE }}
-                >
-                  <span className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
-                      <Folder size={16} />
-                    </span>
-                    <span className="truncate text-[13px] font-bold" style={{ color: TEXT }}>{s.label}</span>
-                  </span>
-                  <span className="shrink-0 text-[12px] font-semibold" style={{ color: MUTED }}>{s.count}</span>
-                </Link>
-              ))}
-            </div>
-          )
-        )}
-
-        {sub && (
-          documents === null ? (
-            <p className="text-[13px]" style={{ color: MUTED }}>Loading…</p>
-          ) : documents.length === 0 ? (
-            <p className="rounded-2xl border p-6 text-center text-[13px]" style={{ borderColor: BORDER, background: SURFACE, color: MUTED }}>
-              No documents in this folder yet.
-            </p>
-          ) : (
-            <div className="flex flex-col gap-4 lg:flex-row">
-              <div className="min-w-0 lg:w-[33%]">
-                <DocumentTable
-                  documents={documents}
-                  showCategoryColumn
-                  selectedIds={selected}
-                  onToggle={toggle}
-                  onToggleAll={toggleAll}
-                  onDownload={handleDownload}
-                  onPreview={(d) => setPreviewId(d.id)}
-                  focusedId={previewId}
-                />
-              </div>
-              <div className="w-full lg:sticky lg:top-[75px] lg:w-[67%] lg:self-start">
-                <DocumentPreviewPane
-                  doc={documents.find((d) => d.id === previewId) ?? null}
-                  customizableFields={[]}
-                  excludedFields={NO_FIELDS}
-                  onToggleExcludedField={() => {}}
-                  selectedDocs={documents.filter((d) => selected.has(d.id))}
-                  onRemoveSelected={toggle}
-                  bulkExcludedFields={NO_FIELDS}
-                  onToggleExcludedFieldForAll={() => {}}
-                  onShare={() => setShareOpen(true)}
-                />
-              </div>
-            </div>
-          )
-        )}
+        {body()}
       </div>
-
-      {sub && documents && (
-        <ShareAuditorDialog
-          open={shareOpen}
-          onOpenChange={setShareOpen}
-          documents={documents
-            .filter((d) => selected.has(d.id))
-            .map((d) => ({ category: d.category, id: d.id, exclude_fields: [] }))}
-          folderKeys={Array.from(new Set(documents.map((d) => d.category)))}
-          targetDescription={subLabel}
-        />
-      )}
     </HubLayout>
   );
 }

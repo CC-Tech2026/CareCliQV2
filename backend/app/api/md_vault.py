@@ -134,14 +134,21 @@ async def get_vault_tree(current_user: dict = Depends(get_current_user)):
     return {"folders": vault_service.list_vault_tree(org_id)}
 
 
+@router.get("/tree/{top}/people")
+async def get_tree_people(top: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return {"people": vault_service.list_tree_people(org_id, top)}
+
+
 @router.get("/tree/{top}/{sub}/documents")
 async def get_tree_subfolder_documents(
     top: str,
     sub: str,
+    person_id: str | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ):
     org_id = _require_md(current_user)
-    return {"documents": vault_service.list_tree_subfolder_documents(org_id, top, sub)}
+    return {"documents": vault_service.list_tree_subfolder_documents(org_id, top, sub, person_id)}
 
 
 @router.get("/folders/{category}/documents/{document_id}/file")

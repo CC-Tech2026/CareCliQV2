@@ -31,6 +31,10 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from ..core.errors import internal_error_detail
+from .audit_readiness_service import INACTIVE_PARTICIPANT_STATUSES
+from .credential_status import live_status
+from .credential_verification_service import canonical_credential_type
+from .onboarding_escalation_service import REQUIRED_CREDENTIAL_TYPES
 from .organization_branding_service import build_pdf_letterhead, get_letterhead
 from .supabase_client import get_supabase_admin, signed_storage_url
 
@@ -898,7 +902,7 @@ def _list_credentials(org_id: str) -> list[VaultDocument]:
         resp = (
             get_supabase_admin()
             .table("credentials")
-            .select("id, user_id, credential_type, title, status, issue_date, file_path")
+            .select("id, user_id, credential_type, title, status, issue_date, expiry_date, file_path")
             .eq("organization_id", org_id)
             .order("issue_date", desc=True)
             .limit(500)
@@ -917,10 +921,11 @@ def _list_credentials(org_id: str) -> list[VaultDocument]:
             person_type="Worker",
             person_id=row.get("user_id"),
             date=str(row.get("issue_date") or ""),
-            status=row.get("status") or "pending_review",
+            # The stored column never moves to expired on its own.
+            status=live_status(row.get("expiry_date"), row.get("status")),
             source_table="credentials",
             source_id=row["id"],
-            subtype=row.get("credential_type"),
+            subtype=canonical_credential_type(row.get("credential_type")) or None,
             has_stored_file=bool(row.get("file_path")),
         )
         for row in (resp.data or [])
@@ -2220,11 +2225,13 @@ def get_folder_meta(org_id: str, category: str) -> dict[str, Any] | None:
     return _folder_meta_from_docs(category, meta["label"], meta["group"], False, docs)
 
 
-# ── Organised folders: three top-level folders, each with subfolders ─────────
+# ── Organised folders: top-level folders, each with subfolders ───────────────
 # A view over the same documents as the flat category folders. Every document
 # lands in at most one subfolder. Governance subfolders are the categories
 # themselves; participant and staff subfolders group several categories, so
-# they're decided per document. Subfolders with no documents are left out.
+# they're decided per document, and sit inside a folder per person. Every
+# subfolder is listed, empty or not: an empty folder that should hold
+# something is a gap the MD needs to see before an auditor does.
 
 VAULT_TREE_TOPS: dict[str, str] = {
     "governance": "Governance",
@@ -2238,13 +2245,13 @@ VAULT_TREE_SUBFOLDERS: dict[str, list[tuple[str, str]]] = {
         for key in (*GOVERNANCE_FOLDER_KEYS, "audit_packs")
     ],
     "participant": [
+        ("behaviour_support", "Behaviour Support"),
         ("clinical_docs", "Clinical Docs"),
+        ("emergency_risk", "Emergency & Risk"),
         ("incident_reports", "Incident Reports"),
         ("intake_docs", "Intake Docs"),
         ("invoices", "Invoices"),
         ("service_support", "Service A & Support P"),
-        ("behaviour_support", "Behaviour Support"),
-        ("emergency_risk", "Emergency & Risk"),
         ("sil_docs", "SIL Docs"),
         ("support_coordination", "Support Coordination Docs"),
     ],
@@ -2258,27 +2265,30 @@ VAULT_TREE_SUBFOLDERS: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
-# Every credential type the app offers, including the free-text labels the
-# team page still saves for allied health and "Other". A type missing here is
-# left out of the organised folders and logged, never guessed into one.
+# The tops that hold a folder per person, and who that person is.
+TREE_PERSON_TYPES: dict[str, str] = {"participant": "Participant", "staff": "Worker"}
+
+# Every credential type the app offers, by canonical type (see
+# canonical_credential_type), including the free-text labels the team page
+# still saves for allied health and "Other". A type missing here is left out
+# of the organised folders and logged, never guessed into one.
 STAFF_CREDENTIAL_SUBFOLDERS: dict[str, str] = {
     "ndis_screening": "checks",
     "wwcc": "checks",
     "police_check": "checks",
-    "Police Check": "checks",
     "code_of_conduct": "contracts_info",
-    "Professional Indemnity Insurance": "contracts_info",
+    "professional_indemnity_insurance": "contracts_info",
     "first_aid": "first_aid_cpr",
     "cpr": "first_aid_cpr",
-    "First Aid/CPR": "first_aid_cpr",
+    "first_aid/cpr": "first_aid_cpr",
     "drivers_licence": "id_documents",
     "qualification": "training_qualifications",
     "manual_handling": "training_qualifications",
     "infection_control": "training_qualifications",
     "medication_admin": "training_qualifications",
-    "AHPRA Registration": "training_qualifications",
-    "Discipline-specific Certificate": "training_qualifications",
-    "Other": "training_qualifications",
+    "ahpra_registration": "training_qualifications",
+    "discipline_specific_certificate": "training_qualifications",
+    "other": "training_qualifications",
     "vehicle_insurance": "vehicle_insurance",
     "vehicle_registration": "vehicle_insurance",
 }
@@ -2287,9 +2297,10 @@ _unplaced_credential_types: set[str] = set()
 
 
 def _credential_subfolder(credential_type: str | None) -> str | None:
-    sub = STAFF_CREDENTIAL_SUBFOLDERS.get(credential_type or "")
-    if sub is None and credential_type not in _unplaced_credential_types:
-        _unplaced_credential_types.add(credential_type or "")
+    key = canonical_credential_type(credential_type)
+    sub = STAFF_CREDENTIAL_SUBFOLDERS.get(key)
+    if sub is None and key not in _unplaced_credential_types:
+        _unplaced_credential_types.add(key)
         logger.warning("Vault: credential type %r has no staff subfolder, left out of the organised folders", credential_type)
     return sub
 
@@ -2304,7 +2315,9 @@ def _tree_placement(doc: VaultDocument) -> tuple[str, str] | None:
         return "participant", "incident_reports"
     if category == "invoices":
         return "participant", "invoices"
-    if category == "ndis_plans" or doc["source_table"] in ("service_agreements", "ndis_plans"):
+    # An intake's signed agreement PDF is the service agreement, before the
+    # participant is active.
+    if category == "ndis_plans" or doc["source_table"] in ("service_agreements", "ndis_plans", "participant_intakes"):
         return "participant", "service_support"
     if category == "consent_onboarding":
         if doc["person_type"] == "Participant":
@@ -2328,34 +2341,301 @@ def _tree_documents(org_id: str) -> dict[tuple[str, str], list[VaultDocument]]:
     return grouped
 
 
+# ── Gaps: which subfolders each person, or the organisation, must fill ───────
+
+# Credentials every active worker must hold (the onboarding gate's list), by
+# the subfolder they file into.
+REQUIRED_STAFF_CREDENTIALS: dict[str, tuple[str, ...]] = {
+    sub: tuple(t for t in REQUIRED_CREDENTIAL_TYPES if STAFF_CREDENTIAL_SUBFOLDERS[t] == sub)
+    for sub in dict.fromkeys(STAFF_CREDENTIAL_SUBFOLDERS[t] for t in REQUIRED_CREDENTIAL_TYPES)
+}
+
+REQUIRED_CREDENTIAL_LABELS: dict[str, str] = {
+    "ndis_screening": "NDIS Worker Screening Check",
+    "wwcc": "Working with Children Check",
+    "code_of_conduct": "Code of Conduct acknowledgement",
+    "first_aid": "First Aid",
+    "cpr": "CPR",
+    "manual_handling": "Manual handling",
+    "infection_control": "Infection control",
+    "medication_admin": "Medication administration",
+}
+
+# Participant subfolders every active participant must have something in.
+REQUIRED_PARTICIPANT_SUBFOLDERS = {"service_support", "intake_docs", "emergency_risk"}
+
+# Governance subfolders the organisation must fill: the Core Module policies.
+REQUIRED_GOVERNANCE_SUBFOLDERS = set(GOVERNANCE_FOLDER_KEYS)
+
+GAP_STATES = {"missing", "expired"}
+
+
+def _folder_state(
+    docs: list[VaultDocument], required: bool, required_types: tuple[str, ...] = ()
+) -> tuple[str, list[str]]:
+    """complete, missing, expired or not_applicable, plus what's missing or
+    lapsed when the folder needs particular credentials. A rejected document
+    is not on file; an expired one is on file but doesn't count as current."""
+    on_file = [d for d in docs if d["status"] != "rejected"]
+    if not required:
+        return ("complete" if on_file else "not_applicable"), []
+    if not required_types:
+        if any(d["status"] != "expired" for d in on_file):
+            return "complete", []
+        return ("expired" if on_file else "missing"), []
+    missing: list[str] = []
+    lapsed: list[str] = []
+    for credential_type in required_types:
+        held = [d for d in on_file if d.get("subtype") == credential_type]
+        label = REQUIRED_CREDENTIAL_LABELS.get(credential_type, _humanise(credential_type))
+        if not held:
+            missing.append(label)
+        elif all(d["status"] == "expired" for d in held):
+            lapsed.append(f"{label} (expired)")
+    if missing:
+        return "missing", missing + lapsed
+    if lapsed:
+        return "expired", lapsed
+    return "complete", []
+
+
+def _participant_facts(org_id: str) -> dict[str, dict[str, Any]]:
+    """Each participant's status and the services that make a folder
+    required: a behaviour support plan, and SIL or support coordination lines
+    on a live service agreement."""
+    def compute() -> dict[str, dict[str, Any]] | _Uncached:
+        supabase = get_supabase_admin()
+        try:
+            rows = (
+                supabase.table("participants")
+                .select("id, full_name, plan_status, behaviour_support_plan, is_purged")
+                .eq("organization_id", org_id)
+                .execute()
+            ).data or []
+        except Exception as exc:
+            logger.warning("Vault: participants for the organised folders failed for org %s: %s", org_id, exc)
+            return _Uncached({})
+        facts = {
+            str(r["id"]): {
+                "name": r.get("full_name") or "Unknown participant",
+                # A purged record (past its retention date) has no plan status.
+                "active": not r.get("is_purged")
+                and str(r.get("plan_status") or "active").lower() not in INACTIVE_PARTICIPANT_STATUSES,
+                "behaviour_support": bool(str(r.get("behaviour_support_plan") or "").strip()),
+                "sil": False,
+                "support_coordination": False,
+            }
+            for r in rows
+        }
+        try:
+            agreements = (
+                supabase.table("service_agreements")
+                .select("id, participant_id")
+                .eq("organization_id", org_id)
+                .in_("status", ["active", "pending_signature"])
+                .execute()
+            ).data or []
+            participant_by_agreement = {str(a["id"]): str(a["participant_id"]) for a in agreements}
+            lines = []
+            if participant_by_agreement:
+                lines = (
+                    supabase.table("service_agreement_supports")
+                    .select("service_agreement_id, support_item_code")
+                    .in_("service_agreement_id", list(participant_by_agreement))
+                    .execute()
+                ).data or []
+        except Exception as exc:
+            logger.warning("Vault: agreement lines for the organised folders failed for org %s: %s", org_id, exc)
+            return _Uncached(facts)
+        for line in lines:
+            person = facts.get(participant_by_agreement.get(str(line.get("service_agreement_id")), ""))
+            parts = str(line.get("support_item_code") or "").split("_")
+            if not person:
+                continue
+            # NDIS item numbers: category_item_registrationgroup_...
+            # Registration group 0115 is daily tasks in shared living (SIL);
+            # support category 07 is support coordination.
+            if len(parts) > 2 and parts[2] == "0115":
+                person["sil"] = True
+            if parts[0] == "07":
+                person["support_coordination"] = True
+        return facts
+
+    return _cached(f"tree_participants:{org_id}", compute)
+
+
+def _worker_facts(org_id: str) -> dict[str, dict[str, Any]]:
+    """Every user's name and whether they're an active support worker. Only
+    support workers get a staff folder of their own unless they hold
+    documents."""
+    def compute() -> dict[str, dict[str, Any]] | _Uncached:
+        try:
+            rows = (
+                get_supabase_admin().table("users")
+                .select("id, full_name, role, is_active")
+                .eq("organization_id", org_id)
+                .execute()
+            ).data or []
+        except Exception as exc:
+            logger.warning("Vault: workers for the organised folders failed for org %s: %s", org_id, exc)
+            return _Uncached({})
+        return {
+            str(r["id"]): {
+                "name": r.get("full_name") or "Unknown worker",
+                "support_worker": r.get("role") == "support_worker",
+                "active": r.get("is_active") is not False,
+            }
+            for r in rows
+        }
+
+    return _cached(f"tree_workers:{org_id}", compute)
+
+
+def _tree_person_key(doc: VaultDocument) -> str:
+    """The person folder a document sits in: the participant or worker it's
+    about, or, for someone who isn't one yet (an intake, an applicant, a new
+    hire), their name."""
+    if doc.get("person_id"):
+        return str(doc["person_id"])
+    return "name:" + " ".join((doc.get("person_name") or "").lower().split())
+
+
+def _person_required(top: str, sub: str, person: dict[str, Any]) -> bool:
+    if not person["active"]:
+        return False
+    if top == "participant":
+        return sub in REQUIRED_PARTICIPANT_SUBFOLDERS or bool(person.get(sub))
+    if sub == "vehicle_insurance":
+        return person["drives"]
+    return sub in REQUIRED_STAFF_CREDENTIALS
+
+
+def list_tree_people(org_id: str, top: str) -> list[dict[str, Any]]:
+    """The people in a participant or staff folder, each with the state of
+    every one of their subfolders. Participants and support workers are
+    listed even with no documents, so a missing file shows."""
+    person_type = TREE_PERSON_TYPES.get(top)
+    if not person_type:
+        raise HTTPException(status_code=404, detail="Unknown vault folder.")
+    grouped = _tree_documents(org_id)
+    refs = _person_refs(org_id).get(person_type, {})
+    if top == "participant":
+        facts = _participant_facts(org_id)
+        listed = set(facts)
+        sub_keys = ("behaviour_support", "sil", "support_coordination")
+    else:
+        facts = _worker_facts(org_id)
+        listed = {pid for pid, f in facts.items() if f["support_worker"]}
+        sub_keys = ()
+    sub_key_map = {"sil": "sil_docs", "support_coordination": "support_coordination"}
+
+    people: dict[str, dict[str, Any]] = {}
+
+    def person_for(key: str, name: str) -> dict[str, Any]:
+        if key not in people:
+            fact = facts.get(key)
+            if fact:
+                status = "active" if fact["active"] else "exited"
+            else:
+                # Not (or no longer) on the participant or staff list.
+                status = "prospective" if key.startswith("name:") else "exited"
+            people[key] = {
+                "id": key,
+                "name": (fact or {}).get("name") or name or f"Unknown {person_type.lower()}",
+                "ref": refs.get(key),
+                "status": status,
+                # Requirements apply to active participants and active
+                # support workers, not office staff who happen to hold a file.
+                "active": status == "active" and (top == "participant" or fact["support_worker"]),
+                "drives": False,
+                "docs": {},
+                **{sub_key_map.get(k, k): bool((fact or {}).get(k)) for k in sub_keys},
+            }
+        return people[key]
+
+    for key in listed:
+        person_for(key, "")
+    for (doc_top, sub), docs in grouped.items():
+        if doc_top != top:
+            continue
+        for doc in docs:
+            key = _tree_person_key(doc)
+            if key == "name:":
+                logger.warning("Vault: %s document %s has no person, filed under an unknown person", top, doc["id"])
+            person = person_for(key, doc.get("person_name") or "")
+            person["docs"].setdefault(sub, []).append(doc)
+            if doc.get("subtype") == "drivers_licence" and doc["status"] != "rejected":
+                person["drives"] = True
+
+    out = []
+    for person in people.values():
+        subfolders = []
+        for sub, label in VAULT_TREE_SUBFOLDERS[top]:
+            docs = person["docs"].get(sub, [])
+            required = _person_required(top, sub, person)
+            types = REQUIRED_STAFF_CREDENTIALS.get(sub, ()) if top == "staff" else ()
+            state, missing = _folder_state(docs, required, types)
+            subfolders.append({"key": sub, "label": label, "count": len(docs), "state": state, "missing": missing})
+        out.append({
+            "id": person["id"],
+            "name": person["name"],
+            "ref": person["ref"],
+            "status": person["status"],
+            "document_count": sum(s["count"] for s in subfolders),
+            "gap_count": sum(1 for s in subfolders if s["state"] in GAP_STATES),
+            "subfolders": subfolders,
+        })
+    return sorted(out, key=lambda p: (p["status"] != "active", p["name"].lower()))
+
+
 def list_vault_tree(org_id: str) -> list[dict[str, Any]]:
     grouped = _tree_documents(org_id)
     tops: list[dict[str, Any]] = []
     for top_key, top_label in VAULT_TREE_TOPS.items():
+        people = list_tree_people(org_id, top_key) if top_key in TREE_PERSON_TYPES else None
         subfolders = []
         for sub_key, sub_label in VAULT_TREE_SUBFOLDERS[top_key]:
-            count = len(grouped.get((top_key, sub_key), []))
-            if count == 0:
-                continue
+            docs = grouped.get((top_key, sub_key), [])
+            if people is None:
+                state, _ = _folder_state(docs, sub_key in REQUIRED_GOVERNANCE_SUBFOLDERS)
+                gaps = 1 if state in GAP_STATES else 0
+            else:
+                # Across everyone: how many people this folder is a gap for.
+                gaps = sum(
+                    1 for p in people for s in p["subfolders"]
+                    if s["key"] == sub_key and s["state"] in GAP_STATES
+                )
+                state = "missing" if gaps else ("complete" if docs else "not_applicable")
             subfolders.append({
                 "key": sub_key,
                 "label": sub_label,
-                "count": count,
+                "count": len(docs),
+                "state": state,
+                "gap_count": gaps,
                 "category": sub_key if top_key == "governance" else None,
             })
         tops.append({
             "key": top_key,
             "label": top_label,
             "count": sum(s["count"] for s in subfolders),
+            "gap_count": sum(s["gap_count"] for s in subfolders),
+            "gap_people": sum(1 for p in people if p["gap_count"]) if people is not None else None,
+            "person_level": people is not None,
             "subfolders": subfolders,
         })
     return tops
 
 
-def list_tree_subfolder_documents(org_id: str, top: str, sub: str) -> list[VaultDocument]:
+def list_tree_subfolder_documents(
+    org_id: str, top: str, sub: str, person_id: str | None = None
+) -> list[VaultDocument]:
+    """One subfolder's documents: one person's when person_id is given,
+    otherwise everyone's (the "by type" view)."""
     if sub not in dict(VAULT_TREE_SUBFOLDERS.get(top, [])):
         raise HTTPException(status_code=404, detail="Unknown vault folder.")
     docs = _tree_documents(org_id).get((top, sub), [])
+    if person_id:
+        docs = [d for d in docs if _tree_person_key(d) == person_id]
     return sorted(docs, key=lambda d: d.get("date") or "", reverse=True)
 
 

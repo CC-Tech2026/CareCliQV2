@@ -370,6 +370,22 @@ function Router() {
         )}
       </Route>
 
+      <Route path="/md/vault/tree/:top/person/:personId">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Governance & policy document vault">
+            <MDVaultTreeFolderPage top={params.top} personId={params.personId} />
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/md/vault/tree/:top/person/:personId/:sub">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Governance & policy document vault">
+            <MDVaultTreeFolderPage top={params.top} personId={params.personId} sub={params.sub} />
+          </ProtectedRoute>
+        )}
+      </Route>
+
       <Route path="/md/vault/tree/:top/:sub">
         {(params) => (
           <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Governance & policy document vault">

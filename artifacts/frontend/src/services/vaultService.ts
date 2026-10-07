@@ -120,10 +120,18 @@ export async function fetchFolderDocuments(
   return data.documents;
 }
 
+/** complete: has a current document. missing / expired: required and empty,
+ * or only lapsed documents. not_applicable: not required here. */
+export type VaultFolderState = "complete" | "missing" | "expired" | "not_applicable";
+
 export interface VaultTreeSubfolder {
   key: string;
   label: string;
   count: number;
+  state: VaultFolderState;
+  /** Governance: 1 when the folder is a gap. Participant and staff: how many
+   * people it is a gap for. */
+  gap_count: number;
   /** Set for governance subfolders, which are the category's own folder page. */
   category: string | null;
 }
@@ -132,7 +140,38 @@ export interface VaultTreeFolder {
   key: "governance" | "participant" | "staff";
   label: string;
   count: number;
+  gap_count: number;
+  /** People with at least one gap, for the folders that hold a folder per person. */
+  gap_people: number | null;
+  person_level: boolean;
   subfolders: VaultTreeSubfolder[];
+}
+
+export interface VaultTreePersonSubfolder {
+  key: string;
+  label: string;
+  count: number;
+  state: VaultFolderState;
+  /** The required credentials missing or lapsed, when the folder needs particular ones. */
+  missing: string[];
+}
+
+export interface VaultTreePerson {
+  /** A participant or worker id, or "name:..." for someone not yet one. */
+  id: string;
+  name: string;
+  /** NDIS number or employee ID. */
+  ref: string | null;
+  status: "active" | "exited" | "prospective";
+  document_count: number;
+  gap_count: number;
+  subfolders: VaultTreePersonSubfolder[];
+}
+
+export async function fetchTreePeople(top: string): Promise<VaultTreePerson[]> {
+  const res = await apiFetch(`/api/md-vault/tree/${encodeURIComponent(top)}/people`);
+  const data = await parseJson<{ people: VaultTreePerson[] }>(res);
+  return data.people;
 }
 
 export async function fetchVaultTree(): Promise<VaultTreeFolder[]> {
@@ -141,9 +180,14 @@ export async function fetchVaultTree(): Promise<VaultTreeFolder[]> {
   return data.folders;
 }
 
-export async function fetchTreeSubfolderDocuments(top: string, sub: string): Promise<VaultDocument[]> {
+export async function fetchTreeSubfolderDocuments(
+  top: string,
+  sub: string,
+  personId?: string
+): Promise<VaultDocument[]> {
+  const qs = personId ? `?person_id=${encodeURIComponent(personId)}` : "";
   const res = await apiFetch(
-    `/api/md-vault/tree/${encodeURIComponent(top)}/${encodeURIComponent(sub)}/documents`
+    `/api/md-vault/tree/${encodeURIComponent(top)}/${encodeURIComponent(sub)}/documents${qs}`
   );
   const data = await parseJson<{ documents: VaultDocument[] }>(res);
   return data.documents;
