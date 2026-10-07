@@ -69,6 +69,14 @@ class VaultDocument(TypedDict):
     # The row a document is registered under, when it isn't source_id — a
     # governance document's first version, so the ID survives new versions.
     register_source_id: NotRequired[str]
+    # Set with register_source_id when the document is registered under
+    # another record's entry (see register_inherits).
+    register_kind: NotRequired[str]
+    # An earlier record of the same document, as its (kind, source_id)
+    # register entry — a structured service agreement's onboarding intake.
+    # The document takes that ID when it has none of its own yet, so the ID
+    # an MD saw on the intake's PDF carries over.
+    register_inherits: NotRequired[tuple[str, str]]
     # The kind within a category, where one category holds several (a worker
     # credential's type), used to file it into the organised folders.
     subtype: NotRequired[str | None]
@@ -1111,7 +1119,7 @@ def _list_participant_agreements(org_id: str, patients: dict[str, str]) -> list[
     try:
         agreements = (
             get_supabase_admin().table("service_agreements")
-            .select("id, participant_id, agreement_number, status, start_date, end_date, signed_date, sent_at, created_at")
+            .select("id, participant_id, intake_id, agreement_number, status, start_date, end_date, signed_date, sent_at, created_at")
             .eq("organization_id", org_id)
             .neq("status", "draft")
             # Still on an onboarding intake: listed once the participant is active.
@@ -1124,7 +1132,7 @@ def _list_participant_agreements(org_id: str, patients: dict[str, str]) -> list[
     for row in agreements:
         covered.add(str(row.get("participant_id")))
         status = SERVICE_AGREEMENT_VAULT_STATUS.get(effective_status(row), "pending")
-        docs.append(VaultDocument(
+        doc = VaultDocument(
             id=f"sa-{row['id']}",
             category="consent_onboarding",
             folder_label=CATEGORY_META["consent_onboarding"]["label"],
@@ -1137,7 +1145,11 @@ def _list_participant_agreements(org_id: str, patients: dict[str, str]) -> list[
             source_table="service_agreements",
             source_id=str(row["id"]),
             has_stored_file=True,
-        ))
+        )
+        if row.get("intake_id"):
+            # Until now it was listed as the intake's signed PDF.
+            doc["register_inherits"] = ("participant_intakes", str(row["intake_id"]))
+        docs.append(doc)
     return docs + _list_plan_agreements(org_id, patients, covered)
 
 
@@ -1178,9 +1190,10 @@ def _list_plan_agreements(org_id: str, patients: dict[str, str], covered: set[st
 
 def _list_intake_service_agreements(org_id: str) -> list[VaultDocument]:
     """Signed agreement PDFs stored on an onboarding intake, whether uploaded
-    by hand or generated at signing. Hidden once a structured service
-    agreement exists for that intake — that record is already listed by
-    _list_participant_agreements."""
+    by hand or generated at signing. Hidden once the intake's structured
+    service agreement is listed by _list_participant_agreements — which is
+    only once the participant is active, so until then the PDF stays here
+    (hiding it as soon as the agreement existed left it in neither place)."""
     try:
         supabase = get_supabase_admin()
         intakes = (
@@ -1199,6 +1212,8 @@ def _list_intake_service_agreements(org_id: str) -> list[VaultDocument]:
             .eq("organization_id", org_id)
             .neq("status", "draft")
             .not_.is_("intake_id", "null")
+            # The same filter _list_participant_agreements lists by.
+            .not_.is_("participant_id", "null")
             .execute()
         ).data or []
     except Exception:
@@ -1981,7 +1996,35 @@ def _doc_kind(doc: VaultDocument) -> str:
 
 
 def _register_key(doc: VaultDocument) -> tuple[str, str]:
-    return _doc_kind(doc), str(doc.get("register_source_id") or doc["source_id"])
+    return doc.get("register_kind") or _doc_kind(doc), str(doc.get("register_source_id") or doc["source_id"])
+
+
+def _apply_inherited_ids(org_id: str, docs: list[VaultDocument]) -> None:
+    """Register a document under the earlier record it continues
+    (register_inherits) when that record already has an ID and the document
+    has none of its own yet. One that's already numbered keeps its number —
+    a permanent ID never changes. If the register can't be read, nothing is
+    inherited and the document is numbered as new."""
+    heirs = [doc for doc in docs if doc.get("register_inherits")]
+    if not heirs:
+        return
+    wanted = {_register_key(doc) for doc in heirs} | {tuple(doc["register_inherits"]) for doc in heirs}
+    try:
+        rows = (
+            get_supabase_admin().table("vault_document_register")
+            .select("doc_kind, source_id")
+            .eq("organization_id", org_id)
+            .in_("source_id", sorted({source_id for _, source_id in wanted}))
+            .execute()
+        ).data or []
+    except Exception as exc:
+        logger.warning("Vault register lookup for inherited IDs failed for org %s: %s", org_id, exc)
+        return
+    registered = {(str(r["doc_kind"]), str(r["source_id"])) for r in rows}
+    for doc in heirs:
+        inherited = tuple(doc["register_inherits"])
+        if _register_key(doc) not in registered and inherited in registered:
+            doc["register_kind"], doc["register_source_id"] = inherited
 
 
 def format_doc_id(org_abbrev: str | None, type_code: str, seq: int) -> str:
@@ -1994,6 +2037,7 @@ def _assign_document_ids(org_id: str, docs: list[VaultDocument]) -> bool:
     older documents get lower numbers) and set doc_id on all of them. If the
     register isn't available the vault still lists everything, without IDs,
     and returns False so that listing isn't cached."""
+    _apply_inherited_ids(org_id, docs)
     items: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for doc in sorted(docs, key=lambda d: d.get("date") or ""):
