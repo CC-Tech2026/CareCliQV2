@@ -120,6 +120,35 @@ export async function fetchFolderDocuments(
   return data.documents;
 }
 
+export interface VaultTreeSubfolder {
+  key: string;
+  label: string;
+  count: number;
+  /** Set for governance subfolders, which are the category's own folder page. */
+  category: string | null;
+}
+
+export interface VaultTreeFolder {
+  key: "governance" | "participant" | "staff";
+  label: string;
+  count: number;
+  subfolders: VaultTreeSubfolder[];
+}
+
+export async function fetchVaultTree(): Promise<VaultTreeFolder[]> {
+  const res = await apiFetch("/api/md-vault/tree");
+  const data = await parseJson<{ folders: VaultTreeFolder[] }>(res);
+  return data.folders;
+}
+
+export async function fetchTreeSubfolderDocuments(top: string, sub: string): Promise<VaultDocument[]> {
+  const res = await apiFetch(
+    `/api/md-vault/tree/${encodeURIComponent(top)}/${encodeURIComponent(sub)}/documents`
+  );
+  const data = await parseJson<{ documents: VaultDocument[] }>(res);
+  return data.documents;
+}
+
 export function documentFileUrl(category: string, id: string, excludeFields: string[] = []): string {
   const base = `/api/md-vault/folders/${encodeURIComponent(category)}/documents/${encodeURIComponent(id)}/file`;
   if (excludeFields.length === 0) return base;

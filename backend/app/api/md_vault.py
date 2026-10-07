@@ -128,6 +128,22 @@ async def get_folder_documents(
     return {"documents": docs}
 
 
+@router.get("/tree")
+async def get_vault_tree(current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return {"folders": vault_service.list_vault_tree(org_id)}
+
+
+@router.get("/tree/{top}/{sub}/documents")
+async def get_tree_subfolder_documents(
+    top: str,
+    sub: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_md(current_user)
+    return {"documents": vault_service.list_tree_subfolder_documents(org_id, top, sub)}
+
+
 @router.get("/folders/{category}/documents/{document_id}/file")
 async def get_folder_document_file(
     category: str,

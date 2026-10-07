@@ -69,6 +69,17 @@ class VaultDocument(TypedDict):
     # The row a document is registered under, when it isn't source_id — a
     # governance document's first version, so the ID survives new versions.
     register_source_id: NotRequired[str]
+    # Set with register_source_id when the document is registered under
+    # another record's entry (see register_inherits).
+    register_kind: NotRequired[str]
+    # An earlier record of the same document, as its (kind, source_id)
+    # register entry — a structured service agreement's onboarding intake.
+    # The document takes that ID when it has none of its own yet, so the ID
+    # an MD saw on the intake's PDF carries over.
+    register_inherits: NotRequired[tuple[str, str]]
+    # The kind within a category, where one category holds several (a worker
+    # credential's type), used to file it into the organised folders.
+    subtype: NotRequired[str | None]
 
 
 GOVERNANCE_FOLDER_KEYS = (
@@ -909,6 +920,7 @@ def _list_credentials(org_id: str) -> list[VaultDocument]:
             status=row.get("status") or "pending_review",
             source_table="credentials",
             source_id=row["id"],
+            subtype=row.get("credential_type"),
             has_stored_file=bool(row.get("file_path")),
         )
         for row in (resp.data or [])
@@ -1107,7 +1119,7 @@ def _list_participant_agreements(org_id: str, patients: dict[str, str]) -> list[
     try:
         agreements = (
             get_supabase_admin().table("service_agreements")
-            .select("id, participant_id, agreement_number, status, start_date, end_date, signed_date, sent_at, created_at")
+            .select("id, participant_id, intake_id, agreement_number, status, start_date, end_date, signed_date, sent_at, created_at")
             .eq("organization_id", org_id)
             .neq("status", "draft")
             # Still on an onboarding intake: listed once the participant is active.
@@ -1120,7 +1132,7 @@ def _list_participant_agreements(org_id: str, patients: dict[str, str]) -> list[
     for row in agreements:
         covered.add(str(row.get("participant_id")))
         status = SERVICE_AGREEMENT_VAULT_STATUS.get(effective_status(row), "pending")
-        docs.append(VaultDocument(
+        doc = VaultDocument(
             id=f"sa-{row['id']}",
             category="consent_onboarding",
             folder_label=CATEGORY_META["consent_onboarding"]["label"],
@@ -1133,7 +1145,11 @@ def _list_participant_agreements(org_id: str, patients: dict[str, str]) -> list[
             source_table="service_agreements",
             source_id=str(row["id"]),
             has_stored_file=True,
-        ))
+        )
+        if row.get("intake_id"):
+            # Until now it was listed as the intake's signed PDF.
+            doc["register_inherits"] = ("participant_intakes", str(row["intake_id"]))
+        docs.append(doc)
     return docs + _list_plan_agreements(org_id, patients, covered)
 
 
@@ -1169,6 +1185,56 @@ def _list_plan_agreements(org_id: str, patients: dict[str, str], covered: set[st
         for row in rows
         if str(row.get("status") or "").lower() not in ("draft", "cancelled")
         and str(row.get("patient_id")) not in covered
+    ]
+
+
+def _list_intake_service_agreements(org_id: str) -> list[VaultDocument]:
+    """Signed agreement PDFs stored on an onboarding intake, whether uploaded
+    by hand or generated at signing. Hidden once the intake's structured
+    service agreement is listed by _list_participant_agreements — which is
+    only once the participant is active, so until then the PDF stays here
+    (hiding it as soon as the agreement existed left it in neither place)."""
+    try:
+        supabase = get_supabase_admin()
+        intakes = (
+            supabase.table("participant_intakes")
+            .select("id, full_name, provider_signed_at, family_signed_at, "
+                    "service_agreement_document_path, updated_at")
+            .eq("organization_id", org_id)
+            .not_.is_("service_agreement_document_path", "null")
+            .order("updated_at", desc=True)
+            .limit(300)
+            .execute()
+        ).data or []
+        structured = (
+            supabase.table("service_agreements")
+            .select("intake_id")
+            .eq("organization_id", org_id)
+            .neq("status", "draft")
+            .not_.is_("intake_id", "null")
+            # The same filter _list_participant_agreements lists by.
+            .not_.is_("participant_id", "null")
+            .execute()
+        ).data or []
+    except Exception:
+        return []
+    superseded = {str(row["intake_id"]) for row in structured}
+    return [
+        VaultDocument(
+            id=f"intake-{row['id']}",
+            category="consent_onboarding",
+            folder_label=CATEGORY_META["consent_onboarding"]["label"],
+            title="Service agreement",
+            person_name=row.get("full_name") or "Unknown participant",
+            person_type="Participant",
+            date=str(row.get("updated_at") or ""),
+            status="signed" if row.get("provider_signed_at") and row.get("family_signed_at") else "on_file",
+            source_table="participant_intakes",
+            source_id=row["id"],
+            has_stored_file=True,
+        )
+        for row in intakes
+        if str(row["id"]) not in superseded
     ]
 
 
@@ -1212,6 +1278,7 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
 
     docs.extend(_list_open_hire_offers(org_id))
     docs.extend(_list_participant_agreements(org_id, patients))
+    docs.extend(_list_intake_service_agreements(org_id))
 
     try:
         resp = (
@@ -1284,12 +1351,36 @@ def _list_consent_onboarding(org_id: str) -> list[VaultDocument]:
     return docs
 
 
+def _render_intake_service_agreement(org_id: str, intake_id: str) -> tuple[str, bytes]:
+    rows = (
+        get_supabase_admin()
+        .table("participant_intakes")
+        .select("id, service_agreement_document_name, service_agreement_document_path")
+        .eq("id", intake_id)
+        .eq("organization_id", org_id)
+        .limit(1)
+        .execute()
+    ).data or []
+    row = rows[0] if rows else None
+    if not row or not row.get("service_agreement_document_path"):
+        raise HTTPException(status_code=404, detail="Consent/onboarding document not found.")
+    path = row["service_agreement_document_path"]
+    data = _download_stored_file("participant-intake-files", path)
+    ext = path.rsplit(".", 1)[-1] if "." in path else "pdf"
+    name = row.get("service_agreement_document_name") or "service-agreement"
+    stem = name[: -(len(ext) + 1)] if name.lower().endswith(f".{ext.lower()}") else name
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-")
+    return f"{safe}.{ext}", data
+
+
 def _render_consent_onboarding(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
     if document_id.startswith("sa-"):
         from .service_agreement_document_service import agreement_document
         return agreement_document(org_id, document_id.removeprefix("sa-"))
     if document_id.startswith("agreement-"):
         return _render_plan_agreement(org_id, document_id.removeprefix("agreement-"), exclude_fields)
+    if document_id.startswith("intake-"):
+        return _render_intake_service_agreement(org_id, document_id.removeprefix("intake-"))
 
     hire_doc = (
         get_supabase_admin().table("employee_onboarding_documents")
@@ -1860,6 +1951,7 @@ DOC_TYPE_CODES: dict[str, str] = {
     "ndis_plans": "PLN",
     "plan_agreements": "AGR",
     "service_agreements": "AGR",
+    "participant_intakes": "AGR",
     "medication_documents": "MED",
     "medication_administrations": "MAR",
     "credentials": "CRD",
@@ -1880,6 +1972,7 @@ DOC_SOURCE_LABELS: dict[str, str] = {
     "ndis_plans": "Participant plan",
     "plan_agreements": "Recorded on the NDIS plan",
     "service_agreements": "Service agreement",
+    "participant_intakes": "Signed onboarding agreement",
     "medication_documents": "Medication upload",
     "medication_administrations": "Medication round",
     "credentials": "Worker credential",
@@ -1903,7 +1996,35 @@ def _doc_kind(doc: VaultDocument) -> str:
 
 
 def _register_key(doc: VaultDocument) -> tuple[str, str]:
-    return _doc_kind(doc), str(doc.get("register_source_id") or doc["source_id"])
+    return doc.get("register_kind") or _doc_kind(doc), str(doc.get("register_source_id") or doc["source_id"])
+
+
+def _apply_inherited_ids(org_id: str, docs: list[VaultDocument]) -> None:
+    """Register a document under the earlier record it continues
+    (register_inherits) when that record already has an ID and the document
+    has none of its own yet. One that's already numbered keeps its number —
+    a permanent ID never changes. If the register can't be read, nothing is
+    inherited and the document is numbered as new."""
+    heirs = [doc for doc in docs if doc.get("register_inherits")]
+    if not heirs:
+        return
+    wanted = {_register_key(doc) for doc in heirs} | {tuple(doc["register_inherits"]) for doc in heirs}
+    try:
+        rows = (
+            get_supabase_admin().table("vault_document_register")
+            .select("doc_kind, source_id")
+            .eq("organization_id", org_id)
+            .in_("source_id", sorted({source_id for _, source_id in wanted}))
+            .execute()
+        ).data or []
+    except Exception as exc:
+        logger.warning("Vault register lookup for inherited IDs failed for org %s: %s", org_id, exc)
+        return
+    registered = {(str(r["doc_kind"]), str(r["source_id"])) for r in rows}
+    for doc in heirs:
+        inherited = tuple(doc["register_inherits"])
+        if _register_key(doc) not in registered and inherited in registered:
+            doc["register_kind"], doc["register_source_id"] = inherited
 
 
 def format_doc_id(org_abbrev: str | None, type_code: str, seq: int) -> str:
@@ -1916,6 +2037,7 @@ def _assign_document_ids(org_id: str, docs: list[VaultDocument]) -> bool:
     older documents get lower numbers) and set doc_id on all of them. If the
     register isn't available the vault still lists everything, without IDs,
     and returns False so that listing isn't cached."""
+    _apply_inherited_ids(org_id, docs)
     items: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for doc in sorted(docs, key=lambda d: d.get("date") or ""):
@@ -2096,6 +2218,118 @@ def get_folder_meta(org_id: str, category: str) -> dict[str, Any] | None:
         return None
     docs = _load_category_docs(org_id, category)
     return _folder_meta_from_docs(category, meta["label"], meta["group"], False, docs)
+
+
+# ── Organised folders: three top-level folders, each with subfolders ─────────
+# A view over the same documents as the flat category folders. Every document
+# lands in at most one subfolder. Governance subfolders are the categories
+# themselves; participant and staff subfolders group several categories, so
+# they're decided per document. Subfolders with no documents are left out.
+
+VAULT_TREE_TOPS: dict[str, str] = {
+    "governance": "Governance",
+    "participant": "Participant Folder",
+    "staff": "Staff Folder",
+}
+
+VAULT_TREE_SUBFOLDERS: dict[str, list[tuple[str, str]]] = {
+    "governance": [
+        (key, CATEGORY_META[key]["label"])
+        for key in (*GOVERNANCE_FOLDER_KEYS, "audit_packs")
+    ],
+    "participant": [
+        ("clinical_docs", "Clinical Docs"),
+        ("incident_reports", "Incident Reports"),
+        ("intake_docs", "Intake Docs"),
+        ("invoices", "Invoices"),
+        ("service_support", "Service A & Support P"),
+        ("behaviour_support", "Behaviour Support"),
+        ("emergency_risk", "Emergency & Risk"),
+        ("sil_docs", "SIL Docs"),
+        ("support_coordination", "Support Coordination Docs"),
+    ],
+    "staff": [
+        ("checks", "Checks (NDIS WSC, WWCC, Police Check)"),
+        ("contracts_info", "Contracts & Info"),
+        ("first_aid_cpr", "First Aid & CPR"),
+        ("id_documents", "ID Documents"),
+        ("training_qualifications", "Training & Qualifications"),
+        ("vehicle_insurance", "Vehicle Insurance & Rego"),
+    ],
+}
+
+STAFF_CREDENTIAL_SUBFOLDERS: dict[str, str] = {
+    "ndis_screening": "checks",
+    "wwcc": "checks",
+    "police_check": "checks",
+    "first_aid": "first_aid_cpr",
+    "cpr": "first_aid_cpr",
+    "drivers_licence": "id_documents",
+}
+
+
+def _tree_placement(doc: VaultDocument) -> tuple[str, str] | None:
+    category = doc["category"]
+    if category in GOVERNANCE_FOLDER_KEYS or category == "audit_packs":
+        return "governance", category
+    if category in ("session_notes", "medication_records"):
+        return "participant", "clinical_docs"
+    if category == "incident_reports":
+        return "participant", "incident_reports"
+    if category == "invoices":
+        return "participant", "invoices"
+    if category == "ndis_plans" or doc["source_table"] in ("service_agreements", "ndis_plans"):
+        return "participant", "service_support"
+    if category == "consent_onboarding":
+        if doc["person_type"] == "Participant":
+            return "participant", "intake_docs"
+        return "staff", "contracts_info"
+    if category == "worker_credentials":
+        return "staff", STAFF_CREDENTIAL_SUBFOLDERS.get(doc.get("subtype") or "", "training_qualifications")
+    return None
+
+
+def _tree_documents(org_id: str) -> dict[tuple[str, str], list[VaultDocument]]:
+    grouped: dict[tuple[str, str], list[VaultDocument]] = {}
+    for category, docs in _load_all_category_docs(org_id).items():
+        if category.startswith(CUSTOM_FOLDER_PREFIX):
+            continue
+        for doc in docs:
+            placement = _tree_placement(doc)
+            if placement:
+                grouped.setdefault(placement, []).append(doc)
+    return grouped
+
+
+def list_vault_tree(org_id: str) -> list[dict[str, Any]]:
+    grouped = _tree_documents(org_id)
+    tops: list[dict[str, Any]] = []
+    for top_key, top_label in VAULT_TREE_TOPS.items():
+        subfolders = []
+        for sub_key, sub_label in VAULT_TREE_SUBFOLDERS[top_key]:
+            count = len(grouped.get((top_key, sub_key), []))
+            if count == 0:
+                continue
+            subfolders.append({
+                "key": sub_key,
+                "label": sub_label,
+                "count": count,
+                "category": sub_key if top_key == "governance" else None,
+            })
+        tops.append({
+            "key": top_key,
+            "label": top_label,
+            "count": sum(s["count"] for s in subfolders),
+            "subfolders": subfolders,
+        })
+    return tops
+
+
+def list_tree_subfolder_documents(org_id: str, top: str, sub: str) -> list[VaultDocument]:
+    if sub not in dict(VAULT_TREE_SUBFOLDERS.get(top, [])):
+        raise HTTPException(status_code=404, detail="Unknown vault folder.")
+    docs = _tree_documents(org_id).get((top, sub), [])
+    return sorted(docs, key=lambda d: d.get("date") or "", reverse=True)
 
 
 def list_folders(org_id: str) -> list[dict[str, Any]]:
