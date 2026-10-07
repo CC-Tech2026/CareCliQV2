@@ -2258,14 +2258,40 @@ VAULT_TREE_SUBFOLDERS: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
+# Every credential type the app offers, including the free-text labels the
+# team page still saves for allied health and "Other". A type missing here is
+# left out of the organised folders and logged, never guessed into one.
 STAFF_CREDENTIAL_SUBFOLDERS: dict[str, str] = {
     "ndis_screening": "checks",
     "wwcc": "checks",
     "police_check": "checks",
+    "Police Check": "checks",
+    "code_of_conduct": "contracts_info",
+    "Professional Indemnity Insurance": "contracts_info",
     "first_aid": "first_aid_cpr",
     "cpr": "first_aid_cpr",
+    "First Aid/CPR": "first_aid_cpr",
     "drivers_licence": "id_documents",
+    "qualification": "training_qualifications",
+    "manual_handling": "training_qualifications",
+    "infection_control": "training_qualifications",
+    "medication_admin": "training_qualifications",
+    "AHPRA Registration": "training_qualifications",
+    "Discipline-specific Certificate": "training_qualifications",
+    "Other": "training_qualifications",
+    "vehicle_insurance": "vehicle_insurance",
+    "vehicle_registration": "vehicle_insurance",
 }
+
+_unplaced_credential_types: set[str] = set()
+
+
+def _credential_subfolder(credential_type: str | None) -> str | None:
+    sub = STAFF_CREDENTIAL_SUBFOLDERS.get(credential_type or "")
+    if sub is None and credential_type not in _unplaced_credential_types:
+        _unplaced_credential_types.add(credential_type or "")
+        logger.warning("Vault: credential type %r has no staff subfolder, left out of the organised folders", credential_type)
+    return sub
 
 
 def _tree_placement(doc: VaultDocument) -> tuple[str, str] | None:
@@ -2285,7 +2311,8 @@ def _tree_placement(doc: VaultDocument) -> tuple[str, str] | None:
             return "participant", "intake_docs"
         return "staff", "contracts_info"
     if category == "worker_credentials":
-        return "staff", STAFF_CREDENTIAL_SUBFOLDERS.get(doc.get("subtype") or "", "training_qualifications")
+        sub = _credential_subfolder(doc.get("subtype"))
+        return ("staff", sub) if sub else None
     return None
 
 

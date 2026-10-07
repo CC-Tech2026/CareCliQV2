@@ -42,6 +42,36 @@ def test_worker_credentials_are_filed_by_their_type():
     assert vault_service._tree_placement(_doc("worker_credentials", subtype="drivers_licence")) == ("staff", "id_documents")
     assert vault_service._tree_placement(_doc("worker_credentials", subtype="manual_handling")) == (
         "staff", "training_qualifications")
+    assert vault_service._tree_placement(_doc("worker_credentials", subtype="code_of_conduct")) == (
+        "staff", "contracts_info")
+
+
+def test_vehicle_credentials_file_under_vehicle_insurance_and_rego():
+    for sub_type in ("vehicle_insurance", "vehicle_registration"):
+        assert vault_service._tree_placement(_doc("worker_credentials", subtype=sub_type)) == (
+            "staff", "vehicle_insurance")
+
+
+# Every type the web team page, worker detail and mobile app let someone save.
+OFFERED_CREDENTIAL_TYPES = [
+    "ndis_screening", "wwcc", "code_of_conduct", "police_check", "Police Check", "first_aid", "cpr",
+    "manual_handling", "infection_control", "medication_admin", "drivers_licence",
+    "vehicle_registration", "vehicle_insurance", "qualification", "Other",
+    "AHPRA Registration", "Professional Indemnity Insurance", "First Aid/CPR",
+    "Discipline-specific Certificate",
+]
+
+
+def test_every_offered_credential_type_has_a_subfolder():
+    for sub_type in OFFERED_CREDENTIAL_TYPES:
+        assert vault_service._tree_placement(_doc("worker_credentials", subtype=sub_type)) is not None, sub_type
+
+
+def test_unknown_credential_type_is_not_placed_by_fallback(caplog):
+    with caplog.at_level("WARNING"):
+        assert vault_service._tree_placement(_doc("worker_credentials", subtype="brand_new_type")) is None
+        assert vault_service._tree_placement(_doc("worker_credentials", subtype=None)) is None
+    assert "brand_new_type" in caplog.text
 
 
 def test_custom_folder_documents_are_not_placed():
