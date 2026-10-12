@@ -25,8 +25,8 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { SectionInfo } from "@/components/ui/section-info";
-import { PageHeader, SummaryStrip, ctaClass, ghostClass } from "@/components/layout/PageKit";
-import { ChoiceCard, DropZone, Field, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass } from "@/pages/md/vault/components/PanelKit";
+import { PageHeader, StatusText, SummaryStrip, ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
+import { ChoiceCard, DropZone, Field, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass, textareaClass } from "@/pages/md/vault/components/PanelKit";
 import {
   AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, Briefcase, CalendarDays, ChevronDown, ChevronRight, ChevronUp, Clock, Clock3, CheckCircle2,
   Copy, FileText, ClipboardCheck, Users, Gauge, LayoutGrid, Loader2, Mail, RefreshCw,
@@ -211,7 +211,7 @@ const DOC_TYPE_META: Record<string, { label: string; icon: typeof FileText }> = 
 function StatusBadge({ status }: { status: EmployeeHire["status"] }) {
   const meta = STATUS_META[status];
   return (
-    <span className="text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap" style={{ background: meta.bg, color: meta.color }}>
+    <span className="whitespace-nowrap text-xs font-semibold" style={{ color: meta.color }}>
       {meta.label}
     </span>
   );
@@ -224,14 +224,14 @@ function ReadinessCard({ categories }: { categories: ReadinessCategory[] }) {
   const totalMax = categories.reduce((s, c) => s + c.max, 0);
   const score = totalMax > 0 ? (totalAchieved / totalMax) * 5 : 0;
   return (
-    <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+    <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
       <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-        <Gauge size={16} style={{ color: PLUM }} />
-        <p className="text-sm font-black" style={{ color: TEXT }}>Readiness</p>
+        <Gauge size={16} style={{ color: MUTED }} />
+        <p className="text-base font-semibold" style={{ color: TEXT }}>Readiness</p>
       </div>
       <div className="p-5">
         <div className="flex items-end gap-1.5">
-          <p className="text-[30px] font-black leading-none" style={{ color: PLUM }}>{score.toFixed(1)}</p>
+          <p className="text-3xl font-semibold leading-none tabular-nums tracking-tight" style={{ color: TEXT }}>{score.toFixed(1)}</p>
           <p className="pb-1 text-xs font-semibold" style={{ color: MUTED }}>/ 5.0</p>
         </div>
         <div className="mt-4 space-y-3">
@@ -268,11 +268,11 @@ function SignatureCard({
 }: { label: string; signedName?: string | null; signedAt?: string | null; pendingLabel: string }) {
   const signed = !!signedAt;
   return (
-    <div className="rounded-lg p-3.5 border" style={{ background: signed ? SUCCESS_BG : SOFT, borderColor: signed ? "transparent" : BORDER }}>
-      <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: signed ? SUCCESS : MUTED }}>{label}</p>
+    <div className="rounded-2xl p-4" style={{ background: signed ? SUCCESS_BG : SOFT }}>
+      <p className="text-xs font-semibold" style={{ color: signed ? SUCCESS : MUTED }}>{label}</p>
       {signed ? (
         <div className="mt-1.5">
-          <p className="text-sm font-black flex items-center gap-1.5" style={{ color: TEXT }}>
+          <p className="text-sm font-semibold flex items-center gap-1.5" style={{ color: TEXT }}>
             <CheckCircle2 size={14} style={{ color: SUCCESS }} /> {signedName}
           </p>
           <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>
@@ -412,7 +412,7 @@ function HireDetail({
               <ArrowLeft size={14} style={{ color: MUTED }} />
             </button>
             {index >= 0 && (
-              <span className="px-1 text-[11px] font-semibold" style={{ color: MUTED }}>{index + 1} of {hires.length}</span>
+              <span className="px-1 text-xs font-medium" style={{ color: MUTED }}>{index + 1} of {hires.length}</span>
             )}
             <button
               onClick={() => hasNext && onNavigate(hires[index + 1].id)}
@@ -428,7 +428,7 @@ function HireDetail({
           <Avatar name={hire.full_name} size={44} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-black truncate" style={{ color: TEXT }}>{hire.full_name}</h2>
+              <h2 className="truncate text-xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{hire.full_name}</h2>
               <StatusBadge status={hire.status} />
             </div>
             <p className="mt-1 truncate text-xs" style={{ color: MUTED }}>
@@ -444,9 +444,9 @@ function HireDetail({
 
           {/* Profile */}
           <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: SURFACE }}>
-            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Profile</p>
+            <p className="text-base font-semibold" style={{ color: TEXT }}>Profile</p>
             {hire.resume_summary ? (
-              <p className="mt-3 text-[13px] leading-relaxed" style={{ color: TEXT }}>{hire.resume_summary}</p>
+              <p className="mt-2 text-sm leading-6" style={{ color: TEXT }}>{hire.resume_summary}</p>
             ) : (
               <p className="mt-3 text-[12px]" style={{ color: MUTED }}>No resume summary available for this hire.</p>
             )}
@@ -462,7 +462,7 @@ function HireDetail({
             )}
             {hasCredentials && (
               <div className="mt-4 border-t pt-4" style={{ borderColor: BORDER }}>
-                <p className="text-[9px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Self-reported credentials</p>
+                <p className="text-xs font-semibold" style={{ color: MUTED }}>Self-reported credentials</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {hire.credentials_claimed!.map((c) => (
                     <span key={c.type} className="rounded-full px-3 py-1 text-[11px] font-bold" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
@@ -477,9 +477,9 @@ function HireDetail({
           {/* Documents */}
           <div className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
             <div className="flex items-center justify-between gap-3 px-6 py-5">
-              <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Documents</p>
+              <p className="text-base font-semibold" style={{ color: TEXT }}>Documents</p>
               {hire.status === "draft" && (
-                <button onClick={() => setAddDocOpen(true)} className="flex items-center gap-1.5 text-[11px] font-black transition-colors hover:opacity-70" style={{ color: PLUM }}>
+                <button onClick={() => setAddDocOpen(true)} className={outlineClass}>
                   <FileText size={12} /> Add document
                 </button>
               )}
@@ -494,15 +494,15 @@ function HireDetail({
                   const meta = DOC_TYPE_META[d.document_type] ?? DOC_TYPE_META.other;
                   return (
                     <div key={d.id} className="flex items-center justify-between gap-3 px-6 py-3.5">
-                      <span className="truncate text-[13px] font-bold" style={{ color: TEXT }}>{d.title}</span>
+                      <span className="truncate text-sm font-medium" style={{ color: TEXT }}>{d.title}</span>
                       <div className="flex shrink-0 items-center gap-3">
                         {d.file_url ? (
-                          <span className="rounded-full px-2.5 py-1 text-[9.5px] font-black uppercase tracking-wide" style={{ background: SUCCESS_BG, color: SUCCESS }}>Attached</span>
+                          <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: SUCCESS_BG, color: SUCCESS }}>Attached</span>
                         ) : (
-                          <span className="rounded-full px-2.5 py-1 text-[9.5px] font-black uppercase tracking-wide" style={{ background: SOFT, color: MUTED }}>No file</span>
+                          <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: SOFT, color: MUTED }}>No file</span>
                         )}
                         {d.file_url && (
-                          <a href={d.file_url} target="_blank" rel="noreferrer" className="text-[11px] font-bold underline" style={{ color: PLUM }}>View</a>
+                          <a href={d.file_url} target="_blank" rel="noreferrer" className="text-sm font-medium underline-offset-4 hover:underline" style={{ color: TEXT }}>View</a>
                         )}
                         {hire.status === "draft" && (
                           <button onClick={() => removeDocMut.mutate(d.id)} className="rounded-lg p-1 hover:bg-black/5" aria-label="Remove document">
@@ -519,7 +519,7 @@ function HireDetail({
 
           {/* Signatures */}
           <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: SURFACE }}>
-            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Signatures</p>
+            <p className="text-base font-semibold" style={{ color: TEXT }}>Signatures</p>
             <div className="mt-4 space-y-3">
               <div className="grid sm:grid-cols-2 gap-3">
                 <SignatureCard label="Employer" signedName={hire.employer_signed_name} signedAt={hire.employer_signed_at} pendingLabel="Not yet sent" />
@@ -527,7 +527,7 @@ function HireDetail({
               </div>
 
               {hire.status === "draft" && (
-                <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending || documents.length === 0}>
+                <Button variant="navy" className="min-h-11 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending || documents.length === 0}>
                   {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send for signature
                 </Button>
               )}
@@ -536,7 +536,7 @@ function HireDetail({
                 const offerExpiry = expiryStatus(hire.employer_signed_at, OFFER_LINK_TTL_DAYS);
                 return (
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: WARNING_BG }}>
+                    <div className="flex items-center gap-2 rounded-2xl px-4 py-3" style={{ background: WARNING_BG }}>
                       <Mail size={14} style={{ color: WARNING }} className="shrink-0" />
                       <div className="flex-1">
                         <p className="text-xs" style={{ color: TEXT }}>Emailed to {hire.email}. Waiting for their signature.</p>
@@ -557,7 +557,7 @@ function HireDetail({
                         <Copy size={13} style={{ color: MUTED }} />
                       </button>
                     </div>
-                    <Button variant="outline" className="w-full gap-2 rounded-lg" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
+                    <Button variant="outline" className="min-h-11 w-full gap-2 rounded-full" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
                       {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={13} />} Resend offer email
                     </Button>
                   </div>
@@ -566,20 +566,20 @@ function HireDetail({
 
               {hire.status === "expired" && (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: DANGER_BG }}>
+                  <div className="flex items-center gap-2 rounded-2xl px-4 py-3" style={{ background: DANGER_BG }}>
                     <AlertTriangle size={14} style={{ color: DANGER }} className="shrink-0" />
                     <p className="text-xs flex-1" style={{ color: TEXT }}>
                       The offer link expired after {OFFER_LINK_TTL_DAYS} days without a signature. Resend to issue a fresh link.
                     </p>
                   </div>
-                  <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
+                  <Button variant="navy" className="min-h-11 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
                     {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Resend offer
                   </Button>
                 </div>
               )}
 
               {hire.status === "signed" && (
-                <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={() => sendInviteMut.mutate()} disabled={sendInviteMut.isPending}>
+                <Button variant="navy" className="min-h-11 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendInviteMut.mutate()} disabled={sendInviteMut.isPending}>
                   {sendInviteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send login invite
                 </Button>
               )}
@@ -588,7 +588,7 @@ function HireDetail({
                 const inviteExpiry = expiryStatus(hire.invited_at, INVITE_TOKEN_TTL_DAYS);
                 return (
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: inviteExpiry?.expired ? DANGER_BG : SUCCESS_BG }}>
+                    <div className="flex items-center gap-2 rounded-2xl px-4 py-3" style={{ background: inviteExpiry?.expired ? DANGER_BG : SUCCESS_BG }}>
                       {inviteExpiry?.expired ? (
                         <AlertTriangle size={16} style={{ color: DANGER }} className="shrink-0" />
                       ) : (
@@ -605,7 +605,7 @@ function HireDetail({
                     </div>
                     <Button
                       variant={inviteExpiry?.expired ? "navy" : "outline"}
-                      className="w-full gap-2 rounded-lg"
+                      className="min-h-11 w-full gap-2 rounded-full"
                       onClick={() => sendInviteMut.mutate()}
                       disabled={sendInviteMut.isPending}
                     >
@@ -616,7 +616,7 @@ function HireDetail({
               })()}
 
               {hire.status === "completed" && (
-                <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
+                <div className="flex items-center gap-2 rounded-2xl px-4 py-3" style={{ background: SUCCESS_BG }}>
                   <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
                   <p className="text-xs font-bold" style={{ color: SUCCESS }}>Login invite sent — account activated.</p>
                 </div>
@@ -625,7 +625,7 @@ function HireDetail({
           </div>
 
           {(hire.status === "invited" || hire.status === "completed") && (
-            <div className="flex items-center gap-2.5 rounded-2xl p-4 border" style={{ background: INFO_BG, borderColor: BORDER }}>
+            <div className="flex items-center gap-2.5 rounded-2xl px-4 py-3" style={{ background: INFO_BG }}>
               <ShieldCheck size={16} style={{ color: INFO }} className="shrink-0" />
               <p className="text-xs" style={{ color: TEXT }}>
                 {hire.full_name.split(" ")[0]} will appear in the Credentials/Training columns below once they finish setting up their account, and can't be rostered until onboarding is complete.
@@ -1174,7 +1174,7 @@ function ApplicantDetailSheet({
                 <ArrowLeft size={14} style={{ color: MUTED }} />
               </button>
               {index >= 0 && (
-                <span className="px-1 text-[11px] font-semibold" style={{ color: MUTED }}>{index + 1} of {applicants.length}</span>
+                <span className="px-1 text-xs font-medium" style={{ color: MUTED }}>{index + 1} of {applicants.length}</span>
               )}
               <button
                 onClick={() => hasNext && onNavigate(applicants[index + 1].id)}
@@ -1190,10 +1190,8 @@ function ApplicantDetailSheet({
               <Avatar name={applicant.full_name} size={44} color={STAGE_COLOR.interview} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base font-black truncate" style={{ color: TEXT }}>{applicant.full_name}</h2>
-                  <span className="rounded-full px-2.5 py-1 text-[10px] font-black capitalize" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
-                    {applicant.stage === "applied" ? "Applied" : "Interview"}
-                  </span>
+                  <h2 className="truncate text-xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{applicant.full_name}</h2>
+                  <StatusText tone="info">{applicant.stage === "applied" ? "Applied" : "Interview"}</StatusText>
                 </div>
                 <p className="mt-1 truncate text-xs" style={{ color: MUTED }}>
                   {applicant.email}{applicant.phone ? ` · ${applicant.phone}` : ""} · <span className="capitalize">{applicant.role.replace(/_/g, " ")}</span>
@@ -1202,7 +1200,7 @@ function ApplicantDetailSheet({
             </div>
 
             <div className="mt-5 flex items-center justify-between gap-3">
-              <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Hiring Process</p>
+              <p className="text-base font-semibold" style={{ color: TEXT }}>Hiring Process</p>
               {stageOptions.length > 0 && (
                 <div className="flex items-center gap-2">
                   {stageOptions.map((opt) => {
@@ -1213,10 +1211,7 @@ function ApplicantDetailSheet({
                         key={opt.value}
                         onClick={() => onMoveStage(opt.value)}
                         disabled={movePending}
-                        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black disabled:opacity-60"
-                        style={goingBack
-                          ? { background: SOFT, color: MUTED }
-                          : { background: PLUM, color: "#fff" }}
+                        className={goingBack ? outlineClass : ctaClass}
                       >
                         {movePending ? <Loader2 size={12} className="animate-spin" /> : null} {opt.label}
                       </button>
@@ -1232,9 +1227,9 @@ function ApplicantDetailSheet({
               <ReadinessCard categories={readinessCategories} />
 
               <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: SURFACE }}>
-                <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Profile</p>
+                <p className="text-base font-semibold" style={{ color: TEXT }}>Profile</p>
                 {applicant.resume_summary ? (
-                  <p className="mt-3 text-[13px] leading-relaxed" style={{ color: TEXT }}>{applicant.resume_summary}</p>
+                  <p className="mt-2 text-sm leading-6" style={{ color: TEXT }}>{applicant.resume_summary}</p>
                 ) : (
                   <p className="mt-3 text-[12px]" style={{ color: MUTED }}>No resume summary yet. Add a resume below to build one automatically.</p>
                 )}
@@ -1250,7 +1245,7 @@ function ApplicantDetailSheet({
                 )}
                 {hasCredentials && (
                   <div className="mt-4 border-t pt-4" style={{ borderColor: BORDER }}>
-                    <p className="text-[9px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Self-reported credentials</p>
+                    <p className="text-xs font-semibold" style={{ color: MUTED }}>Self-reported credentials</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {applicant.credentials_claimed!.map((c) => (
                         <span key={c.type} className="rounded-full px-3 py-1 text-[11px] font-bold" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
@@ -1264,16 +1259,16 @@ function ApplicantDetailSheet({
 
               <div className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
                 <div className="flex items-center justify-between gap-3 px-6 py-5">
-                  <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Documents</p>
-                  <button onClick={() => setAddOpen((v) => !v)} className="flex items-center gap-1.5 text-[11px] font-black transition-colors hover:opacity-70" style={{ color: PLUM }}>
+                  <p className="text-base font-semibold" style={{ color: TEXT }}>Documents</p>
+                  <button onClick={() => setAddOpen((v) => !v)} className={outlineClass}>
                     <Upload size={12} /> Add file
                   </button>
                 </div>
 
                 {addOpen && (
-                  <div className="space-y-3 border-t px-6 py-5" style={{ borderColor: BORDER, background: SOFT }}>
+                  <div className="space-y-3 border-t px-6 py-5" style={{ borderColor: BORDER }}>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Document type</label>
+                      <label className="text-sm font-medium" style={{ color: TEXT }}>Document type</label>
                       <Select value={docType} onValueChange={(v) => setDocType(v as ApplicantDocumentType)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -1287,15 +1282,15 @@ function ApplicantDetailSheet({
                     <FileDropZone
                       accept="application/pdf,image/jpeg,image/png"
                       onFiles={(files) => setDocFile(files[0] ?? null)}
-                      className="flex items-center gap-2 rounded-lg border border-dashed bg-white px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]"
-                      style={{ borderColor: BORDER, color: docFile ? TEXT : MUTED }}
+                      className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed bg-cc-surface px-4 py-4 text-sm font-medium transition hover:bg-cc-soft"
+                      style={{ borderColor: docFile ? "var(--cc-brand-purple)" : BORDER, color: docFile ? TEXT : MUTED }}
                     >
                       <Upload size={14} />
                       {docFile ? docFile.name : "Choose or drop a file (PDF or image)"}
                     </FileDropZone>
                     <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="sm" onClick={() => { setAddOpen(false); setDocFile(null); }}>Cancel</Button>
-                      <Button variant="navy" size="sm" onClick={() => addDocMut.mutate()} disabled={!docFile || addDocMut.isPending}>
+                      <Button variant="outline" size="sm" className="min-h-10 rounded-full px-4" onClick={() => { setAddOpen(false); setDocFile(null); }}>Cancel</Button>
+                      <Button variant="navy" size="sm" className="min-h-10 rounded-full px-4 text-white" style={{ background: "var(--cc-cta)" }} onClick={() => addDocMut.mutate()} disabled={!docFile || addDocMut.isPending}>
                         {addDocMut.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null} Upload
                       </Button>
                     </div>
@@ -1310,11 +1305,11 @@ function ApplicantDetailSheet({
                       const meta = APPLICANT_DOC_TYPE_META[d.document_type] ?? APPLICANT_DOC_TYPE_META.other;
                       return (
                         <div key={d.id} className="flex items-center justify-between gap-3 px-6 py-3.5">
-                          <span className="truncate text-[13px] font-bold" style={{ color: TEXT }}>{meta.label}</span>
+                          <span className="truncate text-sm font-medium" style={{ color: TEXT }}>{meta.label}</span>
                           <div className="flex shrink-0 items-center gap-3">
-                            <span className="rounded-full px-2.5 py-1 text-[9.5px] font-black uppercase tracking-wide" style={{ background: SUCCESS_BG, color: SUCCESS }}>Uploaded</span>
+                            <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: SUCCESS_BG, color: SUCCESS }}>Uploaded</span>
                             {d.file_url && (
-                              <a href={d.file_url} target="_blank" rel="noreferrer" className="text-[11px] font-bold underline" style={{ color: PLUM }}>View</a>
+                              <a href={d.file_url} target="_blank" rel="noreferrer" className="text-sm font-medium underline-offset-4 hover:underline" style={{ color: TEXT }}>View</a>
                             )}
                             <button onClick={() => removeDocMut.mutate(d.id)} className="rounded-lg p-1 hover:bg-black/5" aria-label={`Remove ${d.title}`}>
                               <Trash2 size={13} style={{ color: MUTED }} />
@@ -1328,14 +1323,14 @@ function ApplicantDetailSheet({
               </div>
 
               <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: SURFACE }}>
-                <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Notes</p>
+                <p className="text-base font-semibold" style={{ color: TEXT }}>Notes</p>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   onBlur={() => { if (notes !== (applicant.notes ?? "")) notesMut.mutate(notes); }}
                   rows={4}
                   placeholder="Write a note about this candidate…"
-                  className="mt-3 w-full resize-none rounded-lg border px-3 py-2.5 text-[12px] outline-none focus:ring-1"
+                  className={`mt-3 resize-none ${textareaClass}`}
                   style={{ borderColor: BORDER, color: TEXT }}
                 />
                 {notesMut.isPending && <p className="mt-1.5 text-[10px]" style={{ color: MUTED }}>Saving…</p>}
@@ -1343,8 +1338,8 @@ function ApplicantDetailSheet({
 
               <button
                 onClick={onReject}
-                className="rounded-full border-2 px-5 py-2 text-[12px] font-black transition-colors hover:bg-black/[0.02]"
-                style={{ borderColor: "var(--cc-status-critical)", color: "var(--cc-status-critical)" }}
+                className={outlineClass}
+                style={{ color: "var(--cc-danger-text)" }}
               >
                 Reject
               </button>
@@ -1508,7 +1503,7 @@ function PipelineListView({
 
   return (
     <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="grid grid-cols-[1fr_140px_140px_1fr_76px] gap-3 border-b px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.1em]" style={{ borderColor: BORDER, color: MUTED }}>
+      <div className="grid grid-cols-[1fr_140px_140px_1fr_76px] gap-3 border-b px-5 py-2.5 text-xs font-medium" style={{ borderColor: BORDER, color: MUTED }}>
         <SortHeader label="Candidate" k="name" />
         <SortHeader label="Role" k="name" className="hidden sm:flex" />
         <SortHeader label="Stage" k="stage" />

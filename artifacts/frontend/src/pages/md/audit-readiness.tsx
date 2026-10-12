@@ -73,7 +73,7 @@ import {
   type SubjectType,
 } from "@/services/auditReadinessService";
 import { fetchFolderDocuments, fetchVaultFolders, type VaultDocument } from "@/services/vaultService";
-import { PanelHeader, PrimaryButton } from "@/pages/md/vault/components/PanelKit";
+import { PanelHeader, PrimaryButton, SecondaryButton, textareaClass } from "@/pages/md/vault/components/PanelKit";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -428,7 +428,7 @@ function EvidenceRow({ item, evidence, onDone }: { item: AuditItem; evidence: Au
   const canReview = evidence.reviewable && item.status !== "not_applicable";
 
   return (
-    <div className="rounded-2xl border p-3.5" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border p-4" style={{ borderColor: BORDER }}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[13px] font-semibold" style={{ color: TEXT }}>{evidence.title}</p>
@@ -447,22 +447,21 @@ function EvidenceRow({ item, evidence, onDone }: { item: AuditItem; evidence: Au
         <StatusPill status={evidence.status} />
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         {evidence.vault_category && (
           <Link
             href={`/md/vault/${encodeURIComponent(evidence.vault_category)}`}
-            className="text-[12px] font-bold"
-            style={{ color: PLUM }}
+            className={outlineClass}
           >
             Open in vault
           </Link>
         )}
         {canReview && mode === "idle" && (
           <>
-            <button type="button" className="text-[12px] font-bold" style={{ color: "var(--cc-status-success)" }} onClick={() => setMode("approve")}>
+            <button type="button" className={outlineClass} style={{ color: "var(--cc-green)" }} onClick={() => setMode("approve")}>
               {evidence.review_status === "approved" ? "Re-review" : "Approve"}
             </button>
-            <button type="button" className="text-[12px] font-bold" style={{ color: "var(--cc-status-danger)" }} onClick={() => setMode("reject")}>
+            <button type="button" className={outlineClass} style={{ color: "var(--cc-danger-text)" }} onClick={() => setMode("reject")}>
               Reject
             </button>
           </>
@@ -470,7 +469,7 @@ function EvidenceRow({ item, evidence, onDone }: { item: AuditItem; evidence: Au
         {evidence.kind === "linked" && evidence.link_id && mode === "idle" && (
           <button
             type="button"
-            className="text-[12px] font-bold"
+            className={ghostClass}
             style={{ color: MUTED }}
             disabled={busy}
             onClick={() => run(() => unlinkEvidence(evidence.link_id as string), "Evidence unlinked")}
@@ -495,10 +494,12 @@ function EvidenceRow({ item, evidence, onDone }: { item: AuditItem; evidence: Au
             onChange={(e) => setNote(e.target.value)}
             rows={2}
           />
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              disabled={busy || (mode === "reject" && !note.trim())}
+          <div className="flex flex-wrap gap-2">
+            <SecondaryButton onClick={() => setMode("idle")}>Cancel</SecondaryButton>
+            <PrimaryButton
+              tone={mode === "reject" ? "danger" : "brand"}
+              busy={busy}
+              disabled={mode === "reject" && !note.trim()}
               onClick={() =>
                 run(
                   () => reviewEvidence(item, evidence, mode === "approve" ? "approved" : "rejected", { note, expiry_date: expiry || null }),
@@ -507,8 +508,7 @@ function EvidenceRow({ item, evidence, onDone }: { item: AuditItem; evidence: Au
               }
             >
               {mode === "approve" ? "Approve" : "Reject"}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode("idle")}>Cancel</Button>
+            </PrimaryButton>
           </div>
         </div>
       )}
@@ -637,37 +637,38 @@ function ItemSheet({
 
   return (
     <Sheet open={!!item} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
+      <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
         {item && (
           <>
-            <SheetHeader>
-              <div className="flex items-center gap-2">
-                <StatusPill status={item.status} />
-                {item.critical && (
-                  <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "var(--cc-status-danger)" }}>
-                    Critical
-                  </span>
-                )}
-              </div>
-              <SheetTitle>{item.title}</SheetTitle>
-              <SheetDescription>
-                {SUBJECT_LABELS[item.subject_type]} · {item.subject_name}
-              </SheetDescription>
-            </SheetHeader>
+            <SheetTitle className="sr-only">{item.title}</SheetTitle>
+            <SheetDescription className="sr-only">
+              {SUBJECT_LABELS[item.subject_type]} · {item.subject_name}
+            </SheetDescription>
+            <PanelHeader
+              icon={ClipboardCheck}
+              title={item.title}
+              description={
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span>{SUBJECT_LABELS[item.subject_type]} · {item.subject_name}</span>
+                  <StatusPill status={item.status} />
+                  {item.critical && <StatusText tone="danger">Critical</StatusText>}
+                </span>
+              }
+            />
 
-            <div className="mt-4 space-y-5 text-[13px]">
+            <div className="mt-6 space-y-6 text-sm">
               <section
-                className="rounded-xl p-3"
+                className="rounded-2xl px-4 py-3"
                 style={{ background: item.status === "current" ? "var(--cc-soft)" : STATUS_STYLE[item.status].bg }}
               >
-                <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Next action</p>
-                <p className="mt-1" style={{ color: TEXT }}>{item.next_action}</p>
+                <p className="text-xs font-semibold" style={{ color: MUTED }}>Next action</p>
+                <p className="mt-1 leading-6" style={{ color: TEXT }}>{item.next_action}</p>
               </section>
 
               {requirement && (
                 <section className="space-y-2">
                   <p style={{ color: TEXT }}>{requirement.description}</p>
-                  <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12px]">
+                  <dl className="grid grid-cols-[120px_1fr] gap-x-3 gap-y-2 rounded-2xl border p-4 text-[13px]" style={{ borderColor: BORDER }}>
                     <dt style={{ color: MUTED }}>Why it applies</dt>
                     <dd style={{ color: TEXT }}>{item.applies_reason}</dd>
                     <dt style={{ color: MUTED }}>Source</dt>
@@ -689,7 +690,7 @@ function ItemSheet({
               )}
 
               {item.not_applicable ? (
-                <section className="rounded-xl border p-3" style={{ borderColor: BORDER }}>
+                <section className="rounded-2xl border p-4" style={{ borderColor: BORDER }}>
                   <p className="font-semibold" style={{ color: TEXT }}>Marked not applicable</p>
                   <p className="mt-1" style={{ color: TEXT }}>{item.not_applicable.reason}</p>
                   <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
@@ -700,12 +701,12 @@ function ItemSheet({
 
               <section className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold" style={{ color: TEXT }}>Evidence</h3>
+                  <h3 className="text-base font-semibold" style={{ color: TEXT }}>Evidence</h3>
                   {!item.not_applicable && (
-                    <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setLinking((v) => !v)}>
+                    <button type="button" className={outlineClass} onClick={() => setLinking((v) => !v)}>
                       <Link2 size={14} />
                       {linking ? "Close" : "Link from vault"}
-                    </Button>
+                    </button>
                   )}
                 </div>
                 {linking && <LinkFromVault item={item} onDone={done} />}
@@ -722,7 +723,7 @@ function ItemSheet({
                 {!naOpen ? (
                   <button
                     type="button"
-                    className="text-[12px] font-bold"
+                    className={`${ghostClass} -ml-4`}
                     style={{ color: MUTED }}
                     onClick={() => setNaOpen(true)}
                   >
@@ -730,7 +731,9 @@ function ItemSheet({
                   </button>
                 ) : (
                   <div className="space-y-2">
-                    <Textarea
+                    <textarea
+                      className={textareaClass}
+                      style={{ borderColor: BORDER, color: TEXT }}
                       aria-label={item.not_applicable ? "Why it applies again" : "Why it doesn't apply"}
                       placeholder={
                         item.not_applicable
@@ -741,15 +744,15 @@ function ItemSheet({
                       onChange={(e) => setReason(e.target.value)}
                       rows={3}
                     />
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        disabled={busy || (!item.not_applicable && reason.trim().length < 10)}
+                    <div className="flex flex-wrap gap-2">
+                      <SecondaryButton onClick={() => setNaOpen(false)}>Cancel</SecondaryButton>
+                      <PrimaryButton
+                        busy={busy}
+                        disabled={!item.not_applicable && reason.trim().length < 10}
                         onClick={saveNa}
                       >
                         {item.not_applicable ? "Revoke" : "Approve as not applicable"}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setNaOpen(false)}>Cancel</Button>
+                      </PrimaryButton>
                     </div>
                   </div>
                 )}

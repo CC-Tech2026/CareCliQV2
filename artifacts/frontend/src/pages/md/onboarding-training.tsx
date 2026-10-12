@@ -21,6 +21,9 @@ import {
   Loader2,
   ClipboardCheck,
   Search,
+  ListChecks,
+  ShieldCheck,
+  BookOpen,
 } from "lucide-react";
 import { TrainingReviews } from "@/components/training/TrainingReviews";
 import { TrainingModuleEditor } from "@/components/training/TrainingModuleEditor";
@@ -28,6 +31,8 @@ import { SharedResourceAccess } from "@/components/training/WorkerResourceLibrar
 import { CourseCover } from "@/components/training/CourseCover";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { EmptyState, LoadError, PageHeader, PillTabs, SkeletonBlocks, StatusText, ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { ChoiceCard, Field, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass, textareaClass } from "@/pages/md/vault/components/PanelKit";
 import { SectionInfo } from "@/components/ui/section-info";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
@@ -553,184 +558,104 @@ function StageSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
-      <div
-        className="h-full w-full max-w-md overflow-y-auto bg-white shadow-xl flex flex-col"
-        style={{ borderLeft: `1px solid ${BORDER}` }}
-      >
-        <div
-          className="flex items-center justify-between border-b px-5 py-4"
-          style={{ borderColor: BORDER }}
+    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+        <SheetTitle className="sr-only">Edit stage</SheetTitle>
+        <SheetDescription className="sr-only">Change what a new starter does in this onboarding stage.</SheetDescription>
+        <PanelHeader icon={ListChecks} title="Edit stage" description="What a new starter does in this stage, and what counts as done." />
+        <form
+          id="stage-form"
+          className="mt-6 flex-1 space-y-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (title.trim() && !saving) void handleSave();
+          }}
         >
-          <h3 className="text-[15px] font-black" style={{ color: TEXT }}>
-            Edit Stage
-          </h3>
-          <button
-            onClick={onClose}
-            aria-label="Close panel"
-            className="rounded-lg p-1 hover:bg-gray-100"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="flex-1 space-y-5 p-5">
-          <div>
-            <label
-              className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]"
-              style={{ color: MUTED }}
-            >
-              Stage Name
-            </label>
+          <Field label="Stage name" htmlFor="stage-name">
             <input
+              id="stage-name"
               aria-label="Stage name"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
-              style={{ borderColor: BORDER }}
+              className={inputClass}
+              style={{ borderColor: BORDER, color: TEXT }}
             />
-          </div>
-
-          <div>
-            <label
-              className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]"
-              style={{ color: MUTED }}
-            >
-              Instructions
-            </label>
+          </Field>
+          <Field label="Instructions" htmlFor="stage-instructions">
             <textarea
+              id="stage-instructions"
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               rows={5}
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none resize-none focus:ring-1"
-              style={{ borderColor: BORDER }}
+              className={`resize-none ${textareaClass}`}
+              style={{ borderColor: BORDER, color: TEXT }}
               placeholder="Describe what the new starter should do in this stage…"
             />
-          </div>
-
-          <div>
-            <label
-              className="mb-3 block text-[11px] font-black uppercase tracking-[0.12em]"
-              style={{ color: MUTED }}
-            >
-              Completion Requirements
-            </label>
-            <div className="space-y-2">
-              {COMPLETION_KEYS.map(({ key, label }) => (
-                <label
-                  key={key}
-                  className="flex items-center gap-3 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!reqs[key]}
-                    onChange={() => toggleReq(key)}
-                    className="h-4 w-4 rounded accent-[#1E3A5F]"
-                  />
-                  <span
-                    className="text-[13px] font-medium"
-                    style={{ color: TEXT }}
-                  >
-                    {label}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <label
-                className="text-[11px] font-black uppercase tracking-[0.12em]"
-                style={{ color: MUTED }}
-              >
-                Attach Resources
+          </Field>
+          <div className="space-y-2">
+            <p className="text-sm font-medium" style={{ color: TEXT }}>Completion requirements</p>
+            {COMPLETION_KEYS.map(({ key, label }) => (
+              <label key={key} className="flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 transition hover:bg-cc-soft" style={{ borderColor: reqs[key] ? "var(--cc-brand-purple)" : BORDER, background: reqs[key] ? "var(--cc-brand-purple-soft)" : undefined }}>
+                <input
+                  type="checkbox"
+                  checked={!!reqs[key]}
+                  onChange={() => toggleReq(key)}
+                  className="h-4 w-4 rounded accent-[color:var(--cc-brand-purple)]"
+                />
+                <span className="text-sm font-medium" style={{ color: TEXT }}>{label}</span>
               </label>
+            ))}
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium" style={{ color: TEXT }}>Attach resources</p>
               {!resourcesLoaded && (
-                <button
-                  onClick={loadResources}
-                  className="text-[11px] font-bold underline"
-                  style={{ color: PLUM }}
-                >
+                <button type="button" onClick={loadResources} className={ghostClass}>
                   {resourcesLoading ? "Loading…" : "Load resources"}
                 </button>
               )}
             </div>
             {resourcesLoaded && allResources.length === 0 && (
-              <p className="text-[12px]" style={{ color: MUTED }}>
+              <p className="text-sm" style={{ color: MUTED }}>
                 No resources in library yet. Upload some in the Resources tab.
               </p>
             )}
             {resourcesLoaded && allResources.length > 0 && (
-              <div
-                className="max-h-44 overflow-y-auto space-y-1.5 rounded-lg border p-2"
-                style={{ borderColor: BORDER }}
-              >
+              <div className="max-h-56 space-y-1.5 overflow-y-auto">
                 {allResources.map((r) => (
-                  <label
-                    key={r.id}
-                    className="flex items-center gap-2.5 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-gray-50"
-                  >
+                  <label key={r.id} className="flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 transition hover:bg-cc-soft" style={{ borderColor: attachedIds.has(r.id) ? "var(--cc-brand-purple)" : BORDER, background: attachedIds.has(r.id) ? "var(--cc-brand-purple-soft)" : undefined }}>
                     <input
                       type="checkbox"
                       checked={attachedIds.has(r.id)}
                       onChange={() => toggleAttach(r.id)}
-                      className="h-4 w-4 rounded accent-[#1E3A5F] shrink-0"
+                      className="h-4 w-4 shrink-0 rounded accent-[color:var(--cc-brand-purple)]"
                     />
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className="truncate text-[12px] font-semibold"
-                        style={{ color: TEXT }}
-                      >
-                        {r.name}
-                      </p>
-                      <p
-                        className="text-[10px] font-medium uppercase"
-                        style={{ color: MUTED }}
-                      >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium" style={{ color: TEXT }}>{r.name}</span>
+                      <span className="block text-xs capitalize" style={{ color: MUTED }}>
                         {r.resource_type}
                         {r.category ? ` · ${r.category}` : ""}
-                      </p>
-                    </div>
+                      </span>
+                    </span>
                   </label>
                 ))}
               </div>
             )}
             {attachedIds.size > 0 && (
-              <p
-                className="mt-1.5 text-[11px] font-bold"
-                style={{ color: PLUM }}
-              >
-                {attachedIds.size} resource{attachedIds.size !== 1 ? "s" : ""}{" "}
-                will be attached on save
+              <p className="text-xs font-semibold" style={{ color: "var(--cc-brand-purple)" }}>
+                {attachedIds.size} resource{attachedIds.size !== 1 ? "s" : ""} will be attached on save
               </p>
             )}
           </div>
-        </div>
-
-        <div
-          className="flex justify-end gap-2 border-t px-5 py-4"
-          style={{ borderColor: BORDER }}
-        >
-          <button
-            onClick={onClose}
-            className="rounded-lg border px-4 py-2 text-[13px] font-bold"
-            style={{ borderColor: BORDER, color: MUTED }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !title.trim()}
-            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-black text-white disabled:opacity-50"
-            style={{ background: "var(--cc-cta)" }}
-          >
-            {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-            Save Stage
-          </button>
-        </div>
-      </div>
-    </div>
+        </form>
+        <PanelFooter>
+          <SecondaryButton onClick={onClose} disabled={saving}>Cancel</SecondaryButton>
+          <PrimaryButton type="submit" form="stage-form" busy={saving} disabled={!title.trim()}>
+            Save stage
+          </PrimaryButton>
+        </PanelFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -2129,122 +2054,77 @@ function InductionFormSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
-      <div
-        className="h-full w-full max-w-md overflow-y-auto bg-white shadow-xl flex flex-col"
-        style={{ borderLeft: `1px solid ${BORDER}` }}
-      >
-        <div
-          className="flex items-center justify-between border-b px-5 py-4"
-          style={{ borderColor: BORDER }}
+    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+        <SheetTitle className="sr-only">New induction item</SheetTitle>
+        <SheetDescription className="sr-only">Add an item to the induction checklist.</SheetDescription>
+        <PanelHeader icon={ClipboardCheck} title="New induction item" description="Something every new worker reads, watches or does before their first shifts." />
+        <form
+          id="induction-item-form"
+          className="mt-6 flex-1 space-y-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (title.trim() && !saving) void handleSave();
+          }}
         >
-          <h3 className="text-[15px] font-black" style={{ color: TEXT }}>
-            New Induction Item
-          </h3>
-          <button
-            onClick={onClose}
-            aria-label="Close panel"
-            className="rounded-lg p-1 hover:bg-gray-100"
-          >
-            <X size={16} style={{ color: MUTED }} />
-          </button>
-        </div>
-
-        <div className="flex-1 space-y-5 p-5">
-          <div>
-            <label
-              className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]"
-              style={{ color: MUTED }}
-            >
-              Title
-            </label>
+          <Field label="Title" htmlFor="induction-title">
             <input
+              id="induction-title"
               autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Meet your team"
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
-              style={{ borderColor: BORDER }}
+              className={inputClass}
+              style={{ borderColor: BORDER, color: TEXT }}
             />
-          </div>
-
-          <div>
-            <label
-              className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]"
-              style={{ color: MUTED }}
-            >
-              Description
-            </label>
+          </Field>
+          <Field label="Description" htmlFor="induction-description" optional>
             <textarea
+              id="induction-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none resize-none focus:ring-1"
-              style={{ borderColor: BORDER }}
+              className={`resize-none ${textareaClass}`}
+              style={{ borderColor: BORDER, color: TEXT }}
               placeholder="What should a new worker do for this item?"
             />
-          </div>
-
-          <div>
-            <label
-              className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]"
-              style={{ color: MUTED }}
-            >
-              Resource link
-            </label>
+          </Field>
+          <Field label="Resource link" htmlFor="induction-link" optional hint="A reading, video or policy link.">
             <input
+              id="induction-link"
               value={contentUrl}
               onChange={(e) => setContentUrl(e.target.value)}
-              placeholder="Optional — a reading, video, or policy link"
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
-              style={{ borderColor: BORDER }}
+              placeholder="https://"
+              className={inputClass}
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+          </Field>
+          <div className="space-y-2" role="radiogroup" aria-label="Requirement">
+            <p className="text-sm font-medium" style={{ color: TEXT }}>Requirement</p>
+            <ChoiceCard
+              selected={isMandatory}
+              onSelect={() => setIsMandatory(true)}
+              icon={ShieldCheck}
+              title="Mandatory"
+              description="Applies to every worker in the org. Rostering is blocked until it's complete."
+            />
+            <ChoiceCard
+              selected={!isMandatory}
+              onSelect={() => setIsMandatory(false)}
+              icon={BookOpen}
+              title="Optional"
+              description="Informational only. Never blocks rostering."
             />
           </div>
-
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isMandatory}
-              onChange={(e) => setIsMandatory(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded accent-[#1E3A5F]"
-            />
-            <span className="text-[13px] font-medium" style={{ color: TEXT }}>
-              Mandatory
-              <span
-                className="mt-0.5 block text-[11px] font-normal"
-                style={{ color: MUTED }}
-              >
-                Applies to every worker in the org. Rostering is blocked until
-                it's complete. Uncheck for optional/informational items that
-                never block anything.
-              </span>
-            </span>
-          </label>
-        </div>
-
-        <div
-          className="flex justify-end gap-2 border-t px-5 py-4"
-          style={{ borderColor: BORDER }}
-        >
-          <button
-            onClick={onClose}
-            className="rounded-lg border px-4 py-2 text-[13px] font-bold"
-            style={{ borderColor: BORDER, color: MUTED }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !title.trim()}
-            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-black text-white disabled:opacity-50"
-            style={{ background: "var(--cc-cta)" }}
-          >
-            {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-            Create Item
-          </button>
-        </div>
-      </div>
-    </div>
+        </form>
+        <PanelFooter>
+          <SecondaryButton onClick={onClose} disabled={saving}>Cancel</SecondaryButton>
+          <PrimaryButton type="submit" form="induction-item-form" busy={saving} disabled={!title.trim()}>
+            Create item
+          </PrimaryButton>
+        </PanelFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
