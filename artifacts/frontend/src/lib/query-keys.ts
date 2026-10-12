@@ -11,3 +11,6 @@ export const WORKER_STATS_KEY = ["coordinator", "worker-stats"] as const;
 
 /** GET /api/dashboard/compliance-trend (MD hub and executive pages). */
 export const COMPLIANCE_TREND_KEY = ["md", "compliance-trend"] as const;
+
+/** GET /api/participant-complaints (Participant Complaints page and the hub nav badge). */
+export const PARTICIPANT_COMPLAINTS_KEY = ["participant-complaints"] as const;
