@@ -4,7 +4,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   BarChart3,
-  CircleDollarSign,
   FileText,
   Loader2,
   Pencil,
@@ -14,7 +13,6 @@ import {
   Download,
   Send,
   Table as TableIcon,
-  TrendingUp,
   Wallet,
 } from "lucide-react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -24,14 +22,15 @@ import { HubLayout } from "@/components/layout/HubLayout";
 import { NdiaClaimsPanel } from "@/components/billing/NdiaClaimsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { Field, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass } from "@/pages/md/vault/components/PanelKit";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useReAuth } from "@/hooks/useReAuth";
 import { useToast } from "@/hooks/use-toast";
 import { formatAppDate } from "@/lib/datetime";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
-import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
+import { LoadError, PageHeader, PillTabs, StatusText, SummaryStrip, ctaClass, outlineClass, type Tone } from "@/components/layout/PageKit";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -193,11 +192,11 @@ function InvoiceLedger() {
   });
 
   return (
-    <section className="mb-5 rounded-3xl border bg-white" style={{ borderColor: BORDER }}>
+    <section className="mb-5 overflow-hidden rounded-2xl bg-cc-surface">
       <div className="border-b px-6 py-5" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
-          <FileText size={15} strokeWidth={2.5} style={{ color: PLUM }} />
-          <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Monthly financial ledger</h2>
+          <FileText size={16} style={{ color: MUTED }} />
+          <h2 className="text-lg font-semibold" style={{ color: TEXT }}>Monthly financial ledger</h2>
         </div>
         <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>Invoice-level billing activity, collections and outstanding balances</p>
       </div>
@@ -247,14 +246,14 @@ function InvoiceLedger() {
           <table className="w-full min-w-[960px]">
             <thead>
               <tr className="border-b text-left" style={{ borderColor: BORDER }}>
-                <th className="px-6 py-3 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Invoice ID</th>
-                <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Participant</th>
-                <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Service type</th>
-                <th className="px-4 py-3 text-right text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Amount</th>
-                <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Payment method</th>
-                <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Date</th>
-                <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Status</th>
-                <th className="px-6 py-3 text-right text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Actions</th>
+                <th className="px-6 py-3 text-xs font-medium" style={{ color: MUTED }}>Invoice ID</th>
+                <th className="px-4 py-3 text-xs font-medium" style={{ color: MUTED }}>Participant</th>
+                <th className="px-4 py-3 text-xs font-medium" style={{ color: MUTED }}>Service type</th>
+                <th className="px-4 py-3 text-right text-xs font-medium" style={{ color: MUTED }}>Amount</th>
+                <th className="px-4 py-3 text-xs font-medium" style={{ color: MUTED }}>Payment method</th>
+                <th className="px-4 py-3 text-xs font-medium" style={{ color: MUTED }}>Date</th>
+                <th className="px-4 py-3 text-xs font-medium" style={{ color: MUTED }}>Status</th>
+                <th className="px-6 py-3 text-right text-xs font-medium" style={{ color: MUTED }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -405,7 +404,6 @@ const SECTIONS: Array<{ key: Section; label: string; icon: typeof FileText }> = 
   { key: "ledger", label: "Invoice ledger", icon: FileText },
 ];
 
-const PINK = "#E8457A";
 // Chart series — checked for colour-blind separation in light and dark.
 const SERIES = {
   revenue: { label: "Revenue", color: "#E8457A" },
@@ -425,6 +423,8 @@ const money = (cents: number, compact = false) =>
     : new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: compact ? 0 : 2 }).format(cents / 100);
 const months = (n: number) => `${n.toLocaleString("en-AU", { maximumFractionDigits: 1 })} month${n === 1 ? "" : "s"}`;
 
+const INVOICE_TONE: Record<string, Tone> = { draft: "neutral", outstanding: "warning", overdue: "danger", paid: "good" };
+
 const INVOICE_STATUS: Record<string, { label: string; fg: string; bg: string }> = {
   draft: { label: "Draft", fg: "var(--cc-muted)", bg: "var(--cc-soft)" },
   outstanding: { label: "Outstanding", fg: "var(--cc-status-warning)", bg: "var(--cc-status-warning-bg)" },
@@ -434,7 +434,7 @@ const INVOICE_STATUS: Record<string, { label: string; fg: string; bg: string }> 
 
 function Card({ children, className = "", label }: { children: React.ReactNode; className?: string; label?: string }) {
   return (
-    <section className={`rounded-2xl border bg-cc-surface p-5 ${className}`} style={{ borderColor: BORDER }} aria-label={label}>
+    <section className={`rounded-2xl bg-cc-surface p-5 ${className}`} aria-label={label}>
       {children}
     </section>
   );
@@ -507,7 +507,7 @@ function PerformanceChart({
     <Card label="Revenue, costs and profit" className="min-w-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-[15px] font-bold" style={{ color: TEXT }}>Revenue, costs and profit</h2>
+          <h2 className="text-base font-semibold" style={{ color: TEXT }}>Revenue, costs and profit</h2>
           <p className="mt-0.5 text-[12px]" style={{ color: MUTED }}>
             {anyCosts ? "By month. Click a month to see its breakdown." : "Costs appear once pay has been calculated or overheads are set."}
           </p>
@@ -661,11 +661,11 @@ function ProfitAndLoss({ data, month, onClearMonth, onEdit }: { data: FinancialS
     <Card label="Profit and loss">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h2 className="text-[15px] font-bold" style={{ color: TEXT }}>Profit &amp; loss</h2>
+          <h2 className="text-base font-semibold" style={{ color: TEXT }}>Profit &amp; loss</h2>
           <p className="text-[12px]" style={{ color: MUTED }}>{month ? monthLong(month.month) : data.period_label}</p>
         </div>
         {month && (
-          <button type="button" onClick={onClearMonth} className="rounded-full px-2 py-1 text-[11px] font-semibold" style={{ color: PLUM, background: SOFT }}>
+          <button type="button" onClick={onClearMonth} className={outlineClass}>
             Back to {data.period_label}
           </button>
         )}
@@ -703,7 +703,7 @@ function ProfitAndLoss({ data, month, onClearMonth, onEdit }: { data: FinancialS
         />
       </div>
       {!month && data.cost_per_session_cents != null && (
-        <p className="mt-2 rounded-lg p-2.5 text-[12px]" style={{ background: SOFT, color: MUTED }}>
+        <p className="mt-2 rounded-xl p-3 text-[12px]" style={{ background: SOFT, color: MUTED }}>
           {data.session_count.toLocaleString("en-AU")} sessions · <span className="font-semibold" style={{ color: TEXT }}>{money(data.cost_per_session_cents)}</span> wages per session
         </p>
       )}
@@ -730,21 +730,21 @@ function CashPosition({ data, onEdit }: { data: FinancialSummary; onEdit: () => 
     <Card label="Cash position">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h2 className="text-[15px] font-bold" style={{ color: TEXT }}>Cash &amp; runway</h2>
+          <h2 className="text-base font-semibold" style={{ color: TEXT }}>Cash &amp; runway</h2>
           <p className="text-[12px]" style={{ color: MUTED }}>
             {onHand == null ? "From your bank balance" : `Balance as of ${cash?.as_of ? formatAppDate(cash.as_of) : "—"}`}
           </p>
         </div>
-        <button type="button" onClick={onEdit} className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ color: PLUM, background: SOFT }}>
-          <Pencil size={11} /> {onHand == null ? "Set up" : "Update"}
+        <button type="button" onClick={onEdit} className={outlineClass}>
+          <Pencil size={14} /> {onHand == null ? "Set up" : "Update"}
         </button>
       </div>
 
       {onHand == null ? (
-        <div className="mt-4 rounded-xl border border-dashed p-4 text-[13px]" style={{ borderColor: BORDER, color: MUTED }}>
+        <div className="mt-4 rounded-2xl bg-cc-soft p-4 text-sm leading-6" style={{ color: MUTED }}>
           Enter your cash balance and monthly overheads to see how many months your reserves cover.
-          <button type="button" onClick={onEdit} className="mt-3 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-bold text-white" style={{ background: PINK }}>
-            <Wallet size={13} /> Add cash balance
+          <button type="button" onClick={onEdit} className={`${ctaClass} mt-3`}>
+            <Wallet size={15} /> Add cash balance
           </button>
         </div>
       ) : (
@@ -843,40 +843,48 @@ function FinanceSettingsDialog({ open, onOpenChange, data, onSaved }: { open: bo
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Cash and overheads</DialogTitle>
-          <DialogDescription>
-            CareCliQ knows your revenue and wages. Add what's in your accounting system so net profit and runway are complete.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-[1fr_150px]">
-            <label className="space-y-1.5 text-sm">
-              <span className="text-[12px] font-medium" style={{ color: TEXT }}>Cash in the bank ($)</span>
-              <Input inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="e.g. 250000" />
-            </label>
-            <label className="space-y-1.5 text-sm">
-              <span className="text-[12px] font-medium" style={{ color: TEXT }}>As of</span>
-              <Input type="date" value={asOf} max={today} onChange={(e) => setAsOf(e.target.value)} disabled={cashN == null} />
-            </label>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+        <SheetTitle className="sr-only">Cash and overheads</SheetTitle>
+        <SheetDescription className="sr-only">Add your cash balance and monthly overheads.</SheetDescription>
+        <PanelHeader
+          icon={Wallet}
+          title="Cash and overheads"
+          description="CareCliQ knows your revenue and wages. Add what's in your accounting system so net profit and runway are complete."
+        />
+        <form
+          id="finance-settings-form"
+          className="mt-6 flex-1 space-y-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <div className="grid gap-4 sm:grid-cols-[1fr_170px]">
+            <Field label="Cash in the bank ($)" htmlFor="finance-cash">
+              <input id="finance-cash" inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="e.g. 250000" className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
+            </Field>
+            <Field label="As of" htmlFor="finance-as-of">
+              <input id="finance-as-of" type="date" value={asOf} max={today} onChange={(e) => setAsOf(e.target.value)} disabled={cashN == null} className={`${inputClass} disabled:opacity-50`} style={{ borderColor: BORDER, color: TEXT }} />
+            </Field>
           </div>
-          <label className="block space-y-1.5 text-sm">
-            <span className="text-[12px] font-medium" style={{ color: TEXT }}>Monthly overheads ($)</span>
-            <Input inputMode="decimal" value={overheads} onChange={(e) => setOverheads(e.target.value)} placeholder="e.g. 18000" />
-            <span className="block text-[11px]" style={{ color: MUTED }}>
-              Costs outside payroll: rent, insurance, software, vehicles, accounting. Wages come from the pay engine.
-            </span>
-          </label>
-          {invalid && <p className="text-[12px]" style={{ color: "var(--cc-status-danger)" }}>Enter amounts as numbers, e.g. 18000.</p>}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving || invalid}>{saving ? "Saving…" : "Save"}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <Field
+            label="Monthly overheads ($)"
+            htmlFor="finance-overheads"
+            hint="Costs outside payroll: rent, insurance, software, vehicles, accounting. Wages come from the pay engine."
+          >
+            <input id="finance-overheads" inputMode="decimal" value={overheads} onChange={(e) => setOverheads(e.target.value)} placeholder="e.g. 18000" className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
+          </Field>
+          {invalid && <p role="alert" className="text-sm" style={{ color: "var(--cc-danger-text)" }}>Enter amounts as numbers, e.g. 18000.</p>}
+        </form>
+        <PanelFooter>
+          <SecondaryButton onClick={() => onOpenChange(false)} disabled={saving}>Cancel</SecondaryButton>
+          <PrimaryButton type="submit" form="finance-settings-form" busy={saving} disabled={invalid}>
+            {saving ? "Saving…" : "Save"}
+          </PrimaryButton>
+        </PanelFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -886,8 +894,8 @@ function RecentInvoices({ rows }: { rows: FinancialSummary["recent_invoices"] })
   return (
     <Card label="Recent invoices">
       <div className="flex items-center justify-between">
-        <h2 className="text-[15px] font-bold" style={{ color: TEXT }}>Recent invoices</h2>
-        <Link href="/billing?workspace=invoices" className="text-[12px] font-semibold" style={{ color: PLUM }}>All invoices</Link>
+        <h2 className="text-base font-semibold" style={{ color: TEXT }}>Recent invoices</h2>
+        <Link href="/billing?workspace=invoices" className="text-sm font-medium underline-offset-4 hover:underline" style={{ color: TEXT }}>All invoices</Link>
       </div>
       {rows.length === 0 ? (
         <p className="mt-4 text-sm" style={{ color: MUTED }}>No invoices yet.</p>
@@ -903,8 +911,8 @@ function RecentInvoices({ rows }: { rows: FinancialSummary["recent_invoices"] })
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <span className="text-[13px] font-bold tabular-nums" style={{ color: TEXT }}>{money(inv.total_cents)}</span>
-                  <span className="w-[92px] rounded-full px-2 py-0.5 text-center text-[10px] font-bold uppercase tracking-wide" style={{ color: tone.fg, background: tone.bg }}>
-                    {tone.label}
+                  <span className="w-[84px] text-right">
+                    <StatusText tone={INVOICE_TONE[inv.status] ?? "neutral"}>{tone.label}</StatusText>
                   </span>
                 </div>
               </li>
@@ -935,22 +943,22 @@ function ClaimsShortcut({ onOpen }: { onOpen: () => void }) {
   const sum = (rows: Array<{ total_cents: number }>) => rows.reduce((s, r) => s + r.total_cents, 0);
   return (
     <Card label="NDIS claims">
-      <h2 className="text-[15px] font-bold" style={{ color: TEXT }}>NDIS claims</h2>
+      <h2 className="text-base font-semibold" style={{ color: TEXT }}>NDIS claims</h2>
       <p className="text-[12px]" style={{ color: MUTED }}>Money waiting on the NDIA</p>
       {claims.isError ? (
         <p className="mt-4 text-[12px]" style={{ color: MUTED }}>Claims couldn't be loaded.</p>
       ) : (
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <button type="button" onClick={onOpen} className="rounded-xl border p-3 text-left transition-colors hover:bg-cc-soft" style={{ borderColor: BORDER }}>
-            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>Ready to claim</p>
+          <button type="button" onClick={onOpen} className="rounded-2xl bg-cc-soft p-3.5 text-left transition hover:opacity-80">
+            <p className="text-xs font-medium" style={{ color: MUTED }}>Ready to claim</p>
             <p className="mt-1 text-[18px] font-extrabold tabular-nums" style={{ color: TEXT }}>{claims.isLoading ? "…" : money(sum(ready))}</p>
             <p className="text-[11px]" style={{ color: MUTED }}>
               {ready.length} invoice{ready.length === 1 ? "" : "s"}
               {needsFixing > 0 && <span style={{ color: "var(--cc-status-danger)" }}> · {needsFixing} to fix</span>}
             </p>
           </button>
-          <button type="button" onClick={onOpen} className="rounded-xl border p-3 text-left transition-colors hover:bg-cc-soft" style={{ borderColor: BORDER }}>
-            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>Awaiting payment</p>
+          <button type="button" onClick={onOpen} className="rounded-2xl bg-cc-soft p-3.5 text-left transition hover:opacity-80">
+            <p className="text-xs font-medium" style={{ color: MUTED }}>Awaiting payment</p>
             <p className="mt-1 text-[18px] font-extrabold tabular-nums" style={{ color: TEXT }}>{claims.isLoading ? "…" : money(sum(submitted))}</p>
             <p className="text-[11px]" style={{ color: MUTED }}>{submitted.length} claim{submitted.length === 1 ? "" : "s"}</p>
           </button>
@@ -959,10 +967,9 @@ function ClaimsShortcut({ onOpen }: { onOpen: () => void }) {
       <button
         type="button"
         onClick={onOpen}
-        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-[12px] font-bold text-white"
-        style={{ background: PINK }}
+        className={`${ctaClass} mt-4 w-full`}
       >
-        <Send size={13} /> {ready.length ? `Claim ${ready.length} invoice${ready.length === 1 ? "" : "s"}` : "Open NDIS claims"}
+        <Send size={15} /> {ready.length ? `Claim ${ready.length} invoice${ready.length === 1 ? "" : "s"}` : "Open NDIS claims"}
       </button>
     </Card>
   );
@@ -1013,130 +1020,103 @@ export default function MDFinancialPage() {
 
   return (
     <HubLayout>
-      <div className="space-y-5 pb-12">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: "var(--cc-active-bg)", color: PINK }}>
-              <CircleDollarSign size={20} />
-            </span>
-            <div>
-              <h1 className="text-xl font-semibold tracking-[-0.025em]" style={{ color: TEXT }}>Financial Governance</h1>
-              <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>
-                Revenue, profit, cash and NDIS claims{data ? ` · ${data.period_label}` : ""}
-              </p>
-            </div>
-          </div>
-          {section === "overview" && (
-            <div role="tablist" aria-label="Period" className="flex rounded-xl border p-1" style={{ borderColor: BORDER, background: SOFT }}>
-              {PERIODS.map((p) => (
-                <button
-                  key={p.key}
-                  role="tab"
-                  type="button"
-                  aria-selected={period === p.key}
-                  onClick={() => changePeriod(p.key)}
-                  className="rounded-lg px-3 py-1.5 text-xs font-semibold"
-                  style={{
-                    background: period === p.key ? "var(--cc-surface)" : "transparent",
-                    color: period === p.key ? TEXT : MUTED,
-                    boxShadow: period === p.key ? "0 1px 2px rgba(0,0,0,0.08)" : undefined,
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="space-y-8 pb-12">
+        <PageHeader
+          eyebrow="Finance"
+          title="Financial Governance"
+          description={`Revenue, profit, cash and NDIS claims${data ? ` · ${data.period_label}` : ""}`}
+          actions={
+            section === "overview" ? (
+              <div role="tablist" aria-label="Period" className="flex items-center rounded-full border p-1" style={{ borderColor: BORDER }}>
+                {PERIODS.map((p) => (
+                  <button
+                    key={p.key}
+                    role="tab"
+                    type="button"
+                    aria-selected={period === p.key}
+                    onClick={() => changePeriod(p.key)}
+                    className="min-h-9 rounded-full px-4 text-sm font-medium transition"
+                    style={period === p.key ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { color: MUTED }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            ) : undefined
+          }
+        />
 
-        <nav aria-label="Financial sections" className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: BORDER }}>
-          {SECTIONS.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setSection(key)}
-              aria-current={section === key ? "page" : undefined}
-              className="-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] font-semibold transition-colors"
-              style={{ borderColor: section === key ? PINK : "transparent", color: section === key ? TEXT : MUTED }}
-            >
-              <Icon size={14} /> {label}
-            </button>
-          ))}
-        </nav>
+        <PillTabs<Section> label="Financial sections" value={section} onChange={setSection} options={SECTIONS} />
 
         {section === "claims" && <NdiaClaimsPanel heading="NDIS invoices" onChanged={refreshFigures} />}
         {section === "ledger" && <InvoiceLedger />}
 
         {section === "overview" &&
           (summary.isError && !data ? (
-            <div role="alert" className="flex flex-wrap items-center gap-2 rounded-2xl border p-4 text-sm" style={{ borderColor: RED, color: RED }}>
-              <AlertTriangle size={15} /> Financial figures couldn't be loaded.
-              {loadErrorHint(summary.error) && <span>{loadErrorHint(summary.error)}</span>}
-              <button type="button" className="font-bold underline" onClick={() => void summary.refetch()}>Try again</button>
-            </div>
+            <LoadError onRetry={() => void summary.refetch()}>
+              <AlertTriangle size={16} style={{ color: RED }} />
+              <span>
+                <span className="font-semibold">Financial figures couldn't be loaded.</span>
+                {loadErrorHint(summary.error) && <span style={{ color: MUTED }}> {loadErrorHint(summary.error)}</span>}
+              </span>
+            </LoadError>
           ) : !data ? (
             <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" style={{ color: PLUM }} /></div>
           ) : (
             <>
-              <KpiGrid>
-                <KpiCard
-                  icon={<TrendingUp />}
-                  label="Revenue"
-                  value={money(data.billed_cents)}
-                  sub={`${data.invoice_count.toLocaleString("en-AU")} invoices${collectionRate != null ? ` · ${collectionRate}% collected` : ""}`}
-                  tone="brand"
-                  onClick={() => setSection("ledger")}
-                />
-                <KpiCard
-                  icon={<CircleDollarSign />}
-                  label="Net profit"
-                  value={net == null ? "—" : money(net)}
-                  sub={
-                    net == null
-                      ? "Add costs to see profit"
-                      : `${pl?.margin_pct ?? 0}% margin${pl && (!pl.overheads_set || !pl.wages_complete) ? " · costs incomplete" : ""}`
-                  }
-                  tone={net == null ? "neutral" : net < 0 ? "danger" : "success"}
-                  onClick={net == null ? () => setEditing(true) : undefined}
-                />
-                <KpiCard
-                  icon={<Wallet />}
-                  label="Cash runway"
-                  value={
-                    cash?.on_hand_cents == null
-                      ? "Set up"
-                      : cash.runway_months != null
-                        ? months(cash.runway_months)
-                        : cash.cash_positive
-                          ? "Cash-positive"
-                          : money(cash.on_hand_cents)
-                  }
-                  sub={
-                    cash?.on_hand_cents == null
-                      ? "Add your cash balance"
-                      : cash.covers_months != null
-                        ? `${money(cash.on_hand_cents)} covers ${months(cash.covers_months)}`
-                        : `Cash as of ${cash.as_of ? formatAppDate(cash.as_of) : "—"}`
-                  }
-                  tone={cash?.runway_months != null && cash.runway_months < 6 ? "danger" : cash?.cash_positive ? "success" : "info"}
-                  onClick={() => setEditing(true)}
-                />
-                <KpiCard
-                  icon={<AlertTriangle />}
-                  label="Outstanding"
-                  value={money(data.outstanding_cents)}
-                  sub={data.overdue_cents ? `${money(data.overdue_cents)} overdue` : "Nothing overdue"}
-                  tone={data.overdue_cents ? "danger" : "warning"}
-                  onClick={() => setSection("ledger")}
-                />
-              </KpiGrid>
+              <SummaryStrip
+                items={[
+                  {
+                    value: money(data.billed_cents),
+                    label: "revenue",
+                    hint: `${data.invoice_count.toLocaleString("en-AU")} invoices${collectionRate != null ? ` · ${collectionRate}% collected` : ""}`,
+                    onClick: () => setSection("ledger"),
+                  },
+                  {
+                    value: net == null ? "N/A" : money(net),
+                    label: "net profit",
+                    tone: net == null ? undefined : net < 0 ? "danger" : "good",
+                    hint:
+                      net == null
+                        ? "Add costs to see profit"
+                        : `${pl?.margin_pct ?? 0}% margin${pl && (!pl.overheads_set || !pl.wages_complete) ? " · costs incomplete" : ""}`,
+                    onClick: net == null ? () => setEditing(true) : undefined,
+                  },
+                  {
+                    value:
+                      cash?.on_hand_cents == null
+                        ? "Set up"
+                        : cash.runway_months != null
+                          ? months(cash.runway_months)
+                          : cash.cash_positive
+                            ? "Cash-positive"
+                            : money(cash.on_hand_cents),
+                    label: "cash runway",
+                    tone: cash?.runway_months != null && cash.runway_months < 6 ? "danger" : cash?.cash_positive ? "good" : undefined,
+                    hint:
+                      cash?.on_hand_cents == null
+                        ? "Add your cash balance"
+                        : cash.covers_months != null
+                          ? `${money(cash.on_hand_cents)} covers ${months(cash.covers_months)}`
+                          : `Cash as of ${cash.as_of ? formatAppDate(cash.as_of) : "N/A"}`,
+                    onClick: () => setEditing(true),
+                  },
+                  {
+                    value: money(data.outstanding_cents),
+                    label: "outstanding",
+                    tone: data.overdue_cents ? "danger" : data.outstanding_cents ? "warning" : undefined,
+                    hint: data.overdue_cents ? `${money(data.overdue_cents)} overdue` : "Nothing overdue",
+                    onClick: () => setSection("ledger"),
+                  },
+                ]}
+              />
 
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
                 <PerformanceChart data={data} selected={selectedMonth} onSelect={(m) => setSelectedMonth((cur) => (cur === m ? null : m))} />
                 <ProfitAndLoss data={data} month={month} onClearMonth={() => setSelectedMonth(null)} onEdit={() => setEditing(true)} />
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-6 lg:grid-cols-3">
                 <CashPosition data={data} onEdit={() => setEditing(true)} />
                 <ClaimsShortcut onOpen={() => setSection("claims")} />
                 <RecentInvoices rows={data.recent_invoices} />

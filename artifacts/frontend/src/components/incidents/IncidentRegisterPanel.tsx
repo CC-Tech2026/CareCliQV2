@@ -1,11 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { subDays, parseISO, isAfter } from "date-fns";
+import { Plus, Download, ShieldAlert, AlertTriangle, Siren } from "lucide-react";
 import {
-  Plus, Download, Flag, ShieldAlert, Hourglass, CircleCheck, Bot,
-  List, User, AlertTriangle, Loader2,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+  EmptyState,
+  Notice,
+  PageHeader,
+  PillTabs,
+  RowList,
+  SkeletonBlocks,
+  SummaryStrip,
+  Surface,
+  ctaClass,
+  ghostClass,
+  outlineClass,
+  type PillOption,
+} from "@/components/layout/PageKit";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { listIncidents, getIncidentStats, updateIncident } from "@/services/incidentService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -181,183 +191,147 @@ export function IncidentRegisterPanel() {
     }
   }
 
-  const subTabs: { id: SubTab; label: string; count?: number }[] = [
-    { id: "all", label: translate("incidents.register.tabAll"), count: inWindow.length },
-    { id: "open", label: translate("incidents.register.tabOpen"), count: kpis.open },
-    { id: "review", label: translate("incidents.register.tabReview"), count: kpis.review || undefined },
-    { id: "resolved", label: translate("incidents.register.tabResolved") },
-    { id: "rp", label: translate("incidents.register.tabRp"), count: kpis.rp || undefined },
+  const subTabs: PillOption<SubTab>[] = [
+    { key: "all", label: translate("incidents.register.tabAll"), count: inWindow.length },
+    { key: "open", label: translate("incidents.register.tabOpen"), count: kpis.open },
+    { key: "review", label: translate("incidents.register.tabReview"), count: kpis.review || undefined },
+    { key: "resolved", label: translate("incidents.register.tabResolved") },
+    { key: "rp", label: translate("incidents.register.tabRp"), count: kpis.rp || undefined },
   ];
 
-  const typeFilters: { id: TypeFilter; label: string; icon: typeof List }[] = [
-    { id: "all", label: translate("incidents.register.filterAll"), icon: List },
-    { id: "restrictive_practice", label: translate("incidents.register.filterRp"), icon: ShieldAlert },
-    { id: "auto", label: translate("incidents.register.filterAuto"), icon: Bot },
-    { id: "manual", label: translate("incidents.register.filterManual"), icon: User },
+  const typeFilters: { id: TypeFilter; label: string }[] = [
+    { id: "all", label: translate("incidents.register.filterAll") },
+    { id: "restrictive_practice", label: translate("incidents.register.filterRp") },
+    { id: "auto", label: translate("incidents.register.filterAuto") },
+    { id: "manual", label: translate("incidents.register.filterManual") },
   ];
+
+  const showTab = (tab: SubTab, type: TypeFilter = "all") => {
+    setTypeFilter(type);
+    setSubTab(tab);
+  };
 
   return (
-    <div className="space-y-5 pb-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--cc-coral)]">
-            {translate("incidents.new.standard")}
-          </p>
-          <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight text-[var(--cc-text)]">
+    <div className="space-y-8 pb-12">
+      <PageHeader
+        eyebrow={translate("incidents.new.standard")}
+        title={
+          <span className="inline-flex items-center gap-2">
             {translate("incidents.register.title")}
             <SectionInfo text="Every incident recorded across your organisation, from all sources, aligned to NDIS Practice Standard Core." />
-          </h1>
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => toast({ title: translate("incidents.register.exportSoon") })}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold border border-[var(--cc-border)] text-[var(--cc-text-secondary)] bg-white hover:bg-[var(--cc-soft)]"
-          >
-            <Download size={14} />
-            {translate("incidents.register.export")}
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate("/incidents/new")}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold text-white bg-[var(--cc-cta)] hover:opacity-95"
-          >
-            <Plus size={14} />
-            {translate("incidents.register.create")}
-          </button>
-        </div>
-      </div>
+          </span>
+        }
+        description="Every incident from first report through investigation and NDIS Commission notification."
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => toast({ title: translate("incidents.register.exportSoon") })}
+              className={ghostClass}
+            >
+              <Download size={15} />
+              {translate("incidents.register.export")}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/incidents/new")}
+              className={`${ctaClass} order-first w-full sm:order-none sm:w-auto`}
+            >
+              <Plus size={15} />
+              {translate("incidents.register.create")}
+            </button>
+          </>
+        }
+      />
 
-      <div className="flex gap-0 border-b border-[var(--cc-border)] overflow-x-auto">
-        {subTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setSubTab(tab.id)}
-            className={cn(
-              "px-4 py-2.5 text-xs font-bold whitespace-nowrap border-b-2 -mb-px transition-colors",
-              subTab === tab.id
-                ? "text-[var(--cc-plum)] border-[var(--cc-plum)]"
-                : "text-[var(--cc-muted)] border-transparent hover:text-[var(--cc-text)]",
-            )}
-          >
-            {tab.label}
-            {tab.count != null && tab.count > 0 && (
-              <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#FCEBEB] text-[#791F1F]">
-                {tab.count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <SummaryStrip
+        loading={isLoading}
+        items={[
+          { value: kpis.open, label: translate("incidents.register.kpiOpen"), tone: kpis.open ? "danger" : "good", onClick: () => showTab("open"), active: subTab === "open" && typeFilter === "all" },
+          { value: kpis.rp, label: translate("incidents.register.kpiRp"), tone: kpis.rp ? "danger" : undefined, onClick: () => showTab("rp"), active: subTab === "rp" && typeFilter === "all" },
+          { value: kpis.review, label: translate("incidents.register.kpiReview"), tone: kpis.review ? "warning" : undefined, onClick: () => showTab("review"), active: subTab === "review" && typeFilter === "all" },
+          { value: kpis.resolvedMonth, label: translate("incidents.register.kpiResolved"), tone: "good", onClick: () => showTab("resolved"), active: subTab === "resolved" && typeFilter === "all" },
+          { value: kpis.auto, label: translate("incidents.register.kpiAuto"), onClick: () => showTab("all", "auto"), active: subTab === "all" && typeFilter === "auto" },
+        ]}
+      />
 
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-        {[
-          { label: translate("incidents.register.kpiOpen"), value: kpis.open, sub: translate("incidents.register.kpiOpenSub"), tone: "text-[#E24B4A]", icon: Flag, select: () => { setTypeFilter("all"); setSubTab("open"); } },
-          { label: translate("incidents.register.kpiRp"), value: kpis.rp, sub: translate("incidents.register.kpiRpSub"), tone: "text-[#E24B4A]", icon: ShieldAlert, select: () => { setTypeFilter("all"); setSubTab("rp"); } },
-          { label: translate("incidents.register.kpiReview"), value: kpis.review, sub: translate("incidents.register.kpiReviewSub"), tone: "text-[#BA7517]", icon: Hourglass, select: () => { setTypeFilter("all"); setSubTab("review"); } },
-          { label: translate("incidents.register.kpiResolved"), value: kpis.resolvedMonth, sub: translate("incidents.register.kpiResolvedSub"), tone: "text-[#3B9E5A]", icon: CircleCheck, select: () => { setTypeFilter("all"); setSubTab("resolved"); } },
-          { label: translate("incidents.register.kpiAuto"), value: kpis.auto, sub: translate("incidents.register.kpiAutoSub"), tone: "text-[var(--cc-plum)]", icon: Bot, select: () => { setSubTab("all"); setTypeFilter("auto"); } },
-        ].map(({ label, value, sub, tone, icon: Icon, select }) => (
-          <button
-            type="button"
-            key={label}
-            onClick={select}
-            aria-label={`${label}: ${value}`}
-            className="rounded-xl border border-[var(--cc-border)] bg-white p-3.5 text-left transition hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-plum)]"
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <PillTabs<SubTab> label={translate("incidents.register.title")} value={subTab} onChange={setSubTab} options={subTabs} />
+        <div className="flex items-center gap-3">
+          <select
+            aria-label={translate("incidents.register.filterBy")}
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+            className="min-h-10 rounded-full border bg-cc-surface px-4 text-sm outline-none focus:ring-2 focus:ring-cc-plum"
+            style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
           >
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--cc-muted)] flex items-center gap-1 mb-1">
-              <Icon size={12} /> {label}
-            </p>
-            <p className={cn("text-2xl font-black", tone)}>{value}</p>
-            <p className="text-[11px] text-[var(--cc-muted)] mt-0.5">{sub}</p>
-          </button>
-        ))}
+            {typeFilters.map((f) => (
+              <option key={f.id} value={f.id}>{f.label}</option>
+            ))}
+          </select>
+          <span className="whitespace-nowrap text-sm text-[var(--cc-muted)]">
+            {translate("incidents.register.last30Days")}
+          </span>
+        </div>
       </div>
 
       {subTab === "open" && kpis.open > 0 && (
-        <div className="rounded-xl border border-[#FAC775] bg-[#FAEEDA] px-4 py-3 flex gap-3">
-          <AlertTriangle size={18} className="text-[#BA7517] shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-bold text-[#633806]">
-              {translateParams("incidents.register.openBannerTitle", { count: String(kpis.open) })}
-            </p>
-            <p className="text-xs text-[#854F0B] mt-0.5">{translate("incidents.register.openBannerBody")}</p>
-          </div>
-        </div>
+        <Notice tone="warning" icon={AlertTriangle} title={translateParams("incidents.register.openBannerTitle", { count: String(kpis.open) })}>
+          {translate("incidents.register.openBannerBody")}
+        </Notice>
       )}
 
       {subTab === "rp" && kpis.rp > 0 && (
-        <div className="rounded-xl border border-[#F7C1C1] bg-[#FCEBEB] px-4 py-3 flex gap-3">
-          <ShieldAlert size={18} className="text-[#E24B4A] shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-bold text-[#791F1F]">{translate("incidents.register.rpBannerTitle")}</p>
-            <p className="text-xs text-[#A32D2D] mt-0.5">{translate("incidents.register.rpBannerBody")}</p>
-          </div>
-        </div>
+        <Notice tone="danger" icon={ShieldAlert} title={translate("incidents.register.rpBannerTitle")}>
+          {translate("incidents.register.rpBannerBody")}
+        </Notice>
       )}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-[var(--cc-muted)]">{translate("incidents.register.filterBy")}</span>
-        {typeFilters.map((f) => {
-          const Icon = f.icon;
-          const on = typeFilter === f.id;
-          return (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setTypeFilter(f.id)}
-              className={cn(
-                "inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors",
-                on
-                  ? "bg-[#EEEDFE] border-[#AFA9EC] text-[#534AB7]"
-                  : "bg-white border-[var(--cc-border)] text-[var(--cc-muted)] hover:bg-[var(--cc-soft)]",
-              )}
-            >
-              <Icon size={12} />
-              {f.label}
-            </button>
-          );
-        })}
-        <span className="ml-auto text-xs text-[var(--cc-muted)]">
-          {translate("incidents.register.last30Days")}
-        </span>
-      </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-16 text-[var(--cc-muted)]">
-          <Loader2 size={24} className="animate-spin" />
-        </div>
+        <SkeletonBlocks count={3} height="h-14" />
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-sm text-[var(--cc-muted)]">
-          {translate("incidents.noIncidentsFound")}
-        </div>
+        <EmptyState
+          icon={Siren}
+          title={translate("incidents.noIncidentsFound")}
+          body={subTab !== "all" || typeFilter !== "all" ? "Try another view, or show every incident from the last 30 days." : undefined}
+          action={
+            subTab !== "all" || typeFilter !== "all" ? (
+              <button type="button" className={outlineClass} onClick={() => showTab("all")}>
+                {translate("incidents.register.tabAll")}
+              </button>
+            ) : undefined
+          }
+        />
       ) : (
-        <div className="space-y-3">
-          {paginated.map((incident) => (
-            <IncidentAccordionCard
-              key={incident.id}
-              incident={incident}
-              typeLabel={typeLabel(incident.incident_type)}
-              statusLabel={statusLabel(incident.status)}
-              translate={translate}
-              onViewFull={(id) => navigate(`/incidents/${id}`)}
-              onCompleteReport={(id) => navigate(`/incidents/${id}`)}
-              onAddNote={(id) => navigate(`/incidents/${id}`)}
-              onMarkResolved={handleMarkResolved}
-              onNotifyCommission={incident.ndis_reportable ? handleNotifyCommission : undefined}
-              onEscalate={handleEscalate}
-            />
-          ))}
-        </div>
+        <Surface>
+          <RowList>
+            {paginated.map((incident) => (
+              <li key={incident.id}>
+                <IncidentAccordionCard
+                  variant="row"
+                  incident={incident}
+                  typeLabel={typeLabel(incident.incident_type)}
+                  statusLabel={statusLabel(incident.status)}
+                  translate={translate}
+                  onViewFull={(id) => navigate(`/incidents/${id}`)}
+                  onCompleteReport={(id) => navigate(`/incidents/${id}`)}
+                  onAddNote={(id) => navigate(`/incidents/${id}`)}
+                  onMarkResolved={handleMarkResolved}
+                  onNotifyCommission={incident.ndis_reportable ? handleNotifyCommission : undefined}
+                  onEscalate={handleEscalate}
+                />
+              </li>
+            ))}
+          </RowList>
+        </Surface>
       )}
 
-      {!isLoading && stats && (
+      {!isLoading && stats && filtered.length > 0 && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-[var(--cc-muted)]">
+          <p className="text-sm text-[var(--cc-muted)]">
             {translateParams("incidents.showingCount", {
-              filtered: String(filtered.length),
-              total: String(stats.total),
+              filtered: String(paginated.length),
+              total: String(filtered.length),
             })}
           </p>
           {filtered.length > PAGE_SIZE && (
@@ -366,7 +340,7 @@ export function IncidentRegisterPanel() {
                 type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={safePage === 1}
-                className="px-3 py-1.5 rounded-full border border-[var(--cc-border)] text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                className={outlineClass}
               >
                 Previous
               </button>
@@ -377,12 +351,8 @@ export function IncidentRegisterPanel() {
                     type="button"
                     onClick={() => setPage(pageNumber)}
                     aria-current={safePage === pageNumber ? "page" : undefined}
-                    className={cn(
-                      "min-w-8 px-2.5 py-1.5 rounded-full border text-xs font-semibold transition-colors",
-                      safePage === pageNumber
-                        ? "bg-[var(--cc-plum)] border-[var(--cc-plum)] text-white"
-                        : "border-[var(--cc-border)] text-[var(--cc-muted)] hover:bg-[var(--cc-soft)]",
-                    )}
+                    className="flex h-10 min-w-10 items-center justify-center rounded-full px-2 text-sm font-medium transition hover:bg-[var(--cc-soft)]"
+                    style={safePage === pageNumber ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { color: "var(--cc-text)" }}
                   >
                     {pageNumber}
                   </button>
@@ -392,7 +362,7 @@ export function IncidentRegisterPanel() {
                 type="button"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage === totalPages}
-                className="px-3 py-1.5 rounded-full border border-[var(--cc-border)] text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                className={outlineClass}
               >
                 Next
               </button>

@@ -1,14 +1,12 @@
 import { loadErrorHint } from "@/lib/load-error";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle2,
   ClipboardCheck,
-  Clock3,
   Download,
-  FileSearch,
   FolderLock,
   Link2,
   Settings2,
@@ -16,7 +14,25 @@ import {
   XCircle,
 } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
-import { StatCard, StatCardGroup } from "@/components/ui/stat-card";
+import {
+  EmptyState,
+  LoadError,
+  Notice,
+  PageHeader,
+  PillTabs,
+  RowList,
+  SearchField,
+  Section,
+  SkeletonBlocks,
+  StatusText,
+  SummaryStrip,
+  Surface,
+  ctaClass,
+  ghostClass,
+  outlineClass,
+  rowClass,
+  type Tone,
+} from "@/components/layout/PageKit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,6 +73,7 @@ import {
   type SubjectType,
 } from "@/services/auditReadinessService";
 import { fetchFolderDocuments, fetchVaultFolders, type VaultDocument } from "@/services/vaultService";
+import { PanelHeader, PrimaryButton } from "@/pages/md/vault/components/PanelKit";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -94,16 +111,18 @@ function fmtDate(value: string | null | undefined): string {
   return formatAppDate(value.length === 10 ? `${value}T12:00:00Z` : value);
 }
 
+const STATUS_TONE: Record<ItemStatus | "rejected", Tone> = {
+  missing: "danger",
+  overdue: "danger",
+  rejected: "danger",
+  awaiting_review: "info",
+  due_soon: "warning",
+  current: "good",
+  not_applicable: "neutral",
+};
+
 function StatusPill({ status }: { status: ItemStatus | "rejected" }) {
-  const style = STATUS_STYLE[status];
-  return (
-    <span
-      className="inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold"
-      style={{ color: style.fg, background: style.bg }}
-    >
-      {STATUS_LABELS[status]}
-    </span>
-  );
+  return <StatusText tone={STATUS_TONE[status]}>{STATUS_LABELS[status]}</StatusText>;
 }
 
 function useInvalidate() {
@@ -130,125 +149,117 @@ function Overview({
   const criticalGaps = data.items
     .filter((i) => i.critical && (i.status === "missing" || i.status === "overdue"))
     .slice(0, 8);
+  const areas = summary.by_area.filter((a) => a.total > 0);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       {!data.profile_configured && (
-        <div
-          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4"
-          style={{ borderColor: "var(--cc-status-warning)", background: "var(--cc-status-warning-bg)" }}
+        <Notice
+          tone="warning"
+          icon={Settings2}
+          title="Your audit profile isn't set up"
+          action={<button type="button" className={outlineClass} onClick={openSetup}>Set up audit profile</button>}
         >
-          <p className="text-sm" style={{ color: TEXT }}>
-            Set your audit type and registration groups so the checklist only includes what applies to you.
-            Until then, every audit type's requirements are included.
-          </p>
-          <Button size="sm" variant="outline" onClick={openSetup}>
-            Set up audit profile
-          </Button>
-        </div>
+          Set your audit type and registration groups so the checklist only includes what applies to you.
+          Until then, every audit type's requirements are included.
+        </Notice>
       )}
 
-      <StatCardGroup fill>
-        <StatCard
-          icon={<ClipboardCheck size={16} />}
-          label="Evidence ready"
-          value={summary.readiness_percent === null ? "—" : `${summary.readiness_percent}%`}
-          sub={`${summary.counts.current + summary.counts.due_soon} of ${summary.applicable} items`}
-          tone="info"
-          onClick={() => openChecklist({})}
-        />
-        <StatCard
-          icon={<ShieldAlert size={16} />}
-          label="Critical gaps"
-          value={summary.critical_gaps}
-          sub="missing or overdue"
-          tone={summary.critical_gaps ? "danger" : "success"}
-          onClick={() => openChecklist({ critical: "1", status: "gaps" })}
-        />
-        <StatCard
-          icon={<FileSearch size={16} />}
-          label="Awaiting review"
-          value={summary.counts.awaiting_review}
-          tone="info"
-          onClick={() => openChecklist({ status: "awaiting_review" })}
-        />
-        <StatCard
-          icon={<Clock3 size={16} />}
-          label="Due soon"
-          value={summary.counts.due_soon}
-          sub="within 60 days"
-          tone="warning"
-          onClick={() => openChecklist({ status: "due_soon" })}
-        />
-      </StatCardGroup>
+      <SummaryStrip
+        items={[
+          {
+            value: summary.readiness_percent === null ? "N/A" : `${summary.readiness_percent}%`,
+            label: `evidence ready, ${summary.counts.current + summary.counts.due_soon} of ${summary.applicable} items`,
+            onClick: () => openChecklist({}),
+          },
+          {
+            value: summary.critical_gaps,
+            label: "critical gaps",
+            tone: summary.critical_gaps ? "danger" : "good",
+            onClick: () => openChecklist({ critical: "1", status: "gaps" }),
+          },
+          {
+            value: summary.counts.awaiting_review,
+            label: "awaiting review",
+            tone: summary.counts.awaiting_review ? "info" : undefined,
+            onClick: () => openChecklist({ status: "awaiting_review" }),
+          },
+          {
+            value: summary.counts.due_soon,
+            label: "due within 60 days",
+            tone: summary.counts.due_soon ? "warning" : undefined,
+            onClick: () => openChecklist({ status: "due_soon" }),
+          },
+        ]}
+      />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-xl border p-4" style={{ borderColor: BORDER, background: "var(--cc-surface)" }}>
-          <h2 className="text-sm font-bold" style={{ color: TEXT }}>By area</h2>
-          <div className="mt-3 space-y-2">
-            {summary.by_area.filter((a) => a.total > 0).map((area) => {
-              const pct = area.total ? Math.round((100 * area.ready) / area.total) : 0;
-              return (
-                <button
-                  key={area.area}
-                  type="button"
-                  onClick={() => openChecklist({ area: area.area })}
-                  className="w-full rounded-lg p-2.5 text-left transition-colors hover:bg-black/5"
-                >
-                  <div className="flex items-baseline justify-between gap-3 text-[13px]">
-                    <span className="font-semibold" style={{ color: TEXT }}>{area.label}</span>
-                    <span style={{ color: MUTED }}>
-                      {area.ready}/{area.total} ready{area.gaps ? ` · ${area.gaps} gaps` : ""}
-                    </span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--cc-soft)" }}>
-                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: PLUM }} />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
+      <div className="grid gap-8 lg:grid-cols-2">
+        <Section title="By area" description="How much of each practice standard area has current evidence.">
+          <Surface>
+            {areas.length === 0 ? (
+              <p className="px-5 py-6 text-sm leading-6" style={{ color: MUTED }}>
+                No requirements are listed yet. Review your audit profile to confirm the areas that apply to your organisation.
+              </p>
+            ) : (
+              <RowList>
+                {areas.map((area) => {
+                  const pct = area.total ? Math.round((100 * area.ready) / area.total) : 0;
+                  return (
+                    <li key={area.area}>
+                      <button type="button" onClick={() => openChecklist({ area: area.area })} className={`${rowClass} flex-col items-stretch gap-2`}>
+                        <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                          <span className="text-sm font-semibold" style={{ color: TEXT }}>{area.label}</span>
+                          <span className="text-xs tabular-nums" style={{ color: MUTED }}>
+                            {area.ready}/{area.total} ready
+                            {area.gaps ? <span className="font-semibold" style={{ color: "var(--cc-danger-text)" }}> · {area.gaps} gaps</span> : null}
+                          </span>
+                        </span>
+                        <span className="block h-1.5 overflow-hidden rounded-full" style={{ background: "var(--cc-soft)" }}>
+                          <span className="block h-full rounded-full" style={{ width: `${pct}%`, background: PLUM }} />
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </RowList>
+            )}
+          </Surface>
+        </Section>
 
-        <section className="rounded-xl border p-4" style={{ borderColor: BORDER, background: "var(--cc-surface)" }}>
-          <h2 className="text-sm font-bold" style={{ color: TEXT }}>Critical gaps</h2>
-          {criticalGaps.length === 0 ? (
-            <p className="mt-3 flex items-center gap-2 text-sm" style={{ color: MUTED }}>
-              <CheckCircle2 size={15} style={{ color: "var(--cc-status-success)" }} />
-              No critical item is missing or overdue.
-            </p>
-          ) : (
-            <ul className="mt-2 divide-y" style={{ borderColor: BORDER }}>
-              {criticalGaps.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => openItem(item.id)}
-                    className="flex w-full items-center justify-between gap-3 py-2.5 text-left hover:opacity-80"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-semibold" style={{ color: TEXT }}>
-                        {item.title}
+        <Section
+          title="Critical gaps"
+          description="Critical requirements with missing or overdue evidence."
+          action={
+            summary.critical_gaps > criticalGaps.length ? (
+              <button type="button" className={ghostClass} onClick={() => openChecklist({ critical: "1", status: "gaps" })}>
+                See all {summary.critical_gaps}
+              </button>
+            ) : undefined
+          }
+        >
+          <Surface>
+            {criticalGaps.length === 0 ? (
+              <p className="flex items-center gap-2 px-5 py-6 text-sm" style={{ color: MUTED }}>
+                <CheckCircle2 size={16} style={{ color: "var(--cc-green)" }} />
+                No critical item is missing or overdue.
+              </p>
+            ) : (
+              <RowList>
+                {criticalGaps.map((item) => (
+                  <li key={item.id}>
+                    <button type="button" onClick={() => openItem(item.id)} className={rowClass}>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold" style={{ color: TEXT }}>{item.title}</span>
+                        <span className="block truncate text-xs" style={{ color: MUTED }}>{item.subject_name}</span>
                       </span>
-                      <span className="block truncate text-[12px]" style={{ color: MUTED }}>{item.subject_name}</span>
-                    </span>
-                    <StatusPill status={item.status} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {summary.critical_gaps > criticalGaps.length && (
-            <button
-              type="button"
-              className="mt-2 text-[12px] font-bold"
-              style={{ color: PLUM }}
-              onClick={() => openChecklist({ critical: "1", status: "gaps" })}
-            >
-              See all {summary.critical_gaps}
-            </button>
-          )}
-        </section>
+                      <StatusPill status={item.status} />
+                    </button>
+                  </li>
+                ))}
+              </RowList>
+            )}
+          </Surface>
+        </Section>
       </div>
     </div>
   );
@@ -256,15 +267,19 @@ function Overview({
 
 // ── Checklist ────────────────────────────────────────────────────────────
 
+const CHECKLIST_PAGE = 30;
+
 function Checklist({
   items,
   filters,
   setFilter,
+  clearFilters,
   openItem,
 }: {
   items: AuditItem[];
   filters: Record<string, string>;
   setFilter: (key: string, value: string) => void;
+  clearFilters: () => void;
   openItem: (id: string) => void;
 }) {
   const filtered = useMemo(() => {
@@ -288,84 +303,99 @@ function Checklist({
       );
   }, [items, filters]);
 
-  const selectClass = "h-9 rounded-md border bg-transparent px-2 text-[13px]";
+  const selectClass = "min-h-10 max-w-full rounded-full border bg-cc-surface px-4 text-sm outline-none focus:ring-2 focus:ring-cc-plum";
   const selectStyle = { borderColor: BORDER, color: TEXT };
+  const criticalOnly = filters.critical === "1";
+  const anyFilter = FILTER_KEYS.some((key) => filters[key]);
+  const [shown, setShown] = useState(CHECKLIST_PAGE);
+  useEffect(() => setShown(CHECKLIST_PAGE), [filters]);
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border p-3" style={{ borderColor: BORDER, background: "var(--cc-surface)" }}>
-        <Input
-          aria-label="Search requirements or people"
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <SearchField
+          label="Search requirements or people"
           placeholder="Search requirement or person"
-          className="h-9 min-w-[200px] flex-1"
           value={filters.q ?? ""}
-          onChange={(e) => setFilter("q", e.target.value)}
+          onChange={(value) => setFilter("q", value)}
         />
-        <select aria-label="Area" className={selectClass} style={selectStyle} value={filters.area ?? ""} onChange={(e) => setFilter("area", e.target.value)}>
-          <option value="">All areas</option>
-          {(Object.keys(AREA_LABELS) as Area[]).map((a) => (
-            <option key={a} value={a}>{AREA_LABELS[a]}</option>
-          ))}
-        </select>
-        <select aria-label="Record type" className={selectClass} style={selectStyle} value={filters.scope ?? ""} onChange={(e) => setFilter("scope", e.target.value)}>
-          <option value="">Everyone</option>
-          <option value="organisation">Organisation</option>
-          <option value="worker">Workers</option>
-          <option value="participant">Participants</option>
-        </select>
-        <select aria-label="Status" className={selectClass} style={selectStyle} value={filters.status ?? ""} onChange={(e) => setFilter("status", e.target.value)}>
-          <option value="">Any status</option>
-          <option value="gaps">Missing or overdue</option>
-          {STATUS_ORDER.map((s) => (
-            <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-          ))}
-        </select>
-        <label className="flex items-center gap-2 text-[13px]" style={{ color: TEXT }}>
-          <Checkbox
-            checked={filters.critical === "1"}
-            onCheckedChange={(v) => setFilter("critical", v === true ? "1" : "")}
-          />
-          Critical only
-        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <select aria-label="Area" className={selectClass} style={selectStyle} value={filters.area ?? ""} onChange={(e) => setFilter("area", e.target.value)}>
+            <option value="">All areas</option>
+            {(Object.keys(AREA_LABELS) as Area[]).map((a) => (
+              <option key={a} value={a}>{AREA_LABELS[a]}</option>
+            ))}
+          </select>
+          <select aria-label="Record type" className={selectClass} style={selectStyle} value={filters.scope ?? ""} onChange={(e) => setFilter("scope", e.target.value)}>
+            <option value="">Everyone</option>
+            <option value="organisation">Organisation</option>
+            <option value="worker">Workers</option>
+            <option value="participant">Participants</option>
+          </select>
+          <select aria-label="Status" className={selectClass} style={selectStyle} value={filters.status ?? ""} onChange={(e) => setFilter("status", e.target.value)}>
+            <option value="">Any status</option>
+            <option value="gaps">Missing or overdue</option>
+            {STATUS_ORDER.map((s) => (
+              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            aria-pressed={criticalOnly}
+            onClick={() => setFilter("critical", criticalOnly ? "" : "1")}
+            className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+            style={criticalOnly ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` }}
+          >
+            <ShieldAlert size={15} />
+            Critical only
+          </button>
+        </div>
       </div>
 
-      <p className="text-[12px]" style={{ color: MUTED }}>
-        {filtered.length} of {items.length} items
-      </p>
+      <div className="flex min-h-11 items-center justify-between gap-3">
+        <p className="text-sm" style={{ color: MUTED }}>
+          {filtered.length} of {items.length} items
+        </p>
+        {anyFilter && (
+          <button type="button" className={ghostClass} onClick={clearFilters}>
+            Clear filters
+          </button>
+        )}
+      </div>
 
-      <div className="overflow-hidden rounded-xl border" style={{ borderColor: BORDER, background: "var(--cc-surface)" }}>
-        {filtered.length === 0 ? (
-          <p className="p-6 text-center text-sm" style={{ color: MUTED }}>No items match these filters.</p>
-        ) : (
-          <ul className="divide-y" style={{ borderColor: BORDER }}>
-            {filtered.map((item) => (
+      {filtered.length === 0 ? (
+        <EmptyState icon={ClipboardCheck} title="No items match" body="Try another search, or clear the filters." />
+      ) : (
+        <Surface>
+          <RowList>
+            {filtered.slice(0, shown).map((item) => (
               <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => openItem(item.id)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-black/5"
-                >
-                  <span className="min-w-0 flex-1">
+                <button type="button" onClick={() => openItem(item.id)} className={`${rowClass} flex-wrap`}>
+                  <span className="min-w-0 basis-48 flex-1">
                     <span className="flex items-center gap-2">
-                      <span className="truncate text-[13px] font-semibold" style={{ color: TEXT }}>{item.title}</span>
-                      {item.critical && (
-                        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide" style={{ color: "var(--cc-status-danger)" }}>
-                          Critical
-                        </span>
-                      )}
+                      <span className="break-words text-sm font-semibold" style={{ color: TEXT }}>{item.title}</span>
+                      {item.critical && <StatusText tone="danger">Critical</StatusText>}
                     </span>
-                    <span className="block truncate text-[12px]" style={{ color: MUTED }}>
+                    <span className="block truncate text-xs" style={{ color: MUTED }}>
                       {SUBJECT_LABELS[item.subject_type]} · {item.subject_name}
                       {item.due_date ? ` · due ${fmtDate(item.due_date)}` : ""}
                     </span>
                   </span>
                   <StatusPill status={item.status} />
+                  <span className="block w-full text-xs leading-5" style={{ color: MUTED }}>Next step: {item.next_action}</span>
                 </button>
               </li>
             ))}
-          </ul>
-        )}
-      </div>
+          </RowList>
+          {filtered.length > shown && (
+            <div className="border-t px-4 py-3 text-center sm:px-5" style={{ borderColor: BORDER }}>
+              <button type="button" className={outlineClass} onClick={() => setShown((n) => n + CHECKLIST_PAGE)}>
+                Show {Math.min(CHECKLIST_PAGE, filtered.length - shown)} more of {filtered.length - shown}
+              </button>
+            </div>
+          )}
+        </Surface>
+      )}
     </div>
   );
 }
@@ -398,7 +428,7 @@ function EvidenceRow({ item, evidence, onDone }: { item: AuditItem; evidence: Au
   const canReview = evidence.reviewable && item.status !== "not_applicable";
 
   return (
-    <div className="rounded-xl border p-3" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border p-3.5" style={{ borderColor: BORDER }}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[13px] font-semibold" style={{ color: TEXT }}>{evidence.title}</p>
@@ -512,7 +542,7 @@ function LinkFromVault({ item, onDone }: { item: AuditItem; onDone: () => void }
   };
 
   return (
-    <div className="space-y-2 rounded-xl border p-3" style={{ borderColor: BORDER }}>
+    <div className="space-y-2 rounded-2xl border p-3.5" style={{ borderColor: BORDER }}>
       <select
         aria-label="Vault folder"
         className="h-9 w-full rounded-md border bg-transparent px-2 text-[13px]"
@@ -795,13 +825,14 @@ function SetupSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>Audit profile</SheetTitle>
-          <SheetDescription>
-            Decides which requirements are on your checklist. Your auditor sets the final scope from your registration.
-          </SheetDescription>
-        </SheetHeader>
+      <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+        <SheetTitle className="sr-only">Audit profile</SheetTitle>
+        <SheetDescription className="sr-only">Decides which requirements are on your checklist.</SheetDescription>
+        <PanelHeader
+          icon={Settings2}
+          title="Audit profile"
+          description="Decides which requirements are on your checklist. Your auditor sets the final scope from your registration."
+        />
         {!options ? (
           <p className="mt-4 text-sm" style={{ color: MUTED }}>Loading…</p>
         ) : (
@@ -814,12 +845,13 @@ function SetupSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open
                     key={t.value}
                     type="button"
                     onClick={() => setAuditType(t.value)}
-                    className="rounded-full border px-3 py-1.5 font-semibold"
-                    style={{
-                      borderColor: auditType === t.value ? PLUM : BORDER,
-                      color: auditType === t.value ? PLUM : TEXT,
-                      background: auditType === t.value ? "var(--cc-active-bg)" : "transparent",
-                    }}
+                    aria-pressed={auditType === t.value}
+                    className="min-h-10 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft"
+                    style={
+                      auditType === t.value
+                        ? { background: "var(--cc-text)", color: "var(--cc-bg)" }
+                        : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` }
+                    }
                   >
                     {t.label}
                   </button>
@@ -850,7 +882,7 @@ function SetupSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open
 
             <section className="space-y-2">
               <h3 className="font-bold" style={{ color: TEXT }}>Registration groups</h3>
-              <div className="max-h-64 space-y-1.5 overflow-y-auto rounded-xl border p-3" style={{ borderColor: BORDER }}>
+              <div className="max-h-64 space-y-1.5 overflow-y-auto rounded-2xl border p-3" style={{ borderColor: BORDER }}>
                 {options.registration_groups.map((g) => (
                   <label key={g.code} className="flex items-start gap-2" style={{ color: TEXT }}>
                     <Checkbox className="mt-0.5" checked={groups.has(g.code)} onCheckedChange={() => toggle(groups, g.code, setGroups)} />
@@ -860,9 +892,9 @@ function SetupSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open
               </div>
             </section>
 
-            <Button onClick={save} disabled={saving} style={{ background: PLUM, color: "white" }}>
+            <PrimaryButton onClick={save} busy={saving}>
               {saving ? "Saving…" : "Save profile"}
-            </Button>
+            </PrimaryButton>
 
             <section className="space-y-2 border-t pt-4" style={{ borderColor: BORDER }}>
               <h3 className="font-bold" style={{ color: TEXT }}>Requirements</h3>
@@ -871,7 +903,7 @@ function SetupSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open
                 how often you recheck police checks.
               </p>
               {(requirementsQuery.data ?? []).map((req) => (
-                <div key={req.code} className="rounded-lg border p-2.5" style={{ borderColor: BORDER, opacity: req.applies ? 1 : 0.6 }}>
+                <div key={req.code} className="rounded-2xl border p-3.5" style={{ borderColor: BORDER, opacity: req.applies ? 1 : 0.6 }}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-semibold" style={{ color: TEXT }}>{req.title}</p>
@@ -927,31 +959,36 @@ function AuditPacks({ items }: { items: AuditItem[] }) {
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <section className="rounded-xl border p-4" style={{ borderColor: BORDER, background: "var(--cc-surface)" }}>
-        <h2 className="text-sm font-bold" style={{ color: TEXT }}>Outstanding items report</h2>
-        <p className="mt-1 text-[13px]" style={{ color: MUTED }}>
-          {outstanding.length} item{outstanding.length === 1 ? "" : "s"} still need evidence, review or renewal. Download
-          them as a spreadsheet to share with whoever is following them up.
-        </p>
-        <Button className="mt-3 gap-2" variant="outline" onClick={download} disabled={outstanding.length === 0}>
-          <Download size={15} />
-          Download CSV
-        </Button>
-      </section>
-      <section className="rounded-xl border p-4" style={{ borderColor: BORDER, background: "var(--cc-surface)" }}>
-        <h2 className="text-sm font-bold" style={{ color: TEXT }}>Share evidence with an auditor</h2>
-        <p className="mt-1 text-[13px]" style={{ color: MUTED }}>
-          Build a pack from the vault today. Packs assembled straight from this checklist — with an evidence index and
-          review history — are coming next.
-        </p>
-        <Link href="/md/vault">
-          <Button className="mt-3 gap-2" variant="outline">
+    <div className="grid gap-8 lg:grid-cols-2">
+      <Section title="Outstanding items report" description="Everything that still needs evidence, review or renewal.">
+        <Surface className="p-5">
+          <p className="flex items-baseline gap-2">
+            <span className="text-3xl font-semibold tabular-nums tracking-tight" style={{ color: outstanding.length ? "var(--cc-amber)" : "var(--cc-green)" }}>
+              {outstanding.length}
+            </span>
+            <span className="text-sm" style={{ color: MUTED }}>{outstanding.length === 1 ? "action" : "actions"} to follow up</span>
+          </p>
+          <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>
+            Download them as a spreadsheet to share with whoever is following them up.
+          </p>
+          <button type="button" className={`${outlineClass} mt-4`} onClick={download} disabled={outstanding.length === 0}>
+            <Download size={15} />
+            Download CSV
+          </button>
+        </Surface>
+      </Section>
+      <Section title="Share evidence with an auditor" description="Pick the supporting records in the vault and share them from there.">
+        <Surface className="p-5">
+          <p className="text-sm leading-6" style={{ color: MUTED }}>
+            The vault keeps every participant, worker and governance record in folders. Use its sharing tools to send an
+            auditor exactly what they need, and the outstanding items report to track follow-up.
+          </p>
+          <Link href="/md/vault" className={`${ctaClass} mt-4`}>
             <FolderLock size={15} />
             Open the vault
-          </Button>
-        </Link>
-      </section>
+          </Link>
+        </Surface>
+      </Section>
     </div>
   );
 }
@@ -960,7 +997,8 @@ function AuditPacks({ items }: { items: AuditItem[] }) {
 
 const FILTER_KEYS = ["area", "scope", "status", "critical", "q"] as const;
 
-export default function AuditReadinessPage() {
+export default function AuditReadinessPage({ embedded = false }: { embedded?: boolean }) {
+  const Layout = embedded ? Fragment : HubLayout;
   const [location, navigate] = useLocation();
   const search = useSearch();
   const params = useMemo(() => new URLSearchParams(search), [search]);
@@ -1017,78 +1055,55 @@ export default function AuditReadinessPage() {
     [requirements.data],
   );
 
+  const clearFilters = () => {
+    const next = new URLSearchParams(params);
+    for (const key of FILTER_KEYS) next.delete(key);
+    go(next);
+  };
+
   return (
-    <HubLayout>
-      <div className="space-y-5 pb-12">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <span
-              className="flex h-11 w-11 items-center justify-center rounded-xl"
-              style={{ background: "var(--cc-active-bg)", color: PLUM }}
-            >
-              <ClipboardCheck size={20} />
-            </span>
-            <div>
-              <h1 className="text-xl font-semibold tracking-[-0.025em]" style={{ color: TEXT }}>
-                Audit readiness
-              </h1>
-              <p className="mt-0.5 max-w-2xl text-[13px]" style={{ color: MUTED }}>
-                What evidence you have, what's missing and what needs review. This tracks evidence readiness — it
-                doesn't determine compliance or guarantee an audit outcome.
-              </p>
-            </div>
-          </div>
-          <Button variant="outline" className="shrink-0 gap-2" onClick={() => setSetupOpen(true)}>
+    <Layout>
+      <div className="space-y-6 pb-12">
+        {!embedded && (
+          <PageHeader
+            eyebrow="Oversight & Risk"
+            title={view === "checklist" ? "Evidence checklist" : view === "packs" ? "Prepare an audit pack" : "Evidence overview"}
+          />
+        )}
+        {!embedded && <PillTabs label="Audit readiness views" value={view} onChange={setView} options={VIEWS} />}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-2xl text-sm leading-6" style={{ color: MUTED }}>
+            What evidence you have, what's missing and what needs review. This tracks evidence readiness. It
+            doesn't determine compliance or guarantee an audit outcome.
+          </p>
+          <button type="button" className={`${outlineClass} shrink-0`} onClick={() => setSetupOpen(true)}>
             <Settings2 size={15} />
             Audit profile
-          </Button>
-        </div>
-
-        <div role="tablist" className="flex gap-1 border-b" style={{ borderColor: BORDER }}>
-          {VIEWS.map((v) => (
-            <button
-              key={v.key}
-              role="tab"
-              type="button"
-              aria-selected={view === v.key}
-              onClick={() => setView(v.key)}
-              className="-mb-px border-b-2 px-3 py-2 text-[13px] font-semibold"
-              style={{
-                borderColor: view === v.key ? PLUM : "transparent",
-                color: view === v.key ? PLUM : MUTED,
-              }}
-            >
-              {v.label}
-            </button>
-          ))}
+          </button>
         </div>
 
         {checklist.isError ? (
-          <div
-            role="alert"
-            className="flex flex-wrap items-center gap-2 rounded-xl border p-4 text-sm"
-            style={{ borderColor: "var(--cc-status-danger)", color: "var(--cc-status-danger)" }}
-          >
-            <XCircle size={16} />
-            Couldn't load the checklist.
-            {loadErrorHint(checklist.error) && <span className="font-normal">{loadErrorHint(checklist.error)}</span>}
-            <button type="button" className="font-bold underline" onClick={() => checklist.refetch()}>
-              Try again
-            </button>
-          </div>
+          <LoadError onRetry={() => checklist.refetch()}>
+            <XCircle size={16} style={{ color: "var(--cc-danger-text)" }} />
+            <span>
+              <span className="font-semibold">Couldn't load the checklist.</span>
+              {loadErrorHint(checklist.error) && <span style={{ color: MUTED }}> {loadErrorHint(checklist.error)}</span>}
+            </span>
+          </LoadError>
         ) : !checklist.data ? (
-          <p className="text-sm" style={{ color: MUTED }}>Loading…</p>
+          <SkeletonBlocks count={3} height="h-24" />
         ) : view === "overview" ? (
           <Overview data={checklist.data} openChecklist={openChecklist} openItem={openItem} openSetup={() => setSetupOpen(true)} />
         ) : view === "checklist" ? (
-          <Checklist items={items} filters={filters} setFilter={setFilter} openItem={openItem} />
+          <Checklist items={items} filters={filters} setFilter={setFilter} clearFilters={clearFilters} openItem={openItem} />
         ) : (
           <AuditPacks items={items} />
         )}
 
         {checklist.data && checklist.data.summary.critical_gaps > 0 && view !== "overview" && (
-          <p className="flex items-center gap-2 text-[12px]" style={{ color: "var(--cc-status-danger)" }}>
-            <AlertTriangle size={14} />
+          <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--cc-danger-text)" }}>
+            <AlertTriangle size={15} />
             {checklist.data.summary.critical_gaps} critical gap{checklist.data.summary.critical_gaps === 1 ? "" : "s"}
           </p>
         )}
@@ -1100,6 +1115,6 @@ export default function AuditReadinessPage() {
         onClose={closeItem}
       />
       <SetupSheet open={setupOpen} onOpenChange={setSetupOpen} />
-    </HubLayout>
+    </Layout>
   );
 }

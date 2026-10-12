@@ -1,15 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Download, Loader2, Search, Send, CheckCircle2, Undo2, X } from "lucide-react";
+import { AlertTriangle, Download, Loader2, Search, Send, CheckCircle2, Undo2, Wallet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { Field, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass } from "@/pages/md/vault/components/PanelKit";
 import { useToast } from "@/hooks/use-toast";
 import { useReAuth } from "@/hooks/useReAuth";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -272,7 +266,7 @@ export function NdiaClaimsPanel({
               : "NDIA-managed invoices, claimed together as one bulk payment request."}
           </p>
         </div>
-        <div role="tablist" aria-label="Claim status" className="flex rounded-xl border border-cc-border bg-cc-soft p-1">
+        <div role="tablist" aria-label="Claim status" className="flex items-center rounded-full border border-cc-border p-1">
           {TABS.map((t) => {
             const count = query.data?.[t.key].length;
             return (
@@ -282,19 +276,12 @@ export function NdiaClaimsPanel({
                 type="button"
                 aria-selected={tab === t.key}
                 onClick={() => switchTab(t.key)}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
-                style={{
-                  background: tab === t.key ? "var(--cc-surface)" : "transparent",
-                  color: tab === t.key ? "var(--cc-text)" : "var(--cc-muted)",
-                  boxShadow: tab === t.key ? "0 1px 2px rgba(0,0,0,0.08)" : undefined,
-                }}
+                className="flex min-h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition-colors"
+                style={tab === t.key ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { color: "var(--cc-muted)" }}
               >
                 {t.label}
                 {count !== undefined && (
-                  <span
-                    className="rounded-full px-1.5 text-[10px] tabular-nums"
-                    style={{ background: tab === t.key ? "var(--cc-soft)" : "transparent" }}
-                  >
+                  <span className="tabular-nums" style={{ opacity: 0.75 }}>
                     {count}
                   </span>
                 )}
@@ -340,7 +327,7 @@ export function NdiaClaimsPanel({
         </p>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border border-cc-border bg-cc-surface">
+      <div className="overflow-x-auto rounded-2xl bg-cc-surface">
         {query.isLoading ? (
           <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-cc-plum" /></div>
         ) : query.isError ? (
@@ -504,30 +491,38 @@ export function NdiaClaimsPanel({
         </div>
       )}
 
-      <Dialog open={paying} onOpenChange={setPaying}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Record NDIA payment</DialogTitle>
-            <DialogDescription>
-              {chosen.length} claim{chosen.length === 1 ? "" : "s"} · {money(chosenTotal)}. Use the details from the NDIA remittance.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="space-y-1 text-sm">
-              <span className="text-xs text-cc-muted">Payment date</span>
-              <Input type="date" value={paymentDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setPaymentDate(e.target.value)} />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-xs text-cc-muted">Remittance reference</span>
-              <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Optional" />
-            </label>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPaying(false)}>Cancel</Button>
-            <Button onClick={markPaid} disabled={busy}>{busy ? "Saving…" : "Mark paid"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Sheet open={paying} onOpenChange={setPaying}>
+        <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+          <SheetTitle className="sr-only">Record NDIA payment</SheetTitle>
+          <SheetDescription className="sr-only">Use the details from the NDIA remittance.</SheetDescription>
+          <PanelHeader
+            icon={Wallet}
+            title="Record NDIA payment"
+            description={`${chosen.length} claim${chosen.length === 1 ? "" : "s"} · ${money(chosenTotal)}. Use the details from the NDIA remittance.`}
+          />
+          <form
+            id="ndia-payment-form"
+            className="mt-6 flex-1 space-y-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!busy) void markPaid();
+            }}
+          >
+            <Field label="Payment date" htmlFor="ndia-payment-date">
+              <input id="ndia-payment-date" type="date" value={paymentDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setPaymentDate(e.target.value)} className={inputClass} style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }} />
+            </Field>
+            <Field label="Remittance reference" htmlFor="ndia-payment-reference" optional>
+              <input id="ndia-payment-reference" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="From the NDIA remittance advice" className={inputClass} style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }} />
+            </Field>
+          </form>
+          <PanelFooter>
+            <SecondaryButton onClick={() => setPaying(false)} disabled={busy}>Cancel</SecondaryButton>
+            <PrimaryButton type="submit" form="ndia-payment-form" busy={busy}>
+              {busy ? "Saving…" : "Mark paid"}
+            </PrimaryButton>
+          </PanelFooter>
+        </SheetContent>
+      </Sheet>
     </section>
   );
 }

@@ -20,12 +20,14 @@ import {
   X,
   Loader2,
   ClipboardCheck,
+  Search,
 } from "lucide-react";
 import { TrainingReviews } from "@/components/training/TrainingReviews";
 import { TrainingModuleEditor } from "@/components/training/TrainingModuleEditor";
 import { SharedResourceAccess } from "@/components/training/WorkerResourceLibrary";
 import { CourseCover } from "@/components/training/CourseCover";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { EmptyState, LoadError, PageHeader, PillTabs, SkeletonBlocks, StatusText, ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
 import { SectionInfo } from "@/components/ui/section-info";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
@@ -1917,12 +1919,12 @@ function ModulesTab({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-[14px] font-semibold" style={{ color: TEXT }}>
-            Training Modules
+          <h2 className="text-lg font-semibold" style={{ color: TEXT }}>
+            Training modules
           </h2>
-          <p className="mt-0.5 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="mt-0.5 text-sm" style={{ color: MUTED }}>
             Create courses, curate learning materials and set requirements for
             new hires.
           </p>
@@ -1932,30 +1934,37 @@ function ModulesTab({
             setEditingModule(undefined);
             setShowForm(true);
           }}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold text-white shrink-0"
-          style={{ background: "var(--cc-cta)" }}
+          className={`${ctaClass} w-full shrink-0 sm:w-auto`}
         >
-          <Plus size={12} strokeWidth={2.5} /> New Module
+          <Plus size={15} /> New module
         </button>
       </div>
 
-      <label className="block">
-        <span className="sr-only">Search training modules</span>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search training modules"
-          className="w-full rounded-xl border bg-card px-4 py-3 text-sm sm:max-w-sm"
-        />
-      </label>
-
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <label className="grid gap-1.5 text-sm font-medium text-cc-text">
-          Show modules
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <label className="relative block w-full sm:max-w-sm">
+          <span className="sr-only">Search training modules</span>
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search training modules"
+            className="h-11 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
+            style={{ borderColor: BORDER, color: TEXT }}
+          />
+        </label>
+        <div className="flex items-center gap-3">
+        {!loading && !error && (
+          <p role="status" className="text-sm text-cc-muted">
+            {visibleModules.length} of {modules.length} modules
+          </p>
+        )}
+        <label className="text-sm text-cc-text">
+          <span className="sr-only">Show modules</span>
           <select
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
-            className="min-h-11 rounded-lg border bg-card px-3 text-sm"
+            className="min-h-10 rounded-full border bg-cc-surface px-4 text-sm"
+            style={{ borderColor: BORDER }}
           >
             <option value="all">All modules</option>
             <option value="available">Available to workers</option>
@@ -1963,85 +1972,49 @@ function ModulesTab({
             <option value="new-hire">Assigned to new hires</option>
           </select>
         </label>
-        {!loading && !error && (
-          <p role="status" className="text-sm text-cc-muted">
-            {visibleModules.length} of {modules.length} modules
-          </p>
-        )}
+        </div>
       </div>
       {loading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-16 animate-pulse rounded-xl"
-              style={{ background: SOFT }}
-            />
-          ))}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3].map((i) => <div key={i} className="h-72 animate-pulse rounded-2xl bg-cc-surface" />)}
         </div>
       ) : error ? (
-        <div
-          className="rounded-xl border p-10 text-center"
-          style={{ borderColor: BORDER }}
-        >
-          <AlertTriangle
-            size={32}
-            className="mx-auto mb-3"
-            style={{ color: CORAL }}
-          />
-          <p className="font-semibold" style={{ color: TEXT }}>
-            Could not load training modules
-          </p>
-          <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>
-            <button onClick={load} className="underline">
-              Try again
-            </button>
-          </p>
-        </div>
+        <LoadError onRetry={load}>
+          <AlertTriangle size={16} style={{ color: "var(--cc-danger-text)" }} />
+          <span className="font-semibold">Could not load training modules</span>
+        </LoadError>
       ) : modules.length === 0 ? (
-        <div
-          className="rounded-xl border p-10 text-center"
-          style={{ borderColor: BORDER }}
-        >
-          <GraduationCap
-            size={32}
-            className="mx-auto mb-3"
-            style={{ color: MUTED }}
-          />
-          <p className="font-semibold" style={{ color: TEXT }}>
-            No training modules yet
-          </p>
-          <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>
-            Create one and mark it auto-assign to make it mandatory for new
-            hires.
-          </p>
-        </div>
+        <EmptyState
+          icon={GraduationCap}
+          title="No training modules yet"
+          body="Create one and mark it auto-assign to make it mandatory for new hires."
+        />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {visibleModules.map((m) => (
             <div
               key={m.id}
-              className="flex h-full flex-col rounded-2xl border bg-card p-3 shadow-sm"
-              style={{ borderColor: BORDER }}
+              className="flex h-full flex-col rounded-2xl bg-cc-surface p-3"
             >
               <CourseCover
                 title={m.title}
                 count={m.resources?.length}
                 color={m.cover_color}
                 imageUrl={m.cover_url}
+                className="h-28"
               />
               <div className="flex flex-1 flex-col gap-4 p-2 pt-4">
                 <div className="min-w-0 flex-1">
                   <p
-                    className="min-min-h-11 text-sm font-bold leading-5"
+                    className="text-base font-semibold leading-6"
                     style={{ color: TEXT }}
                   >
                     {m.title}
                   </p>
-                  <span
-                    className={`mt-2 inline-flex rounded-full px-2 py-1 text-xs font-bold ${m.is_locked ? "bg-amber-100 text-amber-900" : "bg-emerald-50 text-emerald-700"}`}
-                  >
-                    {m.is_locked ? "Under maintenance" : "Available to workers"}
+                  <span className="mt-0.5 block">
+                    <StatusText tone={m.is_locked ? "warning" : "good"}>
+                      {m.is_locked ? "Under maintenance" : "Available to workers"}
+                    </StatusText>
                   </span>
                   {m.description && (
                     <p
@@ -2062,8 +2035,8 @@ function ModulesTab({
                     )}
                     {m.requires_certification && (
                       <span
-                        className="rounded-full px-2 py-0.5 text-xs font-semibold"
-                        style={{ background: SOFT, color: PLUM }}
+                        className="rounded-full px-2.5 py-0.5 text-xs font-medium"
+                        style={{ background: SOFT, color: TEXT }}
                       >
                         Certification required
                       </span>
@@ -2071,13 +2044,13 @@ function ModulesTab({
                   </div>
                 </div>
 
-                <div className="mt-auto grid gap-2 border-t pt-4">
+                <div className="mt-auto flex flex-wrap items-center gap-2 border-t pt-4" style={{ borderColor: BORDER }}>
                   <button
                     onClick={() => {
                       setEditingModule(m);
                       setShowForm(true);
                     }}
-                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 text-xs font-bold text-primary-foreground"
+                    className={outlineClass}
                   >
                     <Pencil size={14} /> Manage module
                   </button>
@@ -2085,8 +2058,8 @@ function ModulesTab({
                     onClick={() => toggleFlag(m, "auto_assign_on_hire")}
                     disabled={updatingId !== null}
                     aria-pressed={m.auto_assign_on_hire}
-                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold disabled:opacity-50"
-                    style={{ borderColor: BORDER, color: MUTED }}
+                    className={`${ghostClass} min-h-10 text-xs`}
+                    style={{ color: m.auto_assign_on_hire ? TEXT : MUTED }}
                   >
                     {updatingId === m.id && (
                       <Loader2 size={13} className="animate-spin" />
@@ -2106,10 +2079,11 @@ function ModulesTab({
         !error &&
         modules.length > 0 &&
         visibleModules.length === 0 && (
-          <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No modules match your search and filter.
-            <button type="button" onClick={() => { setSearch(""); setFilter("all"); }} className="mx-auto mt-3 block rounded-lg border px-3 py-2 text-xs font-semibold hover:bg-muted">Clear filters</button>
-          </p>
+          <EmptyState
+            icon={Search}
+            title="No modules match your search and filter."
+            action={<button type="button" onClick={() => { setSearch(""); setFilter("all"); }} className={outlineClass}>Clear filters</button>}
+          />
         )}
     </div>
   );
@@ -2471,60 +2445,31 @@ export default function MDOnboardingTrainingPage() {
 
   return (
     <HubLayout>
-      <div className="space-y-6 pb-10">
+      <div className="space-y-8 pb-12">
         {!editing && (
           <>
-            <div className="flex flex-wrap items-center gap-4">
-              <button
-                onClick={() => navigate("/md/onboarding")}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
-                style={{ color: MUTED, background: SOFT }}
-              >
-                <ArrowLeft size={13} strokeWidth={2.5} /> Back to Onboarding
-              </button>
-              <div>
-                <h1
-                  className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
-                  style={{ color: TEXT }}
-                >
+            <PageHeader
+              back={
+                <button type="button" onClick={() => navigate("/md/onboarding")} className={`${ghostClass} -ml-4`}>
+                  <ArrowLeft size={15} /> Back to Onboarding
+                </button>
+              }
+              eyebrow="Workforce & People"
+              title={
+                <span className="inline-flex items-center gap-2">
                   Competency & Training
                   <SectionInfo text={translate("md.onboarding.subtitle")} />
-                </h1>
-              </div>
-              <div
-                className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg"
-                style={{ background: SOFT, color: PLUM }}
-              >
-                <GraduationCap size={16} strokeWidth={2.5} />
-              </div>
-            </div>
+                </span>
+              }
+              description="Training modules, shared resources and completion reviews for your workforce."
+            />
 
-            <div
-              aria-label="Training sections"
-              className="grid grid-cols-1 gap-1 rounded-xl p-1 sm:grid-cols-3"
-              style={{ background: SOFT }}
-            >
-              {TAB_KEYS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  aria-pressed={activeTab === tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className="min-h-11 min-w-0 rounded-lg px-3 py-2 text-sm font-semibold transition"
-                  style={{
-                    background:
-                      activeTab === tab.id ? "var(--cc-bg)" : "transparent",
-                    color: activeTab === tab.id ? PLUM : MUTED,
-                    boxShadow:
-                      activeTab === tab.id
-                        ? "0 1px 3px rgba(0,0,0,0.08)"
-                        : "none",
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+            <PillTabs<(typeof TAB_KEYS)[number]["id"]>
+              label="Training sections"
+              value={activeTab}
+              onChange={setActiveTab}
+              options={TAB_KEYS.map((tab) => ({ key: tab.id, label: tab.label }))}
+            />
           </>
         )}
         {activeTab === "modules" && <ModulesTab onEditingChange={setEditing} />}

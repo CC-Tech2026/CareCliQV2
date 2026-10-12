@@ -11,7 +11,6 @@ import {
   FileText,
   Search,
   ChevronDown,
-  CircleDollarSign,
   Send,
   ClipboardCheck,
   ListChecks,
@@ -39,6 +38,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { SectionInfo } from "@/components/ui/section-info";
+import { PageHeader, PillTabs, ctaClass } from "@/components/layout/PageKit";
+import { PanelHeader, PrimaryButton } from "@/pages/md/vault/components/PanelKit";
 import { useReAuth } from "@/hooks/useReAuth";
 import { NdiaClaimsPanel } from "@/components/billing/NdiaClaimsPanel";
 import { Button } from "@/components/ui/button";
@@ -951,19 +952,17 @@ export default function Billing() {
         }}
       >
         <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
-          <SheetHeader className="border-b border-cc-border px-5 py-5 pr-12">
-            <SheetTitle>Review invoice</SheetTitle>
-            <SheetDescription>
-              {reviewInvoice?.invoice_number} | Check the recipient, services
-              and total before finalising.
-            </SheetDescription>
-          </SheetHeader>
+<div className="shrink-0 border-b border-cc-border px-6 py-5">
+            <SheetTitle className="sr-only">Review invoice</SheetTitle>
+            <SheetDescription className="sr-only">{`${reviewInvoice?.invoice_number ?? ""} · Check the recipient, services and total before finalising.`}</SheetDescription>
+            <PanelHeader icon={FileText} title="Review invoice" description={`${reviewInvoice?.invoice_number ?? ""} · Check the recipient, services and total before finalising.`} />
+          </div>
           {reviewInvoice && (
             <>
               <div className="min-h-0 flex-1 overflow-y-auto p-5">
                 <InvoiceRecord invoice={reviewInvoice} />
                 {invoiceReviewWarnings(reviewInvoice).length > 0 && (
-                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  <div className="mt-4 rounded-2xl p-4 text-sm" style={{ background: "var(--cc-status-warning-bg)", color: "var(--cc-text)" }}>
                     <p className="font-semibold">Check before continuing</p>
                     <ul className="mt-2 list-disc space-y-1 pl-4">
                       {invoiceReviewWarnings(reviewInvoice).map((warning) => (
@@ -973,7 +972,7 @@ export default function Billing() {
                   </div>
                 )}
               </div>
-              <div className="space-y-3 border-t border-cc-border p-5">
+              <div className="space-y-3 border-t border-cc-border px-6 py-4">
                 <label className="flex min-h-11 items-start gap-3 text-sm">
                   <input
                     type="checkbox"
@@ -983,19 +982,19 @@ export default function Billing() {
                   />
                   I have checked the billing details and service items.
                 </label>
-                <Button
-                  className="min-h-11 w-full"
+                <PrimaryButton
+                  className="w-full"
                   disabled={
                     !reviewConfirmed ||
-                    Boolean(busyInvoice) ||
                     !reviewInvoice.line_items.length ||
                     !reviewInvoice.recipient_name?.trim() ||
                     reviewInvoice.pdf_generation_failed
                   }
+                  busy={Boolean(busyInvoice)}
                   onClick={() => invoiceAction(reviewInvoice, "finalize")}
                 >
                   {busyInvoice ? "Finalising..." : "Finalise invoice"}
-                </Button>
+                </PrimaryButton>
                 <p className="text-xs text-cc-muted">
                   Finalising does not email the invoice to the recipient.
                 </p>
@@ -1004,42 +1003,38 @@ export default function Billing() {
           )}
         </SheetContent>
       </Sheet>
-      <div className="w-full min-w-0 space-y-4 pb-6">
-        {/* ── Page header ───────────────────────────────────────────────────── */}
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <span
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-              style={{ background: "var(--cc-active-bg)", color: "#E8457A" }}
-            >
-              <CircleDollarSign size={20} />
+      <div className="w-full min-w-0 space-y-6 pb-10">
+        <PageHeader
+          eyebrow="NDIS billing"
+          title={
+            <span className="inline-flex items-center gap-2">
+              NDIS invoices
+              <SectionInfo text="NDIS invoicing for delivered shifts: generate invoices, claim NDIA-managed ones in bulk, track payments and review pricing." />
             </span>
-            <div>
-              <h1 className="flex items-center gap-2 text-xl font-semibold tracking-[-0.025em] text-cc-text">
-                NDIS invoices
-                <SectionInfo text="NDIS invoicing for delivered shifts: generate invoices, claim NDIA-managed ones in bulk, track payments and review pricing." />
-              </h1>
-              <p className="mt-0.5 text-[13px] text-cc-muted">
-                Create, review and claim invoices from delivered sessions
-              </p>
-            </div>
-          </div>
-          <Button
-            className="min-h-10 gap-2 rounded-xl bg-cc-plum text-white"
-            onClick={() => {
-              setWorkspace("invoices");
-              setShowInvoiceForm((open) => !open);
-            }}
-            aria-expanded={showInvoiceForm}
-            aria-controls="invoice-draft-form"
-          >
-            <Plus className="h-4 w-4" />
-            {showInvoiceForm ? "Close draft form" : "New invoice"}
-          </Button>
-        </div>
+          }
+          description="Create, review and claim invoices from delivered sessions."
+          actions={
+            <button
+              type="button"
+              className={`${ctaClass} w-full sm:w-auto`}
+              onClick={() => {
+                setWorkspace("invoices");
+                setShowInvoiceForm((open) => !open);
+              }}
+              aria-expanded={showInvoiceForm}
+              aria-controls="invoice-draft-form"
+            >
+              <Plus className="h-4 w-4" />
+              {showInvoiceForm ? "Close draft form" : "New invoice"}
+            </button>
+          }
+        />
 
-        <nav aria-label="Invoicing sections" className="flex gap-1 overflow-x-auto border-b border-cc-border">
-          {(
+        <PillTabs<BillingWorkspace>
+          label="Invoicing sections"
+          value={workspace}
+          onChange={setWorkspace}
+          options={(
             [
               ["claims", "NDIS claims", Send],
               ["invoices", "All invoices", FileText],
@@ -1050,30 +1045,13 @@ export default function Billing() {
             ] as const
           )
             .filter(([key]) => key !== "reports" || isManagingDirector)
-            .map(([key, label, Icon]) => {
-              const count =
-                key === "ready" ? readyToInvoiceQuery.data?.length : key === "invoices" ? invoices.length : undefined;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  aria-current={workspace === key ? "page" : undefined}
-                  onClick={() => setWorkspace(key)}
-                  className="-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                  style={{
-                    borderColor: workspace === key ? "#E8457A" : "transparent",
-                    color: workspace === key ? "var(--cc-text)" : MUTED,
-                  }}
-                >
-                  <Icon size={14} />
-                  {label}
-                  {count ? (
-                    <span className="rounded-full bg-cc-soft px-1.5 text-[10px] tabular-nums text-cc-muted">{count}</span>
-                  ) : null}
-                </button>
-              );
-            })}
-        </nav>
+            .map(([key, label, icon]) => ({
+              key,
+              label,
+              icon,
+              count: key === "ready" ? readyToInvoiceQuery.data?.length : key === "invoices" ? invoices.length : undefined,
+            }))}
+        />
         {workspace === "claims" && (
           <NdiaClaimsPanel
             onChanged={() => void loadBilling({ silent: true })}
@@ -1215,12 +1193,11 @@ export default function Billing() {
               id="invoice-draft-form"
               className="flex h-dvh w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
             >
-              <SheetHeader className="shrink-0 border-b border-cc-border px-5 py-5 pr-12 text-left">
-                <SheetTitle>New invoice</SheetTitle>
-                <SheetDescription>
-                  Prepare a draft from verified shifts or enter a service item.
-                </SheetDescription>
-              </SheetHeader>
+<div className="shrink-0 border-b border-cc-border px-6 py-5">
+            <SheetTitle className="sr-only">New invoice</SheetTitle>
+            <SheetDescription className="sr-only">"Prepare a draft from verified shifts or enter a service item."</SheetDescription>
+            <PanelHeader icon={Plus} title="New invoice" description="Prepare a draft from verified shifts or enter a service item." />
+          </div>
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
                 <div className="grid gap-4 sm:grid-cols-2 sm:[&>div]:col-span-2 sm:[&>div:has(>input)]:col-span-1">
                   <div>
@@ -2468,12 +2445,11 @@ export function RevenueInvoiceLedger({
         }}
       >
         <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
-          <SheetHeader className="border-b border-cc-border p-5 pr-12">
-            <SheetTitle>{selectedInvoice?.invoice_number}</SheetTitle>
-            <SheetDescription>
-              Invoice, payment details and recorded activity
-            </SheetDescription>
-          </SheetHeader>
+<div className="shrink-0 border-b border-cc-border px-6 py-5">
+            <SheetTitle className="sr-only">{selectedInvoice?.invoice_number}</SheetTitle>
+            <SheetDescription className="sr-only">"Invoice, payment details and recorded activity."</SheetDescription>
+            <PanelHeader icon={FileText} title={selectedInvoice?.invoice_number ?? "Invoice"} description="Invoice, payment details and recorded activity." />
+          </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
             {selectedInvoice && (
               <>
