@@ -1,4 +1,4 @@
-import { SettingsNavigation } from "@/components/settings/SettingsNavigation";
+import { SettingsNavigation, resolveSettingsSection } from "@/components/settings/SettingsNavigation";
 import { BillingSection } from "@/components/settings/BillingSection";
 import { DelegatedAccessSection } from "@/components/settings/DelegatedAccessSection";
 import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
@@ -86,7 +86,7 @@ import { apiFetch } from "@/lib/api-fetch";
 import { BranchesSection, BranchStateSelect } from "@/components/branches/BranchesSection";
 import { useBranches, useInvalidateBranches } from "@/hooks/useBranches";
 import { useReAuth } from "@/hooks/useReAuth";
-import { Link } from "wouter";
+import { Link, useSearch, useLocation } from "wouter";
 import {
   useGetPractitionerSettings,
   useSavePractitionerSettings,
@@ -134,6 +134,16 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 type SectionId = "account" | "security" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "branches" | "bugReport" | "improvementFeedback" | "delegatedAccess";
 
+const SETTINGS_DESCRIPTIONS: Partial<Record<SectionId, string>> = {
+  account: "Profile and contact details", security: "Password, sign-in and devices",
+  provider: "Organisation and business details", defaults: "Your documentation preferences",
+  compliance: "Documentation and signature settings", accessibility: "Text, colours and language",
+  privacy: "Your information and permissions", notifications: "Alerts and reminders",
+  team: "Staff access and invitations", billing: "CareCliQ plan and subscription",
+  branding: "Logo and organisation appearance", delegatedAccess: "Temporary access for staff",
+  bugReport: "Get help with a technical issue", improvementFeedback: "Suggest an improvement",
+};
+
 const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOrMdOnly?: boolean; mdOnly?: boolean; requiredCapability?: string }[] = [
   { id: "account",       labelKey: "settings.nav.account",          icon: User        },
   { id: "security",      labelKey: "settings.nav.security",         icon: LockKeyhole },
@@ -150,7 +160,7 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   // vendor isn't a delegable capability, and letting a coordinator grant
   // *more* delegated access would be a privilege-escalation hole).
   { id: "improvementFeedback", labelKey: "settings.nav.improvementFeedback", icon: Lightbulb, mdOnly: true },
-  { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true, requiredCapability: "platform_billing" },
+  { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true },
   { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true, requiredCapability: "org_branding" },
   // "branches" intentionally left out of NAV_ITEMS for now — multi-office
   // management is deferred; single-office providers use the "Business
@@ -199,10 +209,13 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-6">
-      <div className="pb-1">
+    <div className="space-y-2">
+      <div className="flex items-start gap-3 border-b border-cc-border pb-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cc-soft text-cc-plum"><Icon className="h-5 w-5" /></span>
+        <div className="min-w-0">
         <h2 className="text-xl font-semibold tracking-tight" style={{ color: "var(--cc-text)" }}>{title}</h2>
         <p className="text-[13px] mt-1 leading-relaxed" style={{ color: "var(--cc-muted)" }}>{description}</p>
+        </div>
       </div>
       {children}
     </div>
@@ -223,7 +236,7 @@ function PanelCard({
 }) {
   return (
     <div
-      className={cn("rounded-xl overflow-hidden", className)}
+      className={cn("min-w-0 rounded-xl overflow-hidden shadow-sm", className)}
       style={{ border: "1px solid var(--cc-border)", background: "var(--cc-surface)" }}
     >
       <div className="p-4 sm:p-5">
@@ -1630,15 +1643,24 @@ export default function Settings() {
     (!item.mdOnly || isMD || (item.requiredCapability ? hasDelegatedCapability(item.requiredCapability) : false)),
   );
 
-  const [activeSection, setActiveSection] = useState<SectionId>(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (isMD && params.has("billing")) return "billing";
-    // ?section=provider — linked from places that need organisation details
-    // filled in (e.g. NDIA claims without a registration number).
-    const requested = params.get("section");
-    if (requested && NAV_ITEMS.some((item) => item.id === requested)) return requested as SectionId;
-    return "account";
-  });
+  const allowedSectionsKey = visibleNavItems.map(item => item.id).join(",");
+  const search = useSearch();
+  const [, navigate] = useLocation();
+  const contentRef = useRef<HTMLElement>(null);
+  const [activeSection, setActiveSection] = useState<SectionId>(() =>
+    resolveSettingsSection(search, visibleNavItems.map(item => item.id), "account"));
+  useEffect(() => {
+    setActiveSection(resolveSettingsSection(search, visibleNavItems.map(item => item.id), "account"));
+  }, [search, user?.role, allowedSectionsKey]);
+  function selectSection(section: SectionId) {
+    if (!visibleNavItems.some(item => item.id === section)) return;
+    setActiveSection(section);
+    navigate("/settings?section=" + encodeURIComponent(section), { replace: true });
+    requestAnimationFrame(() => {
+      contentRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
+      contentRef.current?.focus({ preventScroll: true });
+    });
+  }
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"draw" | "upload">("draw");
 
@@ -2203,22 +2225,23 @@ export default function Settings() {
 
   // -- Render -----------------------------------------------------------------
   return (
-    <div className="mx-auto flex min-h-full w-full min-w-0 max-w-6xl flex-col gap-5 pb-12">
+    <div className="mx-auto flex min-h-full w-full min-w-0 flex-col gap-2 pb-6">
       {modal}
 
       {/* -- Page header ------------------------------------------------------- */}
-      <div>
+      <div className="relative overflow-hidden rounded-2xl border border-cc-border bg-cc-surface px-4 py-3">
+        <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-cc-plum" />
         <h1 className="text-[26px] font-semibold tracking-tight" style={{ color: "var(--cc-text)" }}>{translate("settings.title")}</h1>
         <p className="text-[13px] mt-1" style={{ color: "var(--cc-muted)" }}>
-          {translate("settings.subtitle")}
+          {isMD ? "Manage your account, organisation and subscription in one place." : isCoordinator ? "Manage your account, team preferences and organisation details." : "Manage your profile, sign-in security and work preferences."}
         </p>
       </div>
 
-      <div className="flex min-w-0 flex-col items-start gap-5 lg:flex-row lg:gap-7">
-        <SettingsNavigation<SectionId> items={visibleNavItems.map(item=>({...item,label:translate(item.labelKey)}))} active={activeSection} onChange={setActiveSection} />
+      <div className="flex min-w-0 flex-col items-start gap-3 rounded-xl border border-cc-border bg-cc-surface p-3 lg:flex-row lg:gap-4">
+        <SettingsNavigation<SectionId> items={visibleNavItems.map(item=>({...item,label:translate(item.labelKey),description:SETTINGS_DESCRIPTIONS[item.id]}))} active={activeSection} onChange={selectSection} />
 
       {/* -- Content panel ----------------------------------------------------- */}
-      <main className="w-full min-w-0 flex-1 space-y-5">
+      <main ref={contentRef} tabIndex={-1} aria-label={translate(visibleNavItems.find(item => item.id === activeSection)?.labelKey || "settings.nav.account")} className="w-full min-w-0 flex-1 scroll-mt-28 space-y-2 outline-none">
 
         {/* -- Account section ----------------------------------------------- */}
         {activeSection === "account" && (
@@ -2227,6 +2250,7 @@ export default function Settings() {
             description={translate("settings.account.subtitle")}
             icon={User}
           >
+            <div className="grid min-w-0 gap-2 xl:grid-cols-2 xl:items-start">
             {/* Personal details card */}
             <PanelCard label={translate("settings.practitioner.label")}>
               {isLoadingSettings ? (
@@ -2257,7 +2281,7 @@ export default function Settings() {
                   )}
 
                   <div className={cn("grid grid-cols-1 gap-4", !isMD && "sm:grid-cols-2")}>
-                    <div className={cn("space-y-1.5", isMD && "max-w-sm")}>
+                    <div className="space-y-1.5">
                       <Label htmlFor="pract-name" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>{translate("settings.practitioner.fullName")}</Label>
                       <Input
                         id="pract-name"
@@ -2284,7 +2308,7 @@ export default function Settings() {
               )}
             </PanelCard>
 
-            <StickyActionBar visible={practDirty} saving={isSavingPract} onSave={handleSavePractitioner} onCancel={handleCancelPractitioner} />
+
 
             {/* Password card */}
             <PanelCard label={translate("settings.password.label")}>
@@ -2328,6 +2352,9 @@ export default function Settings() {
                 </div>
               )}
             </PanelCard>
+
+            </div>
+            <StickyActionBar visible={practDirty} saving={isSavingPract} onSave={handleSavePractitioner} onCancel={handleCancelPractitioner} />
 
             {/* Signature card */}
             <PanelCard label={translate("settings.signature.label")}>
@@ -2928,7 +2955,7 @@ export default function Settings() {
           <BillingSection />
         )}
 
-        {activeSection === "branding" && isMD && (
+        {activeSection === "branding" && (isMD || hasDelegatedCapability("org_branding")) && (
           <OrganizationBrandingSection />
         )}
 

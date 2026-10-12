@@ -138,6 +138,8 @@ function SettingsRow({
     return (
       <Pressable
         accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityHint={description}
         onPress={onPress}
         style={({ pressed }) => [
           styles.row,
@@ -584,7 +586,7 @@ export default function SettingsTabScreen() {
           styles.scroll,
           { paddingBottom: insets.bottom + 120 },
         ]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
       >
         <View
@@ -976,7 +978,7 @@ const styles = StyleSheet.create({
     maxWidth: 800,
     alignSelf: "center",
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 12,
   },
   searchBar: {
     flexDirection: "row",
@@ -986,7 +988,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 999,
+    borderRadius: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -1016,8 +1018,8 @@ const styles = StyleSheet.create({
   emptyStateText: { fontSize: 13, textAlign: "center", paddingHorizontal: 24 },
   profileHero: {
     flexDirection: "row",
-    padding: 20,
-    borderRadius: 24,
+    padding: 16,
+    borderRadius: 16,
     borderWidth: 1,
     alignItems: "center",
     gap: 8,
@@ -1029,9 +1031,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   profileHeroAvatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -1054,9 +1056,9 @@ const styles = StyleSheet.create({
   profileHeroInitials: {
     fontSize: 24,
   },
-  profileHeroName: { fontSize: 22, lineHeight: 28 },
+  profileHeroName: { fontSize: 20, lineHeight: 26 },
   profileHeroMeta: { fontSize: 14, lineHeight: 20 },
-  group: { marginTop: 24 },
+  group: { marginTop: 18 },
   groupTitle: {
     fontSize: 13,
     lineHeight: 18,

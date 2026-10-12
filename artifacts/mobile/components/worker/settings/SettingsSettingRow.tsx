@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 14,
   },
-  copy: { flex: 1, gap: 4 },
+  copy: { flex: 1, minWidth: 0, gap: 4 },
   title: { fontSize: 14, lineHeight: 20 },
   description: { fontSize: 12, lineHeight: 18 },
 });
