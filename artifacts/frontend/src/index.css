@@ -248,6 +248,12 @@
      (delete buttons etc). Pending founding-team sign-off, functional-only, never decorative. */
   --cc-status-danger:       #EF4444;
   --cc-status-danger-bg:    #FEF2F2;
+  /* Danger as small text: --cc-status-danger is too light to read at body size on white. */
+  --cc-danger-text:         #B42318;
+  /* Official CareCliQ Purple, for vault folders and their panels. */
+  --cc-brand-purple:        #7C3AED;
+  --cc-brand-purple-soft:   rgba(124, 58, 237, 0.08);
+  --cc-brand-purple-ring:   rgba(124, 58, 237, 0.28);
   /* ── Shadow language (pink-tinted, for modals/overlays only — no card shadows) ── */
   --cc-shadow-sm:  0 2px 8px rgba(232,69,122,0.06), 0 1px 3px rgba(232,69,122,0.04);
   --cc-shadow-md:  0 4px 16px rgba(232,69,122,0.09), 0 2px 6px rgba(232,69,122,0.04);
@@ -359,6 +365,10 @@
   --cc-status-critical-bg:  rgba(167, 139, 250, 0.12);
   --cc-status-danger:       #F87171;
   --cc-status-danger-bg:    rgba(248, 113, 113, 0.12);
+  --cc-danger-text:         #F87171;
+  --cc-brand-purple:        #A78BFA;
+  --cc-brand-purple-soft:   rgba(167, 139, 250, 0.14);
+  --cc-brand-purple-ring:   rgba(167, 139, 250, 0.4);
   --cc-status-info:         #38BDF8;
   --cc-status-info-bg:      rgba(56, 189, 248, 0.12);
   /* Shadows — subtler on dark */

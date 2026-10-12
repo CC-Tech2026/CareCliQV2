@@ -1,11 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users,
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
-  SlidersHorizontal, X, AlertTriangle,
+  SlidersHorizontal, X, AlertTriangle, ArrowUp, ArrowDown,
 } from "lucide-react";
+import { useGetParticipants } from "@workspace/api-client-react";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { WORKER_STATS_KEY } from "@/lib/query-keys";
+import {
+  getCoordinatorWorkerStats,
+  getOrgAssignments,
+  SUPPORT_ALLOCATION_ROLES,
+  type WorkerStats,
+} from "@/services/coordinatorService";
+import { budgetUsage, planEndStatus, planManagementLabel, type Tone } from "@/lib/directory-insights";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -569,149 +579,509 @@ function ParticipantListView({
   );
 }
 
+/** Plan, budget and support facts for one participant row (from /api/participants). */
+export interface ParticipantSnapshot {
+  /** null = nobody assigned; undefined = not known (still loading or no record). */
+  workerName?: string | null;
+  planStart?: string | null;
+  planEnd?: string | null;
+  totalBudget?: number | string | null;
+  usedBudget?: number | string | null;
+  planManagement?: string | null;
+  activeGoals?: number;
+  completedGoals?: number;
+}
+
+type ParticipantSort = "name" | "worker" | "planEnd" | "budget";
+type ParticipantFocus = "planDue" | "noWorker" | "budget";
+
+/**
+ * Desktop columns. lg shows the essentials; xl adds funding and goals.
+ * Cells hidden at a breakpoint don't take a grid track.
+ */
+const PARTICIPANT_GRID =
+  "lg:grid-cols-[minmax(220px,1.6fr)_minmax(140px,1fr)_minmax(130px,1fr)_minmax(150px,1fr)_120px_20px] " +
+  "xl:grid-cols-[minmax(220px,1.6fr)_minmax(140px,1fr)_minmax(130px,1fr)_minmax(160px,1fr)_120px_100px_130px_20px]";
+
+const PARTICIPANT_COLUMNS: { label: string; key?: ParticipantSort; className?: string }[] = [
+  { label: "Participant", key: "name" },
+  { label: "Support worker", key: "worker" },
+  { label: "Plan ends", key: "planEnd" },
+  { label: "Budget", key: "budget" },
+  { label: "Funding", className: "hidden xl:block" },
+  { label: "Goals", className: "hidden xl:block" },
+  { label: "Status" },
+  { label: "" },
+];
+
+function toneColor(tone: Tone) {
+  if (tone === "good") return "var(--cc-green)";
+  if (tone === "info") return "var(--cc-sky)";
+  if (tone === "warning") return "var(--cc-amber)";
+  if (tone === "danger") return "var(--cc-danger-text)";
+  return MUTED;
+}
+
 /**
  * Dedicated full-page roster of Active participants — reached by clicking
  * the "Active" column header on the board (a proper page, not just an
  * in-place filter, since MDs use this as a reference list on its own).
  */
-function ActiveParticipantsPage({
-  intakes, onBack, onOpen, onOpenComplaints,
-}: { intakes: Intake[]; onBack: () => void; onOpen: (id: string) => void; onOpenComplaints: () => void }) {
+export function ActiveParticipantsPage({
+  intakes, onBack, onOpen, onOpenComplaints, loadFailed = false, onRetry, details, detailsLoading = false,
+}: {
+  intakes: Intake[]; onBack: () => void; onOpen: (id: string) => void; onOpenComplaints: () => void;
+  loadFailed?: boolean; onRetry?: () => void;
+  /** Keyed by intake id. */
+  details?: Record<string, ParticipantSnapshot>;
+  detailsLoading?: boolean;
+}) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<"all" | ServiceCategory>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
-  const q = search.trim().toLowerCase();
-  const rows = intakes
+  const [focus, setFocus] = useState<ParticipantFocus | null>(null);
+  const [sortKey, setSortKey] = useState<ParticipantSort>("name");
+  const [sortAsc, setSortAsc] = useState(true);
+
+  // Everything a row shows, worked out once per participant.
+  const roster = intakes
     .filter((i) => columnIdForStatus(i.status) === "active")
-    .filter((i) => !q || i.full_name.toLowerCase().includes(q) || i.ndis_number.toLowerCase().includes(q))
-    .filter((i) => categoryFilter === "all" || i.service_category === categoryFilter)
-    .filter((i) => statusFilter === "all" || i.status === statusFilter)
-    .sort((a, b) => (b.activated_at ?? "").localeCompare(a.activated_at ?? ""));
+    .map((intake) => {
+      const snapshot = details?.[intake.id];
+      const planStart = snapshot?.planStart ?? intake.plan_start_date ?? null;
+      const planEnd = snapshot?.planEnd ?? intake.plan_end_date ?? null;
+      return {
+        intake,
+        snapshot,
+        plan: planEndStatus(planEnd),
+        budget: budgetUsage(snapshot?.totalBudget ?? intake.total_budget, snapshot?.usedBudget, { start: planStart, end: planEnd }),
+        funding: planManagementLabel(snapshot?.planManagement),
+      };
+    });
+
+  const needs = {
+    planDue: (r: (typeof roster)[number]) => r.plan.tone === "danger" || r.plan.tone === "warning",
+    noWorker: (r: (typeof roster)[number]) => r.snapshot?.workerName === null,
+    budget: (r: (typeof roster)[number]) => r.budget.tone === "danger" || r.budget.tone === "warning",
+  };
+  const focusCounts = {
+    planDue: roster.filter(needs.planDue).length,
+    noWorker: roster.filter(needs.noWorker).length,
+    budget: roster.filter(needs.budget).length,
+  };
+
+  const q = search.trim().toLowerCase();
+  const dir = sortAsc ? 1 : -1;
+  const rows = roster
+    .filter(({ intake: i }) => !q || i.full_name.toLowerCase().includes(q) || i.ndis_number.toLowerCase().includes(q))
+    .filter(({ intake: i }) => categoryFilter === "all" || i.service_category === categoryFilter)
+    .filter(({ intake: i }) => statusFilter === "all" || i.status === statusFilter)
+    .filter((r) => !focus || needs[focus](r))
+    .sort((a, b) => {
+      if (sortKey === "worker") {
+        return (a.snapshot?.workerName ?? "").localeCompare(b.snapshot?.workerName ?? "") * dir;
+      }
+      if (sortKey === "planEnd") {
+        // Undated plans sort last either way.
+        const da = a.plan.days ?? Number.MAX_SAFE_INTEGER;
+        const db = b.plan.days ?? Number.MAX_SAFE_INTEGER;
+        return (da - db) * dir;
+      }
+      if (sortKey === "budget") return ((a.budget.percent ?? -1) - (b.budget.percent ?? -1)) * dir;
+      return a.intake.full_name.localeCompare(b.intake.full_name) * dir;
+    });
+
   const activeTotal = intakes.filter((i) => i.status === "active").length;
   const inactiveTotal = intakes.filter((i) => i.status === "inactive").length;
+  const total = activeTotal + inactiveTotal;
+  const filtersActive = !!q || categoryFilter !== "all" || statusFilter !== "all" || focus !== null;
 
-  // No complaints backend exists yet — dummy seeded data (SEED_COMPLAINTS).
-  const complaintCount = SEED_COMPLAINTS.length;
+  function resetFilters() {
+    setSearch("");
+    setCategoryFilter("all");
+    setStatusFilter("all");
+    setFocus(null);
+  }
+
+  function handleSort(key: ParticipantSort) {
+    if (key === sortKey) setSortAsc((v) => !v);
+    else {
+      setSortKey(key);
+      // Most useful first: soonest plan end, highest budget use.
+      setSortAsc(key !== "budget");
+    }
+  }
+
+  const pillStyle = (selected: boolean) =>
+    selected ? { background: TEXT, color: "var(--cc-bg)" } : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` };
+  const pillClass =
+    "inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum";
 
   return (
-    <div className="space-y-5 pb-10">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+    <div className="space-y-6 pb-10">
+      {/* Header sits on the page, not in a card. */}
+      <header className="flex flex-wrap items-end justify-between gap-5">
+        <div className="max-w-2xl">
           <button
             onClick={onBack}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
-            style={{ color: MUTED, background: SOFT }}
+            className="-ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-full px-2 text-sm font-medium transition-colors hover:bg-cc-soft"
+            style={{ color: MUTED }}
           >
-            <ArrowLeft size={13} strokeWidth={2.5} /> Back to Participant Onboarding
+            <ArrowLeft size={15} /> Participant onboarding
           </button>
-          <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>
+          <h1
+            className="mt-1 flex items-center gap-2 text-3xl font-semibold tracking-tight"
+            style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
+          >
             Participants
             <SectionInfo text="Everyone onboarded with your organisation, active and inactive." />
           </h1>
-          <p className="mt-0.5 text-[12px] font-medium" style={{ color: MUTED }}>
-            {activeTotal} active · {inactiveTotal} inactive with this provider.
+          <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>
+            The people your organisation supports. Open anyone to see their plan,
+            care information and the support they've received.
           </p>
         </div>
 
         <button
           onClick={onOpenComplaints}
-          className="flex items-center gap-3 rounded-[1.25rem] border px-5 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
-          style={{ background: DANGER_BG, borderColor: DANGER }}
-          title="View participant complaints"
+          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-5 text-sm font-medium transition hover:bg-cc-soft"
+          style={{ color: TEXT }}
         >
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl shrink-0" style={{ background: "rgba(255,255,255,0.65)", color: DANGER }}>
-            <Mail size={18} />
-            {complaintCount > 0 && (
-              <span
-                className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
-                style={{ background: DANGER }}
-              >
-                {complaintCount}
-              </span>
-            )}
-          </div>
-          <div>
-            <p className="text-[22px] font-black leading-none" style={{ color: DANGER }}>{complaintCount}</p>
-            <p className="mt-1.5 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>Participant Complaints</p>
-          </div>
+          <Mail size={16} /> Participant complaints
         </button>
-      </div>
+      </header>
 
-      <div className="flex flex-col gap-3 rounded-[1.25rem] border bg-white p-3 sm:flex-row sm:items-center" style={{ borderColor: BORDER }}>
-        <div className="relative min-w-0 flex-1">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+      {/* At a glance: what needs the director's attention across the caseload. */}
+      {!loadFailed && total > 0 && (
+        <div className="flex flex-wrap items-stretch gap-x-2 gap-y-3">
+          {([
+            { label: total === 1 ? "participant" : "participants", value: total, color: TEXT, focus: null },
+            { label: focusCounts.planDue === 1 ? "plan ending or ended" : "plans ending or ended", value: focusCounts.planDue, color: focusCounts.planDue ? "var(--cc-amber)" : "var(--cc-green)", focus: "planDue" },
+            { label: "without a support worker", value: focusCounts.noWorker, color: focusCounts.noWorker ? "var(--cc-amber)" : "var(--cc-green)", focus: "noWorker" },
+            { label: "spending ahead of plan", value: focusCounts.budget, color: focusCounts.budget ? "var(--cc-danger-text)" : "var(--cc-green)", focus: "budget" },
+          ] as const).map((item, index) => (
+            <div key={item.label} className="flex items-center gap-2">
+              {index > 0 && <span aria-hidden className="mr-2 hidden h-6 w-px sm:block" style={{ background: BORDER }} />}
+              <button
+                type="button"
+                disabled={detailsLoading && index > 0}
+                onClick={() => setFocus(item.focus && item.value > 0 ? item.focus : null)}
+                className="flex min-h-11 items-center rounded-full px-3 transition hover:bg-cc-soft disabled:cursor-default"
+              >
+                <span className="flex items-baseline gap-2">
+                  <span className="text-2xl font-semibold tabular-nums tracking-tight" style={{ color: item.color }}>
+                    {detailsLoading && index > 0 ? "…" : item.value}
+                  </span>
+                  <span className="text-sm" style={{ color: MUTED }}>{item.label}</span>
+                </span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1 sm:max-w-sm">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search for the Participant"
-            className="h-10 rounded-xl border-0 bg-[#F8F7F4] pl-9 text-[12px] shadow-none focus-visible:ring-1"
+            aria-label="Search participants" placeholder="Search by name or NDIS number"
+            className="h-11 rounded-full border-cc-border bg-cc-surface pl-11 pr-11 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-cc-plum"
           />
           {search && (
-            <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5">
-              <X size={13} style={{ color: MUTED }} />
+            <button aria-label="Clear participant search" onClick={() => setSearch("")} className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full hover:bg-cc-soft">
+              <X size={14} style={{ color: MUTED }} />
             </button>
           )}
         </div>
-        <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
-          <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-[#F8F7F4] text-[12px] shadow-none sm:w-[170px]">
-            <Users size={14} className="mr-1.5" /><SelectValue placeholder="All categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            <SelectItem value="disability">Disability</SelectItem>
-            <SelectItem value="aged_care">Aged Care</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "inactive")}>
-          <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-[#F8F7F4] text-[12px] shadow-none sm:w-[150px]">
-            <SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+          <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
+            <SelectTrigger aria-label="Service category" className="h-11 w-full rounded-full border-cc-border bg-cc-surface px-4 text-sm shadow-none sm:w-[180px]" style={{ color: TEXT }}>
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="disability">Disability</SelectItem>
+              <SelectItem value="aged_care">Aged Care</SelectItem>
+            </SelectContent>
+          </Select>
+          {/* Desktop sorts from the column headers. */}
+          <div className="flex h-11 min-w-0 items-center rounded-full border bg-cc-surface pl-4 focus-within:ring-2 focus-within:ring-cc-plum lg:hidden" style={{ borderColor: BORDER }}>
+            <select
+              aria-label="Sort participants"
+              value={sortKey}
+              onChange={(e) => { const key = e.target.value as ParticipantSort; setSortKey(key); setSortAsc(key !== "budget"); }}
+              className="h-full min-w-0 flex-1 bg-transparent pr-1 text-sm outline-none"
+              style={{ color: TEXT }}
+            >
+              <option value="name">Sort by name</option>
+              <option value="worker">Sort by support worker</option>
+              <option value="planEnd">Sort by plan end</option>
+              <option value="budget">Sort by budget used</option>
+            </select>
+            <button type="button" onClick={() => setSortAsc((v) => !v)} aria-label={sortAsc ? "Sort descending" : "Sort ascending"} className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-cc-soft" style={{ color: TEXT }}>
+              {sortAsc ? <ArrowUp size={15} /> : <ArrowDown size={15} />}
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
-        <div className="grid grid-cols-[1fr_110px_100px_140px_120px_40px] gap-3 border-b px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.1em]" style={{ borderColor: BORDER, color: MUTED }}>
-          <span>Participant</span>
-          <span className="hidden sm:inline">Category</span>
-          <span>Status</span>
-          <span className="hidden md:inline">NDIS number</span>
-          <span>Activated</span>
-          <span />
-        </div>
-        {rows.length === 0 ? (
-          <p className="px-5 py-10 text-center text-[12px] font-medium" style={{ color: MUTED }}>No participants match the current filters.</p>
-        ) : (
-          <div className="divide-y" style={{ borderColor: BORDER }}>
-            {rows.map((i) => (
-              <div
-                key={i.id}
-                onClick={() => onOpen(i.id)}
-                className="grid cursor-pointer grid-cols-[1fr_110px_100px_140px_120px_40px] items-center gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <Avatar name={i.full_name} size={30} color={i.status === "inactive" ? WARNING : COLUMN_COLOR.active} />
-                  <p className="truncate text-[12px] font-black" style={{ color: TEXT }}>{i.full_name}</p>
-                </div>
-                <p className="hidden truncate text-[11px] font-medium sm:block" style={{ color: MUTED }}>
-                  {i.service_category === "aged_care" ? "Aged Care" : "Disability"}
-                </p>
-                <div><StatusBadge status={i.status} /></div>
-                <p className="hidden truncate text-[11px] font-medium md:block" style={{ color: MUTED }}>{i.ndis_number || "—"}</p>
-                <p className="truncate text-[11px] font-medium" style={{ color: MUTED }}>{formatDate(i.activated_at) ?? "—"}</p>
-                <div className="flex justify-end">
-                  <ArrowRight size={14} style={{ color: "#B8B4B0" }} />
-                </div>
-              </div>
-            ))}
-          </div>
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter participants">
+        {([["all", "Everyone", total], ["active", "Active", activeTotal], ["inactive", "Inactive", inactiveTotal]] as const).map(([value, label, count]) => (
+          <button key={value} type="button" aria-pressed={statusFilter === value} onClick={() => setStatusFilter(value)} className={pillClass} style={pillStyle(statusFilter === value)}>
+            {label}
+            <span className="tabular-nums" style={{ opacity: 0.7 }}>{count}</span>
+          </button>
+        ))}
+        {!detailsLoading && ([["planDue", "Plan review due", focusCounts.planDue], ["noWorker", "No support worker", focusCounts.noWorker], ["budget", "Budget ahead of plan", focusCounts.budget]] as const)
+          .filter(([, , count]) => count > 0)
+          .map(([value, label, count]) => (
+            <button key={value} type="button" aria-pressed={focus === value} onClick={() => setFocus(focus === value ? null : value)} className={pillClass} style={pillStyle(focus === value)}>
+              {label}
+              <span className="tabular-nums" style={{ opacity: 0.7 }}>{count}</span>
+            </button>
+          ))}
+        {filtersActive && (
+          <button type="button" onClick={resetFilters} className="min-h-10 px-3 text-sm font-medium underline-offset-4 hover:underline" style={{ color: PLUM }}>
+            Clear
+          </button>
         )}
       </div>
+
+      <p role="status" className={`text-sm ${loadFailed ? "hidden" : ""}`} style={{ color: MUTED }}>
+        {rows.length === total
+          ? `${total} ${total === 1 ? "person" : "people"} supported by your organisation`
+          : `Showing ${rows.length} of ${total} participants`}
+      </p>
+
+      {loadFailed ? (
+        <div role="alert" className="rounded-3xl bg-cc-surface px-6 py-14 text-center">
+          <AlertTriangle size={26} className="mx-auto mb-3" style={{ color: "var(--cc-amber)" }} />
+          <h2 className="text-base font-semibold text-cc-text">We couldn't load your participants</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-cc-muted">Check your connection and try again. Nothing has been changed.</p>
+          {onRetry && (
+            <button type="button" onClick={onRetry} className="mt-5 min-h-11 rounded-full border border-cc-border px-5 text-sm font-semibold text-cc-text">Try again</button>
+          )}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="rounded-3xl bg-cc-surface px-6 py-14 text-center">
+          <Users size={26} className="mx-auto mb-3 text-cc-muted" />
+          <h2 className="text-base font-semibold text-cc-text">{total === 0 ? "Your participant directory starts here" : "No one matches that"}</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-cc-muted">{total === 0 ? "Complete participant onboarding to bring their details, care records and service status into this directory." : "Try another name or NDIS number, or clear the filters to see everyone."}</p>
+          <button type="button" onClick={() => { if (total === 0) onBack(); else resetFilters(); }} className="mt-5 min-h-11 rounded-full border border-cc-border px-5 text-sm font-semibold text-cc-text">{total === 0 ? "Open participant onboarding" : "Clear filters"}</button>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-3xl bg-cc-surface">
+          {/* Column headers (desktop). Click to sort. */}
+          <div className={`hidden items-center gap-4 border-b px-6 py-3 lg:grid ${PARTICIPANT_GRID}`} style={{ borderColor: BORDER }}>
+            {PARTICIPANT_COLUMNS.map((column) =>
+              column.key ? (
+                <button
+                  key={column.label}
+                  type="button"
+                  onClick={() => handleSort(column.key!)}
+                  aria-label={`Sort by ${column.label.toLowerCase()}`}
+                  className={`flex items-center gap-1 text-left text-xs font-medium transition hover:text-cc-text ${column.className ?? ""}`}
+                  style={{ color: sortKey === column.key ? TEXT : MUTED }}
+                >
+                  {column.label}
+                  {sortKey === column.key && (sortAsc ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                </button>
+              ) : (
+                <span key={column.label || "chevron"} className={`text-xs font-medium ${column.className ?? ""}`} style={{ color: MUTED }}>
+                  {column.label}
+                </span>
+              ),
+            )}
+          </div>
+
+          <ul>
+            {rows.map(({ intake: i, snapshot, plan, budget, funding }) => {
+              const inactive = i.status === "inactive";
+              const statusColor = inactive ? "var(--cc-amber)" : "var(--cc-green)";
+              const activated = formatDate(i.activated_at);
+              const workerKnown = snapshot && snapshot.workerName !== undefined;
+              const goalsText = snapshot?.activeGoals !== undefined
+                ? `${snapshot.activeGoals} active${snapshot.completedGoals ? ` · ${snapshot.completedGoals} done` : ""}`
+                : null;
+              const pending = <span className="block h-3 w-20 animate-pulse rounded-full" style={{ background: SOFT }} />;
+
+              return (
+                <li key={i.id} className="border-b last:border-b-0" style={{ borderColor: BORDER }}>
+                  <button
+                    type="button"
+                    onClick={() => onOpen(i.id)}
+                    className={`group flex w-full items-center gap-4 px-4 py-4 text-left transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum sm:px-6 lg:grid ${PARTICIPANT_GRID}`}
+                  >
+                    {/* Person */}
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold" style={{ background: SOFT, color: TEXT }}>
+                        {initials(i.full_name)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-[15px] font-semibold" style={{ color: TEXT }}>{i.full_name}</p>
+                        <p className="mt-0.5 truncate text-sm" style={{ color: MUTED }}>
+                          {i.service_category === "aged_care" ? "Aged Care" : "Disability"}
+                          {i.ndis_number ? ` · NDIS ${i.ndis_number}` : ""}
+                        </p>
+                        {/* Phones and tablets: the column facts, condensed. */}
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs lg:hidden" style={{ color: MUTED }}>
+                          <span className="flex items-center gap-1.5 font-medium" style={{ color: statusColor }}>
+                            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: statusColor }} />
+                            {inactive ? "Inactive" : "Active"}
+                          </span>
+                          {workerKnown && (
+                            <span style={{ color: snapshot!.workerName ? MUTED : "var(--cc-amber)" }} className={snapshot!.workerName ? "" : "font-medium"}>
+                              {snapshot!.workerName ? `Worker: ${snapshot!.workerName}` : "No support worker"}
+                            </span>
+                          )}
+                          {plan.days !== null && (
+                            <span className={plan.tone === "neutral" ? "" : "font-medium"} style={{ color: plan.tone === "neutral" ? MUTED : toneColor(plan.tone) }}>
+                              Plan: {plan.detail.toLowerCase()}
+                            </span>
+                          )}
+                          {budget.percent !== null && (
+                            <span className={budget.tone === "good" ? "" : "font-medium"} style={{ color: budget.tone === "good" ? MUTED : toneColor(budget.tone) }}>
+                              Budget {budget.label}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Support worker */}
+                    <div className="hidden min-w-0 lg:block">
+                      {detailsLoading && !workerKnown ? pending : snapshot?.workerName ? (
+                        <p className="truncate text-sm" style={{ color: TEXT }}>{snapshot.workerName}</p>
+                      ) : snapshot?.workerName === null ? (
+                        <p className="text-sm font-medium" style={{ color: "var(--cc-amber)" }}>Not assigned</p>
+                      ) : (
+                        <p className="text-sm" style={{ color: MUTED }}>N/A</p>
+                      )}
+                    </div>
+
+                    {/* Plan ends */}
+                    <div className="hidden min-w-0 lg:block">
+                      {detailsLoading && !snapshot ? pending : (
+                        <>
+                          <p className="truncate text-sm" style={{ color: plan.days === null ? MUTED : TEXT }}>{plan.label}</p>
+                          {plan.days !== null && (
+                            <p className={`mt-0.5 truncate text-xs ${plan.tone === "neutral" ? "" : "font-medium"}`} style={{ color: toneColor(plan.tone) }}>
+                              {plan.detail}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* Budget */}
+                    <div className="hidden min-w-0 lg:block">
+                      {detailsLoading && !snapshot ? pending : budget.percent === null ? (
+                        <p className="text-sm" style={{ color: MUTED }}>{budget.label}</p>
+                      ) : (
+                        <>
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="text-sm font-semibold tabular-nums" style={{ color: toneColor(budget.tone) }}>{budget.label}</p>
+                          </div>
+                          <div className="mt-1 h-1.5 overflow-hidden rounded-full" style={{ background: SOFT }}>
+                            <div className="h-full rounded-full" style={{ width: `${Math.min(budget.percent, 100)}%`, background: toneColor(budget.tone) }} />
+                          </div>
+                          <p className="mt-1 truncate text-xs" style={{ color: MUTED }}>{budget.detail}</p>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Funding */}
+                    <p className="hidden truncate text-sm xl:block" style={{ color: funding ? TEXT : MUTED }}>
+                      {detailsLoading && !snapshot ? pending : funding ?? "Not set"}
+                    </p>
+
+                    {/* Goals */}
+                    <p className="hidden truncate text-sm xl:block" style={{ color: goalsText ? TEXT : MUTED }}>
+                      {detailsLoading && !snapshot ? pending : goalsText ?? "N/A"}
+                    </p>
+
+                    {/* Status */}
+                    <div className="hidden min-w-0 lg:block">
+                      <p className="flex items-center gap-2 text-sm font-medium" style={{ color: statusColor }}>
+                        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: statusColor }} />
+                        {inactive ? "Inactive" : "Active"}
+                      </p>
+                      {activated && (
+                        <p className="mt-0.5 truncate pl-4 text-xs" style={{ color: MUTED }}>Since {activated}</p>
+                      )}
+                    </div>
+
+                    <ChevronRight size={18} className="shrink-0 justify-self-end transition group-hover:translate-x-0.5" style={{ color: MUTED }} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
+  );
+}
+
+/** Loads the plan/budget/worker facts the roster shows next to each intake. */
+function ActiveParticipantsRoute(props: {
+  intakes: Intake[]; onBack: () => void; onOpen: (id: string) => void; onOpenComplaints: () => void;
+  loadFailed?: boolean; onRetry?: () => void;
+}) {
+  const participantsQuery = useGetParticipants();
+  const workerStatsQuery = useOrgQuery<WorkerStats[]>(WORKER_STATS_KEY, { queryFn: getCoordinatorWorkerStats });
+  // Same source as the worker profile's participants tab.
+  const assignmentsQuery = useOrgQuery(["worker-assignments", "org"], { queryFn: getOrgAssignments });
+
+  const details = useMemo(() => {
+    const participants = (participantsQuery.data ?? []) as Array<Record<string, any>>;
+    if (participants.length === 0) return undefined;
+    const byId = new Map(participants.map((p) => [String(p.id), p]));
+    const byNdis = new Map(participants.filter((p) => p.ndis_number).map((p) => [String(p.ndis_number), p]));
+    const workerNames = new Map((workerStatsQuery.data ?? []).map((w) => [w.id, w.full_name]));
+    const workersByParticipant = new Map<string, Set<string>>();
+    for (const assignment of assignmentsQuery.data ?? []) {
+      if (!SUPPORT_ALLOCATION_ROLES.has(assignment.allocated_role)) continue;
+      const set = workersByParticipant.get(assignment.patient_id) ?? new Set<string>();
+      set.add(assignment.user_id);
+      workersByParticipant.set(assignment.patient_id, set);
+    }
+    const namesLoading = workerStatsQuery.isLoading || assignmentsQuery.isLoading;
+
+    const out: Record<string, ParticipantSnapshot> = {};
+    for (const intake of props.intakes) {
+      const record = (intake.participant_id && byId.get(intake.participant_id)) || (intake.ndis_number && byNdis.get(intake.ndis_number));
+      if (!record) continue;
+      const workerIds = new Set(workersByParticipant.get(String(record.id)) ?? []);
+      if (record.assigned_worker_id) workerIds.add(String(record.assigned_worker_id));
+      // An id we can't name (e.g. a deactivated account) still counts as assigned.
+      const names = [...workerIds].map((id) => workerNames.get(id) ?? "Assigned").sort();
+      const workerName = names.length === 0
+        ? (namesLoading ? undefined : null)
+        : names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`;
+      const goals = Array.isArray(record.goals) ? (record.goals as Array<{ status?: string }>) : [];
+      out[intake.id] = {
+        workerName,
+        planStart: record.plan_start_date ?? null,
+        planEnd: record.plan_end_date ?? null,
+        totalBudget: record.total_budget ?? null,
+        usedBudget: record.total_used ?? null,
+        planManagement: record.plan_management_type ?? null,
+        activeGoals: goals.filter((g) => (g.status ?? "active") === "active").length,
+        completedGoals: goals.filter((g) => g.status === "completed").length,
+      };
+    }
+    return out;
+  }, [participantsQuery.data, workerStatsQuery.data, workerStatsQuery.isLoading, assignmentsQuery.data, assignmentsQuery.isLoading, props.intakes]);
+
+  return (
+    <ActiveParticipantsPage
+      {...props}
+      details={details}
+      detailsLoading={participantsQuery.isLoading || assignmentsQuery.isLoading}
+    />
   );
 }
 
@@ -1090,15 +1460,22 @@ export default function ParticipantOnboardingBoard() {
   // Loaded from the backend on mount — see participantIntakeService.ts.
   const [intakes, setIntakes] = useState<Intake[]>([]);
   const [loadingIntakes, setLoadingIntakes] = useState(true);
+  const [intakesLoadFailed, setIntakesLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setLoadingIntakes(true);
     listParticipantIntakes()
-      .then((rows) => { if (!cancelled) setIntakes(rows); })
-      .catch((err: Error) => toast({ title: "Couldn't load participants", description: err.message, variant: "destructive" }))
+      .then((rows) => { if (!cancelled) { setIntakes(rows); setIntakesLoadFailed(false); } })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setIntakesLoadFailed(true);
+        toast({ title: "Couldn't load participants", description: err.message, variant: "destructive" });
+      })
       .finally(() => { if (!cancelled) setLoadingIntakes(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [loadAttempt]);
 
   // The public referral form files straight onto this board; this is the
   // link to share with families, support coordinators and referrers.
@@ -1257,11 +1634,13 @@ export default function ParticipantOnboardingBoard() {
   // since it's meant as a proper roster view, not a quick glance.
   if (location === "/onboard-participant/active") {
     return (
-      <ActiveParticipantsPage
+      <ActiveParticipantsRoute
         intakes={intakes}
         onBack={() => navigate("/onboard-participant")}
         onOpen={(id) => navigate(`/onboard-participant?profile=${id}`)}
         onOpenComplaints={() => navigate("/onboard-participant/complaints")}
+        loadFailed={intakesLoadFailed}
+        onRetry={() => setLoadAttempt((n) => n + 1)}
       />
     );
   }

@@ -1169,6 +1169,14 @@ export function getWorkerAssignments(workerId: string) {
   return jsonFetch<WorkerAssignment[]>(`/api/assignments?worker_id=${encodeURIComponent(workerId)}`);
 }
 
+/** Every active assignment in the org (coordinators and managing directors). */
+export function getOrgAssignments() {
+  return jsonFetch<WorkerAssignment[]>("/api/assignments");
+}
+
+/** Allocation roles that mean "this worker supports this participant". */
+export const SUPPORT_ALLOCATION_ROLES = new Set(["support_worker", "supervisor"]);
+
 /** Add or update a skill for a worker */
 export function addWorkerSkill(workerId: string, skill: WorkerSkill) {
   return jsonFetch<WorkerSkill>(
