@@ -1,13 +1,12 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
-import { ChevronRight } from "lucide-react";
+import { useLocation } from "wouter";
+import { Search, UserRound } from "lucide-react";
 import type { VaultTreePerson } from "@/services/vaultService";
-import { StatePill } from "./TreeSubfolderGrid";
+import { FolderCard, type FolderMenuItem } from "./FileManager";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SURFACE = "var(--cc-surface)";
 
 type StatusFilter = "active" | "exited" | "prospective" | "all";
 
@@ -27,13 +26,20 @@ export function TreePeopleList({
   people,
   personNoun,
   initialGapsOnly = false,
+  sizeOf,
+  menuFor,
 }: {
+  /** The ⋮ menu for a person's folder. */
+  menuFor?: (person: VaultTreePerson) => FolderMenuItem[];
+  /** Size of a person's folder, e.g. "1.2 MB". */
+  sizeOf?: (personId: string) => string | undefined;
   top: string;
   people: VaultTreePerson[];
   /** "participant" or "worker", for the copy. */
   personNoun: string;
   initialGapsOnly?: boolean;
 }) {
+  const [, navigate] = useLocation();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("active");
   const [gapsOnly, setGapsOnly] = useState(initialGapsOnly);
@@ -50,76 +56,107 @@ export function TreePeopleList({
     );
   }, [people, query, status, gapsOnly]);
 
+  const counts: Record<StatusFilter, number> = {
+    active: people.filter((p) => p.status === "active").length,
+    exited: people.filter((p) => p.status === "exited").length,
+    prospective: people.filter((p) => p.status === "prospective").length,
+    all: people.length,
+  };
+  const pill = (selected: boolean) =>
+    selected
+      ? { background: TEXT, color: "var(--cc-bg)" }
+      : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` };
+  const pillClass =
+    "inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum";
+
   return (
-    <div className="space-y-3">
-      <p className="text-[13px] font-semibold" style={{ color: gapTotal ? "var(--cc-status-danger)" : MUTED }}>
+    <div className="space-y-4">
+      <p className="text-sm font-semibold" style={{ color: gapTotal ? "var(--cc-danger-text)" : MUTED }}>
         {gapTotal
           ? `${gapTotal} ${gapTotal === 1 ? "gap" : "gaps"} across ${gapPeople} ${gapPeople === 1 ? personNoun : `${personNoun}s`}`
           : `No gaps across active ${personNoun}s`}
       </p>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border p-3" style={{ borderColor: BORDER, background: SURFACE }}>
-        <input
-          aria-label={`Search ${personNoun}s`}
-          type="search"
-          placeholder={`Search by name or ${personNoun === "participant" ? "NDIS number" : "employee ID"}`}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="h-10 min-w-0 flex-1 basis-56 rounded-md border bg-transparent px-3 text-sm"
-          style={{ borderColor: BORDER }}
-        />
-        <select
-          aria-label="Status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as StatusFilter)}
-          className="h-10 rounded-md border bg-transparent px-2 text-sm"
-          style={{ borderColor: BORDER }}
-        >
-          <option value="active">Active</option>
-          <option value="exited">Exited</option>
-          <option value="prospective">Not yet active</option>
-          <option value="all">All</option>
-        </select>
-        <label className="flex items-center gap-2 text-sm" style={{ color: TEXT }}>
-          <input type="checkbox" checked={gapsOnly} onChange={(e) => setGapsOnly(e.target.checked)} />
-          Only {personNoun}s with gaps
-        </label>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative w-full lg:max-w-sm">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+          <input
+            aria-label={`Search ${personNoun}s`}
+            type="search"
+            placeholder={`Search by name or ${personNoun === "participant" ? "NDIS number" : "employee ID"}`}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="h-11 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
+            style={{ borderColor: BORDER, color: TEXT }}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter">
+          {(["active", "prospective", "exited", "all"] as const)
+            .filter((key) => key === "all" || key === "active" || counts[key] > 0)
+            .map((key) => (
+              <button key={key} type="button" aria-pressed={status === key} onClick={() => setStatus(key)} className={pillClass} style={pill(status === key)}>
+                {key === "all" ? "Everyone" : STATUS_LABELS[key]}
+                <span className="tabular-nums" style={{ opacity: 0.7 }}>{counts[key]}</span>
+              </button>
+            ))}
+          {gapPeople > 0 && (
+            <button type="button" aria-pressed={gapsOnly} onClick={() => setGapsOnly((v) => !v)} className={pillClass} style={pill(gapsOnly)}>
+              With gaps
+              <span className="tabular-nums" style={{ opacity: 0.7 }}>{gapPeople}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {visible.length === 0 ? (
-        <p className="rounded-2xl border p-6 text-center text-[13px]" style={{ borderColor: BORDER, background: SURFACE, color: MUTED }}>
+        <p className="rounded-2xl bg-cc-surface p-8 text-center text-sm" style={{ color: MUTED }}>
           No {personNoun}s match.
         </p>
       ) : (
-        <ul className="divide-y rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           {visible.map((person) => {
             const gaps = person.subfolders.filter((s) => s.state === "missing" || s.state === "expired");
+            const required = person.subfolders.filter((s) => s.state !== "not_applicable");
+            const listed = required.slice(0, 7);
             return (
-              <li key={person.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3" style={{ borderColor: BORDER }}>
-                <Link href={personHref(top, person.id)} className="flex min-w-0 flex-1 basis-56 items-center gap-2 hover:underline">
-                  <span className="truncate text-[14px] font-bold" style={{ color: TEXT }}>{person.name}</span>
-                  {person.ref && <span className="shrink-0 text-[12px]" style={{ color: MUTED }}>{person.ref}</span>}
-                  {person.status !== "active" && (
-                    <span className="shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold" style={{ borderColor: BORDER, color: MUTED }}>
-                      {STATUS_LABELS[person.status]}
-                    </span>
-                  )}
-                </Link>
-                <span className="flex flex-wrap items-center gap-1.5">
-                  {gaps.map((s) => (
-                    <Link key={s.key} href={personHref(top, person.id, s.key)} title={s.missing.length ? `Not on file: ${s.missing.join(", ")}` : undefined}>
-                      <StatePill state={s.state} label={s.label} />
-                    </Link>
-                  ))}
-                </span>
-                <span className="flex shrink-0 items-center gap-1 text-[12px] font-semibold" style={{ color: MUTED }}>
-                  {person.document_count} {person.document_count === 1 ? "document" : "documents"}
-                  <ChevronRight size={14} />
-                </span>
-              </li>
+              <FolderCard
+                key={person.id}
+                compact
+                title={person.name}
+                Icon={UserRound}
+                muted={person.status !== "active"}
+                meta={[
+                  [`${person.document_count} ${person.document_count === 1 ? "file" : "files"}`, sizeOf?.(person.id)]
+                    .filter(Boolean)
+                    .join(" · "),
+                  person.ref ?? (person.status !== "active" ? STATUS_LABELS[person.status] : undefined),
+                ]}
+                status={
+                  gaps.length
+                    ? { label: `Missing: ${gaps.map((g) => g.label).join(", ")}`, tone: "danger" }
+                    : { label: "Nothing missing", tone: "good" }
+                }
+                onOpen={() => navigate(personHref(top, person.id))}
+                menu={menuFor?.(person)}
+                preview={{
+                  nodes: listed.map((s) => {
+                    const gap = s.state === "missing" || s.state === "expired";
+                    return {
+                      kind: "folder" as const,
+                      label: s.label,
+                      href: personHref(top, person.id, s.key),
+                      meta: gap ? (s.state === "expired" ? "Expired" : "Missing") : String(s.count),
+                      tone: gap ? (s.state === "expired" ? "warning" : "danger") : "neutral",
+                    };
+                  }),
+                  more: required.length - listed.length,
+                  moreNoun: "folders",
+                  empty: "No folders are required yet.",
+                }}
+              />
             );
           })}
-        </ul>
+        </div>
       )}
     </div>
   );

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, has_active_grant, is_managing_director
 from ..core.security import get_current_user
-from ..services import vault_service
+from ..services import vault_service, vault_size_service
 from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/md-vault", tags=["md-vault"])
@@ -33,6 +33,14 @@ def _client_ip(request: Request) -> str | None:
 async def get_vault_stats(current_user: dict = Depends(get_current_user)):
     org_id = _require_md(current_user)
     return vault_service.list_vault_stats(org_id)
+
+
+@router.get("/sizes")
+async def get_vault_sizes(current_user: dict = Depends(get_current_user)):
+    """Byte size of every folder. Documents not measured yet are counted in
+    "pending" and measured in the background; poll until it reaches 0."""
+    org_id = _require_md(current_user)
+    return vault_size_service.folder_sizes(org_id)
 
 
 @router.get("/folders")
@@ -81,6 +89,23 @@ async def post_custom_folder(body: CustomFolderRequest, current_user: dict = Dep
     org_id = _require_md(current_user)
     user_id = get_user_id(current_user)
     return vault_service.create_custom_folder(org_id, body.label, body.description, user_id, body.group)
+
+
+class RenameFolderRequest(BaseModel):
+    label: str
+
+
+@router.patch("/custom-folders/{folder_id}")
+async def patch_custom_folder(folder_id: str, body: RenameFolderRequest, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return vault_service.rename_custom_folder(org_id, folder_id, body.label)
+
+
+@router.delete("/custom-folders/{folder_id}")
+async def delete_custom_folder(folder_id: str, current_user: dict = Depends(get_current_user)):
+    """Soft-deletes a folder an MD created, with its files. Built-in folders can't be deleted."""
+    org_id = _require_md(current_user)
+    return {"removed_files": vault_service.delete_custom_folder(org_id, folder_id)}
 
 
 @router.post("/custom-folders/{folder_id}/documents", status_code=201)

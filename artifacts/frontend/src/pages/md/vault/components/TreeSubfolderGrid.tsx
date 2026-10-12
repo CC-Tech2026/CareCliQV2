@@ -1,12 +1,10 @@
-import { Link } from "wouter";
-import { ChevronDown, Folder } from "lucide-react";
+import { useLocation } from "wouter";
+import { ChevronDown } from "lucide-react";
+import { FolderCard, type FolderMenuItem, type FolderTone } from "./FileManager";
 import type { VaultFolderState } from "@/services/vaultService";
 
-const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SURFACE = "var(--cc-surface)";
-const PLUM = "var(--cc-plum)";
 const DANGER = "var(--cc-status-danger)";
 const DANGER_BG = "var(--cc-status-danger-bg)";
 const WARNING_TEXT = "#9A5B0A";
@@ -22,6 +20,10 @@ export interface TreeGridItem {
   gapLabel?: string;
   /** The required credentials missing or lapsed. */
   missing?: string[];
+  /** Folder size, e.g. "2.4 MB" or "Measuring…". */
+  size?: string;
+  /** The folder's ⋮ menu. */
+  menu?: FolderMenuItem[];
 }
 
 export function StatePill({ state, label }: { state: VaultFolderState; label?: string }) {
@@ -38,35 +40,28 @@ export function StatePill({ state, label }: { state: VaultFolderState; label?: s
 }
 
 function Tile({ item, muted }: { item: TreeGridItem; muted?: boolean }) {
+  const [, navigate] = useLocation();
   const gap = item.state === "missing" || item.state === "expired";
+  const status = gap
+    ? {
+        label: item.missing && item.missing.length > 0
+          ? `Not on file: ${item.missing.join(", ")}`
+          : item.gapLabel ?? (item.state === "expired" ? "Expired" : "Missing"),
+        tone: (item.state === "expired" ? "warning" : "danger") as FolderTone,
+      }
+    : muted
+      ? { label: "Not required here", tone: "neutral" as FolderTone }
+      : undefined;
   return (
-    <Link
-      href={item.href}
-      className="flex flex-col gap-1.5 rounded-2xl border p-4 transition-colors hover:bg-black/5"
-      style={{ borderColor: gap ? DANGER : BORDER, background: SURFACE, opacity: muted ? 0.6 : 1 }}
-    >
-      <span className="flex items-center justify-between gap-3">
-        <span className="flex min-w-0 items-center gap-3">
-          <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-            style={muted ? { background: "var(--cc-border)", color: MUTED } : { background: "var(--cc-plum-soft)", color: PLUM }}
-          >
-            <Folder size={16} />
-          </span>
-          <span className="truncate text-[13px] font-bold" style={{ color: TEXT }}>{item.label}</span>
-        </span>
-        {gap ? (
-          <StatePill state={item.state} label={item.gapLabel} />
-        ) : (
-          !muted && <span className="shrink-0 text-[12px] font-semibold" style={{ color: MUTED }}>{item.count}</span>
-        )}
-      </span>
-      {item.missing && item.missing.length > 0 && (
-        <span className="pl-12 text-[12px]" style={{ color: MUTED }}>
-          Not on file: {item.missing.join(", ")}
-        </span>
-      )}
-    </Link>
+    <FolderCard
+      compact
+      title={item.label}
+      muted={muted || (!gap && item.count === 0)}
+      meta={[`${item.count} ${item.count === 1 ? "file" : "files"}`, item.size]}
+      status={status}
+      onOpen={() => navigate(item.href)}
+      menu={item.menu}
+    />
   );
 }
 
@@ -78,7 +73,7 @@ export function TreeSubfolderGrid({ items }: { items: TreeGridItem[] }) {
   return (
     <div className="space-y-3">
       {shown.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           {shown.map((item) => <Tile key={item.key} item={item} />)}
         </div>
       )}
@@ -88,7 +83,7 @@ export function TreeSubfolderGrid({ items }: { items: TreeGridItem[] }) {
             <ChevronDown size={14} className="transition-transform group-open:rotate-180" />
             Not required here · {notRequired.length} {notRequired.length === 1 ? "folder" : "folders"}
           </summary>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             {notRequired.map((item) => <Tile key={item.key} item={item} muted />)}
           </div>
         </details>

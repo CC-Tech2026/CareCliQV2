@@ -174,6 +174,32 @@ export async function fetchTreePeople(top: string): Promise<VaultTreePerson[]> {
   return data.people;
 }
 
+/** Bytes in a folder, and how many of its documents are still being measured. */
+export interface VaultSizeTally {
+  bytes: number;
+  pending: number;
+  files: number;
+  /** Listed, but the stored file is missing, so it can't be opened. */
+  unavailable: number;
+}
+
+export interface VaultSizes {
+  total: VaultSizeTally;
+  /** Documents not measured yet, across the vault. Poll until 0. */
+  pending: number;
+  /** By flat folder category. */
+  folders: Record<string, VaultSizeTally>;
+  /** By organised folder, with its subfolders. */
+  tree: Record<string, VaultSizeTally & { subfolders: Record<string, VaultSizeTally> }>;
+  /** By organised folder, then person id, with their subfolders. */
+  people: Record<string, Record<string, VaultSizeTally & { subfolders: Record<string, VaultSizeTally> }>>;
+}
+
+export async function fetchVaultSizes(): Promise<VaultSizes> {
+  const res = await apiFetch("/api/md-vault/sizes");
+  return parseJson<VaultSizes>(res);
+}
+
 export async function fetchVaultTree(): Promise<VaultTreeFolder[]> {
   const res = await apiFetch("/api/md-vault/tree");
   const data = await parseJson<{ folders: VaultTreeFolder[] }>(res);
@@ -369,6 +395,24 @@ export async function createCustomFolder(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ label, description: description || null, group }),
   });
+  return parseJson(res);
+}
+
+/** Custom folders are stored as category "custom:<id>". */
+export const CUSTOM_FOLDER_CATEGORY_PREFIX = "custom:";
+
+export async function renameCustomFolder(folderId: string, label: string): Promise<{ category: string; label: string }> {
+  const res = await apiFetch(`/api/md-vault/custom-folders/${encodeURIComponent(folderId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label }),
+  });
+  return parseJson(res);
+}
+
+/** Soft-deletes a folder an MD created, with its files. Built-in folders can't be deleted. */
+export async function deleteCustomFolder(folderId: string): Promise<{ removed_files: number }> {
+  const res = await apiFetch(`/api/md-vault/custom-folders/${encodeURIComponent(folderId)}`, { method: "DELETE" });
   return parseJson(res);
 }
 

@@ -1856,6 +1856,63 @@ async def upload_custom_folder_document(
     return result.data[0] if result.data else payload
 
 
+def _forget_custom_folder(org_id: str, folder_id: str) -> None:
+    """Drop the cached folder list and contents so a rename or delete shows at once."""
+    _ttl_cache.pop(f"custom_folders:{org_id}", None)
+    _ttl_cache.pop(f"docs:{org_id}:{_custom_folder_category(folder_id)}", None)
+
+
+def _require_custom_folder(org_id: str, folder_id: str) -> None:
+    existing = (
+        get_supabase_admin()
+        .table("vault_custom_folders")
+        .select("id")
+        .eq("id", folder_id)
+        .eq("organization_id", org_id)
+        .is_("deleted_at", "null")
+        .limit(1)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Folder not found.")
+
+
+def rename_custom_folder(org_id: str, folder_id: str, label: str) -> dict[str, Any]:
+    if not label.strip():
+        raise HTTPException(status_code=422, detail="Folder name is required.")
+    _require_custom_folder(org_id, folder_id)
+    get_supabase_admin().table("vault_custom_folders").update({"label": label.strip()}).eq("id", folder_id).eq(
+        "organization_id", org_id
+    ).execute()
+    _forget_custom_folder(org_id, folder_id)
+    return {"id": folder_id, "label": label.strip(), "category": _custom_folder_category(folder_id)}
+
+
+def delete_custom_folder(org_id: str, folder_id: str) -> int:
+    """Remove a folder someone created, and the files in it, from the vault.
+
+    Soft delete (deleted_at), like a single file: nothing is erased, so a
+    folder removed by mistake can be restored and an auditor can still be
+    shown what existed. Built-in folders are views over live records and
+    can't be deleted. Returns how many files were removed with it."""
+    _require_custom_folder(org_id, folder_id)
+    now = datetime.now(timezone.utc).isoformat()
+    supabase = get_supabase_admin()
+    removed = (
+        supabase.table("vault_custom_folder_documents")
+        .update({"deleted_at": now})
+        .eq("folder_id", folder_id)
+        .eq("organization_id", org_id)
+        .is_("deleted_at", "null")
+        .execute()
+    )
+    supabase.table("vault_custom_folders").update({"deleted_at": now}).eq("id", folder_id).eq(
+        "organization_id", org_id
+    ).execute()
+    _forget_custom_folder(org_id, folder_id)
+    return len(removed.data or [])
+
+
 def delete_custom_folder_document(org_id: str, folder_id: str, document_id: str) -> None:
     supabase = get_supabase_admin()
     existing = (

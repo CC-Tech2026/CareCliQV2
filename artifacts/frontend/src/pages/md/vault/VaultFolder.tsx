@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
-import { FileEdit, Search, Upload, ChevronRight, Users } from "lucide-react";
+import { FileEdit, Search, Share2, Upload, ChevronRight, Users } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ import {
 import { triggerBlobDownload } from "@/lib/vaultZip";
 import { DocumentTable } from "./components/DocumentTable";
 import { DocumentPreviewPane } from "./components/DocumentPreviewPane";
+import { FolderIcon } from "./components/FileManager";
+import { sizeLabel, useVaultSizes } from "./components/useVaultSizes";
 import { ShareAuditorDialog } from "./components/ShareAuditorDialog";
 import { FolderUploadDialog } from "./components/FolderUploadDialog";
 import { PolicyDocumentEditorSheet } from "./components/PolicyDocumentEditorSheet";
@@ -62,7 +64,10 @@ function presetToDateFrom(preset: string): string | undefined {
 export default function VaultFolderPage({ category }: { category: string }) {
   const [location, navigate] = useLocation();
   // ?flagged=1 — opened from the vault's "Flagged for review" tile/filter.
-  const flaggedOnly = new URLSearchParams(useSearch()).get("flagged") === "1";
+  const searchParams = new URLSearchParams(useSearch());
+  const flaggedOnly = searchParams.get("flagged") === "1";
+  // ?upload=1 — "Upload a file" from the folder's ⋮ menu in the vault.
+  const uploadRequested = searchParams.get("upload") === "1";
   const { toast } = useToast();
 
   const [meta, setMeta] = useState<VaultFolderMeta | null>(null);
@@ -88,7 +93,22 @@ export default function VaultFolderPage({ category }: { category: string }) {
   const isGovernance = GOVERNANCE_FOLDER_KEYS.has(category);
   const isCustom = category.startsWith(CUSTOM_FOLDER_PREFIX);
   const customFolderId = isCustom ? category.slice(CUSTOM_FOLDER_PREFIX.length) : null;
+  const sizes = useVaultSizes();
+  // The whole folder's size; left off while only flagged files are listed.
+  const folderSizes = flaggedOnly ? undefined : sizes?.folders[category];
   const canUpload = isGovernance || isCustom;
+
+  // Open on the first document, so the preview is never an empty box.
+  useEffect(() => {
+    if (!previewId && documents.length > 0) setPreviewId(documents[0].id);
+  }, [documents, previewId]);
+
+  useEffect(() => {
+    if (!uploadRequested || !canUpload) return;
+    setUploadOpen(true);
+    // One-shot: drop the flag so a refresh doesn't reopen the dialog.
+    window.history.replaceState(null, "", location);
+  }, [uploadRequested, canUpload, location]);
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -268,35 +288,49 @@ export default function VaultFolderPage({ category }: { category: string }) {
 
   return (
     <HubLayout>
-      <div className="space-y-4 pb-12">
-        <nav className="flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: "var(--cc-muted)" }}>
-          <button type="button" onClick={() => navigate("/md/vault")} className="hover:underline" style={{ color: "var(--cc-plum)" }}>
-            Documents & Audit Vault
+      <div className="space-y-5 pb-12">
+        <nav aria-label="Folder path" className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold" style={{ color: "var(--cc-muted)" }}>
+          <button type="button" onClick={() => navigate("/md/vault")} className="hover:underline">
+            Vault
           </button>
-          <ChevronRight size={13} />
-          <span>{label}</span>
+          <ChevronRight size={14} />
+          <span style={{ color: "var(--cc-text)" }}>{label}</span>
         </nav>
 
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-black tracking-[-0.025em]" style={{ color: "var(--cc-text)" }}>
-              {label}
-            </h1>
-            <p className="mt-0.5 text-[13px]" style={{ color: "var(--cc-muted)" }}>
-              {documents.length} document{documents.length === 1 ? "" : "s"}
-            </p>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <FolderIcon size={56} />
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight" style={{ color: "var(--cc-text)", fontFamily: "var(--app-font-display)" }}>
+                {label}
+              </h1>
+              <p className="mt-1 text-sm" style={{ color: "var(--cc-muted)" }}>
+                {[`${documents.length} ${documents.length === 1 ? "file" : "files"}`, sizeLabel(folderSizes, !!sizes)]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              className="min-h-11 gap-2 rounded-full px-5"
+              disabled={documents.length === 0}
+              onClick={() => setShareOpen(true)}
+              style={{ background: "var(--cc-brand-purple)", color: "white" }}
+            >
+              <Share2 size={15} />
+              {selectedIds.size ? `Share ${selectedIds.size} selected` : "Share folder"}
+            </Button>
             {isGovernance && (
-              <Button variant="outline" className="gap-2" onClick={openNewPolicyEditor}>
+              <Button variant="outline" className="min-h-11 gap-2 rounded-full px-4" onClick={openNewPolicyEditor}>
                 <FileEdit size={15} />
                 Write in-app
               </Button>
             )}
             {canUpload && (
-              <Button className="gap-2" onClick={() => setUploadOpen(true)} style={{ background: "var(--cc-plum)", color: "white" }}>
+              <Button className="min-h-11 gap-2 rounded-full px-5" onClick={() => setUploadOpen(true)} style={{ background: "var(--cc-cta)", color: "white" }}>
                 <Upload size={15} />
-                Upload document
+                Upload file
               </Button>
             )}
           </div>
@@ -352,7 +386,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
           </div>
         )}
 
-        <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--cc-border)", background: "var(--cc-surface)" }}>
+        <div>
           <div className="flex flex-wrap items-center gap-2.5">
             {flaggedOnly && (
               <button
@@ -364,12 +398,12 @@ export default function VaultFolderPage({ category }: { category: string }) {
                 Showing flagged for review · Show all
               </button>
             )}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--cc-muted)" }} />
-              <Input className="pl-8" placeholder="Search by title, name or ID" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <div className="relative min-w-[200px] flex-1 sm:max-w-sm">
+              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: "var(--cc-muted)" }} />
+              <Input aria-label="Search files" className="h-11 rounded-full bg-cc-surface pl-11" placeholder="Search by title, name or ID" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <Select value={person} onValueChange={setPerson}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger aria-label="Filter by person" className="h-11 w-[200px] rounded-full bg-cc-surface px-4">
                 <SelectValue placeholder="All participants" />
               </SelectTrigger>
               <SelectContent>
@@ -382,17 +416,19 @@ export default function VaultFolderPage({ category }: { category: string }) {
               </SelectContent>
             </Select>
           </div>
-          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Date range">
             {DATE_PRESETS.map((p) => (
               <button
                 key={p.key}
                 type="button"
                 onClick={() => setDatePreset(p.key)}
-                className="rounded-full px-3 py-1 text-[12px] font-semibold"
-                style={{
-                  background: datePreset === p.key ? "var(--cc-plum)" : "var(--cc-soft)",
-                  color: datePreset === p.key ? "white" : "var(--cc-muted)",
-                }}
+                aria-pressed={datePreset === p.key}
+                className="min-h-9 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft"
+                style={
+                  datePreset === p.key
+                    ? { background: "var(--cc-text)", color: "var(--cc-bg)" }
+                    : { color: "var(--cc-text)", boxShadow: "inset 0 0 0 1px var(--cc-border)" }
+                }
               >
                 {p.label}
               </button>
@@ -455,14 +491,9 @@ export default function VaultFolderPage({ category }: { category: string }) {
             <DocumentPreviewPane
               doc={documents.find((d) => d.id === previewId) ?? null}
               showVersionHistory={isGovernance}
-              customizableFields={customizableFields[category] ?? []}
+              customizableFields={[]}
               excludedFields={(previewId && docExclusions[previewId]) || new Set()}
               onToggleExcludedField={toggleExcludedField}
-              selectedDocs={documents.filter((d) => selectedIds.has(d.id))}
-              onRemoveSelected={toggle}
-              bulkExcludedFields={bulkExcludedFields}
-              onToggleExcludedFieldForAll={toggleExcludedFieldForSelected}
-              onShare={() => setShareOpen(true)}
             />
           </div>
         </div>
@@ -471,9 +502,13 @@ export default function VaultFolderPage({ category }: { category: string }) {
       <ShareAuditorDialog
         open={shareOpen}
         onOpenChange={setShareOpen}
-        documents={selectedRefs}
+        documents={documents
+          .filter((d) => selectedIds.has(d.id))
+          .map((d) => ({ ...d, exclude_fields: Array.from(docExclusions[d.id] ?? []) }))}
+        // Nothing selected: share the whole folder, already loaded here.
+        preselect={selectedIds.size ? [] : [{ key: category, label, count: documents.length, load: async () => documents }]}
         folderKeys={[category]}
-        targetDescription={`All ${selectedRefs.length} selected file${selectedRefs.length === 1 ? "" : "s"} in ${label}`}
+        targetDescription={selectedIds.size ? `${selectedIds.size} selected in ${label}` : label}
       />
 
       {canUpload && (
