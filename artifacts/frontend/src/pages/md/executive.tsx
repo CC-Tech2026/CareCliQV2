@@ -460,7 +460,7 @@ export default function MDExecutivePage() {
         {/* ============================================================
             HEADER
         ============================================================ */}
-        <header className="border-b pb-5" style={{ borderColor: BORDER }}>
+        <header className="rounded-2xl border bg-cc-surface p-5 sm:p-6" style={{ borderColor: BORDER }}>
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1">
               <span className="text-xs font-bold" style={{ color: MUTED }}>
@@ -476,12 +476,12 @@ export default function MDExecutivePage() {
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-cc-muted">Review trends, compare results with targets and identify where leadership attention is needed. Use the Report library for detailed records and exports.</p>
               {multiBranch && (
-                <label className="mt-2 flex items-center gap-2 text-[11px] font-semibold" style={{ color: MUTED }}>
+                <label className="mt-4 flex flex-wrap items-center gap-2 text-xs font-medium" style={{ color: MUTED }}>
                   Branch
                   <select
                     value={branchId}
                     onChange={(e) => setBranchId(e.target.value)}
-                    className="rounded-lg border bg-white px-2 py-1 text-[12px] font-semibold"
+                    className="min-h-11 rounded-lg border border-cc-border bg-cc-surface px-3 py-2 text-sm font-medium"
                     style={{ color: TEXT }}
                     aria-label="Filter by branch"
                   >

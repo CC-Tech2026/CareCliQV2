@@ -109,7 +109,7 @@ function AlertRow({
           go();
         }
       }}
-      className="flex w-full cursor-pointer items-stretch gap-3 px-5 py-3.5 transition-colors hover:bg-cc-soft focus-visible:bg-cc-soft focus-visible:outline-none"
+      className="flex w-full cursor-pointer items-stretch gap-3 px-5 py-3.5 transition-colors hover:bg-cc-soft focus-visible:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum"
     >
       <span
         className="w-[3px] shrink-0 self-stretch rounded-full"
@@ -118,16 +118,16 @@ function AlertRow({
       {/* Content is capped and left-packed rather than letting the title/action
           pair stretch to the row's full width - on a wide card that stretch
           reads as a big blank gap in the middle of a two-line alert. */}
-      <div className="flex min-w-0 max-w-2xl flex-1 items-start justify-between gap-4">
+      <div className="flex min-w-0 max-w-2xl flex-1 flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <p
-            className="text-[12.5px] font-bold leading-snug"
+            className="break-words text-sm font-semibold leading-snug"
             style={{ color: TEXT }}
           >
             {alert.title}
           </p>
           <p
-            className="mt-1 text-[11px] leading-relaxed"
+            className="mt-1 break-words text-xs leading-relaxed"
             style={{ color: MUTED }}
           >
             {alert.detail}
@@ -479,7 +479,7 @@ export function GovernanceTriage({
           <EmptyState message="All caught up. Nothing needs action right now." />
         ) : (
           <div
-            className="max-h-[36rem] flex-1 divide-y overflow-y-auto"
+            className="min-h-0 max-h-[36rem] flex-1 divide-y overflow-y-auto xl:max-h-none"
             style={{ borderColor: BORDER }}
           >
             {all.map((a) => {
@@ -491,19 +491,19 @@ export function GovernanceTriage({
                   className="w-full px-5 py-3.5 text-left transition-colors hover:bg-cc-soft"
                 >
                   <p
-                    className="text-[9px] font-black uppercase tracking-wide"
+                    className="text-[11px] font-bold uppercase tracking-wide"
                     style={{ color }}
                   >
                     {severityLabel(a.severity)}
                   </p>
                   <p
-                    className="mt-1 text-[12px] font-bold leading-snug"
+                    className="mt-1 break-words text-sm font-semibold leading-snug"
                     style={{ color: TEXT }}
                   >
                     {a.title}
                   </p>
                   <p
-                    className="mt-0.5 text-[10.5px] leading-relaxed"
+                    className="mt-1 break-words text-xs leading-relaxed"
                     style={{ color: MUTED }}
                   >
                     {a.detail}

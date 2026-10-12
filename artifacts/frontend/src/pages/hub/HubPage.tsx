@@ -33,7 +33,7 @@ export default function HubPage() {
           // here: MDHubView's triage sections already cover compliance/incident/
           // invoice alerts (same /api/hub/compliance-alerts source), and a
           // social "welcome aboard" feed doesn't belong on a governance view.
-          <main className="mt-6 min-w-0 space-y-5">
+          <main className="mt-5 min-w-0 space-y-5">
             <MDHubView />
             <NewsFeed />
           </main>
