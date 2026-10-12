@@ -8,6 +8,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ..core.access import (
+    PARTICIPANT_ROLES,
     get_coordinator_team_ids,
     get_user_id,
     get_user_organization_id,
@@ -269,9 +270,14 @@ async def _team_members(org_id: str, scoped_user_ids: set[str] | None = None) ->
             # doesn't actually belong to this org's roster — skip rather than surface a
             # nameless placeholder row that leaks their existence/role across orgs.
             continue
+        role = row.get("role") or profile.get("role")
+        # Participant portal logins are org members too, but they're the people
+        # being supported, not staff — keep them out of every staff roster/count.
+        if role in PARTICIPANT_ROLES:
+            continue
         output.append({
             "id": row.get("user_id"),
-            "role": row.get("role") or profile.get("role"),
+            "role": role,
             "full_name": profile.get("full_name") or profile.get("email") or "Team member",
             "email": profile.get("email"),
             "is_active": bool(row.get("is_active")),
