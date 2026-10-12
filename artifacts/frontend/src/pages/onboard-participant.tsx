@@ -211,6 +211,12 @@ const STAGE_COLOR: Record<string, string> = {
   active: "#0F7B57",
 };
 
+/** Still working through onboarding: on the board, not yet active, not closed. */
+function inPipeline(status: IntakeStatus): boolean {
+  const column = columnIdForStatus(status);
+  return column !== null && column !== "active";
+}
+
 function columnIdForStatus(status: IntakeStatus): BoardColumnId | null {
   switch (status) {
     case "enquiry": return "enquiry";
@@ -320,20 +326,30 @@ function ParticipantCard({ intake, onClick }: { intake: Intake; onClick: () => v
   const subtitle = subtitleForIntake(intake);
   const column = columnIdForStatus(intake.status);
   const accent = column ? STAGE_COLOR[column] : PLUM;
+  const waiting = inPipeline(intake.status) ? daysSince(intake.created_at) : null;
   return (
     <button
       onClick={onClick}
-      className="group relative w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+      className="group relative w-full rounded-2xl border bg-cc-surface p-4 text-left transition-colors hover:border-[color:var(--cc-brand-purple)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
       style={{ borderColor: BORDER }}
     >
       <div className="flex items-start gap-3">
         <Avatar name={intake.full_name} size={36} color={accent} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-black" style={{ color: TEXT }}>{intake.full_name}</p>
-          <p className="mt-0.5 truncate text-[10px] font-medium" style={{ color: MUTED }}>{subtitle}</p>
+          <p className="truncate text-sm font-semibold" style={{ color: TEXT }}>{intake.full_name}</p>
+          <p className="mt-0.5 truncate text-xs" style={{ color: MUTED }}>{subtitle}</p>
         </div>
       </div>
-      {badge && <div className="mt-3"><CardBadge {...badge} /></div>}
+      {(badge || waiting !== null) && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {badge && <CardBadge {...badge} />}
+          {waiting !== null && (
+            <span className="text-xs font-medium" style={{ color: waiting >= 7 ? DANGER : MUTED }}>
+              {waiting === 0 ? "Referred today" : `Waiting ${waiting} ${waiting === 1 ? "day" : "days"}`}
+            </span>
+          )}
+        </div>
+      )}
     </button>
   );
 }
@@ -377,7 +393,7 @@ function HorizontalStepper({ status, viewedStep, onSelect }: { status: IntakeSta
               >
                 {done ? <CheckCircle2 size={18} /> : <Icon size={16} />}
               </div>
-              <p className="text-[11px] font-bold whitespace-nowrap" style={{ color: selected || isCurrent ? TEXT : MUTED }}>{s.label}</p>
+              <p className="whitespace-nowrap text-xs font-medium" style={{ color: selected || isCurrent ? TEXT : MUTED }}>{s.label}</p>
             </button>
             {!last && <div className="h-[2px] flex-1 mx-2" style={{ background: i < current ? SUCCESS : BORDER, marginBottom: 20 }} />}
           </div>
@@ -1414,6 +1430,7 @@ export default function ParticipantOnboardingBoard() {
 
   const [search, setSearch] = useState("");
   const [newIntakeOpen, setNewIntakeOpen] = useState(false);
+  const [showClosed, setShowClosed] = useState(false);
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [activeKpi, setActiveKpi] = useState<"open" | "stuck" | "active" | "signature" | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<"all" | ServiceCategory>("all");
@@ -1436,6 +1453,13 @@ export default function ParticipantOnboardingBoard() {
   const [source, setSource] = useState<EnquirySource>("online_form");
 
   const dobAge = calculateAge(dob);
+  // What's still missing before an enquiry can be logged, in plain words.
+  const referralMissing = [
+    !fullName.trim() && "full name",
+    !dob.trim() && "date of birth",
+    !ndisNumber.trim() && "NDIS number",
+    !isValidEmail(email) && (email.trim() ? "a valid email" : "email"),
+  ].filter(Boolean) as string[];
   const agedCareBlocked = serviceCategory === "aged_care" && dob.trim().length > 0 && !isAgedCareEligible(dob);
 
   const [creatingIntake, setCreatingIntake] = useState(false);
@@ -1561,8 +1585,8 @@ export default function ParticipantOnboardingBoard() {
   const q = search.trim().toLowerCase();
   const matchesSearch = (i: Intake) => !q || i.full_name.toLowerCase().includes(q) || i.ndis_number.toLowerCase().includes(q);
   const matchesKpi = (i: Intake) => {
-    if (activeKpi === "open") return columnIdForStatus(i.status) !== "active" && i.status !== "declined";
-    if (activeKpi === "stuck") return columnIdForStatus(i.status) !== "active" && i.status !== "declined" && daysSince(i.created_at) >= 7;
+    if (activeKpi === "open") return inPipeline(i.status);
+    if (activeKpi === "stuck") return inPipeline(i.status) && daysSince(i.created_at) >= 7;
     if (activeKpi === "active") return columnIdForStatus(i.status) === "active";
     if (activeKpi === "signature") return i.status === "awaiting_signatures";
     return true;
@@ -1575,8 +1599,12 @@ export default function ParticipantOnboardingBoard() {
     setActiveKpi((prev) => (prev === filter ? null : filter));
   }
 
-  const openEnquiries = intakes.filter((i) => columnIdForStatus(i.status) !== "active" && i.status !== "declined").length;
-  const stuckCount = intakes.filter((i) => columnIdForStatus(i.status) !== "active" && i.status !== "declined" && daysSince(i.created_at) >= 7).length;
+  const openEnquiries = intakes.filter((i) => inPipeline(i.status)).length;
+  const stuckCount = intakes.filter((i) => inPipeline(i.status) && daysSince(i.created_at) >= 7).length;
+  // Declined and withdrawn referrals: off the board, but still findable.
+  const closedIntakes = intakes
+    .filter((i) => i.status === "declined" || i.status === "withdrawn")
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
   const activeCount = intakes.filter((i) => columnIdForStatus(i.status) === "active").length;
   const readyForSignatureCount = intakes.filter((i) => i.status === "awaiting_signatures").length;
 
@@ -1646,6 +1674,17 @@ export default function ParticipantOnboardingBoard() {
             { value: stuckCount, label: "stuck 7+ days", tone: stuckCount ? "danger" : "good", onClick: () => setKpiFilter("stuck"), active: activeKpi === "stuck" },
             { value: activeCount, label: "active participants", tone: "good", onClick: () => setKpiFilter("active"), active: activeKpi === "active" },
             { value: readyForSignatureCount, label: "ready for signature", tone: "info", onClick: () => setKpiFilter("signature"), active: activeKpi === "signature" },
+            ...(closedIntakes.length
+              ? [{
+                  value: closedIntakes.length,
+                  label: "closed",
+                  onClick: () => {
+                    setShowClosed(true);
+                    window.setTimeout(() => document.getElementById("closed-referrals")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                  },
+                  active: showClosed,
+                }]
+              : []),
           ]}
         />
 
@@ -1714,6 +1753,9 @@ export default function ParticipantOnboardingBoard() {
           </div>
         </div>
 
+        {view === "kanban" && (
+          <p className="text-xs lg:hidden" style={{ color: MUTED }}>Swipe sideways to see every stage.</p>
+        )}
         {view === "kanban" ? (
           <div className="flex items-start gap-3 overflow-x-auto pb-3 [scrollbar-width:thin] snap-x snap-mandatory lg:items-stretch">
             {BOARD_COLUMNS.map((col) => {
@@ -1722,7 +1764,7 @@ export default function ParticipantOnboardingBoard() {
               return (
                 <div
                   key={col.id}
-                  className="flex min-h-[220px] w-[300px] shrink-0 scale-100 flex-col gap-3 rounded-2xl p-4 transition-all duration-150 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink"
+                  className="flex min-h-[220px] w-[300px] shrink-0 scale-100 flex-col gap-3 rounded-2xl p-4 transition-all duration-150 lg:min-h-[430px] lg:w-auto lg:min-w-[200px] lg:flex-1 lg:shrink"
                   style={{ background: "var(--cc-bg)" }}
                 >
                   <div className="flex items-center justify-between px-0.5 pb-0.5">
@@ -1761,23 +1803,67 @@ export default function ParticipantOnboardingBoard() {
         ) : (
           <ParticipantListView rows={listRows} sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
         )}
+
+        {closedIntakes.length > 0 && (
+          <section id="closed-referrals" className="scroll-mt-24 rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
+            <button
+              type="button"
+              onClick={() => setShowClosed((v) => !v)}
+              aria-expanded={showClosed}
+              className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
+            >
+              <span>
+                <span className="block text-sm font-semibold" style={{ color: TEXT }}>Closed referrals</span>
+                <span className="block text-xs" style={{ color: MUTED }}>
+                  {closedIntakes.length} declined or withdrawn. Kept for your records, off the board.
+                </span>
+              </span>
+              <ChevronDown size={18} className={`shrink-0 transition-transform ${showClosed ? "rotate-180" : ""}`} style={{ color: MUTED }} />
+            </button>
+            {showClosed && (
+              <ul className="border-t" style={{ borderColor: BORDER }}>
+                {closedIntakes.map((i) => (
+                  <li key={i.id} className="border-b last:border-b-0" style={{ borderColor: BORDER }}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/onboard-participant?intake=${i.id}`)}
+                      className="flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-cc-soft"
+                    >
+                      <Avatar name={i.full_name} size={32} color={MUTED} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium" style={{ color: TEXT }}>{i.full_name}</span>
+                        <span className="block truncate text-xs" style={{ color: MUTED }}>
+                          {STATUS_META[i.status].label} · {(i.status === "withdrawn" ? i.withdrawn_reason : i.decline_reason) || "No reason recorded"}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-xs" style={{ color: MUTED }}>Referred {formatDate(i.created_at)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </div>
 
       <Sheet open={newIntakeOpen} onOpenChange={setNewIntakeOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
-              <HeartHandshake size={18} style={{ color: PLUM }} /> New Referral
+              <HeartHandshake size={18} style={{ color: PLUM }} /> New referral
             </SheetTitle>
+            <p className="text-sm" style={{ color: MUTED }}>
+              Log an enquiry to start onboarding. Fields marked <span style={{ color: DANGER }}>*</span> are needed.
+            </p>
           </SheetHeader>
-          <div className="space-y-3 py-1">
+          <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Full name</label>
+              <label className="text-sm font-medium" style={{ color: TEXT }}>Full name <span aria-hidden="true" style={{ color: DANGER }}>*</span></label>
               <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Sam Rivera" autoFocus />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Service category</label>
+                <label className="text-sm font-medium" style={{ color: TEXT }}>Service category</label>
                 <Select value={serviceCategory} onValueChange={(v) => setServiceCategory(v as ServiceCategory)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -1787,9 +1873,7 @@ export default function ParticipantOnboardingBoard() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>
-                  Date of birth <span style={{ color: DANGER }}>*</span>
-                </label>
+                <label className="text-sm font-medium" style={{ color: TEXT }}>Date of birth <span aria-hidden="true" style={{ color: DANGER }}>*</span></label>
                 <Input
                   type="date"
                   value={dob}
@@ -1802,17 +1886,17 @@ export default function ParticipantOnboardingBoard() {
             {serviceCategory === "aged_care" && (
               <p className="text-[11px] font-medium" style={{ color: agedCareBlocked ? DANGER : MUTED }}>
                 {agedCareBlocked
-                  ? `Aged Care is only available to participants aged 65 and over${dobAge !== null ? ` — this person is ${dobAge}.` : "."}`
-                  : "Aged Care is only available to participants aged 65 and over — date of birth is required to confirm eligibility."}
+                  ? `Aged Care is only available to participants aged 65 and over${dobAge !== null ? `. This person is ${dobAge}.` : "."}`
+                  : "Aged Care is only available to participants aged 65 and over, so the date of birth confirms eligibility."}
               </p>
             )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>NDIS number</label>
-                <Input value={ndisNumber} onChange={(e) => setNdisNumber(e.target.value)} placeholder="e.g. [ID Number Redacted]" />
+                <label className="text-sm font-medium" style={{ color: TEXT }}>NDIS number <span aria-hidden="true" style={{ color: DANGER }}>*</span></label>
+                <Input value={ndisNumber} onChange={(e) => setNdisNumber(e.target.value)} placeholder="e.g. 430123456" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Funding type</label>
+                <label className="text-sm font-medium" style={{ color: TEXT }}>Funding type</label>
                 <Select value={fundingType} onValueChange={(v) => setFundingType(v as FundingType)}>
                   <SelectTrigger><SelectValue placeholder="Select funding type" /></SelectTrigger>
                   <SelectContent>
@@ -1824,7 +1908,7 @@ export default function ParticipantOnboardingBoard() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Email</label>
+              <label className="text-sm font-medium" style={{ color: TEXT }}>Email <span aria-hidden="true" style={{ color: DANGER }}>*</span></label>
               <Input
                 type="email"
                 value={email}
@@ -1839,7 +1923,7 @@ export default function ParticipantOnboardingBoard() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Phone (optional)</label>
+                <label className="text-sm font-medium" style={{ color: TEXT }}>Phone <span className="font-normal" style={{ color: MUTED }}>(optional)</span></label>
                 <Input
                   type="tel"
                   value={phone}
@@ -1853,7 +1937,7 @@ export default function ParticipantOnboardingBoard() {
                 )}
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Enquiry source</label>
+                <label className="text-sm font-medium" style={{ color: TEXT }}>How did they reach you?</label>
                 <Select value={source} onValueChange={(v) => setSource(v as EnquirySource)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -1866,12 +1950,16 @@ export default function ParticipantOnboardingBoard() {
               </div>
             </div>
           </div>
+          {referralMissing.length > 0 && (
+            <p className="pb-2 text-xs" style={{ color: MUTED }}>Still needed: {referralMissing.join(", ")}.</p>
+          )}
           <SheetFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setNewIntakeOpen(false)}>Cancel</Button>
+            <Button variant="outline" className="rounded-full" onClick={() => setNewIntakeOpen(false)}>Cancel</Button>
             <Button
               variant="navy"
+              className="rounded-full"
               onClick={createIntake}
-              disabled={creatingIntake || !fullName.trim() || !ndisNumber.trim() || !dob.trim() || !isValidEmail(email) || (phone.trim().length > 0 && !isValidPhone(phone)) || agedCareBlocked}
+              disabled={creatingIntake || referralMissing.length > 0 || (phone.trim().length > 0 && !isValidPhone(phone)) || agedCareBlocked}
             >
               {creatingIntake ? <Loader2 size={14} className="animate-spin" /> : "Log enquiry"}
             </Button>
@@ -2243,7 +2331,7 @@ function IntakeDetail({
     if (!terminateReason.trim()) return;
     onUpdate({ status: "withdrawn", withdrawn_reason: terminateReason.trim() });
     setTerminateOpen(false);
-    toast({ title: "Application terminated", description: `${intake.full_name} chose not to continue with this provider.` });
+    toast({ title: "Referral closed", description: `${intake.full_name} chose not to continue. You'll find them under Closed referrals.` });
   }
 
   function saveMeetGreetDraft() {
@@ -2289,40 +2377,60 @@ function IntakeDetail({
 
   return (
     <div className="space-y-5 pb-10">
-      <button onClick={onBack} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-bold -ml-2.5" style={{ color: PLUM }}>
-        <ArrowLeft size={15} /> Back to enquiries
+      <button type="button" onClick={onBack} className={`${kitGhostClass} -ml-3`}>
+        <ArrowLeft size={15} /> Participant onboarding
       </button>
 
-      <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
-        <HorizontalStepper status={intake.status} viewedStep={viewedStep} onSelect={setViewedStep} />
-      </div>
+      <header className="flex flex-wrap items-center gap-4">
+        <Avatar name={intake.full_name} size={52} color={STATUS_META[intake.status].color} />
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
+            {intake.full_name}
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: MUTED }}>
+            <span className="font-medium" style={{ color: STATUS_META[intake.status].color }}>{STATUS_META[intake.status].label}</span>
+            {" · "}Referred {formatDate(intake.created_at)} via {sourceMeta(intake.source).label.toLowerCase()}
+            {inPipeline(intake.status) && (() => {
+              const days = daysSince(intake.created_at);
+              return <span style={{ color: days >= 7 ? DANGER : MUTED }}>{" · "}{days === 0 ? "Started today" : `${days} ${days === 1 ? "day" : "days"} in onboarding`}</span>;
+            })()}
+          </p>
+        </div>
+      </header>
+
+      {intake.status !== "declined" && intake.status !== "withdrawn" && (
+        <div className="rounded-2xl border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
+          <HorizontalStepper status={intake.status} viewedStep={viewedStep} onSelect={setViewedStep} />
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_300px] items-start">
         <div className="space-y-5 min-w-0">
           {intake.status === "declined" || intake.status === "withdrawn" ? (
-            <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+            <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
               <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                 <XCircle size={16} style={{ color: STATUS_META[intake.status].color }} />
-                <p className="text-sm font-black" style={{ color: TEXT }}>{STATUS_META[intake.status].label}</p>
+                <p className="text-base font-semibold" style={{ color: TEXT }}>
+                  {intake.status === "withdrawn" ? "They chose not to continue" : "Referral declined"}
+                </p>
               </div>
-              <div className="p-5">
-                <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: STATUS_META[intake.status].bg }}>
-                  <XCircle size={16} style={{ color: STATUS_META[intake.status].color }} className="shrink-0" />
-                  <p className="text-xs" style={{ color: TEXT }}>
-                    {intake.status === "withdrawn"
-                      ? intake.withdrawn_reason || "The participant chose not to continue with this provider."
-                      : intake.decline_reason || "Declined."}
-                  </p>
-                </div>
+              <div className="space-y-1 p-5">
+                <p className="text-sm font-medium" style={{ color: MUTED }}>Reason recorded</p>
+                <p className="text-sm" style={{ color: TEXT }}>
+                  {(intake.status === "withdrawn" ? intake.withdrawn_reason : intake.decline_reason) || "No reason was recorded."}
+                </p>
+                <p className="pt-3 text-xs" style={{ color: MUTED }}>
+                  This referral is closed and kept for your records. Start a new referral if they get back in touch.
+                </p>
               </div>
             </div>
           ) : (
             <>
               {viewedStep === 0 && (
-                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+                <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
                   <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                     <Mail size={16} style={{ color: PLUM }} />
-                    <p className="text-sm font-black" style={{ color: TEXT }}>Enquiry</p>
+                    <p className="text-base font-semibold" style={{ color: TEXT }}>Enquiry</p>
                   </div>
 
                   <div className="p-5 space-y-3">
@@ -2344,23 +2452,23 @@ function IntakeDetail({
                           Logged via {sourceMeta(intake.source).label.toLowerCase()}. Start screening when you're ready to review this enquiry.
                         </p>
                         <div className="pt-2 space-y-1.5">
-                          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Decline reason</label>
+                          <label className="text-sm font-medium" style={{ color: TEXT }}>Not a fit? Say why, then decline</label>
                           <div className="flex gap-2">
                             <Input value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} placeholder="e.g. Outside our service area" />
-                            <Button variant="outline" className="shrink-0 gap-2 rounded-lg" style={{ color: DANGER }} onClick={decline} disabled={!declineReason.trim()}>
+                            <Button variant="outline" className="shrink-0 gap-2 rounded-full" style={{ color: DANGER }} onClick={decline} disabled={!declineReason.trim()}>
                               <XCircle size={14} /> Decline
                             </Button>
                           </div>
                         </div>
                         <div className="flex justify-between gap-2 pt-1">
-                          <Button variant="outline" className="gap-2 rounded-lg" onClick={onBack}>
+                          <Button variant="outline" className="gap-2 rounded-full" onClick={onBack}>
                             <ArrowLeft size={14} /> Back
                           </Button>
                           <div className="flex gap-2">
-                            <Button variant="outline" className="rounded-lg" onClick={saveEnquiryDraft}>
-                              Save Draft
+                            <Button variant="outline" className="rounded-full" onClick={saveEnquiryDraft}>
+                              Save draft
                             </Button>
-                            <Button variant="navy" className="gap-2 rounded-lg" onClick={startScreening}>
+                            <Button variant="navy" className="gap-2 rounded-full" onClick={startScreening}>
                               Next <ClipboardCheck size={14} />
                             </Button>
                           </div>
@@ -2379,10 +2487,10 @@ function IntakeDetail({
               )}
 
               {viewedStep === 1 && (
-                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+                <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
                   <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                     <ClipboardCheck size={16} style={{ color: PLUM }} />
-                    <p className="text-sm font-black" style={{ color: TEXT }}>Screening</p>
+                    <p className="text-base font-semibold" style={{ color: TEXT }}>Screening</p>
                   </div>
                   <div className="p-5 space-y-3">
                     {intake.status === "screening" ? (
@@ -2397,23 +2505,23 @@ function IntakeDetail({
                         />
 
                         <div className="pt-2 space-y-1.5">
-                          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Decline reason</label>
+                          <label className="text-sm font-medium" style={{ color: TEXT }}>Not a fit? Say why, then decline</label>
                           <div className="flex gap-2">
                             <Input value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} placeholder="e.g. Outside our service area" />
-                            <Button variant="outline" className="shrink-0 gap-2 rounded-lg" style={{ color: DANGER }} onClick={decline} disabled={!declineReason.trim()}>
+                            <Button variant="outline" className="shrink-0 gap-2 rounded-full" style={{ color: DANGER }} onClick={decline} disabled={!declineReason.trim()}>
                               <XCircle size={14} /> Decline
                             </Button>
                           </div>
                         </div>
                         <div className="flex justify-between gap-2 pt-1">
-                          <Button variant="outline" className="gap-2 rounded-lg" onClick={goBack}>
+                          <Button variant="outline" className="gap-2 rounded-full" onClick={goBack}>
                             <ArrowLeft size={14} /> Back
                           </Button>
                           <div className="flex gap-2">
-                            <Button variant="outline" className="rounded-lg" onClick={saveScreeningDraft}>
-                              Save Draft
+                            <Button variant="outline" className="rounded-full" onClick={saveScreeningDraft}>
+                              Save draft
                             </Button>
-                            <Button variant="navy" className="gap-2 rounded-lg" onClick={accept}>
+                            <Button variant="navy" className="gap-2 rounded-full" onClick={accept}>
                               Next <CheckCircle2 size={14} />
                             </Button>
                           </div>
@@ -2430,10 +2538,10 @@ function IntakeDetail({
               )}
 
               {viewedStep === 2 && (
-                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER}}>
+                <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER}}>
                   <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                     <Mic size={16} style={{ color: PLUM }} />
-                    <p className="text-sm font-black" style={{ color: TEXT }}>Meet &amp; Greet</p>
+                    <p className="text-base font-semibold" style={{ color: TEXT }}>Meet &amp; Greet</p>
                   </div>
                   <div className="p-5 space-y-3">
                     <MeetGreetCapture
@@ -2455,16 +2563,16 @@ function IntakeDetail({
                     />
                     {intake.status === "meet_greet" && (
                       <div className="flex justify-between gap-2">
-                        <Button variant="outline" className="gap-2 rounded-lg" onClick={goBack}>
+                        <Button variant="outline" className="gap-2 rounded-full" onClick={goBack}>
                           <ArrowLeft size={14} /> Back
                         </Button>
                         <div className="flex gap-2">
-                          <Button variant="outline" className="rounded-lg" onClick={saveMeetGreetDraft}>
-                            Save Draft
+                          <Button variant="outline" className="rounded-full" onClick={saveMeetGreetDraft}>
+                            Save draft
                           </Button>
                           <Button
                             variant="navy"
-                            className="gap-2 rounded-lg"
+                            className="gap-2 rounded-full"
                             onClick={saveMeetGreetAndContinue}
                             disabled={openSummaryLines > 0}
                             title={openSummaryLines > 0 ? "Include or dismiss everything said that isn't in the summary first" : undefined}
@@ -2479,10 +2587,10 @@ function IntakeDetail({
               )}
 
               {viewedStep === 3 && (
-                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+                <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
                   <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                     <FileSignature size={16} style={{ color: PLUM }} />
-                    <p className="text-sm font-black" style={{ color: TEXT }}>Service Agreement</p>
+                    <p className="text-base font-semibold" style={{ color: TEXT }}>Service Agreement</p>
                   </div>
                   <div className="p-5 space-y-3">
                     {(intake.meet_greet_summary?.supports.length ?? 0) > 0 && (
@@ -2501,7 +2609,7 @@ function IntakeDetail({
                     />
                     {intake.status === "awaiting_signatures" && (
                       <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3" style={{ borderColor: BORDER }}>
-                        <Button variant="outline" className="gap-2 rounded-lg" onClick={goBack}>
+                        <Button variant="outline" className="gap-2 rounded-full" onClick={goBack}>
                           <ArrowLeft size={14} /> Back
                         </Button>
                         <p className="text-xs" style={{ color: MUTED }}>
@@ -2540,7 +2648,7 @@ function IntakeDetail({
                     )}
 
                     {intake.status === "signed" && (
-                      <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={activate} disabled={activating}>
+                      <Button variant="navy" className="w-full gap-2 rounded-full" onClick={activate} disabled={activating}>
                         {activating ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />} Activate participant
                       </Button>
                     )}
@@ -2549,10 +2657,10 @@ function IntakeDetail({
               )}
 
               {viewedStep === 4 && (
-                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+                <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
                   <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                     <ShieldCheck size={16} style={{ color: PLUM }} />
-                    <p className="text-sm font-black" style={{ color: TEXT }}>Profile</p>
+                    <p className="text-base font-semibold" style={{ color: TEXT }}>Profile</p>
                   </div>
                   <div className="p-5 space-y-4">
                     <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
@@ -2595,29 +2703,32 @@ function IntakeDetail({
               )}
 
               {intake.status !== "active" && intake.status !== "inactive" && (
-                <div className="rounded-lg border p-4" style={{ background: SOFT, borderColor: BORDER }}>
+                <div className="rounded-2xl border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
                   {!terminateOpen ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setTerminateOpen(true)}
-                      className="gap-1.5 rounded-lg hover:bg-transparent hover:opacity-80"
-                      style={{ color: "#DC2626" }}
-                    >
-                      <XCircle size={13} /> Terminate application
-                    </Button>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: TEXT }}>Not going ahead?</p>
+                        <p className="text-xs" style={{ color: MUTED }}>
+                          If {intake.full_name.split(" ")[0]} has decided not to continue, close the referral. It stays in your records.
+                        </p>
+                      </div>
+                      <Button type="button" variant="outline" onClick={() => setTerminateOpen(true)} className="gap-1.5 rounded-full" style={{ color: DANGER }}>
+                        <XCircle size={14} /> Close referral
+                      </Button>
+                    </div>
                   ) : (
-                    <div className="space-y-2">
-                      <p className="text-[11px]" style={{ color: MUTED }}>
-                        Use this if the participant has decided not to continue with this provider. Ends the pipeline immediately from any stage.
-                      </p>
-                      <Input value={terminateReason} onChange={(e) => setTerminateReason(e.target.value)} placeholder="e.g. Chose a different provider" />
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="rounded-lg" onClick={() => { setTerminateOpen(false); setTerminateReason(""); }}>
-                          Cancel
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium" style={{ color: TEXT }} htmlFor="close-referral-reason">
+                        Why isn't {intake.full_name.split(" ")[0]} continuing?
+                      </label>
+                      <Input id="close-referral-reason" autoFocus value={terminateReason} onChange={(e) => setTerminateReason(e.target.value)} placeholder="e.g. Chose a different provider" />
+                      <p className="text-xs" style={{ color: MUTED }}>This ends onboarding from any stage and moves the referral to Closed.</p>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button variant="outline" className="rounded-full" onClick={() => { setTerminateOpen(false); setTerminateReason(""); }}>
+                          Keep going
                         </Button>
-                        <Button variant="outline" size="sm" className="rounded-lg" style={{ color: DANGER }} onClick={terminate} disabled={!terminateReason.trim()}>
-                          <XCircle size={13} className="mr-1.5" /> Confirm termination
+                        <Button className="gap-1.5 rounded-full text-white" style={{ background: DANGER }} onClick={terminate} disabled={!terminateReason.trim()}>
+                          <XCircle size={14} /> Close referral
                         </Button>
                       </div>
                     </div>
@@ -2629,24 +2740,27 @@ function IntakeDetail({
         </div>
 
         <div className="space-y-5">
-          <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
-            <Avatar name={intake.full_name} size={44} />
-            <h2 className="text-base font-black mt-3" style={{ color: TEXT }}>{intake.full_name}</h2>
-            <div className="mt-1"><StatusBadge status={intake.status} /></div>
-            <div className="mt-4 pt-4 border-t space-y-2" style={{ borderColor: BORDER }}>
-              <p className="text-xs" style={{ color: MUTED }}>NDIS [ID Number Redacted]</p>
-              {intake.email && <p className="text-xs" style={{ color: MUTED }}>{intake.email}</p>}
-              {intake.phone && <p className="text-xs" style={{ color: MUTED }}>{intake.phone}</p>}
-              <p className="text-xs flex items-center gap-1.5" style={{ color: MUTED }}>
-                {(() => { const Icon = sourceMeta(intake.source).icon; return <Icon size={12} />; })()}
-                {sourceMeta(intake.source).label}
-              </p>
-            </div>
+          <div className="rounded-2xl border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
+            <h2 className="text-sm font-semibold" style={{ color: TEXT }}>Details</h2>
+            <dl className="mt-3 space-y-2.5 text-sm">
+              {([
+                ["NDIS number", intake.ndis_number || "Not recorded"],
+                ["Category", intake.service_category === "aged_care" ? "Aged Care" : "Disability"],
+                ["Email", intake.email ? <a href={`mailto:${intake.email}`} className="break-all underline-offset-4 hover:underline" style={{ color: TEXT }}>{intake.email}</a> : "Not recorded"],
+                ["Phone", intake.phone ? <a href={`tel:${intake.phone.replace(/\s+/g, "")}`} className="underline-offset-4 hover:underline" style={{ color: TEXT }}>{intake.phone}</a> : "Not recorded"],
+                ["Came in by", sourceMeta(intake.source).label],
+              ] as [string, React.ReactNode][]).map(([term, value]) => (
+                <div key={term} className="flex justify-between gap-3">
+                  <dt style={{ color: MUTED }}>{term}</dt>
+                  <dd className="min-w-0 text-right font-medium" style={{ color: TEXT }}>{value}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
 
           {intake.status !== "enquiry" && intake.status !== "declined" && intake.status !== "withdrawn" && intake.status !== "active" && (
-            <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
-              <label className="text-[10px] font-black uppercase tracking-wide mb-2 block" style={{ color: MUTED }}>Board card note</label>
+            <div className="rounded-2xl border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
+              <label className="mb-2 block text-sm font-semibold" style={{ color: TEXT }}>Note on the board card</label>
               <Input
                 value={boardSubtitle}
                 onChange={(e) => setBoardSubtitle(e.target.value)}
@@ -2654,7 +2768,7 @@ function IntakeDetail({
                 placeholder={subtitleForIntake(intake)}
                 className="text-sm"
               />
-              <p className="text-[10px] mt-1.5" style={{ color: MUTED }}>Shown as the second line on the board card.</p>
+              <p className="mt-1.5 text-xs" style={{ color: MUTED }}>Shown under their name on the board, e.g. "Waiting on plan details".</p>
             </div>
           )}
         </div>
