@@ -38,23 +38,23 @@ export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessi
   }, [sessions, search]);
 
   return (
-    <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+    <section className="rounded-2xl border border-cc-border bg-cc-surface p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <CalendarDays className="h-3.5 w-3.5 text-[#E8457A]" />
-          <h4 className="text-[13px] font-black text-[#1A1A2E]">Shift History</h4>
-          <span className="rounded-full bg-[#EDE3FC] px-2.5 py-0.5 text-[10px] font-black text-[#E8457A]">
+          <h4 className="text-[13px] font-semibold text-cc-text">Shift History</h4>
+          <span className="rounded-full bg-[#EDE3FC] px-2.5 py-0.5 text-[11px] font-semibold text-[#E8457A]">
             {filtered.length}{filtered.length !== sessions.length ? ` of ${sessions.length}` : ""}
           </span>
         </div>
         {sessions.length > 0 && (
           <div className="relative w-full sm:w-56">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6A6A77]" />
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-cc-muted" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search shift, worker, notes…"
-              className="h-8 rounded-lg border-purple-100/60 pl-8 text-[12px]"
+              className="h-8 rounded-lg border-cc-border pl-8 text-[12px]"
             />
           </div>
         )}
@@ -65,15 +65,15 @@ export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessi
           {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
         </div>
       ) : sessions.length === 0 ? (
-        <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
-          <CalendarDays className="h-8 w-8 text-[#6A6A77] opacity-30 mx-auto mb-2" />
-          <p className="text-[13px] font-semibold text-[#1A1A2E]">No shifts yet</p>
-          <p className="text-[11px] text-[#6A6A77] mt-1">Shifts with this participant will appear here.</p>
+        <div className="rounded-xl bg-cc-surface border border-cc-border p-6 text-center">
+          <CalendarDays className="h-8 w-8 text-cc-muted opacity-30 mx-auto mb-2" />
+          <p className="text-[13px] font-semibold text-cc-text">No shifts yet</p>
+          <p className="text-[11px] text-cc-muted mt-1">Shifts with this participant will appear here.</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
-          <Search className="h-8 w-8 text-[#6A6A77] opacity-30 mx-auto mb-2" />
-          <p className="text-[13px] font-semibold text-[#1A1A2E]">No shifts match "{search}"</p>
+        <div className="rounded-xl bg-cc-surface border border-cc-border p-6 text-center">
+          <Search className="h-8 w-8 text-cc-muted opacity-30 mx-auto mb-2" />
+          <p className="text-[13px] font-semibold text-cc-text">No shifts match "{search}"</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -83,7 +83,7 @@ export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessi
             return (
               <div
                 key={session.id}
-                className="rounded-xl bg-white border overflow-hidden transition-colors"
+                className="rounded-xl bg-cc-surface border overflow-hidden transition-colors"
                 style={{ borderColor: isOpen ? "rgba(232,69,122,0.35)" : "rgba(221,214,254,0.5)" }}
               >
                 {/* Row header — always visible, most relevant info at a glance */}
@@ -94,32 +94,32 @@ export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessi
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold text-[#1A1A2E] capitalize truncate">
+                      <p className="text-[13px] font-bold text-cc-text capitalize truncate">
                         {(session.session_type || "session").replace(/_/g, " ")}
                       </p>
-                      <p className="text-[11px] text-[#6A6A77] mt-0.5 truncate">
+                      <p className="text-[11px] text-cc-muted mt-0.5 truncate">
                         {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
                         {session.worker_name ? ` · ${session.worker_name}` : ""}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {session.compliance_score != null && (
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${complianceTone(session.compliance_score)}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${complianceTone(session.compliance_score)}`}>
                           {session.compliance_score}%
                         </span>
                       )}
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${statusBadge(session.status || "")}`}>
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold capitalize ${statusBadge(session.status || "")}`}>
                         {session.status || "draft"}
                       </span>
                       <ChevronDown
                         size={14}
-                        className="text-[#6A6A77] opacity-50 shrink-0 transition-transform"
+                        className="text-cc-muted opacity-50 shrink-0 transition-transform"
                         style={{ transform: isOpen ? "rotate(180deg)" : "none" }}
                       />
                     </div>
                   </div>
                   {!isOpen && notesText && (
-                    <p className="mt-1.5 text-[11px] text-[#6A6A77] line-clamp-2 leading-relaxed">
+                    <p className="mt-1.5 text-[11px] text-cc-muted line-clamp-2 leading-relaxed">
                       {notesText}
                     </p>
                   )}
@@ -127,7 +127,7 @@ export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessi
 
                 {/* Expanded — most relevant detail inline, full page one click away */}
                 {isOpen && (
-                  <div className="border-t border-purple-100/60 p-3 space-y-3">
+                  <div className="border-t border-cc-border p-3 space-y-3">
                     <Link
                       href={`/sessions/${session.id}`}
                       className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#FDF0F4]"
@@ -137,26 +137,26 @@ export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessi
                     </Link>
 
                     <div className="flex flex-wrap gap-2">
-                      <div className="rounded-lg border border-purple-100/60 bg-[#ECECEC] px-3 py-2 flex-1 min-w-[110px]">
-                        <p className="text-[9px] font-black uppercase tracking-wider text-[#6A6A77]">Date</p>
-                        <p className="text-[13px] font-bold text-[#1A1A2E] mt-0.5">{safeFormat(session.session_date)}</p>
+                      <div className="rounded-lg border border-cc-border bg-[#ECECEC] px-3 py-2 flex-1 min-w-[110px]">
+                        <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted">Date</p>
+                        <p className="text-[13px] font-bold text-cc-text mt-0.5">{safeFormat(session.session_date)}</p>
                       </div>
-                      <div className="rounded-lg border border-purple-100/60 bg-[#ECECEC] px-3 py-2 flex-1 min-w-[110px]">
-                        <p className="text-[9px] font-black uppercase tracking-wider text-[#6A6A77]">Duration</p>
-                        <p className="text-[13px] font-bold text-[#1A1A2E] mt-0.5">{session.duration_minutes || 0} min</p>
+                      <div className="rounded-lg border border-cc-border bg-[#ECECEC] px-3 py-2 flex-1 min-w-[110px]">
+                        <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted">Duration</p>
+                        <p className="text-[13px] font-bold text-cc-text mt-0.5">{session.duration_minutes || 0} min</p>
                       </div>
-                      <div className="rounded-lg border border-purple-100/60 bg-[#ECECEC] px-3 py-2 flex-1 min-w-[110px]">
-                        <p className="text-[9px] font-black uppercase tracking-wider text-[#6A6A77] flex items-center gap-1">
+                      <div className="rounded-lg border border-cc-border bg-[#ECECEC] px-3 py-2 flex-1 min-w-[110px]">
+                        <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted flex items-center gap-1">
                           <User size={9} /> Support Worker
                         </p>
-                        <p className="text-[13px] font-bold text-[#1A1A2E] mt-0.5 truncate">
-                          {session.worker_name || <span className="italic font-medium text-[#6A6A77]">Not recorded</span>}
+                        <p className="text-[13px] font-bold text-cc-text mt-0.5 truncate">
+                          {session.worker_name || <span className="italic font-medium text-cc-muted">Not recorded</span>}
                         </p>
                       </div>
                       {session.compliance_score != null && (
-                        <div className="rounded-lg border border-purple-100/60 bg-[#ECECEC] px-3 py-2 flex-1 min-w-[110px]">
-                          <p className="text-[9px] font-black uppercase tracking-wider text-[#6A6A77] mb-1">Compliance</p>
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${complianceTone(session.compliance_score)}`}>
+                        <div className="rounded-lg border border-cc-border bg-[#ECECEC] px-3 py-2 flex-1 min-w-[110px]">
+                          <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted mb-1">Compliance</p>
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${complianceTone(session.compliance_score)}`}>
                             {session.compliance_score}%
                           </span>
                         </div>
@@ -164,9 +164,9 @@ export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessi
                     </div>
 
                     {notesText && (
-                      <div className="rounded-lg border border-purple-100/60 bg-[#ECECEC] px-3 py-2.5">
-                        <p className="text-[9px] font-black uppercase tracking-wider text-[#6A6A77] mb-1.5">Notes</p>
-                        <p className="text-[12px] text-[#1A1A2E] leading-relaxed whitespace-pre-wrap line-clamp-6">
+                      <div className="rounded-lg border border-cc-border bg-[#ECECEC] px-3 py-2.5">
+                        <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted mb-1.5">Notes</p>
+                        <p className="text-[12px] text-cc-text leading-relaxed whitespace-pre-wrap line-clamp-6">
                           {notesText}
                         </p>
                       </div>

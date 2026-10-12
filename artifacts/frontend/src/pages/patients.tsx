@@ -10,6 +10,7 @@ import {
   type BillingPeriod, type TaskTemplate as DbTaskTemplate, type TaskTemplatesResponse,
 } from "@/services/coordinatorService";
 import { ParticipantRecordsTab } from "@/components/participants/ParticipantRecordsTab";
+import { ParticipantDirectoryWelcome } from "@/components/participants/ParticipantDirectoryWelcome";
 import { ParticipantInvoiceSummary } from "@/components/participants/ParticipantInvoiceSummary";
 import { ParticipantInvoicesPanel } from "@/components/participants/ParticipantInvoicesPanel";
 import { ParticipantServiceAgreementSection } from "@/components/participants/ParticipantServiceAgreementSection";
@@ -1369,6 +1370,16 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
     ...(isCoordinator ? [{ id: "plan_meetings" as const, label: "Meetings & notes", shortLabel: "Meetings", icon: MessageSquare }] : []),
   ];
 
+  const tabDescriptions: Record<ParticipantDetailTab, string> = {
+    overview: "Personal details, key contacts and records for a clear picture of this participant's support.",
+    care_profile: "Daily routines, support preferences, medications and clinical information for safe, consistent care.",
+    plan_goals: "Review funding, agreed supports and goals, then track the tasks that help this participant progress.",
+    sessions: "Review delivered support, staff notes and outcomes across this participant's shift history.",
+    compliance: "Review documentation checks and follow up on records that need attention.",
+    plan_meetings: "Keep review discussions, meeting notes and follow-up decisions together.",
+    records: "Participant documents and supporting records.",
+  };
+
 
   return (
     <div className="flex flex-col min-h-full">
@@ -1381,13 +1392,13 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
 
         {/* Avatar + name */}
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-[#7C3AED] to-[#E8457A] flex items-center justify-center text-white text-sm font-black shrink-0 select-none">
+          <div className="w-11 h-11 sm:w-10 sm:h-10 rounded-2xl bg-cc-plum flex items-center justify-center text-white text-sm font-semibold shrink-0 select-none">
             {initials}
           </div>
           <div className="flex-1 min-w-0">
             <p className="hidden">Participant Profile</p>
             <h3
-              className="text-[16px] font-black leading-snug sm:truncate"
+              className="text-xl font-semibold leading-snug break-words"
               style={{ color: "var(--cc-text)" }}
             >
               {participant.full_name}
@@ -1420,7 +1431,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
               <button
                 type="button"
                 onClick={onToggleFullScreen}
-                className="hidden lg:flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black transition-colors hover:bg-cc-active-bg"
+                className="hidden lg:flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors hover:bg-cc-active-bg"
                 style={{ borderColor: "var(--cc-border)", color: "var(--cc-plum)" }}
               >
                 {fullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
@@ -1432,7 +1443,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                 type="button"
                 onClick={handleExportProfile}
 
-                className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black transition-colors hover:bg-cc-active-bg disabled:opacity-60"
+                className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors hover:bg-cc-active-bg disabled:opacity-60"
                 style={{ borderColor: "var(--cc-border)", color: "var(--cc-plum)" }}
               >
                 <FileDown size={13} />
@@ -1463,9 +1474,9 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                   <div key={metric.label} className={`rounded-xl border px-3 py-2.5 ${metric.tone}`}>
                     <div className="flex items-center gap-1.5 mb-1">
                       <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                      <p className="text-[9px] font-black uppercase tracking-wide opacity-70 leading-tight">{metric.label}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70 leading-tight">{metric.label}</p>
                     </div>
-                    <p className="text-[12px] sm:text-[13px] font-black capitalize leading-snug break-words">{metric.value}</p>
+                    <p className="text-[12px] sm:text-[13px] font-semibold capitalize leading-snug break-words">{metric.value}</p>
                     {metric.linkLabel && (
                       <button
                         type="button"
@@ -1487,7 +1498,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                   type="button"
                   onClick={handleExportProfile}
 
-                  className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black transition-colors hover:bg-cc-active-bg disabled:opacity-60"
+                  className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors hover:bg-cc-active-bg disabled:opacity-60"
                   style={{ borderColor: "var(--cc-border)", color: "var(--cc-plum)" }}
                 >
                   <FileDown size={13} />
@@ -1508,7 +1519,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
             twice already; OnboardingAreaSwitcher's shipped code has the same
             note). The content wrapper right below carries the matching
             var(--cc-surface) background that completes the illusion. */}
-        <div className="flex items-end gap-1.5 overflow-x-auto scrollbar-none scroll-px-3">
+        <nav aria-label="Participant record sections" className="flex items-end gap-1.5 overflow-x-auto scroll-px-3">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -1517,7 +1528,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 aria-current={active ? "page" : undefined}
-                className="relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2.5 sm:px-3.5 text-[11px] sm:text-[12px] font-bold transition-opacity min-h-[44px]"
+                className="relative flex shrink-0 items-center gap-2 whitespace-nowrap px-3 py-3 sm:px-4 text-sm font-semibold transition-opacity min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum"
                 style={{
                   borderRadius: active ? "14px 14px 0 0" : "0",
                   background: active ? "var(--cc-surface)" : "transparent",
@@ -1536,11 +1547,16 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
               </button>
             );
           })}
-        </div>
+        </nav>
       </div>
 
       {/* ── Tab content ───────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 pb-6" style={{ background: "var(--cc-surface)" }}>
+        <header className="rounded-xl border border-cc-border bg-cc-soft p-4 sm:p-5">
+          <p className="text-xs font-medium text-cc-muted">Participant record</p>
+          <h2 className="mt-1 text-lg font-semibold text-cc-text">{TABS.find(tab => tab.id === activeTab)?.label ?? "Overview"}</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-cc-muted">{tabDescriptions[activeTab]}</p>
+        </header>
 
         {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
@@ -1748,7 +1764,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                               }}
                             >
                               <p className="text-[11px] leading-relaxed flex-1" style={{ color: "var(--cc-text)" }}>{desc}</p>
-                              <span className="shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors whitespace-nowrap">
+                              <span className="shrink-0 mt-0.5 px-1.5 py-0.5 text-[11px] font-bold rounded bg-violet-100 text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors whitespace-nowrap">
                                 Use
                               </span>
                             </div>
@@ -1768,7 +1784,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                               onClick={() => setGoalSuccessCriteria(crit)}
                             >
                               <p className="text-[11px] leading-relaxed flex-1" style={{ color: "var(--cc-text)" }}>{crit}</p>
-                              <span className="shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors whitespace-nowrap">
+                              <span className="shrink-0 mt-0.5 px-1.5 py-0.5 text-[11px] font-bold rounded bg-violet-100 text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors whitespace-nowrap">
                                 Use
                               </span>
                             </div>
@@ -1996,7 +2012,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                               onClick={() => { setTaskInstructions(instr); setTaskInstructionsAiApplied(true); }}
                             >
                               <p className="text-[11px] leading-relaxed flex-1" style={{ color: "var(--cc-text)" }}>{instr}</p>
-                              <span className="shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors whitespace-nowrap">
+                              <span className="shrink-0 mt-0.5 px-1.5 py-0.5 text-[11px] font-bold rounded bg-violet-100 text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors whitespace-nowrap">
                                 Use
                               </span>
                             </div>
@@ -2394,12 +2410,12 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                         {progressLoading && <p className="text-[12px] text-[#6A6A77] flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Loading progress…</p>}
                         {progressData && (
                           <div className="space-y-3">
-                            <p className="text-[11px] font-black uppercase tracking-widest text-[#6A6A77]">Progress: Last 30 Days</p>
+                            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#6A6A77]">Progress: Last 30 Days</p>
                             <div className="grid grid-cols-3 gap-2">
                               {([["Sessions", progressData.sessions_count], ["With Evidence", progressData.evidence_count], ["Evidence Rate", `${pct}%`]] as [string, string | number][]).map(([l, v]) => (
                                 <div key={l} className="rounded-lg px-3 py-2 bg-white border border-purple-100/60 text-center">
-                                  <p className="text-[15px] font-black text-[#E8457A]">{v}</p>
-                                  <p className="text-[9px] font-semibold text-[#6A6A77]">{l}</p>
+                                  <p className="text-[15px] font-semibold text-[#E8457A]">{v}</p>
+                                  <p className="text-[11px] font-semibold text-[#6A6A77]">{l}</p>
                                 </div>
                               ))}
                             </div>
@@ -2411,7 +2427,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
                             </div>
                             {progressData.sessions.length > 0 && (
                               <div className="space-y-1">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-[#6A6A77]">Recent Sessions</p>
+                                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#6A6A77]">Recent Sessions</p>
                                 {progressData.sessions.slice(0, 4).map((s) => (
                                   <div key={s.id} className="flex items-center justify-between rounded-lg px-3 py-1.5 bg-white text-[11px] border border-purple-100/60">
                                     <span className="text-[#374151]">{s.session_date}</span>
@@ -2646,11 +2662,11 @@ export default function Patients() {
     }
   }, [deepLinkId]);
 
-  const { data: participants, isLoading: participantsLoading, refetch } = useGetParticipants();
+  const { data: participants, isLoading: participantsLoading, isError: participantsError, refetch } = useGetParticipants();
 
   const filteredParticipants = (participants ?? [])
     .filter((p: any) => {
-      const q = search.toLowerCase();
+      const q = search.trim().toLowerCase();
       const matchesSearch = !q
         || p.full_name.toLowerCase().includes(q)
         || (p.ndis_number ?? "").includes(q);
@@ -2673,7 +2689,7 @@ export default function Patients() {
 
       {/* ── Left panel — participant list ─────────────────────────────── */}
       <div
-        className={`${detailFullScreen ? "hidden" : showMobileDetail ? "hidden lg:flex" : "flex"} ${sidebarCollapsed ? "lg:w-14" : "lg:w-[300px] xl:w-[330px]"} w-full shrink-0 flex-col rounded-none md:rounded-2xl overflow-hidden transition-all duration-200`}
+        className={`${detailFullScreen ? "hidden" : showMobileDetail ? "hidden lg:flex" : "flex"} ${sidebarCollapsed ? "lg:w-14" : "lg:w-[320px] xl:w-[360px]"} w-full shrink-0 flex-col rounded-none md:rounded-2xl overflow-hidden transition-all duration-200`}
         style={{ background: "var(--cc-bg)", border: showMobileDetail ? "none" : "1px solid var(--cc-border)" }}
       >
         {sidebarCollapsed ? (
@@ -2836,6 +2852,8 @@ export default function Patients() {
                 </div>
               </div>
             ))
+          ) : participantsError ? (
+            <div role="alert" className="p-4 text-sm text-cc-text"><p>Participant records couldn’t be loaded.</p><button type="button" onClick={() => void refetch()} className="mt-3 min-h-11 rounded-lg border border-cc-border px-4 font-semibold">Try again</button></div>
           ) : filteredParticipants.length === 0 ? (
             <div className="flex flex-col items-center py-12 gap-3">
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "var(--cc-active-bg)" }}>
@@ -2847,6 +2865,7 @@ export default function Patients() {
                   ? translateParams("patients.empty.letterFilter", { letter: letterFilter })
                   : translate("patients.empty.adjustFilters")}
               </p>
+              {(search || statusFilter !== "all" || letterFilter) && <button type="button" onClick={() => { setSearch(""); setStatusFilter("all"); setLetterFilter(null); }} className="min-h-11 rounded-lg border border-cc-border px-4 text-sm font-semibold text-cc-text">Clear filters</button>}
             </div>
           ) : (
             filteredParticipants.map((p: any) => {
@@ -2858,6 +2877,7 @@ export default function Patients() {
                   type="button"
                   onClick={() => { setSelectedId(p.id); setShowMobileDetail(true); }}
                   data-testid={`button-participant-${p.id}`}
+                  aria-pressed={isSelected}
                   className="w-full text-left rounded-xl transition-all duration-150 flex items-center gap-3 px-3 py-2.5 border"
                   style={{
                     background: isSelected ? "var(--cc-active-bg)" : "transparent",
@@ -2940,17 +2960,7 @@ export default function Patients() {
             </div>
           </>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center gap-4 px-8 text-center">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: "var(--cc-active-bg)" }}>
-              <Users className="h-7 w-7 opacity-40" style={{ color: "var(--cc-plum)" }} />
-            </div>
-            <div>
-              <p className="text-[15px] font-semibold" style={{ color: "var(--cc-text)" }}>{translate("patients.selectPrompt")}</p>
-              <p className="text-[13px] mt-1.5 leading-relaxed" style={{ color: "var(--cc-muted)" }}>
-                {translate("patients.selectHint")}
-              </p>
-            </div>
-          </div>
+          <ParticipantDirectoryWelcome participants={participants ?? []} loading={participantsLoading} error={participantsError} onRetry={() => void refetch()} onSelect={id => { setSelectedId(id); setShowMobileDetail(true); }} />
         )}
       </div>
     </div>
