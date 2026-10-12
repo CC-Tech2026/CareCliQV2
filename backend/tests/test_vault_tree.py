@@ -15,11 +15,6 @@ def _doc(category, source_table="x", person_type="Worker", subtype=None, status=
             "person_id": person_id}
 
 
-def test_governance_categories_are_their_own_subfolders():
-    assert vault_service._tree_placement(_doc("risk_management")) == ("governance", "risk_management")
-    assert vault_service._tree_placement(_doc("audit_packs", person_type="Organisation")) == ("governance", "audit_packs")
-
-
 def test_participant_records_file_under_participant_folder():
     assert vault_service._tree_placement(_doc("session_notes")) == ("participant", "clinical_docs")
     assert vault_service._tree_placement(_doc("medication_records")) == ("participant", "clinical_docs")
@@ -218,20 +213,112 @@ def test_office_staff_are_listed_only_with_documents_and_have_no_requirements():
     assert people["c1"]["gap_count"] == 0
 
 
-def test_tree_shows_every_subfolder_with_gap_totals():
-    with patch.object(vault_service, "_tree_documents", return_value={}), \
+def _tree(grouped=None, groups=()):
+    with patch.object(vault_service, "_tree_documents", return_value=grouped or {}), \
          patch.object(vault_service, "_person_refs", return_value={"Participant": {}, "Worker": {}}), \
          patch.object(vault_service, "_participant_facts", return_value={"p1": _participant()}), \
-         patch.object(vault_service, "_worker_facts", return_value={"w1": _worker()}):
-        tree = {t["key"]: t for t in vault_service.list_vault_tree("org-1")}
+         patch.object(vault_service, "_worker_facts", return_value={"w1": _worker()}), \
+         patch.object(vault_service, "_registered_groups", return_value=frozenset(groups)):
+        return {t["key"]: t for t in vault_service.list_vault_tree("org-1")}
+
+
+def test_tree_shows_every_subfolder_with_gap_totals():
+    tree = _tree()
     for top, subs in vault_service.VAULT_TREE_SUBFOLDERS.items():
         assert [s["key"] for s in tree[top]["subfolders"]] == [key for key, _ in subs]
     assert tree["participant"]["gap_count"] == 3
     assert tree["participant"]["gap_people"] == 1
     assert tree["staff"]["gap_count"] == 4
     governance = {s["key"]: s["state"] for s in tree["governance"]["subfolders"]}
-    assert governance["risk_management"] == "missing"
-    assert governance["audit_packs"] == "not_applicable"
+    assert governance["gov_insurances"] == governance["gov_ndis_registration"] == "missing"
+    assert governance["gov_meeting_minutes"] == "not_applicable"
+    assert tree["governance"]["gap_count"] == len(vault_service.REQUIRED_GOVERNANCE_SUBFOLDERS)
+
+
+def test_vault_opens_in_the_four_folders_of_the_audit_structure():
+    assert list(vault_service.VAULT_TREE_TOPS.values()) == [
+        "Governance", "Participant Folder", "Policy & Procedures", "Staff Folder"]
+    assert [label for _, label in vault_service.VAULT_TREE_SUBFOLDERS["governance"]] == [
+        "Business & Continuity Plan", "Conflict of Interest", "Emergency Management", "Feedback & Complaints",
+        "Incident Management", "Insurances", "Meeting Minutes", "NDIS Registration", "Quality Management",
+        "Risk Management", "Training"]
+    assert [label for _, label in vault_service.VAULT_TREE_SUBFOLDERS["policy"]] == [
+        "Core Module", "Module 1", "Module 2", "Module 3", "Module 4", "Module 5", "Module 5A"]
+
+
+def test_policies_sit_under_core_module_and_audit_packs_under_quality():
+    assert vault_service._tree_placement(_doc("risk_management")) == ("policy", "core_module")
+    assert vault_service._tree_placement(_doc("policy_module_2")) == ("policy", "policy_module_2")
+    assert vault_service._tree_placement(_doc("gov_insurances")) == ("governance", "gov_insurances")
+    assert vault_service._tree_placement(_doc("audit_packs", person_type="Organisation")) == (
+        "governance", "gov_quality_management")
+
+
+def test_core_module_lists_its_nine_policy_areas_and_the_empty_ones():
+    policy = _doc("risk_management", status="on_file")
+    tree = _tree({("policy", "core_module"): [policy]})
+    core = tree["policy"]["subfolders"][0]
+    assert [s["key"] for s in core["sections"]] == list(vault_service.POLICY_CORE_KEYS)
+    assert core["state"] == "missing"
+    assert core["gap_count"] == 8
+    assert "Risk Management" not in core["missing"]
+
+
+def test_modules_apply_by_registration_group():
+    tree = _tree(groups={"0110"})
+    modules = {s["key"]: s["state"] for s in tree["policy"]["subfolders"]}
+    assert modules["policy_module_2"] == "missing"
+    assert modules["policy_module_1"] == modules["policy_module_5a"] == "not_applicable"
+
+
+def test_governance_upload_expiry_status():
+    from datetime import date, timedelta
+    today = date.today()
+    assert vault_service.governance_expiry_status(None) == "on_file"
+    assert vault_service.governance_expiry_status((today + timedelta(days=400)).isoformat()) == "on_file"
+    assert vault_service.governance_expiry_status((today + timedelta(days=10)).isoformat()) == "expiring"
+    assert vault_service.governance_expiry_status((today - timedelta(days=1)).isoformat()) == "expired"
+
+
+def test_expired_insurance_is_a_gap():
+    insurance = _doc("gov_insurances", status="expired", person_type="Organisation")
+    tree = _tree({("governance", "gov_insurances"): [insurance]})
+    states = {s["key"]: s["state"] for s in tree["governance"]["subfolders"]}
+    assert states["gov_insurances"] == "expired"
+
+
+def test_folder_pages_know_where_they_sit_in_the_tree():
+    assert [c["label"] for c in vault_service.category_tree_path("risk_management")] == [
+        "Policy & Procedures", "Core Module"]
+    assert [c["label"] for c in vault_service.category_tree_path("gov_insurances")] == ["Governance"]
+    assert vault_service.category_tree_path("session_notes") == []
+
+
+def test_search_matches_name_title_id_or_folder_and_gives_the_path():
+    agreement = _doc("consent_onboarding", "service_agreements", person_type="Participant",
+                     status="signed", person_id="p1", person_name="Liam Carter", doc_id="a")
+    agreement["title"] = "Service agreement SA-2026-0001"
+    agreement["doc_id"] = "SUNR-AGR-000001"
+    insurance = _doc("gov_insurances", person_type="Organisation", status="expiring", doc_id="i")
+    insurance["title"] = "Public liability certificate"
+    grouped = {("participant", "service_support"): [agreement], ("governance", "gov_insurances"): [insurance]}
+
+    def search(q="", flagged=False):
+        with patch.object(vault_service, "_tree_documents", return_value=grouped), \
+             patch.object(vault_service, "_person_refs", return_value={"Participant": {}, "Worker": {}}), \
+             patch.object(vault_service, "_participant_facts", return_value={"p1": _participant()}), \
+             patch.object(vault_service, "_worker_facts", return_value={}):
+            return vault_service.search_vault_tree("org-1", q, flagged)
+
+    for q in ("liam", "SUNR-AGR-000001", "service a & support", "sa-2026"):
+        results = search(q)
+        assert [r["document"]["id"] for r in results] == ["a"], q
+    assert results[0]["path"] == ["Participant Folder", "Liam Carter", "Service A & Support P"]
+    assert results[0]["href"] == "/md/vault/tree/participant/person/p1/service_support"
+    assert [r["document"]["id"] for r in search("insurances")] == ["i"]
+    assert search("insurances")[0]["href"] == "/md/vault/gov_insurances"
+    assert [r["document"]["id"] for r in search(flagged=True)] == ["i"]
+    assert search() == []
 
 
 def test_subfolder_documents_filter_to_one_person():

@@ -159,6 +159,16 @@ async def get_vault_tree(current_user: dict = Depends(get_current_user)):
     return {"folders": vault_service.list_vault_tree(org_id)}
 
 
+@router.get("/tree/search")
+async def get_tree_search(
+    q: str = Query(default="", max_length=200),
+    flagged: bool = Query(default=False),
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_md(current_user)
+    return {"results": vault_service.search_vault_tree(org_id, q, flagged)}
+
+
 @router.get("/tree/{top}/people")
 async def get_tree_people(top: str, current_user: dict = Depends(get_current_user)):
     org_id = _require_md(current_user)
@@ -265,6 +275,7 @@ async def post_governance_document(
     file: UploadFile = File(...),
     supersedes_document_id: str | None = Form(None),
     version_label: str | None = Form(None),
+    expiry_date: str | None = Form(None),
     visible_to_workers: bool = Form(False),
     current_user: dict = Depends(get_current_user),
 ):
@@ -278,6 +289,7 @@ async def post_governance_document(
         org_id, folder_key, title, description, user_id, raw, content_type,
         supersedes_document_id=supersedes_document_id or None,
         version_label=version_label or None,
+        expiry_date=expiry_date or None,
     )
     if visible_to_workers:
         doc = vault_service.set_governance_document_worker_visibility(org_id, doc["id"], True)

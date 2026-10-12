@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
+from . import vault_record_feeds
 from . import vault_service as vs
 from .supabase_client import get_supabase_admin
 
@@ -90,7 +91,10 @@ def _render_size(org_id: str, category: str, document_id: str) -> int:
     if category.startswith(vs.CUSTOM_FOLDER_PREFIX):
         _, data = vs._render_custom_folder_file(org_id, vs._custom_folder_id(category), document_id)
     elif category in vs.GOVERNANCE_FOLDER_KEYS:
-        _, data = vs._render_governance_file(org_id, category, document_id)
+        if vault_record_feeds.is_feed_document(document_id):
+            _, data = vault_record_feeds.render_feed_document(org_id, category, document_id)
+        else:
+            _, data = vs._render_governance_file(org_id, category, document_id)
     else:
         renderer = vs._RECORD_RENDERERS.get(category)
         if renderer is None:

@@ -26,12 +26,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, NotRequired, TypedDict
+from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import HTTPException
 
 from ..core.errors import internal_error_detail
 from .audit_readiness_service import INACTIVE_PARTICIPANT_STATUSES
+from .audit_readiness_service import load_profile as load_audit_profile
 from .credential_status import live_status
 from .credential_verification_service import canonical_credential_type
 from .onboarding_escalation_service import REQUIRED_CREDENTIAL_TYPES
@@ -86,7 +88,8 @@ class VaultDocument(TypedDict):
     subtype: NotRequired[str | None]
 
 
-GOVERNANCE_FOLDER_KEYS = (
+# The nine Practice Standards policy folders: Policy & Procedures > Core Module.
+POLICY_CORE_KEYS = (
     "governance_operational",
     "risk_management",
     "quality_management",
@@ -97,6 +100,36 @@ GOVERNANCE_FOLDER_KEYS = (
     "continuity_of_supports",
     "emergency_disaster_management",
 )
+
+# Policy & Procedures > Module 1 to 5A, with the registration group that
+# makes each one apply to an organisation (None: the organisation decides).
+POLICY_MODULES: dict[str, tuple[str, str | None]] = {
+    "policy_module_1": ("Module 1", "0104"),
+    "policy_module_2": ("Module 2", "0110"),
+    "policy_module_3": ("Module 3", "0118"),
+    "policy_module_4": ("Module 4", "0132"),
+    "policy_module_5": ("Module 5", "0131"),
+    "policy_module_5a": ("Module 5A", None),
+}
+
+# The organisation's own records: the Governance folder.
+GOVERNANCE_RECORD_FOLDERS: dict[str, str] = {
+    "gov_business_continuity": "Business & Continuity Plan",
+    "gov_conflict_of_interest": "Conflict of Interest",
+    "gov_emergency_management": "Emergency Management",
+    "gov_feedback_complaints": "Feedback & Complaints",
+    "gov_incident_management": "Incident Management",
+    "gov_insurances": "Insurances",
+    "gov_meeting_minutes": "Meeting Minutes",
+    "gov_ndis_registration": "NDIS Registration",
+    "gov_quality_management": "Quality Management",
+    "gov_risk_management": "Risk Management",
+    "gov_training": "Training",
+}
+
+# Every folder stored in governance_documents (uploads) and policy_documents
+# (in-app drafts).
+GOVERNANCE_FOLDER_KEYS = (*POLICY_CORE_KEYS, *POLICY_MODULES, *GOVERNANCE_RECORD_FOLDERS)
 
 CATEGORY_META: dict[str, dict[str, str]] = {
     "session_notes": {"label": "Session & Progress Notes", "group": "record"},
@@ -116,6 +149,8 @@ CATEGORY_META: dict[str, dict[str, str]] = {
     "human_resource_management": {"label": "Human Resource Management", "group": "governance"},
     "continuity_of_supports": {"label": "Continuity of Supports", "group": "governance"},
     "emergency_disaster_management": {"label": "Emergency & Disaster Management", "group": "governance"},
+    **{key: {"label": label, "group": "governance"} for key, (label, _) in POLICY_MODULES.items()},
+    **{key: {"label": label, "group": "governance"} for key, label in GOVERNANCE_RECORD_FOLDERS.items()},
 }
 
 # Statuses across every source table that mean "needs an MD's attention" —
@@ -1531,16 +1566,33 @@ def _render_audit_pack(org_id: str, document_id: str, exclude_fields: set[str] |
     return f"{safe}.json", data
 
 
+def governance_expiry_status(expiry_date: Any) -> str:
+    """on_file, or expiring / expired once a governance upload with an
+    expiry date (an insurance certificate, an NDIS registration) nears or
+    passes it — the same 60-day window as worker credentials."""
+    if not expiry_date:
+        return "on_file"
+    status = live_status(str(expiry_date), "valid")
+    return "on_file" if status == "valid" else status
+
+
+def _display_date(value: Any) -> str:
+    try:
+        return datetime.fromisoformat(str(value)[:10]).strftime("%d %b %Y").lstrip("0")
+    except ValueError:
+        return str(value)
+
+
 def _list_governance(org_id: str, folder_key: str) -> list[VaultDocument]:
     # Only current versions - a superseded row stays in the database (its
     # own version-history entry, reachable via list_governance_document_versions)
     # but is deliberately excluded from the folder's day-to-day list so an
     # MD always lands on the version that's actually in force.
-    try:
-        resp = (
+    def fetch(columns: str):
+        return (
             get_supabase_admin()
             .table("governance_documents")
-            .select("id, title, created_at")
+            .select(columns)
             .eq("organization_id", org_id)
             .eq("folder_key", folder_key)
             .is_("deleted_at", "null")
@@ -1549,8 +1601,15 @@ def _list_governance(org_id: str, folder_key: str) -> list[VaultDocument]:
             .limit(300)
             .execute()
         )
+
+    try:
+        resp = fetch("id, title, created_at, expiry_date")
     except Exception:
-        return []
+        # expiry_date arrives with migration 240; list without it until then.
+        try:
+            resp = fetch("id, title, created_at")
+        except Exception:
+            return []
     org_name = _org_name(org_id)
     doc_ids = [row["id"] for row in (resp.data or [])]
     policy_doc_by_governance_id = _policy_document_id_by_governance_id(org_id, doc_ids)
@@ -1558,15 +1617,17 @@ def _list_governance(org_id: str, folder_key: str) -> list[VaultDocument]:
     docs = []
     for row in resp.data or []:
         first_id, version = first_versions.get(row["id"], (row["id"], 1))
+        expiry = row.get("expiry_date")
         docs.append(VaultDocument(
             id=row["id"],
             category=folder_key,
             folder_label=CATEGORY_META[folder_key]["label"],
-            title=row.get("title") or "Policy document",
+            title=row.get("title") or ("Document" if folder_key in GOVERNANCE_RECORD_FOLDERS else "Policy document"),
             person_name=org_name,
             person_type="Organisation",
             date=str(row.get("created_at") or ""),
-            status="on_file",
+            status=governance_expiry_status(expiry),
+            detail=f"Expires {_display_date(expiry)}" if expiry else None,
             source_table="governance_documents",
             source_id=row["id"],
             has_stored_file=True,
@@ -2024,7 +2085,11 @@ DOC_TYPE_CODES: dict[str, str] = {
     "plan_meeting_sessions": "CON",
     "audit_pack_exports": "AUD",
     "governance_documents": "POL",
+    "governance_records": "GOV",
     "vault_custom_folder_documents": "DOC",
+    "participant_complaints": "CMP",
+    "operational_feedback": "FDB",
+    "vault_registers": "REG",
 }
 
 # Where each kind of document comes from, in the words the listing uses.
@@ -2045,7 +2110,11 @@ DOC_SOURCE_LABELS: dict[str, str] = {
     "plan_meeting_sessions": "Plan meeting",
     "audit_pack_exports": "Generated by the vault",
     "governance_documents": "Uploaded",
+    "governance_records": "Uploaded",
     "vault_custom_folder_documents": "Uploaded",
+    "participant_complaints": "Participant complaint",
+    "operational_feedback": "Staff feedback",
+    "vault_registers": "Live register",
 }
 
 REGISTER_BATCH = 500
@@ -2054,6 +2123,8 @@ REGISTER_BATCH = 500
 def _doc_kind(doc: VaultDocument) -> str:
     if doc["source_table"] == "ndis_plans" and doc["category"] == "consent_onboarding":
         return "plan_agreements"
+    if doc["category"] in GOVERNANCE_RECORD_FOLDERS:
+        return "governance_records"
     return doc["source_table"]
 
 
@@ -2160,7 +2231,13 @@ def _load_category_docs(org_id: str, category: str) -> list[VaultDocument]:
         elif category not in CATEGORY_META:
             raise HTTPException(status_code=404, detail="Unknown vault category.")
         elif category in GOVERNANCE_FOLDER_KEYS:
-            docs = _list_governance(org_id, category)
+            # Uploads, plus what the app itself records for this folder
+            # (complaints, registers): see vault_record_feeds.
+            from . import vault_record_feeds
+
+            docs = _list_governance(org_id, category) + vault_record_feeds.list_feed_documents(
+                org_id, category, folder_label=CATEGORY_META[category]["label"], org_name=_org_name(org_id),
+            )
         else:
             loader = _RECORD_LOADERS.get(category)
             docs = loader(org_id) if loader else []
@@ -2237,7 +2314,12 @@ def render_document_file(
     elif category not in CATEGORY_META:
         raise HTTPException(status_code=404, detail="Unknown vault category.")
     elif category in GOVERNANCE_FOLDER_KEYS:
-        filename, data = _render_governance_file(org_id, category, document_id)
+        from . import vault_record_feeds
+
+        if vault_record_feeds.is_feed_document(document_id):
+            filename, data = vault_record_feeds.render_feed_document(org_id, category, document_id)
+        else:
+            filename, data = _render_governance_file(org_id, category, document_id)
     else:
         renderer = _RECORD_RENDERERS.get(category)
         if not renderer:
@@ -2279,13 +2361,17 @@ def get_folder_meta(org_id: str, category: str) -> dict[str, Any] | None:
     if not meta:
         return None
     docs = _load_category_docs(org_id, category)
-    return _folder_meta_from_docs(category, meta["label"], meta["group"], False, docs)
+    folder = _folder_meta_from_docs(category, meta["label"], meta["group"], False, docs)
+    folder["tree_path"] = category_tree_path(category)
+    return folder
 
 
 # ── Organised folders: top-level folders, each with subfolders ───────────────
 # A view over the same documents as the flat category folders. Every document
-# lands in at most one subfolder. Governance subfolders are the categories
-# themselves; participant and staff subfolders group several categories, so
+# lands in at most one subfolder. Governance and Policy & Procedures
+# subfolders are categories with their own folder page (Core Module holds the
+# nine Practice Standards policy folders); participant and staff subfolders
+# group several categories, so
 # they're decided per document, and sit inside a folder per person. Every
 # subfolder is listed, empty or not: an empty folder that should hold
 # something is a gap the MD needs to see before an auditor does.
@@ -2293,14 +2379,13 @@ def get_folder_meta(org_id: str, category: str) -> dict[str, Any] | None:
 VAULT_TREE_TOPS: dict[str, str] = {
     "governance": "Governance",
     "participant": "Participant Folder",
+    "policy": "Policy & Procedures",
     "staff": "Staff Folder",
 }
 
 VAULT_TREE_SUBFOLDERS: dict[str, list[tuple[str, str]]] = {
-    "governance": [
-        (key, CATEGORY_META[key]["label"])
-        for key in (*GOVERNANCE_FOLDER_KEYS, "audit_packs")
-    ],
+    "governance": list(GOVERNANCE_RECORD_FOLDERS.items()),
+    "policy": [("core_module", "Core Module")] + [(key, label) for key, (label, _) in POLICY_MODULES.items()],
     "participant": [
         ("behaviour_support", "Behaviour Support"),
         ("clinical_docs", "Clinical Docs"),
@@ -2364,8 +2449,14 @@ def _credential_subfolder(credential_type: str | None) -> str | None:
 
 def _tree_placement(doc: VaultDocument) -> tuple[str, str] | None:
     category = doc["category"]
-    if category in GOVERNANCE_FOLDER_KEYS or category == "audit_packs":
+    if category in GOVERNANCE_RECORD_FOLDERS:
         return "governance", category
+    if category == "audit_packs":
+        return "governance", "gov_quality_management"
+    if category in POLICY_CORE_KEYS:
+        return "policy", "core_module"
+    if category in POLICY_MODULES:
+        return "policy", category
     if category in ("session_notes", "medication_records"):
         return "participant", "clinical_docs"
     if category == "incident_reports":
@@ -2421,8 +2512,11 @@ REQUIRED_CREDENTIAL_LABELS: dict[str, str] = {
 # Participant subfolders every active participant must have something in.
 REQUIRED_PARTICIPANT_SUBFOLDERS = {"service_support", "intake_docs", "emergency_risk"}
 
-# Governance subfolders the organisation must fill: the Core Module policies.
-REQUIRED_GOVERNANCE_SUBFOLDERS = set(GOVERNANCE_FOLDER_KEYS)
+# Governance records every registered provider must hold.
+REQUIRED_GOVERNANCE_SUBFOLDERS = {
+    "gov_business_continuity", "gov_conflict_of_interest", "gov_emergency_management",
+    "gov_insurances", "gov_ndis_registration", "gov_risk_management",
+}
 
 GAP_STATES = {"missing", "expired"}
 
@@ -2645,8 +2739,56 @@ def list_tree_people(org_id: str, top: str) -> list[dict[str, Any]]:
     return sorted(out, key=lambda p: (p["status"] != "active", p["name"].lower()))
 
 
+def _registered_groups(org_id: str) -> frozenset[str]:
+    """The NDIS registration groups the organisation set in Audit Readiness,
+    which decide the Practice Standards modules that apply to it."""
+    def compute() -> frozenset[str] | _Uncached:
+        try:
+            return frozenset(load_audit_profile(org_id).registration_groups)
+        except Exception as exc:
+            logger.warning("Vault: audit profile unavailable for org %s: %s", org_id, exc)
+            return _Uncached(frozenset())
+
+    return _cached(f"tree_registration:{org_id}", compute)
+
+
+def _core_module_sections(docs: list[VaultDocument]) -> list[dict[str, Any]]:
+    """Core Module's nine policy areas, each required."""
+    sections = []
+    for key in POLICY_CORE_KEYS:
+        section_docs = [d for d in docs if d["category"] == key]
+        state, _ = _folder_state(section_docs, True)
+        sections.append({
+            "key": key, "label": CATEGORY_META[key]["label"], "count": len(section_docs),
+            "state": state, "category": key,
+        })
+    return sections
+
+
+def _org_subfolder(top: str, sub: str, label: str, docs: list[VaultDocument], groups: frozenset[str]) -> dict[str, Any]:
+    """A Governance or Policy & Procedures subfolder, with its state."""
+    out: dict[str, Any] = {"key": sub, "label": label, "count": len(docs), "category": sub, "missing": []}
+    if sub == "core_module":
+        sections = _core_module_sections(docs)
+        gaps = [s for s in sections if s["state"] in GAP_STATES]
+        out.update(
+            category=None, sections=sections, gap_count=len(gaps), missing=[s["label"] for s in gaps],
+            state="missing" if gaps else "complete",
+        )
+        return out
+    if top == "policy":
+        group = POLICY_MODULES[sub][1]
+        required = bool(group and group in groups)
+    else:
+        required = sub in REQUIRED_GOVERNANCE_SUBFOLDERS
+    state, _ = _folder_state(docs, required)
+    out.update(state=state, gap_count=1 if state in GAP_STATES else 0)
+    return out
+
+
 def list_vault_tree(org_id: str) -> list[dict[str, Any]]:
     grouped = _tree_documents(org_id)
+    groups = _registered_groups(org_id)
     tops: list[dict[str, Any]] = []
     for top_key, top_label in VAULT_TREE_TOPS.items():
         people = list_tree_people(org_id, top_key) if top_key in TREE_PERSON_TYPES else None
@@ -2654,22 +2796,21 @@ def list_vault_tree(org_id: str) -> list[dict[str, Any]]:
         for sub_key, sub_label in VAULT_TREE_SUBFOLDERS[top_key]:
             docs = grouped.get((top_key, sub_key), [])
             if people is None:
-                state, _ = _folder_state(docs, sub_key in REQUIRED_GOVERNANCE_SUBFOLDERS)
-                gaps = 1 if state in GAP_STATES else 0
-            else:
-                # Across everyone: how many people this folder is a gap for.
-                gaps = sum(
-                    1 for p in people for s in p["subfolders"]
-                    if s["key"] == sub_key and s["state"] in GAP_STATES
-                )
-                state = "missing" if gaps else ("complete" if docs else "not_applicable")
+                subfolders.append(_org_subfolder(top_key, sub_key, sub_label, docs, groups))
+                continue
+            # Across everyone: how many people this folder is a gap for.
+            gaps = sum(
+                1 for p in people for s in p["subfolders"]
+                if s["key"] == sub_key and s["state"] in GAP_STATES
+            )
             subfolders.append({
                 "key": sub_key,
                 "label": sub_label,
                 "count": len(docs),
-                "state": state,
+                "state": "missing" if gaps else ("complete" if docs else "not_applicable"),
                 "gap_count": gaps,
-                "category": sub_key if top_key == "governance" else None,
+                "category": None,
+                "missing": [],
             })
         tops.append({
             "key": top_key,
@@ -2681,6 +2822,71 @@ def list_vault_tree(org_id: str) -> list[dict[str, Any]]:
             "subfolders": subfolders,
         })
     return tops
+
+
+def category_tree_path(category: str) -> list[dict[str, str]]:
+    """Where a flat category's folder page sits in the organised folders, as
+    the breadcrumb above it: e.g. Policy & Procedures > Core Module for a
+    Practice Standards policy folder."""
+    policy = {"label": VAULT_TREE_TOPS["policy"], "href": "/md/vault/tree/policy"}
+    governance = {"label": VAULT_TREE_TOPS["governance"], "href": "/md/vault/tree/governance"}
+    if category in POLICY_CORE_KEYS:
+        return [policy, {"label": "Core Module", "href": "/md/vault/tree/policy/core_module"}]
+    if category in POLICY_MODULES:
+        return [policy]
+    if category in GOVERNANCE_RECORD_FOLDERS:
+        return [governance]
+    if category == "audit_packs":
+        return [governance, {
+            "label": GOVERNANCE_RECORD_FOLDERS["gov_quality_management"],
+            "href": "/md/vault/gov_quality_management",
+        }]
+    return []
+
+
+def _tree_location(top: str, sub: str, doc: VaultDocument, people_names: dict[str, str]) -> tuple[list[str], str]:
+    """A placed document's folder path (labels) and the page that shows it."""
+    sub_label = dict(VAULT_TREE_SUBFOLDERS[top])[sub]
+    path = [VAULT_TREE_TOPS[top]]
+    if top in TREE_PERSON_TYPES:
+        key = _tree_person_key(doc)
+        path += [people_names.get(key) or doc.get("person_name") or "Unknown", sub_label]
+        return path, f"/md/vault/tree/{top}/person/{quote(key, safe='')}/{sub}"
+    path.append(sub_label)
+    if sub == "core_module":
+        path.append(CATEGORY_META[doc["category"]]["label"])
+    return path, f"/md/vault/{sub if top == 'governance' else doc['category']}"
+
+
+VAULT_SEARCH_LIMIT = 100
+
+
+def search_vault_tree(org_id: str, query: str = "", flagged_only: bool = False) -> list[dict[str, Any]]:
+    """Documents across the organised folders matching a person's name, a
+    title, a document ID or a folder name, each with its full folder path.
+    With flagged_only and no query, every document needing review."""
+    terms = query.lower().split()
+    if not terms and not flagged_only:
+        return []
+    grouped = _tree_documents(org_id)
+    names = {
+        top: {p["id"]: p["name"] for p in list_tree_people(org_id, top)}
+        for top in TREE_PERSON_TYPES
+    }
+    results = []
+    for (top, sub), docs in grouped.items():
+        for doc in docs:
+            if flagged_only and doc["status"] not in FLAGGED_STATUSES:
+                continue
+            path, href = _tree_location(top, sub, doc, names.get(top, {}))
+            haystack = " ".join([
+                doc.get("title") or "", doc.get("person_name") or "", doc.get("doc_id") or "",
+                doc.get("reference") or "", doc.get("person_ref") or "", " ".join(path),
+            ]).lower()
+            if all(t in haystack for t in terms):
+                results.append({"document": doc, "path": path, "href": href})
+    results.sort(key=lambda r: r["document"].get("date") or "", reverse=True)
+    return results[:VAULT_SEARCH_LIMIT]
 
 
 def list_tree_subfolder_documents(
@@ -2847,9 +3053,15 @@ async def upload_governance_document(
     content_type: str,
     supersedes_document_id: str | None = None,
     version_label: str | None = None,
+    expiry_date: str | None = None,
 ) -> dict[str, Any]:
     if folder_key not in GOVERNANCE_FOLDER_KEYS:
         raise HTTPException(status_code=422, detail="Invalid governance folder.")
+    if expiry_date:
+        try:
+            expiry_date = datetime.fromisoformat(expiry_date[:10]).date().isoformat()
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Expiry date must be a date (YYYY-MM-DD).")
     if not title.strip():
         raise HTTPException(status_code=422, detail="Document title is required.")
     if content_type not in GOVERNANCE_ALLOWED_TYPES:
@@ -2896,6 +3108,8 @@ async def upload_governance_document(
         "file_size_bytes": len(file_bytes),
         "uploaded_by": uploaded_by,
     }
+    if expiry_date:
+        payload["expiry_date"] = expiry_date
     result = supabase.table("governance_documents").insert(payload).execute()
     new_doc = result.data[0] if result.data else payload
 

@@ -490,7 +490,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
           <div className="w-full lg:sticky lg:top-[75px] lg:h-full lg:w-[67%]">
             <DocumentPreviewPane
               doc={documents.find((d) => d.id === previewId) ?? null}
-              showVersionHistory={isGovernance}
+              showVersionHistory={isGovernance && documents.find((d) => d.id === previewId)?.source_table === "governance_documents"}
               customizableFields={[]}
               excludedFields={(previewId && docExclusions[previewId]) || new Set()}
               onToggleExcludedField={toggleExcludedField}
@@ -518,7 +518,8 @@ export default function VaultFolderPage({ category }: { category: string }) {
           folderLabel={label}
           withDescription={isGovernance}
           withWorkerVisibility={isGovernance}
-          existingDocuments={isGovernance ? documents.map((d) => ({ id: d.id, title: d.title })) : undefined}
+          // Only uploaded files can get a new version; live records (registers, complaints) can't.
+          existingDocuments={isGovernance ? documents.filter((d) => d.source_table === "governance_documents").map((d) => ({ id: d.id, title: d.title })) : undefined}
           onUpload={({ title, description, file, supersedesDocumentId, versionLabel, visibleToWorkers }) =>
             isCustom && customFolderId
               ? uploadCustomFolderDocument({ folderId: customFolderId, title, file })
