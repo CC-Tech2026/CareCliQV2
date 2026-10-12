@@ -806,8 +806,8 @@ export function WorkerDetail({
         <button
           type="button"
           onClick={onBack}
-          className="flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 py-2 text-[13px] font-bold transition-colors"
-          style={{ color: PLUM }}
+          className="-ml-3 flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors hover:bg-cc-soft"
+          style={{ color: TEXT }}
         >
           <ArrowLeft size={15} /> {translate("team.detail.back")}
         </button>
@@ -816,7 +816,7 @@ export function WorkerDetail({
             <button
               type="button"
               onClick={onToggleFullScreen}
-              className="hidden lg:flex min-h-10 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors hover:bg-black/5"
+              className="hidden lg:flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors hover:bg-cc-soft"
               style={{ borderColor: BORDER, color: TEXT }}
             >
               {fullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
@@ -829,8 +829,8 @@ export function WorkerDetail({
             <Button
               type="button"
               onClick={onAssignShift}
-              className="min-h-10 gap-1.5 rounded-lg text-white"
-              style={{ background: PLUM }}
+              className="min-h-10 gap-1.5 rounded-full px-5 font-semibold text-white hover:opacity-90"
+              style={{ background: "var(--cc-cta)" }}
             >
               <Clock size={14} /> {translate("team.assignShift")}
             </Button>
@@ -839,7 +839,7 @@ export function WorkerDetail({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="min-h-10 min-w-10 rounded-lg border p-2 transition-colors hover:bg-black/5"
+                  className="flex min-h-10 min-w-10 items-center justify-center rounded-full border p-2 transition-colors hover:bg-cc-soft"
                   style={{ color: TEXT, borderColor: BORDER }}
                   aria-label={`More actions for ${worker.full_name}`}
                 >
@@ -902,14 +902,7 @@ export function WorkerDetail({
       </div>
 
       {/* Identity + at-a-glance header */}
-      <div
-        className="rounded-xl overflow-hidden border"
-        style={{
-          background: SURFACE,
-          borderColor: BORDER,
-          boxShadow: CARD_SHADOW,
-        }}
-      >
+      <div className="overflow-hidden rounded-2xl" style={{ background: SURFACE }}>
         <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 items-start gap-3.5">
             <div
@@ -929,22 +922,18 @@ export function WorkerDetail({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2
-                  className={`${fullScreen ? "text-2xl" : "text-xl"} font-semibold break-words`}
-                  style={{ color: TEXT }}
+                  className={`${fullScreen ? "text-3xl" : "text-2xl"} font-semibold tracking-tight break-words`}
+                  style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
                 >
                   {worker.full_name}
                 </h2>
                 <span
-                  className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                  className="text-xs font-semibold"
                   style={{
-                    background:
-                      worker.is_active !== false
-                        ? "var(--cc-status-success-bg)"
-                        : "var(--cc-status-danger-bg)",
                     color:
                       worker.is_active !== false
-                        ? "var(--cc-status-success)"
-                        : "var(--cc-status-danger)",
+                        ? "var(--cc-green)"
+                        : "var(--cc-danger-text)",
                   }}
                 >
                   {worker.is_active !== false
@@ -1018,25 +1007,25 @@ export function WorkerDetail({
         {/* At-a-glance stat strip: labels spell out what each number
             counts, so "Drafts"/"Flagged" don't need decoding. */}
         <dl
-          className="grid grid-cols-2 border-t sm:grid-cols-5"
+          className="flex flex-wrap items-stretch gap-x-2 gap-y-3 border-t px-3 py-3 sm:px-4"
           style={{ borderColor: BORDER }}
         >
           {statCells.map((cell, index) => (
-            <div
-              key={cell.label}
-              title={cell.hint}
-              className={`px-4 py-3 ${index % 2 === 1 ? "border-l" : ""} ${index > 0 ? "sm:border-l" : ""} ${index > 1 ? "border-t sm:border-t-0" : ""} ${index === statCells.length - 1 && statCells.length % 2 === 1 ? "col-span-2 sm:col-span-1" : ""}`}
-              style={{ borderColor: BORDER }}
-            >
-              <dt className="text-xs" style={{ color: MUTED }}>
-                {cell.label}
-              </dt>
-              <dd
-                className={`${fullScreen ? "text-xl" : "text-lg"} mt-0.5 font-semibold tabular-nums`}
-                style={{ color: cell.color ?? TEXT }}
-              >
-                {cell.value}
-              </dd>
+            <div key={cell.label} title={cell.hint} className="flex items-center gap-2">
+              {index > 0 && (
+                <span aria-hidden className="mr-2 hidden h-6 w-px sm:block" style={{ background: BORDER }} />
+              )}
+              <div className="flex min-h-11 items-baseline gap-2 px-2">
+                <dd
+                  className={`${fullScreen ? "text-2xl" : "text-xl"} font-semibold tabular-nums tracking-tight`}
+                  style={{ color: cell.color ?? TEXT }}
+                >
+                  {cell.value}
+                </dd>
+                <dt className="order-last text-sm" style={{ color: MUTED }}>
+                  {cell.label}
+                </dt>
+              </div>
             </div>
           ))}
         </dl>
@@ -1051,10 +1040,9 @@ export function WorkerDetail({
       >
         <nav
           aria-label="Worker profile sections"
-          className="sticky top-[var(--profile-nav-top)] z-20 border-b bg-[var(--cc-bg)]"
-          style={{ borderColor: BORDER }}
+          className="sticky top-[var(--profile-nav-top)] z-20 bg-[var(--cc-bg)] py-2"
         >
-          <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex gap-1.5 overflow-x-auto px-0.5 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {ALL_WORKER_DETAIL_TABS.map((t) => {
               const badge = tabBadges[t];
               const badgeColor =
@@ -1076,11 +1064,12 @@ export function WorkerDetail({
                   type="button"
                   aria-current={active ? "page" : undefined}
                   onClick={() => selectProfileTab(t)}
-                  className="relative flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg px-3 text-sm font-medium transition-colors hover:bg-black/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2"
-                  style={{
-                    color: active ? TEXT : MUTED,
-                    outlineColor: PLUM,
-                  }}
+                  className={`relative flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${active ? "" : "hover:bg-cc-soft"}`}
+                  style={
+                    active
+                      ? { background: TEXT, color: "var(--cc-bg)", outlineColor: PLUM }
+                      : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}`, outlineColor: PLUM }
+                  }
                 >
                   {translate(
                     `team.detail.tab.${t}` as "team.detail.tab.overview",
@@ -1092,13 +1081,6 @@ export function WorkerDetail({
                     >
                       {badge.text}
                     </span>
-                  )}
-                  {active && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute inset-x-2 bottom-0 h-0.5 rounded-full"
-                      style={{ background: PLUM }}
-                    />
                   )}
                 </button>
               );
@@ -1232,13 +1214,13 @@ function AvailabilitySummaryStrip({ worker }: { worker: WorkerStats }) {
 
   return (
     <div
-      className="rounded-xl border px-5 py-4"
+      className="rounded-2xl px-5 py-4"
       style={{ background: SOFT, borderColor: BORDER }}
     >
       <div className="flex items-center gap-2 mb-1">
         <Clock size={14} style={{ color: PLUM }} />
         <p
-          className="text-[11px] font-semibold uppercase tracking-wide"
+          className="text-xs font-semibold"
           style={{ color: MUTED }}
         >
           Availability
@@ -1278,13 +1260,13 @@ function ProfileCard({ worker }: { worker: WorkerStats }) {
 
   return (
     <div
-      className="rounded-xl border p-4"
+      className="rounded-2xl p-4"
       style={{ borderColor: BORDER, background: SURFACE }}
     >
       <div className="flex items-center gap-2">
         <Sparkles size={14} style={{ color: PLUM }} />
         <p
-          className="text-[11px] font-semibold uppercase tracking-wide"
+          className="text-xs font-semibold"
           style={{ color: MUTED }}
         >
           Profile
@@ -1334,7 +1316,7 @@ function ProfileDetailsGroup({
 }) {
   return (
     <details
-      className="group overflow-hidden rounded-xl border"
+      className="group overflow-hidden rounded-2xl"
       style={{ borderColor: BORDER, background: SURFACE }}
     >
       <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
@@ -1457,7 +1439,7 @@ function PersonalInfoTab({
       {nextSteps.length > 0 ? (
         <section
           aria-label="To do"
-          className="overflow-hidden rounded-xl border"
+          className="overflow-hidden rounded-2xl"
           style={{ borderColor: BORDER, background: SURFACE }}
         >
           <div
@@ -1553,7 +1535,7 @@ function PersonalInfoTab({
           <div className="flex items-center gap-2 mb-1.5">
             <TrendingUp size={15} style={{ color: PLUM }} />
             <p
-              className="text-[11px] font-semibold uppercase tracking-wide"
+              className="text-xs font-semibold"
               style={{ color: PLUM }}
             >
               {translate("team.detail.coachingTitle")}
@@ -1566,7 +1548,7 @@ function PersonalInfoTab({
       )}
 
       <section
-        className="overflow-hidden rounded-xl border"
+        className="overflow-hidden rounded-2xl"
         style={{ borderColor: BORDER, background: SURFACE }}
         aria-label="Contact and personal details"
       >
@@ -1807,11 +1789,11 @@ function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
 
   return (
     <div
-      className="rounded-xl overflow-hidden border p-5"
+      className="rounded-2xl overflow-hidden p-5"
       style={{
         background: SURFACE,
         borderColor: BORDER,
-        boxShadow: CARD_SHADOW,
+        
       }}
     >
       {grant && (
@@ -1821,7 +1803,7 @@ function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
         />
       )}
       <p
-        className="text-[11px] font-semibold uppercase tracking-wide"
+        className="text-xs font-semibold"
         style={{ color: MUTED }}
       >
         Assigned coordinator
@@ -1891,15 +1873,15 @@ function ClassificationLevelSection({ worker }: { worker: WorkerStats }) {
 
   return (
     <div
-      className="rounded-xl overflow-hidden border p-5"
+      className="rounded-2xl overflow-hidden p-5"
       style={{
         background: SURFACE,
         borderColor: BORDER,
-        boxShadow: CARD_SHADOW,
+        
       }}
     >
       <p
-        className="text-[11px] font-semibold uppercase tracking-wide"
+        className="text-xs font-semibold"
         style={{ color: MUTED }}
       >
         SCHADS classification
@@ -2016,15 +1998,15 @@ function BuddyAssignmentSection({ worker }: { worker: WorkerStats }) {
 
   return (
     <div
-      className="rounded-xl overflow-hidden border p-5"
+      className="rounded-2xl overflow-hidden p-5"
       style={{
         background: SURFACE,
         borderColor: BORDER,
-        boxShadow: CARD_SHADOW,
+        
       }}
     >
       <p
-        className="text-[11px] font-semibold uppercase tracking-wide"
+        className="text-xs font-semibold"
         style={{ color: MUTED }}
       >
         Buddy
@@ -2119,15 +2101,15 @@ function WorkerTagsSection({ workerId }: { workerId: string }) {
 
   return (
     <div
-      className="rounded-xl overflow-hidden border p-5"
+      className="rounded-2xl overflow-hidden p-5"
       style={{
         background: SURFACE,
         borderColor: BORDER,
-        boxShadow: CARD_SHADOW,
+        
       }}
     >
       <p
-        className="text-[11px] font-semibold uppercase tracking-wide"
+        className="text-xs font-semibold"
         style={{ color: MUTED }}
       >
         Interests & lived experience
@@ -2152,7 +2134,7 @@ function WorkerTagsSection({ workerId }: { workerId: string }) {
             {tag.label}
             {tag.visible_to_coordinator_only && (
               <span
-                className="text-[9px] font-semibold uppercase"
+                className="text-[11px] font-semibold"
                 style={{ color: PLUM }}
               >
                 Private
@@ -2334,7 +2316,7 @@ function DocumentsTab({
             style={{
               background: SURFACE,
               borderColor: BORDER,
-              boxShadow: CARD_SHADOW,
+              
             }}
           >
             <FileText
@@ -2353,7 +2335,7 @@ function DocumentsTab({
           className="rounded-xl divide-y border"
           style={{
             background: SURFACE,
-            boxShadow: CARD_SHADOW,
+            
             borderColor: BORDER,
           }}
         >
@@ -2501,7 +2483,7 @@ function AddDocumentDialog({
         <div className="space-y-3 py-1">
           <div className="space-y-1.5">
             <label
-              className="text-xs font-semibold uppercase tracking-wider"
+              className="text-xs font-semibold"
               style={{ color: MUTED }}
             >
               {translate("team.documents.docType")}
@@ -2530,7 +2512,7 @@ function AddDocumentDialog({
           </div>
           <div className="space-y-1.5">
             <label
-              className="text-xs font-semibold uppercase tracking-wider"
+              className="text-xs font-semibold"
               style={{ color: MUTED }}
             >
               {translate("team.documents.docTitle")}
@@ -2543,7 +2525,7 @@ function AddDocumentDialog({
           </div>
           <div className="space-y-1.5">
             <label
-              className="text-xs font-semibold uppercase tracking-wider"
+              className="text-xs font-semibold"
               style={{ color: MUTED }}
             >
               {translate("team.documents.notes")}
@@ -2556,7 +2538,7 @@ function AddDocumentDialog({
           </div>
           <div className="space-y-1.5">
             <label
-              className="text-xs font-semibold uppercase tracking-wider"
+              className="text-xs font-semibold"
               style={{ color: MUTED }}
             >
               {translate("team.documents.file")}
@@ -2776,7 +2758,7 @@ function CredentialsTab({
         className="rounded-xl divide-y border"
         style={{
           background: SURFACE,
-          boxShadow: CARD_SHADOW,
+          
           borderColor: BORDER,
         }}
       >
@@ -3051,7 +3033,7 @@ function TrainingTab({
         !assignmentsQuery.isError &&
         (recommendations.length > 0 || history.length > 0) && (
           <dl
-            className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border"
+            className="grid grid-cols-3 divide-x overflow-hidden rounded-2xl"
             style={{ borderColor: BORDER, background: SURFACE }}
           >
             {[
@@ -3136,7 +3118,7 @@ function TrainingTab({
             style={{
               background: SURFACE,
               borderColor: BORDER,
-              boxShadow: CARD_SHADOW,
+              
             }}
           >
             <GraduationCap
@@ -3155,7 +3137,7 @@ function TrainingTab({
           className="rounded-xl divide-y border"
           style={{
             background: SURFACE,
-            boxShadow: CARD_SHADOW,
+            
             borderColor: BORDER,
           }}
         >
@@ -3221,7 +3203,7 @@ function TrainingTab({
       {history.length > 0 && (
         <div>
           <p
-            className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2"
+            className="text-xs font-semibold mb-2"
             style={{ color: MUTED }}
           >
             {translate("team.training.history")}
@@ -3230,7 +3212,7 @@ function TrainingTab({
             className="rounded-xl divide-y border"
             style={{
               background: SURFACE,
-              boxShadow: CARD_SHADOW,
+              
               borderColor: BORDER,
             }}
           >
@@ -3419,7 +3401,7 @@ function InductionTab({
             style={{
               background: SURFACE,
               borderColor: BORDER,
-              boxShadow: CARD_SHADOW,
+              
             }}
           >
             <ClipboardCheck
@@ -3438,7 +3420,7 @@ function InductionTab({
           className="rounded-xl divide-y border"
           style={{
             background: SURFACE,
-            boxShadow: CARD_SHADOW,
+            
             borderColor: BORDER,
           }}
         >
@@ -3543,11 +3525,11 @@ function ShiftsTab({
       )}
       {/* Performance breakdown - the detail behind a single compliance number */}
       <div
-        className="rounded-xl border p-5"
+        className="rounded-2xl p-5"
         style={{
           background: SURFACE,
           borderColor: BORDER,
-          boxShadow: CARD_SHADOW,
+          
         }}
       >
         <div className="flex items-start justify-between gap-4">
@@ -3607,7 +3589,7 @@ function ShiftsTab({
             {!!dashboard?.strengths?.length && (
               <div>
                 <p
-                  className="text-[10px] font-semibold uppercase tracking-wide"
+                  className="text-xs font-semibold"
                   style={{ color: "var(--cc-status-success)" }}
                 >
                   Strengths
@@ -3629,7 +3611,7 @@ function ShiftsTab({
             {!!dashboard?.focus_areas?.length && (
               <div>
                 <p
-                  className="text-[10px] font-semibold uppercase tracking-wide"
+                  className="text-xs font-semibold"
                   style={{ color: "var(--cc-status-warning)" }}
                 >
                   Focus areas
@@ -3674,11 +3656,11 @@ function ShiftsTab({
 
       {/* Shift-by-shift history */}
       <div
-        className="rounded-xl border"
+        className="rounded-2xl"
         style={{
           background: SURFACE,
           borderColor: BORDER,
-          boxShadow: CARD_SHADOW,
+          
         }}
       >
         <div
@@ -3821,7 +3803,7 @@ function ShiftHistoryRowItem({
           </p>
           {isFirstPairing && (
             <span
-              className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase"
+              className="rounded-full px-1.5 py-0.5 text-[11px] font-semibold"
               style={{ background: "var(--cc-plum-soft)", color: PLUM }}
             >
               First shift
@@ -4409,7 +4391,7 @@ export function ShiftAuditPanel({
                         </p>
                         {inc.severity && (
                           <span
-                            className="shrink-0 text-[9px] font-semibold uppercase"
+                            className="shrink-0 text-[11px] font-semibold"
                             style={{ color: "var(--cc-status-danger)" }}
                           >
                             {inc.severity}
@@ -4646,7 +4628,7 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
       style={{ borderColor: BORDER, background: SOFT }}
     >
       <p
-        className="text-[10px] font-semibold uppercase tracking-wide"
+        className="text-xs font-semibold"
         style={{ color: MUTED }}
       >
         How did this pairing go?
@@ -4778,11 +4760,11 @@ function ParticipantsTab({ worker }: { worker: WorkerStats }) {
   return (
     <div className="space-y-4">
       <div
-        className="rounded-xl border"
+        className="rounded-2xl"
         style={{
           background: SURFACE,
           borderColor: BORDER,
-          boxShadow: CARD_SHADOW,
+          
         }}
       >
         <div
@@ -4855,11 +4837,11 @@ function ParticipantsTab({ worker }: { worker: WorkerStats }) {
         !assignmentsQuery.isError &&
         workedWith.length > 0 && (
           <div
-            className="rounded-xl border"
+            className="rounded-2xl"
             style={{
               background: SURFACE,
               borderColor: BORDER,
-              boxShadow: CARD_SHADOW,
+              
             }}
           >
             <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
@@ -5015,7 +4997,7 @@ function AssignTrainingDialog({
         {mode === "existing" ? (
           <div className="space-y-1.5 py-1">
             <label
-              className="text-xs font-semibold uppercase tracking-wider"
+              className="text-xs font-semibold"
               style={{ color: MUTED }}
             >
               {translate("team.training.module")}
@@ -5048,7 +5030,7 @@ function AssignTrainingDialog({
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
               <label
-                className="text-xs font-semibold uppercase tracking-wider"
+                className="text-xs font-semibold"
                 style={{ color: MUTED }}
               >
                 {translate("team.training.moduleTitle")}
@@ -5061,7 +5043,7 @@ function AssignTrainingDialog({
             </div>
             <div className="space-y-1.5">
               <label
-                className="text-xs font-semibold uppercase tracking-wider"
+                className="text-xs font-semibold"
                 style={{ color: MUTED }}
               >
                 {translate("team.training.moduleDescription")}
