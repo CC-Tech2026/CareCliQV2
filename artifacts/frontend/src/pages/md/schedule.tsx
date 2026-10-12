@@ -28,6 +28,7 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -50,6 +51,7 @@ import {
 } from "@/services/coordinatorService";
 
 const LIVE_REFRESH_MS = 30_000;
+const ITEMS_PER_PAGE = 9;
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -66,8 +68,6 @@ const GREEN = "#0F7B57";
 const GREEN_SOFT = "#E9F5F0";
 const SLATE = "#5B655F";
 const SLATE_SOFT = "#F0F1EE";
-// Real safety/roster-risk severity, not the brand's destructive-action purple
-// (--cc-status-critical) — this is the one reserved for "something needs a human".
 const DANGER = "var(--cc-status-danger)";
 const DANGER_SOFT = "var(--cc-status-danger-bg)";
 
@@ -84,7 +84,7 @@ const STATUS_STYLE: Record<
   Bucket,
   { label: string; color: string; bg: string }
 > = {
-  scheduled: { label: "Scheduled", color: PLUM, bg: "var(--cc-soft)" },
+  scheduled: { label: "Scheduled", color: PLUM, bg: SOFT },
   active: { label: "Active now", color: BLUE, bg: BLUE_SOFT },
   completed: { label: "Completed", color: GREEN, bg: GREEN_SOFT },
   cancelled: { label: "Cancelled", color: SLATE, bg: SLATE_SOFT },
@@ -108,8 +108,6 @@ const VIEW_TABS: Array<{ id: ViewMode; label: string }> = [
   { id: "live", label: "Live" },
 ];
 
-// Matches RosterBoard's palette so a worker's avatar colour reads the same
-// wherever they show up across the app.
 const AVATAR_PALETTE = [
   { bg: "#F3E8FF", fg: "#7C3AED" },
   { bg: "#FCE3EB", fg: "#DB2777" },
@@ -118,12 +116,14 @@ const AVATAR_PALETTE = [
   { bg: "#FEF3C7", fg: "#B45309" },
   { bg: "#E0F2FE", fg: "#0369A1" },
 ];
+
 function avatarColor(name: string) {
   let hash = 0;
   for (let i = 0; i < name.length; i++)
     hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 }
+
 function initials(name: string) {
   return (
     name
@@ -135,6 +135,7 @@ function initials(name: string) {
       .toUpperCase() || "?"
   );
 }
+
 function Avatar({ name, size = 22 }: { name: string; size?: number }) {
   const c = avatarColor(name);
   return (
@@ -185,7 +186,6 @@ function formatDateTime(iso?: string | null) {
   }
 }
 
-/** How long a worker has been clocked in, for the real-time "active now" views. */
 function elapsedSince(iso?: string | null): string | null {
   if (!iso) return null;
   const started = new Date(iso).getTime();
@@ -206,7 +206,6 @@ function matchesSearch(shift: CoordinatorShiftRecord, query: string): boolean {
   );
 }
 
-/** Quotes/escapes a CSV field per RFC 4180. */
 function csvCell(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
@@ -256,11 +255,18 @@ export default function MDSchedulePage() {
   const [selectedDay, setSelectedDay] = useState(new Date());
   const [filter, setFilter] = useState<Bucket | "all">("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
   const deepLinkShiftId = new URLSearchParams(useSearch()).get("shiftId");
+
   useEffect(() => {
     if (deepLinkShiftId) setActiveShiftId(deepLinkShiftId);
   }, [deepLinkShiftId]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, search, viewMode]);
+
   const [availMap, setAvailMap] = useState<AvailabilityMap>({});
   const [loadingAvail, setLoadingAvail] = useState(false);
 
@@ -273,11 +279,6 @@ export default function MDSchedulePage() {
     [weekStart, weekEnd],
   );
 
-  // Month view spans a wider range than the week board, so the query range
-  // follows whichever period is actually on screen — same approach as the
-  // coordinator's own rostering page.
-  // Day view fetches a day either side: shifts are bucketed by their own
-  // branch's local day, which can differ from the viewer's.
   const rangeStart =
     viewMode === "month"
       ? startOfMonth(currentMonth)
@@ -293,8 +294,6 @@ export default function MDSchedulePage() {
   const startKey = format(rangeStart, "yyyy-MM-dd");
   const endKey = format(rangeEnd, "yyyy-MM-dd");
 
-  // Polls every 30s so an MD watching this page sees clock-ins/outs and
-  // status changes as they happen, not just when they change weeks.
   const {
     data: shifts = null,
     isError,
@@ -324,8 +323,6 @@ export default function MDSchedulePage() {
   );
   const workers = workersQuery.data ?? [];
 
-  // Availability shading for RosterBoard — only needed in week view, where
-  // the drag-and-drop board is shown.
   useEffect(() => {
     if (viewMode !== "week" || workers.length === 0) return;
     let cancelled = false;
@@ -405,9 +402,6 @@ export default function MDSchedulePage() {
     return items;
   }, [shifts, stats, periodWord]);
 
-  // Ranked by hours so an MD can spot who's carrying the week's load, or
-  // who's barely rostered, at a glance — a per-shift board doesn't surface
-  // this on its own.
   const workload = useMemo(() => {
     const map = new Map<
       string,
@@ -436,24 +430,6 @@ export default function MDSchedulePage() {
   }, [searchedShifts]);
   const busiestHours = Math.max(0, ...workload.map((w) => w.hours));
 
-  const shiftsByDay = useMemo(() => {
-    const map = new Map<string, CoordinatorShiftRecord[]>();
-    for (const day of days) map.set(format(day, "yyyy-MM-dd"), []);
-    for (const s of searchedShifts) {
-      if (!s.scheduled_start) continue;
-      if (filter !== "all" && bucketOf(s) !== filter) continue;
-      const key = format(new Date(s.scheduled_start), "yyyy-MM-dd");
-      if (!map.has(key)) continue;
-      map.get(key)!.push(s);
-    }
-    for (const list of map.values()) {
-      list.sort((a, b) =>
-        (a.scheduled_start ?? "").localeCompare(b.scheduled_start ?? ""),
-      );
-    }
-    return map;
-  }, [days, searchedShifts, filter]);
-
   const filteredShiftList = useMemo(() => {
     return searchedShifts
       .filter((s) => filter === "all" || bucketOf(s) === filter)
@@ -462,6 +438,12 @@ export default function MDSchedulePage() {
         (a.scheduled_start ?? "").localeCompare(b.scheduled_start ?? ""),
       );
   }, [searchedShifts, filter]);
+
+  const totalPages = Math.ceil(filteredShiftList.length / ITEMS_PER_PAGE);
+  const paginatedShifts = useMemo(() => {
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    return filteredShiftList.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredShiftList, page]);
 
   const monthDayShifts = useMemo(
     () =>
@@ -521,49 +503,40 @@ export default function MDSchedulePage() {
 
   return (
     <HubLayout>
-      <div className="min-w-0 space-y-5 pb-10">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1
-              className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
-              style={{ color: TEXT }}
-            >
-              Master Schedule
+      <div className="min-w-0 space-y-6 pb-12">
+        {/* Streamlined, Single-Block Header Surface */}
+        <div className="rounded-3xl border border-cc-border bg-cc-surface p-4 shadow-sm space-y-3.5">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3">
+              <h1
+                className="text-2xl font-semibold tracking-tight"
+                style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
+              >
+                Master Schedule
+              </h1>
               <SectionInfo text="Org-wide shift oversight. Reassigning and unassigning shifts is available here; creating new shifts stays with coordinators." />
-            </h1>
-            <p className="mt-1 text-sm text-cc-muted">
-              Review coverage, find shifts and monitor your organisation.
-            </p>
-            <p
-              className="mt-2 flex items-center gap-1.5 text-[12px] font-medium"
-              style={{ color: MUTED }}
-            >
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
               {shifts !== null && !error && viewMode !== "live" && (
-                <span className="flex items-center gap-1 whitespace-nowrap">
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold"
+                  style={{ background: SOFT, color: TEXT }}
+                >
                   <Radio size={11} style={{ color: GREEN }} />
                   <span style={{ color: GREEN }}>Live</span>
                   {dataUpdatedAt > 0 && (
-                    <span>
-                      · updated{" "}
-                      {format(
-                        new Date(dataUpdatedAt),
-                        "h:mm:ssaaa",
-                      ).toLowerCase()}
+                    <span style={{ color: MUTED }}>
+                      · {format(new Date(dataUpdatedAt), "h:mm:ss aaa").toLowerCase()}
                     </span>
                   )}
                 </span>
               )}
-            </p>
-          </div>
-
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-3 rounded-xl border border-cc-border bg-cc-card p-3">
-            {(viewMode === "week" || viewMode === "list") &&
-              shifts !== null && (
+              {(viewMode === "week" || viewMode === "list") && shifts !== null && (
                 <span
-                  className="hidden rounded-full px-3 py-1.5 text-[11px] font-semibold sm:block"
+                  className="rounded-full px-3 py-1 text-[11px] font-black"
                   style={{
-                    background:
-                      stats.counts.unassigned > 0 ? AMBER_SOFT : GREEN_SOFT,
+                    background: stats.counts.unassigned > 0 ? AMBER_SOFT : GREEN_SOFT,
                     color: stats.counts.unassigned > 0 ? AMBER : GREEN,
                   }}
                 >
@@ -572,12 +545,15 @@ export default function MDSchedulePage() {
                     : "Fully staffed this week"}
                 </span>
               )}
+            </div>
+          </div>
 
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t" style={{ borderColor: BORDER }}>
             {viewMode !== "live" && (
-              <div className="relative min-w-0 flex-1 basis-56">
+              <div className="relative min-w-0 flex-1 basis-64">
                 <Search
-                  size={13}
-                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2"
+                  size={14}
+                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2"
                   style={{ color: MUTED }}
                 />
                 <input
@@ -585,109 +561,107 @@ export default function MDSchedulePage() {
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search worker or participant"
-                  className="h-11 w-full rounded-lg border pl-8 pr-3 text-sm font-semibold outline-none"
-                  style={{
-                    borderColor: BORDER,
-                    background: SURFACE,
-                    color: TEXT,
-                  }}
+                  placeholder="Search worker or participant..."
+                  className="h-9 w-full rounded-full border border-cc-border bg-cc-surface pl-10 pr-9 text-xs font-semibold outline-none shadow-none focus-visible:ring-2 focus-visible:ring-cc-plum"
+                  style={{ color: TEXT }}
                 />
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5"
+                  >
+                    <X size={11} style={{ color: MUTED }} />
+                  </button>
+                )}
               </div>
             )}
 
-            {viewMode !== "live" && shifts !== null && shifts.length > 0 && (
-              <button
-                onClick={() =>
-                  downloadWeekCsv(
-                    filteredShiftList,
-                    viewMode === "month"
-                      ? format(currentMonth, "yyyy-MM")
-                      : startKey,
-                  )
-                }
-                className="flex h-11 items-center gap-1.5 rounded-xl border px-3 text-[11px] font-semibold transition-colors hover:bg-cc-soft"
-                style={{
-                  borderColor: BORDER,
-                  color: TEXT,
-                  background: SURFACE,
-                }}
-              >
-                <Download size={15} />
-                <span className="sr-only sm:not-sr-only">Export</span>
-              </button>
-            )}
-
-            {/* View mode tabs */}
-            <div
-              className="flex w-full items-center gap-0.5 rounded-xl p-1 sm:w-auto"
-              style={{
-                borderColor: BORDER,
-                background: SOFT,
-                border: `1px solid ${BORDER}`,
-              }}
-            >
-              {VIEW_TABS.map((v) => (
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
+              {viewMode !== "live" && shifts !== null && shifts.length > 0 && (
                 <button
-                  key={v.id}
-                  aria-pressed={viewMode === v.id}
-                  onClick={() => {
-                    setViewMode(v.id);
-                    if (v.id === "month") setCurrentMonth(selectedDay);
-                    else if (viewMode === "month" || viewMode === "day")
-                      setWeekStart(
-                        startOfWeek(selectedDay, { weekStartsOn: 1 }),
-                      );
-                  }}
-                  className="min-h-11 flex-1 rounded-lg px-2 py-2 text-xs font-semibold transition-colors sm:flex-none sm:px-3 sm:text-sm"
-                  style={{
-                    background: viewMode === v.id ? PLUM : "transparent",
-                    color: viewMode === v.id ? "#fff" : MUTED,
-                  }}
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
-
-            {viewMode !== "live" && (
-              <div
-                className="flex w-full min-w-0 items-center gap-1 rounded-lg border p-1 sm:w-auto"
-                style={{ borderColor: BORDER, background: SURFACE }}
-              >
-                <button
-                  onClick={handlePrev}
-                  className="flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-cc-soft"
-                  aria-label="Previous period"
-                >
-                  <ChevronLeft size={15} style={{ color: MUTED }} />
-                </button>
-                <span
-                  className="min-w-0 flex-1 px-1 text-center text-xs font-semibold"
+                  onClick={() =>
+                    downloadWeekCsv(
+                      filteredShiftList,
+                      viewMode === "month"
+                        ? format(currentMonth, "yyyy-MM")
+                        : startKey,
+                    )
+                  }
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-cc-border bg-cc-surface px-3.5 text-xs font-semibold transition hover:bg-cc-soft shadow-none"
                   style={{ color: TEXT }}
                 >
-                  {periodLabel}
-                </span>
-                <button
-                  onClick={handleNext}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-cc-soft"
-                  aria-label="Next period"
-                >
-                  <ChevronRight size={15} style={{ color: MUTED }} />
+                  <Download size={13} />
+                  <span>Export</span>
                 </button>
-                <button
-                  onClick={() => {
-                    const today = new Date();
-                    setWeekStart(startOfWeek(today, { weekStartsOn: 1 }));
-                    setCurrentMonth(today);
-                    setSelectedDay(today);
-                  }}
-                  className="min-h-11 rounded-lg px-3 text-sm font-medium text-cc-plum"
-                >
-                  Today
-                </button>
+              )}
+
+              <div
+                className="flex items-center gap-0.5 rounded-full border bg-cc-surface p-0.5 shadow-none"
+                style={{ borderColor: BORDER }}
+              >
+                {VIEW_TABS.map((v) => (
+                  <button
+                    key={v.id}
+                    aria-pressed={viewMode === v.id}
+                    onClick={() => {
+                      setViewMode(v.id);
+                      if (v.id === "month") setCurrentMonth(selectedDay);
+                      else if (viewMode === "month" || viewMode === "day")
+                        setWeekStart(
+                          startOfWeek(selectedDay, { weekStartsOn: 1 }),
+                        );
+                    }}
+                    className="h-8 rounded-full px-3 text-xs font-semibold transition"
+                    style={{
+                      background: viewMode === v.id ? TEXT : "transparent",
+                      color: viewMode === v.id ? "var(--cc-bg)" : MUTED,
+                    }}
+                  >
+                    {v.label}
+                  </button>
+                ))}
               </div>
-            )}
+
+              {viewMode !== "live" && (
+                <div
+                  className="flex items-center gap-1 rounded-full border bg-cc-surface p-0.5 shadow-none"
+                  style={{ borderColor: BORDER }}
+                >
+                  <button
+                    onClick={handlePrev}
+                    className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-cc-soft"
+                    aria-label="Previous period"
+                  >
+                    <ChevronLeft size={14} style={{ color: MUTED }} />
+                  </button>
+                  <span
+                    className="min-w-[110px] px-1 text-center text-xs font-semibold truncate"
+                    style={{ color: TEXT }}
+                  >
+                    {periodLabel}
+                  </span>
+                  <button
+                    onClick={handleNext}
+                    className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-cc-soft"
+                    aria-label="Next period"
+                  >
+                    <ChevronRight size={14} style={{ color: MUTED }} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const today = new Date();
+                      setWeekStart(startOfWeek(today, { weekStartsOn: 1 }));
+                      setCurrentMonth(today);
+                      setSelectedDay(today);
+                    }}
+                    className="h-8 px-3 rounded-full text-xs font-semibold transition hover:bg-cc-soft"
+                    style={{ color: PLUM }}
+                  >
+                    Today
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -695,18 +669,16 @@ export default function MDSchedulePage() {
 
         {viewMode !== "live" && (
           <>
-            {/* Needs attention — the specific roster issues on this page that
-            want a coordinator's action, not just a status readout. */}
             {attentionItems.length > 0 && (
               <div
-                className="rounded-2xl border p-4"
+                className="rounded-3xl border p-5 shadow-sm"
                 style={{ borderColor: DANGER, background: DANGER_SOFT }}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <AlertTriangle size={16} style={{ color: DANGER }} />
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={18} style={{ color: DANGER }} />
                     <p
-                      className="text-[12px] font-semibold"
+                      className="text-xs font-black uppercase tracking-wider"
                       style={{ color: DANGER }}
                     >
                       Needs attention
@@ -723,7 +695,7 @@ export default function MDSchedulePage() {
                           : "cancelled",
                       );
                     }}
-                    className="rounded-full px-3 py-1.5 text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+                    className="rounded-full px-4 py-1.5 text-xs font-black text-white transition-opacity hover:opacity-90"
                     style={{ background: DANGER }}
                   >
                     {stats.counts.unassigned > 0
@@ -735,7 +707,7 @@ export default function MDSchedulePage() {
                   {attentionItems.map((item) => (
                     <li
                       key={item.key}
-                      className="text-[11.5px] font-semibold"
+                      className="text-xs font-semibold leading-relaxed"
                       style={{ color: TEXT }}
                     >
                       • {item.text}
@@ -745,11 +717,8 @@ export default function MDSchedulePage() {
               </div>
             )}
 
-            {/* Stat strip — one bordered row with internal dividers instead of a
-            grid of near-identical boxes, so six numbers don't read as six
-            repeated card components. */}
             <div
-              className="grid grid-cols-3 overflow-hidden rounded-xl border sm:grid-cols-6"
+              className="grid grid-cols-3 overflow-hidden rounded-3xl border shadow-sm sm:grid-cols-6"
               style={{ borderColor: BORDER, background: SURFACE }}
             >
               {(
@@ -791,19 +760,19 @@ export default function MDSchedulePage() {
               ).map((tile, i) => (
                 <div
                   key={tile.label}
-                  className={`min-w-0 px-3 py-3 ${["Total shifts", "Active now", "Unassigned"].includes(tile.label) ? "" : "hidden sm:block"}`}
+                  className={`min-w-0 px-5 py-4 ${["Total shifts", "Active now", "Unassigned"].includes(tile.label) ? "" : "hidden sm:block"}`}
                   style={
                     i > 0 ? { borderLeft: `1px solid ${BORDER}` } : undefined
                   }
                 >
                   <p
-                    className="text-[10px] font-bold uppercase tracking-wide"
+                    className="text-[10px] font-black uppercase tracking-wider"
                     style={{ color: MUTED }}
                   >
                     {tile.label}
                   </p>
                   <p
-                    className="mt-1 text-lg font-semibold"
+                    className="mt-1 text-xl font-bold tracking-tight"
                     style={{ color: tile.color }}
                   >
                     {shifts === null ? "—" : tile.value}
@@ -812,13 +781,12 @@ export default function MDSchedulePage() {
               ))}
             </div>
 
-            <div className="space-y-3">
-              {/* Status filter */}
+            <div className="space-y-4">
               <select
                 aria-label="Filter schedule status"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value as Bucket | "all")}
-                className="h-11 w-full rounded-lg border border-cc-border bg-transparent px-3 text-sm text-cc-text sm:hidden"
+                className="h-11 w-full rounded-2xl border border-cc-border bg-cc-surface px-4 text-xs font-semibold text-cc-text sm:hidden shadow-none"
               >
                 {STATUS_FILTERS.map((f) => (
                   <option key={f.key} value={f.key}>
@@ -827,7 +795,7 @@ export default function MDSchedulePage() {
                   </option>
                 ))}
               </select>
-              <div className="hidden flex-wrap gap-1.5 sm:flex">
+              <div className="hidden flex-wrap gap-2 sm:flex" role="group" aria-label="Filter schedule status">
                 {STATUS_FILTERS.map((f) => {
                   const active = filter === f.key;
                   const count =
@@ -839,21 +807,23 @@ export default function MDSchedulePage() {
                       key={f.key}
                       aria-pressed={active}
                       onClick={() => setFilter(f.key)}
-                      className="min-h-11 rounded-lg border px-3 py-2 text-xs font-bold transition-colors"
-                      style={{
-                        borderColor: active ? PLUM : BORDER,
-                        background: active ? PLUM : SURFACE,
-                        color: active ? "#fff" : TEXT,
-                      }}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-xs font-semibold transition hover:bg-cc-soft"
+                      style={
+                        active
+                          ? { background: TEXT, color: "var(--cc-bg)" }
+                          : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` }
+                      }
                     >
                       {f.label}
-                      {shifts !== null ? ` (${count})` : ""}
+                      <span className="tabular-nums" style={{ opacity: 0.7 }}>
+                        {shifts !== null ? count : "—"}
+                      </span>
                     </button>
                   );
                 })}
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-cc-muted">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-medium" style={{ color: MUTED }}>
                 <span role="status">
                   {shifts === null
                     ? error
@@ -864,7 +834,8 @@ export default function MDSchedulePage() {
                 <div className="flex flex-wrap gap-2">
                   {(search || filter !== "all") && (
                     <button
-                      className="min-h-11 px-3 font-medium text-cc-plum"
+                      className="h-10 px-3 text-xs font-semibold underline-offset-4 hover:underline"
+                      style={{ color: PLUM }}
                       onClick={() => {
                         setSearch("");
                         setFilter("all");
@@ -876,10 +847,11 @@ export default function MDSchedulePage() {
                   <button
                     disabled={isFetching}
                     onClick={() => void refetch()}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-cc-border px-3 disabled:opacity-50"
+                    className="inline-flex h-10 items-center gap-1.5 rounded-full border border-cc-border bg-cc-surface px-4 text-xs font-semibold transition hover:bg-cc-soft disabled:opacity-50 shadow-none"
+                    style={{ color: TEXT }}
                   >
                     <RefreshCw
-                      size={15}
+                      size={14}
                       className={isFetching ? "animate-spin" : ""}
                     />{" "}
                     Refresh
@@ -889,12 +861,12 @@ export default function MDSchedulePage() {
               {error && (
                 <div
                   role="alert"
-                  className="rounded-xl border border-cc-border bg-cc-card p-4"
+                  className="rounded-3xl border border-cc-border bg-cc-surface p-6 text-center shadow-sm"
                 >
-                  <p className="font-semibold text-cc-text">
+                  <p className="text-sm font-semibold" style={{ color: TEXT }}>
                     Couldn't refresh the schedule.
                   </p>
-                  <p className="mt-1">
+                  <p className="mt-1 text-xs" style={{ color: MUTED }}>
                     {shifts
                       ? "Showing the last loaded shifts. Refresh to try again."
                       : "Use Refresh to try loading the schedule again."}
@@ -902,14 +874,14 @@ export default function MDSchedulePage() {
                 </div>
               )}
             </div>
+
             {viewMode === "week" && (!error || shifts !== null) && (
               <>
-                <details className="rounded-xl border border-cc-border bg-cc-card p-4">
-                  <summary className="cursor-pointer text-sm font-medium text-cc-text">
+                <details className="rounded-3xl border border-cc-border bg-cc-surface p-5 shadow-sm">
+                  <summary className="cursor-pointer text-xs font-bold uppercase tracking-wider text-cc-text">
                     Workload insights
                   </summary>
                   <div className="mt-4 space-y-4">
-                    {/* Daily load pattern */}
                     {shifts !== null && stats.total > 0 && (
                       <div
                         className="rounded-2xl border p-4"
@@ -917,7 +889,7 @@ export default function MDSchedulePage() {
                       >
                         <div className="flex items-center gap-1.5">
                           <p
-                            className="text-[11px] font-semibold uppercase tracking-wide"
+                            className="text-[10px] font-black uppercase tracking-wider"
                             style={{ color: MUTED }}
                           >
                             Rostering pattern this week
@@ -941,11 +913,11 @@ export default function MDSchedulePage() {
                                 className="flex flex-col items-center gap-1.5"
                               >
                                 <div
-                                  className="flex h-16 w-full items-end justify-center rounded-lg"
+                                  className="flex h-16 w-full items-end justify-center rounded-xl"
                                   style={{ background: SOFT }}
                                 >
                                   <div
-                                    className="w-full rounded-lg"
+                                    className="w-full rounded-xl"
                                     style={{
                                       height: `${heightPct}%`,
                                       background:
@@ -958,13 +930,13 @@ export default function MDSchedulePage() {
                                   />
                                 </div>
                                 <p
-                                  className="text-[9px] font-semibold uppercase"
+                                  className="text-[10px] font-black uppercase"
                                   style={{ color: isToday(day) ? PLUM : MUTED }}
                                 >
                                   {format(day, "EEE")}
                                 </p>
                                 <p
-                                  className="text-[10px] font-bold"
+                                  className="text-xs font-bold"
                                   style={{ color: TEXT }}
                                 >
                                   {count}
@@ -976,10 +948,9 @@ export default function MDSchedulePage() {
                       </div>
                     )}
 
-                    {/* Worker workload — who's carrying this week, ranked by hours. */}
                     {workload.length > 0 && (
                       <div
-                        className="rounded-2xl border"
+                        className="rounded-2xl border overflow-hidden"
                         style={{ borderColor: BORDER, background: SURFACE }}
                       >
                         <div
@@ -987,7 +958,7 @@ export default function MDSchedulePage() {
                           style={{ borderColor: BORDER }}
                         >
                           <p
-                            className="text-[11px] font-semibold uppercase tracking-wide"
+                            className="text-[10px] font-black uppercase tracking-wider"
                             style={{ color: MUTED }}
                           >
                             Worker workload this week
@@ -1001,11 +972,11 @@ export default function MDSchedulePage() {
                           {workload.map((w) => (
                             <div
                               key={w.id}
-                              className="flex items-center gap-3 px-4 py-2.5"
+                              className="flex items-center gap-3 px-4 py-3"
                             >
                               <Avatar name={w.name} />
                               <p
-                                className="min-w-0 flex-1 truncate text-[12px] font-bold"
+                                className="min-w-0 flex-1 truncate text-xs font-bold"
                                 style={{ color: TEXT }}
                               >
                                 {w.name}
@@ -1023,7 +994,7 @@ export default function MDSchedulePage() {
                                 />
                               </div>
                               <p
-                                className="w-24 shrink-0 text-right text-[11px] font-bold"
+                                className="w-28 shrink-0 text-right text-xs font-bold"
                                 style={{ color: MUTED }}
                               >
                                 {w.hours.toFixed(1)}h · {w.count} shift
@@ -1036,20 +1007,21 @@ export default function MDSchedulePage() {
                     )}
                   </div>
                 </details>
+
                 {shifts === null ? (
                   <div className="grid gap-3 lg:grid-cols-7">
                     {days.map((day) => (
                       <div
                         key={format(day, "yyyy-MM-dd")}
-                        className="space-y-2 rounded-2xl border p-2"
+                        className="space-y-2 rounded-3xl border p-3"
                         style={{ borderColor: BORDER, background: SURFACE }}
                       >
                         <div
-                          className="h-10 animate-pulse rounded-lg"
+                          className="h-10 animate-pulse rounded-xl"
                           style={{ background: SOFT }}
                         />
                         <div
-                          className="h-10 animate-pulse rounded-lg"
+                          className="h-10 animate-pulse rounded-xl"
                           style={{ background: SOFT }}
                         />
                       </div>
@@ -1057,9 +1029,9 @@ export default function MDSchedulePage() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 pt-1">
                       <p
-                        className="text-[11px] font-semibold uppercase tracking-wide"
+                        className="text-[10px] font-black uppercase tracking-wider"
                         style={{ color: MUTED }}
                       >
                         Weekly board
@@ -1076,12 +1048,8 @@ export default function MDSchedulePage() {
                       loadingAvail={loadingAvail}
                       colorBy="worker"
                       allowCreate={false}
-                      onCellClick={() => {
-                        /* Creating new shifts stays with coordinators. */
-                      }}
-                      onRefresh={() => {
-                        /* useOrgQuery invalidation inside RosterBoard already refetches. */
-                      }}
+                      onCellClick={() => {}}
+                      onRefresh={() => {}}
                     />
                   </>
                 )}
@@ -1090,7 +1058,7 @@ export default function MDSchedulePage() {
 
             {viewMode === "day" && (!error || shifts !== null) && (
               shifts === null ? (
-                <div className="h-72 animate-pulse rounded-2xl" style={{ background: SOFT }} />
+                <div className="h-72 animate-pulse rounded-3xl" style={{ background: SOFT }} />
               ) : (
                 <DayTimeline
                   dayKey={format(selectedDay, "yyyy-MM-dd")}
@@ -1102,10 +1070,10 @@ export default function MDSchedulePage() {
             )}
 
             {viewMode === "month" && (!error || shifts !== null) && (
-              <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+              <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
                 {shifts === null ? (
                   <div
-                    className="h-96 animate-pulse rounded-2xl"
+                    className="h-96 animate-pulse rounded-3xl"
                     style={{ background: SOFT }}
                   />
                 ) : (
@@ -1117,30 +1085,30 @@ export default function MDSchedulePage() {
                   />
                 )}
                 <div
-                  className="rounded-2xl border"
+                  className="rounded-3xl border overflow-hidden shadow-sm"
                   style={{ borderColor: BORDER, background: SURFACE }}
                 >
                   <div
-                    className="border-b px-4 py-3"
+                    className="border-b px-5 py-4"
                     style={{ borderColor: BORDER }}
                   >
                     <p
-                      className="text-[10px] font-semibold uppercase tracking-wide"
+                      className="text-[10px] font-black uppercase tracking-wider"
                       style={{ color: MUTED }}
                     >
                       {format(selectedDay, "EEEE")}
                     </p>
                     <p
-                      className="text-[15px] font-semibold"
+                      className="text-base font-semibold tracking-tight"
                       style={{ color: isToday(selectedDay) ? PLUM : TEXT }}
                     >
                       {format(selectedDay, "d MMMM yyyy")}
                     </p>
                   </div>
-                  <div className="max-h-[480px] space-y-1.5 overflow-y-auto p-2.5">
+                  <div className="max-h-[480px] space-y-2 overflow-y-auto p-3">
                     {monthDayShifts.length === 0 ? (
                       <p
-                        className="p-2 text-[11px] font-medium"
+                        className="p-3 text-center text-xs font-medium"
                         style={{ color: MUTED }}
                       >
                         {shifts === null
@@ -1161,27 +1129,27 @@ export default function MDSchedulePage() {
                             <button
                               key={s.id}
                               onClick={() => setActiveShiftId(s.id)}
-                              className="w-full rounded-lg p-2 text-left transition-transform hover:scale-[1.02]"
+                              className="w-full rounded-2xl p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
                               style={{ background: st.bg }}
                             >
                               <p
-                                className="text-[10px] font-semibold"
+                                className="text-[10px] font-black uppercase tracking-wider"
                                 style={{ color: st.color }}
                               >
                                 {formatTime(s.scheduled_start)}
                               </p>
                               <p
-                                className="mt-0.5 truncate text-[11px] font-bold"
+                                className="mt-1 truncate text-xs font-black"
                                 style={{ color: TEXT }}
                               >
                                 {s.participant_name || "Participant"}
                               </p>
-                              <div className="mt-1 flex items-center gap-1.5">
+                              <div className="mt-2 flex items-center gap-2">
                                 {s.worker_name && (
-                                  <Avatar name={s.worker_name} size={16} />
+                                  <Avatar name={s.worker_name} size={18} />
                                 )}
                                 <p
-                                  className="truncate text-[10px] font-medium"
+                                  className="truncate text-xs font-semibold"
                                   style={{
                                     color:
                                       bucketOf(s) === "unassigned"
@@ -1204,93 +1172,125 @@ export default function MDSchedulePage() {
             )}
 
             {viewMode === "list" && (!error || shifts !== null) && (
-              <div
-                className="overflow-hidden rounded-2xl border"
-                style={{ borderColor: BORDER, background: SURFACE }}
-              >
-                {shifts === null ? (
-                  <div className="space-y-2 p-3">
-                    {[0, 1, 2, 3].map((i) => (
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {shifts === null ? (
+                    [0, 1, 2, 3, 4, 5].map((i) => (
                       <div
                         key={i}
-                        className="h-12 animate-pulse rounded-lg"
-                        style={{ background: SOFT }}
+                        className="h-36 animate-pulse rounded-3xl border border-cc-border bg-cc-surface"
                       />
-                    ))}
-                  </div>
-                ) : filteredShiftList.length === 0 ? (
-                  <p
-                    className="p-8 text-center text-[12px] font-medium"
-                    style={{ color: MUTED }}
-                  >
-                    No shifts match this filter.
-                  </p>
-                ) : (
-                  <div className="divide-y" style={{ borderColor: BORDER }}>
-                    {filteredShiftList.map((s) => {
+                    ))
+                  ) : paginatedShifts.length === 0 ? (
+                    <div className="col-span-full rounded-3xl border border-cc-border bg-cc-surface p-12 text-center">
+                      <p className="text-xs font-medium" style={{ color: MUTED }}>
+                        No shifts match this filter.
+                      </p>
+                    </div>
+                  ) : (
+                    paginatedShifts.map((s) => {
                       const st = STATUS_STYLE[bucketOf(s)];
                       return (
-                        <button
+                        <div
                           key={s.id}
                           onClick={() => setActiveShiftId(s.id)}
-                          className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-cc-soft lg:grid-cols-[150px_minmax(0,1fr)_minmax(0,1fr)_auto]"
+                          className="group flex flex-col justify-between rounded-3xl border border-cc-border bg-cc-surface p-5 transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer"
                         >
-                          <span
-                            className="col-start-1 row-start-2 text-xs font-medium lg:col-auto lg:row-auto"
-                            style={{ color: TEXT }}
-                          >
-                            {formatDateTime(s.scheduled_start)}
-                          </span>
-                          <p
-                            className="col-start-1 row-start-1 min-w-0 break-words text-sm font-semibold lg:col-auto lg:row-auto"
-                            style={{ color: TEXT }}
-                          >
-                            {s.participant_name || "Participant"}
-                          </p>
-                          <div className="col-span-2 flex min-w-0 items-center gap-1.5 lg:col-span-1">
-                            {s.worker_name && (
-                              <Avatar name={s.worker_name} size={18} />
-                            )}
-                            <p
-                              className="truncate text-[11px] font-semibold"
-                              style={{
-                                color:
-                                  bucketOf(s) === "unassigned" ? AMBER : MUTED,
-                              }}
+                          <div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span
+                                className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider"
+                                style={{ background: st.bg, color: st.color }}
+                              >
+                                {st.label}
+                              </span>
+                              <span
+                                className="text-[11px] font-semibold"
+                                style={{ color: MUTED }}
+                              >
+                                {formatTime(s.scheduled_start)} – {formatTime(s.scheduled_end)}
+                              </span>
+                            </div>
+                            <h3
+                              className="mt-3 text-sm font-black tracking-tight"
+                              style={{ color: TEXT }}
                             >
-                              {bucketOf(s) === "unassigned"
-                                ? "Unassigned"
-                                : s.worker_name || "Worker"}
+                              {s.participant_name || "Participant"}
+                            </h3>
+                            <p
+                              className="mt-1 text-xs font-medium"
+                              style={{ color: MUTED }}
+                            >
+                              {formatDateTime(s.scheduled_start)}
                             </p>
                           </div>
-                          <span
-                            className="col-start-2 row-start-1 rounded-md px-2.5 py-1 text-xs font-medium lg:col-auto lg:row-auto"
-                            style={{ background: st.bg, color: st.color }}
-                          >
-                            {st.label}
-                          </span>
-                        </button>
+
+                          <div className="mt-4 flex items-center justify-between border-t pt-3" style={{ borderColor: BORDER }}>
+                            <div className="flex items-center gap-2">
+                              {s.worker_name && <Avatar name={s.worker_name} size={22} />}
+                              <span
+                                className="text-xs font-bold truncate max-w-[150px]"
+                                style={{
+                                  color: bucketOf(s) === "unassigned" ? AMBER : TEXT,
+                                }}
+                              >
+                                {bucketOf(s) === "unassigned"
+                                  ? "Unassigned"
+                                  : s.worker_name || "Worker"}
+                              </span>
+                            </div>
+                            <span className="text-[11px] font-semibold text-cc-plum group-hover:underline">
+                              View details →
+                            </span>
+                          </div>
+                        </div>
                       );
-                    })}
+                    })
+                  )}
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between rounded-3xl border border-cc-border bg-cc-surface px-6 py-3.5 shadow-sm">
+                    <p className="text-xs font-semibold" style={{ color: MUTED }}>
+                      Showing page <span style={{ color: TEXT }}>{page}</span> of{" "}
+                      <span style={{ color: TEXT }}>{totalPages}</span> ({filteredShiftList.length} total shifts)
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className="inline-flex h-9 items-center gap-1 rounded-full border border-cc-border px-4 text-xs font-semibold transition hover:bg-cc-soft disabled:opacity-40 shadow-none"
+                        style={{ color: TEXT }}
+                      >
+                        <ChevronLeft size={14} /> Previous
+                      </button>
+                      <button
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        className="inline-flex h-9 items-center gap-1 rounded-full border border-cc-border px-4 text-xs font-semibold transition hover:bg-cc-soft disabled:opacity-40 shadow-none"
+                        style={{ color: TEXT }}
+                      >
+                        Next <ChevronRight size={14} />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Activity log: cancellations + shifts in progress right now */}
             {viewMode === "week" &&
               shifts !== null &&
               activityLog.length > 0 && (
                 <div
-                  className="rounded-2xl border"
+                  className="rounded-3xl border overflow-hidden shadow-sm"
                   style={{ borderColor: BORDER, background: SURFACE }}
                 >
                   <div
-                    className="flex items-center gap-1.5 border-b px-4 py-3"
+                    className="flex items-center gap-1.5 border-b px-5 py-4"
                     style={{ borderColor: BORDER }}
                   >
                     <p
-                      className="text-[11px] font-semibold uppercase tracking-wide"
+                      className="text-[10px] font-black uppercase tracking-wider"
                       style={{ color: MUTED }}
                     >
                       Activity log — active shifts &amp; cancellations this week
@@ -1308,7 +1308,7 @@ export default function MDSchedulePage() {
                         <button
                           key={s.id}
                           onClick={() => setActiveShiftId(s.id)}
-                          className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-cc-soft"
+                          className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-cc-soft"
                           style={{ borderColor: BORDER }}
                         >
                           <span
@@ -1317,14 +1317,14 @@ export default function MDSchedulePage() {
                           />
                           <div className="min-w-0 flex-1">
                             <p
-                              className="truncate text-[12px] font-bold"
+                              className="truncate text-xs font-bold"
                               style={{ color: TEXT }}
                             >
                               {s.participant_name || "Participant"} ·{" "}
                               {s.worker_name || "Unassigned"}
                             </p>
                             <p
-                              className="text-[10px] font-medium"
+                              className="mt-0.5 text-[11px] font-medium"
                               style={{ color: MUTED }}
                             >
                               {bucket === "active" &&
@@ -1334,7 +1334,7 @@ export default function MDSchedulePage() {
                             </p>
                           </div>
                           <span
-                            className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                            className="shrink-0 rounded-full px-3 py-1 text-[10px] font-black"
                             style={{ background: st.bg, color: st.color }}
                           >
                             {st.label}
@@ -1369,15 +1369,15 @@ function DetailRow({
   if (!value) return null;
   return (
     <div className="flex items-start gap-2.5">
-      <Icon size={14} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
+      <Icon size={15} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
       <div>
         <p
-          className="text-[10px] font-bold uppercase tracking-wide"
+          className="text-[10px] font-black uppercase tracking-wider"
           style={{ color: MUTED }}
         >
           {label}
         </p>
-        <p className="text-[12px] font-semibold" style={{ color: TEXT }}>
+        <p className="text-xs font-bold mt-0.5" style={{ color: TEXT }}>
           {value}
         </p>
       </div>
@@ -1392,8 +1392,6 @@ function ShiftDetailSheet({
   shiftId: string | null;
   onClose: () => void;
 }) {
-  // Polls while open so a shift being actively worked (task ticks, clock-out)
-  // updates live rather than needing the sheet closed and reopened.
   const {
     data: detail = null,
     isLoading: loading,
@@ -1416,72 +1414,72 @@ function ShiftDetailSheet({
     <Sheet open={!!shiftId} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
         side="right"
-        className="w-full overflow-y-auto p-4 pt-12 sm:max-w-xl sm:p-6 sm:pt-12"
-        style={{ background: "var(--cc-bg)" }}
+        className="w-full overflow-y-auto p-6 pt-10 sm:max-w-lg"
+        style={{ background: SURFACE }}
       >
         <SheetTitle className="sr-only">Shift details</SheetTitle>
         {loading || !detail ? (
-          <div className="space-y-3 pt-8">
+          <div className="space-y-4 pt-8">
             {error ? (
-              <p className="text-[12px] font-bold" style={{ color: MUTED }}>
+              <p className="text-xs font-bold" style={{ color: MUTED }}>
                 Couldn't load this shift.
               </p>
             ) : (
               <>
                 <div
-                  className="h-6 w-2/3 animate-pulse rounded-lg"
+                  className="h-6 w-2/3 animate-pulse rounded-xl"
                   style={{ background: SOFT }}
                 />
                 <div
-                  className="h-20 animate-pulse rounded-2xl"
+                  className="h-24 animate-pulse rounded-2xl"
                   style={{ background: SOFT }}
                 />
                 <div
-                  className="h-32 animate-pulse rounded-2xl"
+                  className="h-36 animate-pulse rounded-2xl"
                   style={{ background: SOFT }}
                 />
               </>
             )}
           </div>
         ) : (
-          <div className="space-y-5 pt-6">
-            <div>
+          <div className="space-y-5 pt-4">
+            <div className="border-b pb-4" style={{ borderColor: BORDER }}>
               <div className="flex items-center gap-2">
                 {st && (
                   <span
-                    className="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                    className="rounded-full px-3 py-1 text-[10px] font-black"
                     style={{ background: st.bg, color: st.color }}
                   >
                     {st.label}
                   </span>
                 )}
                 <span
-                  className="text-[10px] font-bold uppercase tracking-wide"
+                  className="text-[10px] font-black uppercase tracking-wider"
                   style={{ color: MUTED }}
                 >
                   {(detail.shift_type || "standard_support").replace(/_/g, " ")}
                 </span>
               </div>
               <h2
-                className="mt-2 text-lg font-semibold"
+                className="mt-2 text-lg font-black tracking-tight"
                 style={{ color: TEXT }}
               >
                 {detail.participant_name || "Participant"}
               </h2>
               <p
-                className="flex items-center gap-1.5 text-[12px] font-semibold"
+                className="flex items-center gap-2 mt-1 text-xs font-semibold"
                 style={{ color: MUTED }}
               >
                 {detail.worker_name && (
-                  <Avatar name={detail.worker_name} size={18} />
+                  <Avatar name={detail.worker_name} size={20} />
                 )}
                 Worker: {detail.worker_name || "Unassigned"}
               </p>
             </div>
 
             <div
-              className="grid grid-cols-2 gap-3 rounded-2xl border p-4"
-              style={{ borderColor: BORDER, background: SURFACE }}
+              className="grid grid-cols-2 gap-4 rounded-2xl border p-4"
+              style={{ borderColor: BORDER, background: "var(--cc-bg)" }}
             >
               <DetailRow
                 icon={CalendarClock}
@@ -1516,31 +1514,31 @@ function ShiftDetailSheet({
             {tasks.length > 0 && (
               <div
                 className="rounded-2xl border p-4"
-                style={{ borderColor: BORDER, background: SURFACE }}
+                style={{ borderColor: BORDER, background: "var(--cc-bg)" }}
               >
                 <div className="flex items-center justify-between">
                   <p
-                    className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide"
+                    className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider"
                     style={{ color: MUTED }}
                   >
-                    <ClipboardList size={13} /> Shift tasks
+                    <ClipboardList size={14} /> Shift tasks
                   </p>
                   <span
-                    className="text-[11px] font-bold"
+                    className="text-xs font-bold"
                     style={{ color: TEXT }}
                   >
                     {completedTasks}/{tasks.length} done
                   </span>
                 </div>
-                <div className="mt-2.5 space-y-1.5">
+                <div className="mt-3 space-y-2">
                   {tasks.map((t, i) => (
-                    <div key={t.id ?? i} className="flex items-center gap-2">
+                    <div key={t.id ?? i} className="flex items-center gap-2.5">
                       <CheckCircle2
-                        size={13}
+                        size={15}
                         style={{ color: t.completed ? GREEN : BORDER }}
                       />
                       <p
-                        className="truncate text-[12px] font-medium"
+                        className="truncate text-xs font-medium"
                         style={{ color: t.completed ? TEXT : MUTED }}
                       >
                         {t.label || t.title || "Task"}
@@ -1556,38 +1554,29 @@ function ShiftDetailSheet({
               detail.session_notes) && (
               <div
                 className="rounded-2xl border p-4"
-                style={{ borderColor: BORDER, background: SURFACE }}
+                style={{ borderColor: BORDER, background: "var(--cc-bg)" }}
               >
                 <p
-                  className="text-[11px] font-semibold uppercase tracking-wide"
+                  className="text-[10px] font-black uppercase tracking-wider"
                   style={{ color: MUTED }}
                 >
                   Notes on file
                 </p>
-                <div className="mt-2 space-y-2">
+                <div className="mt-2.5 space-y-2 text-xs leading-relaxed" style={{ color: TEXT }}>
                   {detail.coordinator_notes && (
-                    <p
-                      className="text-[12px] font-medium"
-                      style={{ color: TEXT }}
-                    >
+                    <p>
                       <span className="font-bold">Coordinator: </span>
                       {detail.coordinator_notes}
                     </p>
                   )}
                   {detail.visit_notes && (
-                    <p
-                      className="text-[12px] font-medium"
-                      style={{ color: TEXT }}
-                    >
+                    <p>
                       <span className="font-bold">Visit: </span>
                       {detail.visit_notes}
                     </p>
                   )}
                   {detail.session_notes && (
-                    <p
-                      className="text-[12px] font-medium"
-                      style={{ color: TEXT }}
-                    >
+                    <p>
                       <span className="font-bold">Session: </span>
                       {detail.session_notes}
                     </p>
@@ -1596,29 +1585,29 @@ function ShiftDetailSheet({
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 pt-2">
               {detail.has_risk_alerts && (
                 <span
-                  className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-black"
                   style={{ background: AMBER_SOFT, color: AMBER }}
                 >
-                  <AlertTriangle size={12} /> Risk alerts on file
+                  <AlertTriangle size={13} /> Risk alerts on file
                 </span>
               )}
               {detail.risks_acknowledged && (
                 <span
-                  className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-black"
                   style={{ background: GREEN_SOFT, color: GREEN }}
                 >
-                  <ShieldCheck size={12} /> Risks acknowledged
+                  <ShieldCheck size={13} /> Risks acknowledged
                 </span>
               )}
               {detail.conversation_id && (
                 <span
-                  className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-black"
                   style={{ background: BLUE_SOFT, color: BLUE }}
                 >
-                  <MessageSquare size={12} /> Shift chat active
+                  <MessageSquare size={13} /> Shift chat active
                 </span>
               )}
             </div>

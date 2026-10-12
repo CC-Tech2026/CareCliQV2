@@ -85,7 +85,7 @@ it("applies the status filter in Month and exposes refresh failures", () => {
   state.error = true;
   render(<MDSchedulePage />);
   fireEvent.click(screen.getByRole("button", { name: "Month" }));
-  fireEvent.click(screen.getByRole("button", { name: "Scheduled (1)" }));
+  fireEvent.click(screen.getByRole("button", { name: /^Scheduled\s*1$/ }));
   expect(screen.getByTestId("month-records").textContent).toBe("Alex Morgan");
   expect(screen.getByRole("alert")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
