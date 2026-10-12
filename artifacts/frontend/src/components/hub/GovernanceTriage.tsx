@@ -135,14 +135,14 @@ function AlertRow({
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {alert.category === "urgent" && (
               <span
-                className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide"
+                className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
                 style={{ background: RED_SOFT, color: RED }}
               >
                 Urgent
               </span>
             )}
             <span
-              className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide"
+              className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
               style={{ background: soft, color }}
             >
               {severityLabel(alert.severity)}
@@ -454,7 +454,7 @@ export function GovernanceTriage({
   if (variant === "sidebar") {
     return (
       <section
-        className="flex h-full flex-col overflow-hidden rounded-2xl border"
+        className="flex h-full flex-col overflow-hidden rounded-2xl bg-cc-surface"
         style={{ borderColor: BORDER, background: SURFACE }}
       >
         <div
@@ -491,7 +491,7 @@ export function GovernanceTriage({
                   className="w-full px-5 py-3.5 text-left transition-colors hover:bg-cc-soft"
                 >
                   <p
-                    className="text-[11px] font-bold uppercase tracking-wide"
+                    className="text-xs font-semibold"
                     style={{ color }}
                   >
                     {severityLabel(a.severity)}
@@ -532,7 +532,7 @@ export function GovernanceTriage({
     // both the "empty half" and the "half-width card floating next to blank
     // canvas" problems that came from trying to keep two panels in sync.
     <section
-      className="overflow-hidden rounded-2xl border"
+      className="overflow-hidden rounded-2xl bg-cc-surface"
       style={{ borderColor: BORDER, background: SURFACE }}
     >
       <div
@@ -569,7 +569,7 @@ export function GovernanceTriage({
         <div className="flex items-center gap-2.5">
           {!loading && all.length > 0 && topSeverity && (
             <span
-              className="rounded-full px-2.5 py-1 text-[9.5px] font-black uppercase tracking-wide"
+              className="rounded-full px-2.5 py-1 text-xs font-semibold"
               style={{
                 background: topSeverityColors.soft,
                 color: topSeverityColors.color,

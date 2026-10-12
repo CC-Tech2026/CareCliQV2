@@ -143,7 +143,7 @@ function MetricBreakdown({ items }: { items: Array<{ label: string; value: numbe
       {items.map((item) => (
         <div key={item.label}>
           <p className="text-[15px] font-semibold" style={{ color: item.color ?? TEXT }}>{formatNumber(item.value)}</p>
-          <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{item.label}</p>
+          <p className="text-xs font-semibold" style={{ color: MUTED }}>{item.label}</p>
         </div>
       ))}
     </div>
@@ -228,7 +228,7 @@ function ActiveStaffCard({
   return (
     <button
       onClick={onClick}
-      className="flex flex-col justify-start rounded-2xl border overflow-hidden text-left transition-colors hover:bg-cc-soft"
+      className="flex flex-col justify-start rounded-2xl bg-cc-surface overflow-hidden text-left transition-colors hover:bg-cc-soft"
       style={{ borderColor: BORDER, background: SURFACE }}
     >
       <div className="flex w-full flex-1 flex-wrap items-center gap-4 px-5 py-5">
@@ -237,7 +237,7 @@ function ActiveStaffCard({
         </div>
 
         <div className="min-w-0 flex-1 basis-32">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>Active staff</p>
+          <p className="text-xs font-semibold" style={{ color: MUTED }}>Active staff</p>
 
           <div className="mt-3 flex flex-col gap-1.5">
             <RingLegendItem color={PLUM} value={supportWorkers} label="Support workers" />
@@ -284,7 +284,7 @@ function ExecutiveMetric({
   const content = (
     <div className="w-full px-5 py-5">
       <p
-        className="text-[11px] font-bold uppercase tracking-[0.14em]"
+        className="text-xs font-semibold"
         style={{ color: MUTED }}
       >
         {label}
@@ -314,7 +314,7 @@ function ExecutiveMetric({
   // so the four numbers read as separate facts, not one continuous block.
   if (!onClick) {
     return (
-      <div className="rounded-2xl border overflow-hidden" style={{ borderColor: BORDER, background: SURFACE }}>
+      <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ borderColor: BORDER, background: SURFACE }}>
         {content}
       </div>
     );
@@ -323,7 +323,7 @@ function ExecutiveMetric({
   return (
     <button
       onClick={onClick}
-      className="flex flex-col justify-start rounded-2xl border overflow-hidden text-left transition-colors hover:bg-cc-soft"
+      className="flex flex-col justify-start rounded-2xl bg-cc-surface overflow-hidden text-left transition-colors hover:bg-cc-soft"
       style={{ borderColor: BORDER, background: SURFACE }}
     >
       {content}
@@ -353,11 +353,11 @@ export function DemandCapacityPanel({ data, loading, error, onRetry, onNavigate 
   data?: MdDemandCapacity; loading: boolean; error: boolean;
   onRetry: () => void; onNavigate: (path: string) => void;
 }) {
-  if (error) return <div role="alert" className="rounded-xl border border-cc-border bg-cc-surface p-5 text-sm">
+  if (error) return <div role="alert" className="rounded-2xl bg-cc-surface p-5 text-sm">
     <p>Enquiries and available hours could not be loaded.</p>
     <button type="button" onClick={onRetry} className="mt-3 min-h-11 font-semibold text-cc-plum">Try again</button>
   </div>;
-  if (loading || !data) return <div role="status" className="rounded-xl border border-cc-border bg-cc-surface p-5 text-sm text-cc-muted">Loading enquiries and available hours...</div>;
+  if (loading || !data) return <div role="status" className="rounded-2xl bg-cc-surface p-5 text-sm text-cc-muted">Loading enquiries and available hours...</div>;
   const reliable = Math.round(data.capacity.reliable_hours);
   const casual = Math.round(data.capacity.casual_hours);
   const cards = [
@@ -366,9 +366,9 @@ export function DemandCapacityPanel({ data, loading, error, onRetry, onNavigate 
     { title: "Available this week", value: formatNumber(reliable + casual) + " h", detail: reliable + " h permanent staff / " + casual + " h casual staff", action: "Review staff availability", path: "/md/schedule", icon: Zap },
   ];
   return <section aria-label="Demand and capacity" className="space-y-3">
-    <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-base font-semibold text-cc-text">Plan your next move</h2><span className="text-xs text-cc-muted">Enquiries and this week's capacity</span></div>
+    <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-lg font-semibold text-cc-text">Plan your next move</h2><span className="text-xs text-cc-muted">Enquiries and this week's capacity</span></div>
     <div className="grid gap-4 md:grid-cols-3">
-      {cards.map(({ title, value, detail, action, path, icon: Icon }) => <button key={title} type="button" onClick={() => onNavigate(path)} className="group flex min-w-0 flex-col rounded-2xl border border-cc-border bg-cc-surface p-5 text-left transition-colors hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum">
+      {cards.map(({ title, value, detail, action, path, icon: Icon }) => <button key={title} type="button" onClick={() => onNavigate(path)} className="group flex min-w-0 flex-col rounded-2xl bg-cc-surface p-5 text-left transition-colors hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum">
         <div className="flex w-full items-center justify-between gap-2"><span className="text-sm font-medium text-cc-muted">{title}</span><Icon size={16} className="shrink-0 text-cc-muted" /></div>
         <p className="mt-4 text-3xl font-semibold tracking-tight text-cc-text">{value}</p>
         <p className="mb-4 mt-2 text-xs leading-relaxed text-cc-muted">{detail}</p>
@@ -394,7 +394,7 @@ function ParticipantOverviewCard({
   const planStatus = byPlanStatus ?? { pending: 0, review: 0, expired: 0 };
 
   return (
-    <section aria-label="Participant overview" className="flex min-w-0 flex-col rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
+    <section aria-label="Participant overview" className="flex min-w-0 flex-col rounded-2xl bg-cc-surface" style={{ borderColor: BORDER, background: SURFACE }}>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b px-5 py-3" style={{ borderColor: BORDER }}>
         <div>
           <h3 className="text-sm font-semibold" style={{ color: TEXT }}>Participant overview</h3>
@@ -420,7 +420,7 @@ function ParticipantOverviewCard({
 
         <div>
           <div className="mb-3 flex items-center gap-1.5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>Plan status</p>
+            <p className="text-xs font-semibold" style={{ color: MUTED }}>Plan status</p>
             <Popover>
               <PopoverTrigger asChild>
                 <button type="button" aria-label="What does plan status mean?" className="flex h-3.5 w-3.5 items-center justify-center rounded-full hover:opacity-70" style={{ color: MUTED }}>
@@ -466,7 +466,7 @@ function ComplianceCard({
 
   return (
     <section
-      className="overflow-hidden rounded-2xl border"
+      className="overflow-hidden rounded-2xl bg-cc-surface"
       style={{
         borderColor: BORDER,
         background: SURFACE,
@@ -617,7 +617,7 @@ export function DocumentationInsights({ data, onNavigate }: { data: Pick<MDData,
     { label: "Priority review (below 60%)", count: summary.priority_review, color: RED },
     { label: "Not scored", count: summary.unscored, color: MUTED },
   ] : [];
-  return <section aria-label="Documentation quality and follow-up" className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
+  return <section aria-label="Documentation quality and follow-up" className="overflow-hidden rounded-2xl bg-cc-surface">
     <header className="border-b border-cc-border p-5"><h2 className="text-base font-semibold text-cc-text">Documentation quality: where to focus</h2><p className="mt-1 text-sm text-cc-muted">Based on the latest available session records, up to 400. Scores describe documentation checks, not overall regulatory compliance.</p></header>
     <div className="grid gap-6 p-5 lg:grid-cols-2">
       <div>
@@ -662,12 +662,12 @@ function ComplianceTrend({
     }));
 
   if (chartData.filter(item => item.score !== null).length < 2) {
-    return <p className="rounded-xl border border-cc-border p-4 text-sm text-cc-muted">A trend will appear once at least two weeks have scored documentation.</p>;
+    return <p className="rounded-2xl bg-cc-surface p-4 text-sm text-cc-muted">A trend will appear once at least two weeks have scored documentation.</p>;
   }
 
   return (
     <section
-      className="rounded-2xl border"
+      className="rounded-2xl bg-cc-surface"
       style={{
         borderColor: BORDER,
         background: SURFACE,
@@ -883,7 +883,7 @@ function BillingStat({ label, value, color }: { label: string; value: string; co
   return (
     <div>
       <p className="text-[17px] font-semibold" style={{ color: color ?? TEXT }}>{value}</p>
-      <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+      <p className="mt-0.5 text-xs font-semibold" style={{ color: MUTED }}>{label}</p>
     </div>
   );
 }
@@ -924,7 +924,7 @@ function RevenueChart() {
   const invoiceCount = report?.invoice_count ?? 0;
 
   return (
-    <section className="flex h-full flex-col rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
+    <section className="flex h-full flex-col rounded-2xl bg-cc-surface" style={{ borderColor: BORDER, background: SURFACE }}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 sm:px-6" style={{ borderColor: BORDER }}>
         <div>
           <h2 className="text-[14px] font-semibold" style={{ color: TEXT }}>Revenue</h2>
@@ -1035,7 +1035,7 @@ function FinancialSummary({
 
   return (
     <section
-      className="rounded-2xl border"
+      className="rounded-2xl bg-cc-surface"
       style={{
         borderColor: BORDER,
         background: SURFACE,
@@ -1130,7 +1130,7 @@ function FinancialMetric({
   return (
     <div className="px-5 py-4">
       <p
-        className="text-[11px] font-semibold uppercase tracking-[0.15em]"
+        className="text-xs font-semibold"
         style={{ color: MUTED }}
       >
         {label}
@@ -1215,7 +1215,7 @@ export function MDHubView() {
         </div>
 
         <div
-          className="grid overflow-hidden rounded-2xl border sm:grid-cols-2 xl:grid-cols-4"
+          className="grid overflow-hidden rounded-2xl bg-cc-surface sm:grid-cols-2 xl:grid-cols-4"
           style={{ borderColor: BORDER }}
         >
           {[1, 2, 3, 4].map((item) => (
@@ -1243,7 +1243,7 @@ export function MDHubView() {
     return (
       <div
         role="alert"
-        className="rounded-2xl border p-10 text-center"
+        className="rounded-2xl bg-cc-surface p-10 text-center"
         style={{
           borderColor: BORDER,
           background: SURFACE,
@@ -1320,7 +1320,7 @@ export function MDHubView() {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <span
-            className="text-[11px] font-semibold uppercase tracking-[0.16em]"
+            className="text-xs font-semibold"
             style={{ color: MUTED }}
           >
             How we're tracking
@@ -1354,9 +1354,9 @@ export function MDHubView() {
       </div>
       <div className="space-y-4">
         <DocumentationInsights data={data} onNavigate={navigate} />
-        {trendQuery.isError ? <div role="alert" className="rounded-xl border border-cc-border p-4 text-sm">Documentation trend could not be loaded. <button type="button" className="font-semibold text-cc-plum" onClick={() => void trendQuery.refetch()}>Try again</button></div> : trendQuery.isLoading ? <p role="status" className="text-sm text-cc-muted">Loading documentation trend...</p> : <ComplianceTrend trend={trendQuery.data?.trend ?? []} target={data.compliance_target} />}
+        {trendQuery.isError ? <div role="alert" className="rounded-2xl bg-cc-surface p-4 text-sm">Documentation trend could not be loaded. <button type="button" className="font-semibold text-cc-plum" onClick={() => void trendQuery.refetch()}>Try again</button></div> : trendQuery.isLoading ? <p role="status" className="text-sm text-cc-muted">Loading documentation trend...</p> : <ComplianceTrend trend={trendQuery.data?.trend ?? []} target={data.compliance_target} />}
 
-        <button type="button" onClick={() => navigate("/md/executive")} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-cc-border bg-cc-surface px-5 py-3 text-left text-sm font-semibold text-cc-plum">Review performance and longer-term trends<ArrowRight size={16} /></button>
+        <button type="button" onClick={() => navigate("/md/executive")} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl bg-cc-surface px-5 py-3 text-left text-sm font-semibold text-cc-text hover:bg-cc-soft">Review performance and longer-term trends<ArrowRight size={16} /></button>
       </div>
 
 

@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { Link } from "wouter";
 import { ArrowRight, CalendarDays } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { PageHeader, ctaClass, ghostClass } from "@/components/layout/PageKit";
 
 interface OrgResponse {
   organization_name?: string;
@@ -70,22 +71,28 @@ export function HubHeader() {
 
   if (isMD) {
     return (
-      <header className="rounded-2xl border border-cc-border bg-cc-surface p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-5">
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-cc-muted">{greeting}</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-cc-text sm:text-3xl">Your executive briefing</h1>
-            <p className="mt-2 break-words text-sm text-cc-muted">{orgName}</p>
-          </div>
-          <div className="flex flex-col gap-3">
-            <time dateTime={format(now, "yyyy-MM-dd")} className="inline-flex items-center gap-2 text-xs font-medium text-cc-muted"><CalendarDays size={14} />{today}</time>
-            <nav aria-label="Executive resources" className="flex flex-wrap gap-2">
-              <Link href="/md/executive" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-cc-plum px-4 text-sm font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum">Performance review<ArrowRight size={14} /></Link>
-              <Link href="/reports" className="inline-flex min-h-11 items-center rounded-lg border border-cc-border px-4 text-sm font-semibold text-cc-text hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum">Report library</Link>
-            </nav>
-          </div>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={greeting}
+        title="Your executive briefing"
+        description={
+          <>
+            <span className="break-words">{orgName}</span>
+            <time dateTime={format(now, "yyyy-MM-dd")} className="ml-2 inline-flex items-center gap-1.5">
+              <CalendarDays size={14} />
+              {today}
+            </time>
+          </>
+        }
+        actions={
+          <nav aria-label="Executive resources" className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:gap-2">
+            <Link href="/reports" className={ghostClass}>Report library</Link>
+            <Link href="/md/executive" className={`${ctaClass} order-first w-full sm:order-none sm:w-auto`}>
+              Performance review
+              <ArrowRight size={15} />
+            </Link>
+          </nav>
+        }
+      />
     );
   }
 
