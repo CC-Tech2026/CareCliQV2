@@ -17,6 +17,7 @@ import {
 import {
   AlertTriangle,
   CalendarClock,
+  CalendarX2,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -31,7 +32,18 @@ import {
   X,
 } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
-import { Notice, PageHeader, StatusText, SummaryStrip } from "@/components/layout/PageKit";
+import {
+  EmptyState,
+  Notice,
+  PageHeader,
+  RowList,
+  StatusText,
+  SummaryStrip,
+  Surface,
+  ghostClass,
+  outlineClass,
+  rowClass,
+} from "@/components/layout/PageKit";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import CoordinatorLivePage from "@/pages/coordinator-live";
@@ -52,7 +64,7 @@ import {
 } from "@/services/coordinatorService";
 
 const LIVE_REFRESH_MS = 30_000;
-const ITEMS_PER_PAGE = 9;
+const ITEMS_PER_PAGE = 25;
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -258,6 +270,9 @@ export default function MDSchedulePage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
+  // The weekly board lists only people with shifts that week; everyone else
+  // is one click away (needed to drag a shift onto someone new).
+  const [showAllWorkers, setShowAllWorkers] = useState(false);
   const deepLinkShiftId = new URLSearchParams(useSearch()).get("shiftId");
 
   useEffect(() => {
@@ -431,6 +446,14 @@ export default function MDSchedulePage() {
   }, [searchedShifts]);
   const busiestHours = Math.max(0, ...workload.map((w) => w.hours));
 
+  const boardWorkers = useMemo(() => {
+    if (showAllWorkers) return workers;
+    const rostered = new Set(searchedShifts.map((s) => s.worker_id).filter(Boolean));
+    return workers.filter((w) => rostered.has(w.id));
+  }, [showAllWorkers, workers, searchedShifts]);
+
+  const noShiftsInPeriod = shifts !== null && !error && (shifts ?? []).length === 0;
+
   const filteredShiftList = useMemo(() => {
     return searchedShifts
       .filter((s) => filter === "all" || bucketOf(s) === filter)
@@ -445,6 +468,24 @@ export default function MDSchedulePage() {
     const start = (page - 1) * ITEMS_PER_PAGE;
     return filteredShiftList.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredShiftList, page]);
+
+  // List view: shifts grouped under the day they start.
+  const listGroups = useMemo(() => {
+    const groups: { key: string; label: string; shifts: CoordinatorShiftRecord[] }[] = [];
+    for (const s of paginatedShifts) {
+      const key = s.scheduled_start ? format(parseISO(s.scheduled_start), "yyyy-MM-dd") : "none";
+      let group = groups.find((g) => g.key === key);
+      if (!group) {
+        const label = s.scheduled_start
+          ? `${isToday(parseISO(s.scheduled_start)) ? "Today, " : ""}${format(parseISO(s.scheduled_start), "EEEE d MMMM")}`
+          : "No start time";
+        group = { key, label, shifts: [] };
+        groups.push(group);
+      }
+      group.shifts.push(s);
+    }
+    return groups;
+  }, [paginatedShifts]);
 
   const monthDayShifts = useMemo(
     () =>
@@ -524,10 +565,12 @@ export default function MDSchedulePage() {
                 </span>
               )}
               {(viewMode === "week" || viewMode === "list") && shifts !== null && (
-                <StatusText tone={stats.counts.unassigned > 0 ? "warning" : "good"}>
+                <StatusText tone={stats.counts.unassigned > 0 ? "warning" : stats.total > 0 ? "good" : "neutral"}>
                   {stats.counts.unassigned > 0
-                    ? `${stats.counts.unassigned} unassigned this week`
-                    : "Fully staffed this week"}
+                    ? `${stats.counts.unassigned} unassigned ${periodWord}`
+                    : stats.total > 0
+                      ? `Fully staffed ${periodWord}`
+                      : `No shifts ${periodWord}`}
                 </StatusText>
               )}
             </span>
@@ -579,6 +622,19 @@ export default function MDSchedulePage() {
                 >
                   <Download size={15} />
                   <span>Export</span>
+                </button>
+              )}
+
+              {viewMode !== "live" && (
+                <button
+                  type="button"
+                  disabled={isFetching}
+                  onClick={() => void refetch()}
+                  className={`${ghostClass} h-10 min-h-10`}
+                  aria-label="Refresh the schedule"
+                >
+                  <RefreshCw size={15} className={isFetching ? "animate-spin" : ""} />
+                  <span className="hidden sm:inline">Refresh</span>
                 </button>
               )}
 
@@ -693,96 +749,52 @@ export default function MDSchedulePage() {
             <SummaryStrip
               loading={shifts === null}
               items={[
-                { value: stats.total, label: "shifts" },
-                { value: stats.counts.active, label: "active now", tone: stats.counts.active ? "info" : undefined },
-                { value: stats.counts.completed, label: "completed", tone: stats.counts.completed ? "good" : undefined },
-                { value: stats.counts.cancelled, label: "cancelled" },
-                { value: stats.counts.unassigned, label: "unassigned", tone: stats.counts.unassigned ? "warning" : "good" },
-                {
-                  value: stats.cancellationRate === null ? "N/A" : `${stats.cancellationRate}%`,
-                  label: "cancellation rate",
-                  tone: stats.cancellationRate !== null && stats.cancellationRate >= 15 ? "danger" : undefined,
-                },
+                { value: stats.total, label: stats.total === 1 ? "shift" : "shifts", onClick: () => setFilter("all"), active: filter === "all" },
+                ...(["active", "scheduled", "completed", "cancelled", "unassigned"] as Bucket[]).map((bucket) => ({
+                  value: stats.counts[bucket],
+                  label: STATUS_STYLE[bucket].label.toLowerCase(),
+                  tone:
+                    bucket === "unassigned"
+                      ? stats.counts.unassigned ? ("warning" as const) : undefined
+                      : bucket === "active" && stats.counts.active
+                        ? ("info" as const)
+                        : bucket === "completed" && stats.counts.completed
+                          ? ("good" as const)
+                          : undefined,
+                  onClick: () => setFilter(filter === bucket ? "all" : bucket),
+                  active: filter === bucket,
+                })),
+                ...(stats.cancellationRate !== null
+                  ? [{
+                      value: `${stats.cancellationRate}%`,
+                      label: "cancellation rate",
+                      tone: stats.cancellationRate >= 15 ? ("danger" as const) : undefined,
+                    }]
+                  : []),
               ]}
             />
 
             <div className="space-y-4">
-              <select
-                aria-label="Filter schedule status"
-                value={filter}
-                onChange={(e) => setFilter(e.target.value as Bucket | "all")}
-                className="h-11 w-full rounded-2xl border border-cc-border bg-cc-surface px-4 text-xs font-semibold text-cc-text sm:hidden shadow-none"
-              >
-                {STATUS_FILTERS.map((f) => (
-                  <option key={f.key} value={f.key}>
-                    {f.label} (
-                    {f.key === "all" ? stats.total : stats.counts[f.key]})
-                  </option>
-                ))}
-              </select>
-              <div className="hidden flex-wrap gap-2 sm:flex" role="group" aria-label="Filter schedule status">
-                {STATUS_FILTERS.map((f) => {
-                  const active = filter === f.key;
-                  const count =
-                    f.key === "all"
-                      ? stats.total
-                      : stats.counts[f.key as Bucket];
-                  return (
-                    <button
-                      key={f.key}
-                      aria-pressed={active}
-                      onClick={() => setFilter(f.key)}
-                      className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-xs font-semibold transition hover:bg-cc-soft"
-                      style={
-                        active
-                          ? { background: TEXT, color: "var(--cc-bg)" }
-                          : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` }
-                      }
-                    >
-                      {f.label}
-                      <span className="tabular-nums" style={{ opacity: 0.7 }}>
-                        {shifts !== null ? count : "—"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-medium" style={{ color: MUTED }}>
-                <span role="status">
-                  {shifts === null
-                    ? error
-                      ? "Schedule unavailable"
-                      : "Loading shifts..."
-                    : `${filteredShiftList.length} matching shift${filteredShiftList.length === 1 ? "" : "s"}`}
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {(search || filter !== "all") && (
-                    <button
-                      className="h-10 px-3 text-xs font-semibold underline-offset-4 hover:underline"
-                      style={{ color: PLUM }}
-                      onClick={() => {
-                        setSearch("");
-                        setFilter("all");
-                      }}
-                    >
-                      Clear filters
-                    </button>
-                  )}
+              {(search || filter !== "all") && shifts !== null && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" style={{ color: MUTED }} role="status">
+                  <span>
+                    Showing {filteredShiftList.length} {filter === "all" ? "" : STATUS_STYLE[filter].label.toLowerCase() + " "}
+                    shift{filteredShiftList.length === 1 ? "" : "s"}
+                    {search ? ` matching "${search}"` : ""}
+                  </span>
                   <button
-                    disabled={isFetching}
-                    onClick={() => void refetch()}
-                    className="inline-flex h-10 items-center gap-1.5 rounded-full border border-cc-border bg-cc-surface px-4 text-xs font-semibold transition hover:bg-cc-soft disabled:opacity-50 shadow-none"
-                    style={{ color: TEXT }}
+                    type="button"
+                    className="font-semibold underline-offset-4 hover:underline"
+                    style={{ color: PLUM }}
+                    onClick={() => {
+                      setSearch("");
+                      setFilter("all");
+                    }}
                   >
-                    <RefreshCw
-                      size={14}
-                      className={isFetching ? "animate-spin" : ""}
-                    />{" "}
-                    Refresh
+                    Clear filters
                   </button>
                 </div>
-              </div>
+              )}
               {error && (
                 <div
                   role="alert"
@@ -800,11 +812,34 @@ export default function MDSchedulePage() {
               )}
             </div>
 
-            {viewMode === "week" && (!error || shifts !== null) && (
+            {noShiftsInPeriod && viewMode !== "month" && (
+              <EmptyState
+                icon={CalendarX2}
+                title={`No shifts ${viewMode === "day" ? "on this day" : "this week"}`}
+                body="Coordinators create shifts in Rostering. Look at another week, or switch to Month to see what's coming up."
+                action={
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <button type="button" onClick={handlePrev} className={outlineClass}>
+                      <ChevronLeft size={15} /> {viewMode === "day" ? "Previous day" : "Previous week"}
+                    </button>
+                    <button type="button" onClick={handleNext} className={outlineClass}>
+                      {viewMode === "day" ? "Next day" : "Next week"} <ChevronRight size={15} />
+                    </button>
+                    <button type="button" onClick={() => setViewMode("month")} className={ghostClass}>
+                      Month view
+                    </button>
+                  </div>
+                }
+              />
+            )}
+
+            {viewMode === "week" && (!error || shifts !== null) && !noShiftsInPeriod && (
               <>
-                <details className="rounded-2xl bg-cc-surface px-5 py-4">
-                  <summary className="cursor-pointer text-sm font-semibold text-cc-text">
+                <details className="group rounded-2xl bg-cc-surface px-5 py-4">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-cc-text [&::-webkit-details-marker]:hidden">
+                    <ChevronRight size={16} className="shrink-0 transition-transform group-open:rotate-90" style={{ color: MUTED }} />
                     Workload insights
+                    <span className="font-normal" style={{ color: MUTED }}>Busiest days and hours per worker</span>
                   </summary>
                   <div className="mt-4 space-y-4">
                     {shifts !== null && stats.total > 0 && (
@@ -855,13 +890,13 @@ export default function MDSchedulePage() {
                                   />
                                 </div>
                                 <p
-                                  className="text-[10px] font-black uppercase"
+                                  className="text-xs font-medium"
                                   style={{ color: isToday(day) ? PLUM : MUTED }}
                                 >
                                   {format(day, "EEE")}
                                 </p>
                                 <p
-                                  className="text-xs font-bold"
+                                  className="text-sm font-semibold tabular-nums"
                                   style={{ color: TEXT }}
                                 >
                                   {count}
@@ -901,7 +936,7 @@ export default function MDSchedulePage() {
                             >
                               <Avatar name={w.name} />
                               <p
-                                className="min-w-0 flex-1 truncate text-xs font-bold"
+                                className="min-w-0 flex-1 truncate text-sm font-medium"
                                 style={{ color: TEXT }}
                               >
                                 {w.name}
@@ -919,7 +954,7 @@ export default function MDSchedulePage() {
                                 />
                               </div>
                               <p
-                                className="w-28 shrink-0 text-right text-xs font-bold"
+                                className="w-28 shrink-0 text-right text-xs tabular-nums"
                                 style={{ color: MUTED }}
                               >
                                 {w.hours.toFixed(1)}h · {w.count} shift
@@ -954,21 +989,33 @@ export default function MDSchedulePage() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-1.5 pt-1">
-                      <p
-                        className="text-xs font-semibold"
-                        style={{ color: MUTED }}
-                      >
-                        Weekly board
-                      </p>
-                      <SectionInfo text="Drag a shift onto a different worker's row to reassign it, or drag it to the Unassigned tray to remove the worker. Click a shift for full detail." />
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <h2 className="text-base font-semibold" style={{ color: TEXT }}>
+                          Weekly board
+                        </h2>
+                        <SectionInfo text="Drag a shift onto a different worker's row to reassign it, or drag it to the Unassigned tray to remove the worker. Click a shift for full detail." />
+                        <span className="text-sm" style={{ color: MUTED }}>
+                          {boardWorkers.length} of {workers.length} {workers.length === 1 ? "person" : "people"}
+                        </span>
+                      </div>
+                      {workers.length > 0 && (
+                        <button
+                          type="button"
+                          aria-pressed={showAllWorkers}
+                          onClick={() => setShowAllWorkers((v) => !v)}
+                          className={`${ghostClass} min-h-9`}
+                        >
+                          {showAllWorkers ? "Only people with shifts" : "Show everyone"}
+                        </button>
+                      )}
                     </div>
                     <RosterBoard
                       weekStart={weekStart}
                       shifts={
                         filter === "all" ? searchedShifts : filteredShiftList
                       }
-                      workers={workers}
+                      workers={boardWorkers}
                       availMap={availMap}
                       loadingAvail={loadingAvail}
                       colorBy="worker"
@@ -981,7 +1028,7 @@ export default function MDSchedulePage() {
               </>
             )}
 
-            {viewMode === "day" && (!error || shifts !== null) && (
+            {viewMode === "day" && (!error || shifts !== null) && !noShiftsInPeriod && (
               shifts === null ? (
                 <div className="h-72 animate-pulse rounded-3xl" style={{ background: SOFT }} />
               ) : (
@@ -1064,7 +1111,7 @@ export default function MDSchedulePage() {
                                 {formatTime(s.scheduled_start)}
                               </p>
                               <p
-                                className="mt-1 truncate text-xs font-black"
+                                className="mt-1 truncate text-sm font-semibold"
                                 style={{ color: TEXT }}
                               >
                                 {s.participant_name || "Participant"}
@@ -1096,106 +1143,75 @@ export default function MDSchedulePage() {
               </div>
             )}
 
-            {viewMode === "list" && (!error || shifts !== null) && (
+            {viewMode === "list" && (!error || shifts !== null) && !noShiftsInPeriod && (
               <div className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {shifts === null ? (
-                    [0, 1, 2, 3, 4, 5].map((i) => (
-                      <div
-                        key={i}
-                        className="h-36 animate-pulse rounded-3xl border border-cc-border bg-cc-surface"
-                      />
-                    ))
-                  ) : paginatedShifts.length === 0 ? (
-                    <div className="col-span-full rounded-3xl border border-cc-border bg-cc-surface p-12 text-center">
-                      <p className="text-xs font-medium" style={{ color: MUTED }}>
-                        No shifts match this filter.
-                      </p>
-                    </div>
-                  ) : (
-                    paginatedShifts.map((s) => {
-                      const st = STATUS_STYLE[bucketOf(s)];
-                      return (
-                        <div
-                          key={s.id}
-                          onClick={() => setActiveShiftId(s.id)}
-                          className="group flex flex-col justify-between rounded-3xl border border-cc-border bg-cc-surface p-5 transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer"
-                        >
-                          <div>
-                            <div className="flex items-center justify-between gap-2">
-                              <span
-                                className="rounded-full px-3 py-1 text-xs font-semibold"
-                                style={{ background: st.bg, color: st.color }}
-                              >
-                                {st.label}
-                              </span>
-                              <span
-                                className="text-[11px] font-semibold"
-                                style={{ color: MUTED }}
-                              >
-                                {formatTime(s.scheduled_start)} – {formatTime(s.scheduled_end)}
-                              </span>
-                            </div>
-                            <h3
-                              className="mt-3 text-sm font-black tracking-tight"
-                              style={{ color: TEXT }}
-                            >
-                              {s.participant_name || "Participant"}
-                            </h3>
-                            <p
-                              className="mt-1 text-xs font-medium"
-                              style={{ color: MUTED }}
-                            >
-                              {formatDateTime(s.scheduled_start)}
-                            </p>
-                          </div>
-
-                          <div className="mt-4 flex items-center justify-between border-t pt-3" style={{ borderColor: BORDER }}>
-                            <div className="flex items-center gap-2">
-                              {s.worker_name && <Avatar name={s.worker_name} size={22} />}
-                              <span
-                                className="text-xs font-bold truncate max-w-[150px]"
-                                style={{
-                                  color: bucketOf(s) === "unassigned" ? AMBER : TEXT,
-                                }}
-                              >
-                                {bucketOf(s) === "unassigned"
-                                  ? "Unassigned"
-                                  : s.worker_name || "Worker"}
-                              </span>
-                            </div>
-                            <span className="text-[11px] font-semibold text-cc-plum group-hover:underline">
-                              View details →
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+                {shifts === null ? (
+                  <div className="space-y-2">
+                    {[0, 1, 2, 3].map((i) => (
+                      <div key={i} className="h-16 animate-pulse rounded-2xl bg-cc-surface" />
+                    ))}
+                  </div>
+                ) : paginatedShifts.length === 0 ? (
+                  <EmptyState icon={CalendarX2} title="No shifts match this filter" body="Try another status, or clear the search." />
+                ) : (
+                  <div className="space-y-5">
+                    {listGroups.map((group) => (
+                      <section key={group.key} aria-label={group.label}>
+                        <h2 className="mb-2 text-sm font-semibold" style={{ color: TEXT }}>
+                          {group.label}
+                          <span className="ml-2 font-normal" style={{ color: MUTED }}>
+                            {group.shifts.length} shift{group.shifts.length === 1 ? "" : "s"}
+                          </span>
+                        </h2>
+                        <Surface>
+                          <RowList>
+                            {group.shifts.map((s) => {
+                              const bucket = bucketOf(s);
+                              const st = STATUS_STYLE[bucket];
+                              return (
+                                <li key={s.id}>
+                                  <button type="button" onClick={() => setActiveShiftId(s.id)} className={rowClass}>
+                                    <span className="w-28 shrink-0 text-sm tabular-nums" style={{ color: TEXT }}>
+                                      {formatTime(s.scheduled_start)}
+                                      <span className="block text-xs" style={{ color: MUTED }}>
+                                        to {formatTime(s.scheduled_end)}
+                                      </span>
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block truncate text-sm font-semibold" style={{ color: TEXT }}>
+                                        {s.participant_name || "Participant"}
+                                      </span>
+                                      <span className="mt-0.5 flex items-center gap-1.5 truncate text-xs" style={{ color: bucket === "unassigned" ? AMBER : MUTED }}>
+                                        {bucket !== "unassigned" && s.worker_name && <Avatar name={s.worker_name} size={16} />}
+                                        {bucket === "unassigned" ? "No worker assigned" : s.worker_name || "Worker"}
+                                      </span>
+                                    </span>
+                                    <span className="shrink-0 text-xs font-semibold" style={{ color: st.color }}>
+                                      {st.label}
+                                    </span>
+                                    <ChevronRight size={16} className="shrink-0" style={{ color: MUTED }} />
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </RowList>
+                        </Surface>
+                      </section>
+                    ))}
+                  </div>
+                )}
 
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between rounded-2xl bg-cc-surface px-6 py-3.5">
-                    <p className="text-xs font-semibold" style={{ color: MUTED }}>
-                      Showing page <span style={{ color: TEXT }}>{page}</span> of{" "}
-                      <span style={{ color: TEXT }}>{totalPages}</span> ({filteredShiftList.length} total shifts)
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm" style={{ color: MUTED }}>
+                      Page {page} of {totalPages} · {filteredShiftList.length} shifts
                     </p>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                        className="inline-flex h-9 items-center gap-1 rounded-full border border-cc-border px-4 text-xs font-semibold transition hover:bg-cc-soft disabled:opacity-40 shadow-none"
-                        style={{ color: TEXT }}
-                      >
-                        <ChevronLeft size={14} /> Previous
+                      <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className={outlineClass}>
+                        <ChevronLeft size={15} /> Previous
                       </button>
-                      <button
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={page === totalPages}
-                        className="inline-flex h-9 items-center gap-1 rounded-full border border-cc-border px-4 text-xs font-semibold transition hover:bg-cc-soft disabled:opacity-40 shadow-none"
-                        style={{ color: TEXT }}
-                      >
-                        Next <ChevronRight size={14} />
+                      <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className={outlineClass}>
+                        Next <ChevronRight size={15} />
                       </button>
                     </div>
                   </div>
@@ -1214,12 +1230,9 @@ export default function MDSchedulePage() {
                     className="flex items-center gap-1.5 border-b px-5 py-4"
                     style={{ borderColor: BORDER }}
                   >
-                    <p
-                      className="text-xs font-semibold"
-                      style={{ color: MUTED }}
-                    >
-                      Activity log — active shifts &amp; cancellations this week
-                    </p>
+                    <h2 className="text-base font-semibold" style={{ color: TEXT }}>
+                      Happening now and cancelled this week
+                    </h2>
                     <SectionInfo text="Shifts currently in progress and shifts cancelled this week, most recent first — a quick read on what's happening right now." />
                   </div>
                   <div
@@ -1242,7 +1255,7 @@ export default function MDSchedulePage() {
                           />
                           <div className="min-w-0 flex-1">
                             <p
-                              className="truncate text-xs font-bold"
+                              className="truncate text-sm font-medium"
                               style={{ color: TEXT }}
                             >
                               {s.participant_name || "Participant"} ·{" "}
@@ -1258,10 +1271,7 @@ export default function MDSchedulePage() {
                                 : formatDateTime(s.scheduled_start)}
                             </p>
                           </div>
-                          <span
-                            className="shrink-0 rounded-full px-3 py-1 text-[10px] font-black"
-                            style={{ background: st.bg, color: st.color }}
-                          >
+                          <span className="shrink-0 text-xs font-semibold" style={{ color: st.color }}>
                             {st.label}
                           </span>
                         </button>
