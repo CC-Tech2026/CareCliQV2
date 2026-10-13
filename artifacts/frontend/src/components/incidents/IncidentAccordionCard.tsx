@@ -29,7 +29,7 @@ export interface IncidentCardData {
 }
 
 /** "Due in 6h 12m" / "Overdue by 2h 5m" — same deadline the backend escalation job uses. */
-function formatNotificationCountdown(dueAtIso: string, overdue: boolean): string {
+export function formatNotificationCountdown(dueAtIso: string, overdue: boolean): string {
   const diffMs = Math.abs(parseISO(dueAtIso).getTime() - Date.now());
   const hours = Math.floor(diffMs / 3_600_000);
   const minutes = Math.floor((diffMs % 3_600_000) / 60_000);

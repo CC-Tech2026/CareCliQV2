@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { subDays, parseISO, isAfter } from "date-fns";
-import { Plus, Download, ShieldAlert, AlertTriangle, Siren } from "lucide-react";
+import { Plus, Download, ShieldAlert, AlertTriangle, Siren, ChevronRight } from "lucide-react";
 import {
   EmptyState,
   Notice,
@@ -9,18 +9,22 @@ import {
   PillTabs,
   RowList,
   SkeletonBlocks,
+  StatusText,
   SummaryStrip,
   Surface,
   ctaClass,
   ghostClass,
   outlineClass,
+  rowClass,
   type PillOption,
+  type Tone,
 } from "@/components/layout/PageKit";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
-import { listIncidents, getIncidentStats, updateIncident } from "@/services/incidentService";
+import { listIncidents, getIncidentStats } from "@/services/incidentService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
-import { IncidentAccordionCard, type IncidentCardData } from "./IncidentAccordionCard";
+import { formatNotificationCountdown, type IncidentCardData } from "./IncidentAccordionCard";
+import { formatAppDate } from "@/lib/datetime";
 import { SectionInfo } from "@/components/ui/section-info";
 
 type SubTab = "all" | "open" | "review" | "resolved" | "rp";
@@ -54,6 +58,20 @@ const STATUS_MAP: Record<string, string> = {
   closed: "incidents.status.closed",
 };
 
+const SEVERITY_DOT: Record<string, string> = {
+  low: "var(--cc-green)",
+  medium: "var(--cc-amber)",
+  high: "var(--cc-status-danger)",
+  critical: "var(--cc-status-critical)",
+};
+
+function statusTone(status: string): Tone {
+  if (status === "reported") return "warning";
+  if (status === "under_investigation") return "info";
+  if (status === "resolved") return "good";
+  return "neutral";
+}
+
 interface IncidentRow extends IncidentCardData {
   session_id?: string;
 }
@@ -82,7 +100,7 @@ export function IncidentRegisterPanel() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [page, setPage] = useState(1);
 
-  const { data: incidents = [], isLoading, refetch } = useOrgQuery<IncidentRow[]>(["incidents"], {
+  const { data: incidents = [], isLoading } = useOrgQuery<IncidentRow[]>(["incidents"], {
     queryFn: () => listIncidents<IncidentRow[]>(),
   });
   const { data: stats } = useOrgQuery<Stats>(["incident-stats"], {
@@ -159,36 +177,6 @@ export function IncidentRegisterPanel() {
   function statusLabel(status: string) {
     const key = STATUS_MAP[status];
     return key ? translate(key) : status;
-  }
-
-  async function handleMarkResolved(id: string) {
-    try {
-      await updateIncident(id, { status: "resolved", resolved_date: new Date().toISOString() });
-      await refetch();
-      toast({ title: translate("incidents.detail.markResolved") });
-    } catch {
-      toast({ title: translate("incidents.detail.updateFailed"), variant: "destructive" });
-    }
-  }
-
-  async function handleNotifyCommission(id: string) {
-    try {
-      await updateIncident(id, { ndis_reported_at: new Date().toISOString() });
-      await refetch();
-      toast({ title: translate("incidents.register.notifyCommissionDone") });
-    } catch {
-      toast({ title: translate("incidents.detail.updateFailed"), variant: "destructive" });
-    }
-  }
-
-  async function handleEscalate(id: string) {
-    try {
-      await updateIncident(id, { escalate: true });
-      await refetch();
-      toast({ title: translate("incidents.register.escalateDone") });
-    } catch {
-      toast({ title: translate("incidents.detail.updateFailed"), variant: "destructive" });
-    }
   }
 
   const subTabs: PillOption<SubTab>[] = [
@@ -305,23 +293,54 @@ export function IncidentRegisterPanel() {
       ) : (
         <Surface>
           <RowList>
-            {paginated.map((incident) => (
-              <li key={incident.id}>
-                <IncidentAccordionCard
-                  variant="row"
-                  incident={incident}
-                  typeLabel={typeLabel(incident.incident_type)}
-                  statusLabel={statusLabel(incident.status)}
-                  translate={translate}
-                  onViewFull={(id) => navigate(`/incidents/${id}`)}
-                  onCompleteReport={(id) => navigate(`/incidents/${id}`)}
-                  onAddNote={(id) => navigate(`/incidents/${id}`)}
-                  onMarkResolved={handleMarkResolved}
-                  onNotifyCommission={incident.ndis_reportable ? handleNotifyCommission : undefined}
-                  onEscalate={handleEscalate}
-                />
-              </li>
-            ))}
+            {paginated.map((incident) => {
+              const due = incident.ndis_pending
+                ? incident.notification_due_at
+                  ? formatNotificationCountdown(incident.notification_due_at, !!incident.overdue)
+                  : translate("incidents.register.windowOpen")
+                : null;
+              const meta = [
+                incident.participant_name || translate("incidents.noParticipant"),
+                typeLabel(incident.incident_type),
+                incident.incident_date ? formatAppDate(incident.incident_date, incident.timezone) : null,
+                incident.reference_number || null,
+                incident.auto_detected ? translate("incidents.register.autoDetected") : null,
+              ].filter(Boolean).join(" · ");
+              return (
+                <li key={incident.id}>
+                  <button type="button" onClick={() => navigate(`/incidents/${incident.id}`)} className={`${rowClass} items-start sm:items-center`}>
+                    <span
+                      aria-hidden
+                      className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full sm:mt-0"
+                      style={{ background: SEVERITY_DOT[incident.severity] ?? SEVERITY_DOT.medium }}
+                      title={translate(`incidents.severity.${incident.severity}`)}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-[var(--cc-text)]">
+                        {incident.title || typeLabel(incident.incident_type)}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-[var(--cc-muted)]">
+                        <span className="sr-only">{translate(`incidents.severity.${incident.severity}`)}. </span>
+                        {meta}
+                      </span>
+                      <span className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 sm:hidden">
+                        {due && <StatusText tone={incident.overdue ? "danger" : "warning"}>NDIS: {due}</StatusText>}
+                        <StatusText tone={statusTone(incident.status)}>{statusLabel(incident.status)}</StatusText>
+                      </span>
+                    </span>
+                    {due && (
+                      <span className="hidden sm:inline">
+                        <StatusText tone={incident.overdue ? "danger" : "warning"}>NDIS: {due}</StatusText>
+                      </span>
+                    )}
+                    <span className="hidden w-36 text-right sm:inline">
+                      <StatusText tone={statusTone(incident.status)}>{statusLabel(incident.status)}</StatusText>
+                    </span>
+                    <ChevronRight size={16} className="mt-1 shrink-0 text-[var(--cc-muted)] sm:mt-0" />
+                  </button>
+                </li>
+              );
+            })}
           </RowList>
         </Surface>
       )}

@@ -1,20 +1,26 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { formatAppDate, formatAppTimeWithZone } from "@/lib/datetime";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { Notice, PageHeader, ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
+import {
+  ChoiceCard,
+  Field,
+  PanelFooter,
+  PanelHeader,
+  PrimaryButton,
+  SecondaryButton,
+  inputClass,
+  textareaClass,
+} from "@/pages/md/vault/components/PanelKit";
+import { formatNotificationCountdown } from "@/components/incidents/IncidentAccordionCard";
 import {
   ArrowLeft,
   Shield,
@@ -26,8 +32,6 @@ import {
   ClipboardList,
   Loader2,
   Calendar,
-  MapPin,
-  Users,
   User,
   Sparkles,
   History,
@@ -36,6 +40,12 @@ import {
   Plus,
   UserSearch,
   GraduationCap,
+  Check,
+  Copy,
+  FileText,
+  BookOpen,
+  ArrowUpCircle,
+  type LucideIcon,
 } from "lucide-react";
 import {
   getIncident,
@@ -59,19 +69,23 @@ import type { TeamMember, TrainingModule } from "@/services/coordinatorService";
 import { useReAuth } from "@/hooks/useReAuth";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-const SEVERITY_COLORS: Record<string, string> = {
-  low: "cc-status-success border",
-  medium: "cc-status-warning border",
-  high: "bg-orange-50 text-orange-700 border-orange-200",
-  critical: "bg-[var(--cc-status-danger-bg)] text-[var(--cc-status-danger)] border-[var(--cc-border)]",
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SURFACE = "var(--cc-surface)";
+const SOFT = "var(--cc-soft)";
+const PURPLE = "var(--cc-brand-purple)";
+const PURPLE_SOFT = "var(--cc-brand-purple-soft)";
+
+const SEVERITY_TONE: Record<string, string> = {
+  low: "var(--cc-green)",
+  medium: "var(--cc-amber)",
+  high: "var(--cc-status-danger)",
+  critical: "var(--cc-status-critical)",
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  reported: "cc-status-info border",
-  under_investigation: "cc-status-warning border",
-  resolved: "cc-status-success border",
-  closed: "bg-slate-50 text-slate-600 border-slate-200",
-};
+/** The path every incident takes, shown as a tracker at the top of the record. */
+const STAGES = ["reported", "under_investigation", "resolved", "closed"] as const;
 
 const INCIDENT_TYPE_KEYS: Record<string, string> = {
   injury: "incidents.type.injury",
@@ -332,6 +346,18 @@ export default function IncidentDetail({ id }: { id: string }) {
     onError: () => toast({ title: translate("incidents.detail.updateFailed"), variant: "destructive" }),
   });
 
+  // Raises the incident to critical and alerts the office team.
+  const escalateMutation = useMutation({
+    mutationFn: () => updateIncident(id, { escalate: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [orgId, "incident", id] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "incidents"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "incident-stats"] });
+      toast({ title: "Incident escalated", description: "It's now critical and the office team has been alerted." });
+    },
+    onError: () => toast({ title: translate("incidents.detail.updateFailed"), variant: "destructive" }),
+  });
+
   const overrideMutation = useMutation({
     mutationFn: (payload: { is_reportable: boolean; reason: string }) =>
       requireReAuth(() => overrideIncidentReportable(id, payload)),
@@ -439,8 +465,6 @@ export default function IncidentDetail({ id }: { id: string }) {
     );
   }
 
-  const sevColor = SEVERITY_COLORS[incident.severity] ?? SEVERITY_COLORS.medium;
-  const stColor = STATUS_COLORS[incident.status] ?? STATUS_COLORS.reported;
   const canInvestigate = incident.status === "reported";
   const canResolve = incident.status === "under_investigation";
   const canClose = incident.status === "resolved";
@@ -449,95 +473,221 @@ export default function IncidentDetail({ id }: { id: string }) {
     updateMutation.mutate({ status: newStatus });
   }
 
-  return (
-    <div className="space-y-6 pb-10">
-      {modal}
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-[13px]">
-        <button
-          onClick={() => navigate("/incidents")}
-          className="flex items-center gap-1.5 text-cc-muted transition-opacity hover:opacity-70"
-        >
-          <ArrowLeft size={14} /> {translate("incidents.detail.breadcrumbParent")}
-        </button>
-        <span className="text-cc-muted/60">/</span>
-        <span className="font-medium truncate max-w-[260px] text-cc-text">{incident.title}</span>
-      </div>
+  const ref = incident.reference_number || incident.id.slice(0, 8).toUpperCase();
+  const investigatorName = (team ?? []).find((m) => m.id === incident.assigned_investigator_id)?.full_name;
+  const stageIndex = STAGES.indexOf(incident.status as (typeof STAGES)[number]);
+  const dueText = incident.ndis_pending && incident.notification_due_at
+    ? formatNotificationCountdown(incident.notification_due_at, incident.overdue)
+    : null;
 
-      {/* NDIS urgent banner */}
+  function openNotification() {
+    setNotifyContent(incident!.ndis_notification_content || buildNotificationContent(incident!, investigatorName, translate));
+    setNotifyOpen(true);
+  }
+
+  // The one next step for this incident, shown as the main button.
+  const nextStep = canInvestigate
+    ? { label: translate("incidents.detail.startInvestigation"), icon: FileWarning, status: "under_investigation" }
+    : canResolve
+      ? { label: translate("incidents.detail.markResolved"), icon: CheckCircle2, status: "resolved" }
+      : canClose
+        ? { label: translate("incidents.detail.closeIncident"), icon: XCircle, status: "closed" }
+        : null;
+
+  const details: [string, ReactNode][] = [
+    [translate("incidents.detail.incidentDate"), incident.incident_date ? fmtDateTime(incident.incident_date, incident.timezone) : "Not recorded"],
+    [translate("incidents.detail.type"), incidentTypeLabel(incident.incident_type, translate)],
+    ...(incident.location ? [[translate("incidents.detail.location"), incident.location] as [string, ReactNode]] : []),
+    ...(incident.location_type ? [[translate("incidents.detail.locationType"), translate(`incidents.locationType.${incident.location_type}`)] as [string, ReactNode]] : []),
+    ...(incident.identified_at ? [[translate("incidents.detail.identifiedAt"), fmtDateTime(incident.identified_at, incident.timezone)] as [string, ReactNode]] : []),
+    ...(incident.worker_name ? [["Reported by", incident.worker_name] as [string, ReactNode]] : []),
+    ...(incident.practice_standard ? [[translate("incidents.detail.ndisPracticeStandard"), incident.practice_standard] as [string, ReactNode]] : []),
+    [translate("incidents.register.ndisReportable"), incident.ndis_reportable ? translate("common.yes") : translate("common.no")],
+    ...(incident.ndis_reportable_override !== undefined && incident.ndis_reportable_override !== null
+      ? [[translate("incidents.detail.overrideOverridden"), `${incident.ndis_reportable_override ? translate("common.yes") : translate("common.no")}${incident.ndis_reportable_override_reason ? `. ${incident.ndis_reportable_override_reason}` : ""}`] as [string, ReactNode]]
+      : []),
+    ...(incident.connection_to_service !== undefined && incident.connection_to_service !== null
+      ? [[translate("incidents.detail.connectionToService"), `${incident.connection_to_service ? translate("common.yes") : translate("common.no")}${incident.connection_to_service_reasoning ? `. ${incident.connection_to_service_reasoning}` : ""}`] as [string, ReactNode]]
+      : []),
+  ];
+
+  const history: { label: string; at?: string | null; tone?: "danger" | "good" }[] = [
+    { label: translate("incidents.detail.incidentReported"), at: incident.reported_date },
+    ...(incident.ndis_reportable ? [{ label: translate("incidents.detail.ndisReportableFlagged"), at: incident.reported_date, tone: "danger" as const }] : []),
+    ...(incident.assigned_investigator_at ? [{ label: `${translate("incidents.detail.assignedInvestigator")}: ${investigatorName ?? ""}`.trim(), at: incident.assigned_investigator_at }] : []),
+    ...(incident.ndis_reported_at ? [{ label: translate("incidents.detail.reportedToNdisQsc"), at: incident.ndis_reported_at, tone: "good" as const }] : []),
+    ...(incident.resolved_date ? [{ label: translate("incidents.detail.incidentResolved"), at: incident.resolved_date, tone: "good" as const }] : []),
+  ];
+
+  return (
+    <div className="space-y-6 pb-12">
+      {modal}
+      <PageHeader
+        back={
+          <button type="button" onClick={() => navigate("/incidents")} className={`${ghostClass} -ml-4`}>
+            <ArrowLeft size={15} /> {translate("incidents.detail.breadcrumbParent")}
+          </button>
+        }
+        eyebrow={`${ref} · ${incidentTypeLabel(incident.incident_type, translate)}`}
+        title={incident.title}
+        description={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="inline-flex items-center gap-1.5 font-medium" style={{ color: SEVERITY_TONE[incident.severity] ?? SEVERITY_TONE.medium }}>
+              <span className="h-2 w-2 rounded-full" style={{ background: SEVERITY_TONE[incident.severity] ?? SEVERITY_TONE.medium }} aria-hidden />
+              {severityLabel(incident.severity, translate)} severity
+            </span>
+            {incident.participant_name && (
+              <span className="inline-flex items-center gap-1.5">
+                <User size={14} />
+                {incident.participant_id ? (
+                  <button type="button" onClick={() => navigate(`/participants/${incident.participant_id}`)} className="underline-offset-4 hover:underline" style={{ color: TEXT }}>
+                    {incident.participant_name}
+                  </button>
+                ) : (
+                  <span style={{ color: TEXT }}>{incident.participant_name}</span>
+                )}
+                {incident.participant_ndis && <span>· NDIS {incident.participant_ndis}</span>}
+              </span>
+            )}
+            {incident.incident_date && (
+              <span className="inline-flex items-center gap-1.5">
+                <Calendar size={14} />
+                {formatAppDate(incident.incident_date, incident.timezone)} ({formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })})
+              </span>
+            )}
+          </span>
+        }
+        actions={
+          <>
+            {(incident.ndis_reportable_override === undefined || incident.ndis_reportable_override === null) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOverrideValue(!incident.ndis_reportable);
+                  setOverrideOpen(true);
+                }}
+                className={ghostClass}
+              >
+                <ShieldAlert size={15} />
+                {translate("incidents.detail.overrideClassification")}
+              </button>
+            )}
+            {incident.severity !== "critical" && incident.status !== "resolved" && incident.status !== "closed" && (
+              <button
+                type="button"
+                onClick={() => escalateMutation.mutate()}
+                disabled={escalateMutation.isPending}
+                className={ghostClass}
+                style={{ color: "var(--cc-danger-text)" }}
+                title="Raise to critical and alert the office team"
+              >
+                {escalateMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <ArrowUpCircle size={15} />}
+                Escalate
+              </button>
+            )}
+            {nextStep && (
+              <button
+                type="button"
+                onClick={() => handleStatusChange(nextStep.status)}
+                disabled={updateMutation.isPending}
+                className={nextStep.status === "closed" ? outlineClass : ctaClass}
+              >
+                {updateMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <nextStep.icon size={15} />}
+                {nextStep.label}
+              </button>
+            )}
+          </>
+        }
+      />
+
+      {/* Where this incident is up to */}
+      <ol className="flex items-center gap-2 overflow-x-auto rounded-2xl border px-5 py-4" style={{ borderColor: BORDER, background: SURFACE }} aria-label="Progress">
+        {STAGES.map((stage, i) => {
+          // Closed is the last stage, so reaching it means the work is done.
+          const done = stageIndex > i || (stageIndex === i && stage === "closed");
+          const current = stageIndex === i && !done;
+          return (
+            <li
+              key={stage}
+              className={`flex items-center gap-2 ${i < STAGES.length - 1 ? "min-w-[9rem] flex-1" : "shrink-0"}`}
+              aria-current={current ? "step" : undefined}
+            >
+              <span
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+                style={
+                  done
+                    ? { background: "var(--cc-green)", color: "#fff" }
+                    : current
+                      ? { background: PURPLE_SOFT, color: PURPLE, boxShadow: `inset 0 0 0 2px ${PURPLE}` }
+                      : { boxShadow: `inset 0 0 0 1px ${BORDER}`, color: MUTED }
+                }
+              >
+                {done ? <Check size={14} strokeWidth={3} /> : i + 1}
+              </span>
+              <span className="whitespace-nowrap text-sm" style={{ color: done || current ? TEXT : MUTED, fontWeight: current ? 600 : 400 }}>
+                {statusLabel(stage, translate)}
+              </span>
+              {i < STAGES.length - 1 && <span aria-hidden className="h-px min-w-4 flex-1" style={{ background: done ? "var(--cc-green)" : BORDER }} />}
+            </li>
+          );
+        })}
+      </ol>
+
       {incident.ndis_pending && (
-        <div
-          className="flex items-start gap-3 rounded-2xl p-4 border"
-          style={{ background: "var(--cc-status-danger-bg)", borderColor: "color-mix(in srgb, var(--cc-status-danger) 25%, transparent)" }}
+        <Notice
+          tone="danger"
+          icon={Siren}
+          title={
+            <>
+              {translate("incidents.detail.ndisReportableTitle")}
+              {dueText && <span style={{ color: "var(--cc-danger-text)" }}> · {dueText}</span>}
+            </>
+          }
+          action={
+            <button type="button" onClick={openNotification} className={`${ctaClass} w-full sm:w-auto`} style={{ background: "var(--cc-danger-text)" }}>
+              <Siren size={15} /> {translate("incidents.detail.notifyPrepTitle")}
+            </button>
+          }
         >
-          <Siren size={18} className="shrink-0 mt-0.5" style={{ color: "var(--cc-status-danger)" }} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold" style={{ color: "var(--cc-status-danger)" }}>{translate("incidents.detail.ndisReportableTitle")}</p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--cc-status-danger)" }}>
-              {translate("incidents.detail.ndisReportableBody")}
-              {incident.severity === "critical" && ` ${translate("incidents.detail.ndisCritical24h")}`}
-            </p>
-          </div>
-          <Button
-            size="sm"
-            onClick={() => {
-              const investigatorName = (team ?? []).find((m) => m.id === incident.assigned_investigator_id)?.full_name;
-              setNotifyContent(incident.ndis_notification_content || buildNotificationContent(incident, investigatorName, translate));
-              setNotifyOpen(true);
-            }}
-            className="shrink-0 bg-red-600 hover:bg-red-700 text-white text-xs h-8 rounded-xl"
-          >
-            <CheckCircle2 size={12} className="mr-1.5" />
-            {translate("incidents.detail.markReported")}
-          </Button>
-        </div>
+          {translate("incidents.detail.ndisReportableBody")}
+          {incident.severity === "critical" && ` ${translate("incidents.detail.ndisCritical24h")}`}
+        </Notice>
       )}
 
       {incident.overdue && !incident.ndis_pending && (
-        <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3">
-          <Clock size={16} className="text-orange-600 shrink-0" />
-          <p className="text-sm text-orange-800 font-medium">
-            {translate("incidents.detail.overdueWarning")}
-          </p>
-        </div>
+        <Notice tone="warning" icon={Clock} title={translate("incidents.detail.overdueWarning")} />
       )}
 
       {(incident.pending_fields?.length ?? 0) > 0 && (
-        <div className="cc-surface-card">
-          <div className="cc-card-header flex items-start gap-3">
-            <Clock size={16} className="text-orange-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest cc-card-muted">
-                {translate("incidents.detail.pendingTitle")}
-              </p>
-              <p className="text-[12px] cc-card-muted mt-0.5">
-                {incident.pending_deadline_at
-                  ? translate("incidents.detail.pendingDeadline").replace(
-                      "{time}",
-                      formatDistanceToNow(parseISO(incident.pending_deadline_at), { addSuffix: true })
-                    )
-                  : translate("incidents.detail.pendingBody")}
-              </p>
-            </div>
-          </div>
-          <div className="p-6 space-y-4">
+        <Card
+          icon={Clock}
+          title={translate("incidents.detail.pendingTitle")}
+          description={
+            incident.pending_deadline_at
+              ? translate("incidents.detail.pendingDeadline").replace(
+                  "{time}",
+                  formatDistanceToNow(parseISO(incident.pending_deadline_at), { addSuffix: true }),
+                )
+              : translate("incidents.detail.pendingBody")
+          }
+        >
+          <div className="space-y-4">
             {(incident.pending_fields ?? []).map((field) => (
-              <div key={field}>
-                <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">
-                  {translate(`incidents.detail.pendingField.${field}`)}
-                </Label>
-                <Textarea
+              <Field key={field} label={translate(`incidents.detail.pendingField.${field}`)} htmlFor={`pending-${field}`}>
+                <textarea
+                  id={`pending-${field}`}
                   rows={3}
                   value={pendingDraft[field] ?? ""}
                   onChange={(e) => setPendingDraft((prev) => ({ ...prev, [field]: e.target.value }))}
-                  className="text-[13px] resize-none rounded-xl"
+                  className={`resize-y ${textareaClass}`}
+                  style={{ borderColor: BORDER, color: TEXT }}
                 />
-              </div>
+              </Field>
             ))}
             <div className="flex justify-end">
-              <Button
-                size="sm"
+              <PrimaryButton
                 disabled={(incident.pending_fields ?? []).some((f) => !(pendingDraft[f] ?? "").trim())}
+                busy={updateMutation.isPending}
                 onClick={() => {
                   const updates: Record<string, unknown> = { pending_fields: [] };
                   for (const f of incident.pending_fields ?? []) {
@@ -545,296 +695,380 @@ export default function IncidentDetail({ id }: { id: string }) {
                   }
                   updateMutation.mutate(updates);
                 }}
-                className="text-xs h-9 rounded-xl text-white"
-                style={{ background: "var(--cc-cta)" }}
               >
                 {translate("incidents.detail.pendingComplete")}
-              </Button>
+              </PrimaryButton>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 items-start">
-      <div className="space-y-6">
-
-      {/* Overview */}
-      <div className="cc-surface-card lg:col-start-1">
-        <div className="px-6 pt-6 pb-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>{incident.title}</h1>
-              {incident.participant_name && (
-                <p className="text-[13px] mt-1 flex items-center gap-1.5 text-cc-text">
-                  <User size={13} />
-                  {incident.participant_name}
-                  {incident.participant_ndis && (
-                    <span style={{ color: "#7A6A8A" }}>· NDIS {incident.participant_ndis}</span>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_460px]">
+        <div className="min-w-0 space-y-6">
+          <Card icon={FileText} title={translate("incidents.detail.whatHappened")}>
+            <div className="space-y-5">
+              <p className="whitespace-pre-wrap text-sm leading-7" style={{ color: TEXT }}>{incident.description || "Not recorded"}</p>
+              {incident.participant_impact && (
+                <div>
+                  <h3 className="text-sm font-semibold" style={{ color: TEXT }}>{translate("incidents.detail.participantImpact")}</h3>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-7" style={{ color: TEXT }}>{incident.participant_impact}</p>
+                </div>
+              )}
+              {incident.worker_actions && (
+                <div>
+                  <h3 className="text-sm font-semibold" style={{ color: TEXT }}>{translate("incidents.detail.immediateActions")}</h3>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-7" style={{ color: TEXT }}>{incident.worker_actions}</p>
+                </div>
+              )}
+              {(incident.witnesses_structured?.length || incident.witnesses) && (
+                <div>
+                  <h3 className="text-sm font-semibold" style={{ color: TEXT }}>{translate("incidents.detail.witnesses")}</h3>
+                  {incident.witnesses_structured?.length ? (
+                    <ul className="mt-1 space-y-0.5 text-sm" style={{ color: TEXT }}>
+                      {incident.witnesses_structured.map((w, i) => (
+                        <li key={i}>
+                          {w.name}
+                          {w.relationship ? ` (${w.relationship})` : ""}
+                          {w.contact ? `, ${w.contact}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-sm" style={{ color: TEXT }}>{incident.witnesses}</p>
                   )}
-                </p>
+                </div>
               )}
             </div>
-            <div className="flex flex-col gap-1.5 items-end shrink-0">
-              <Badge variant="outline" className={cn("text-xs px-2.5 py-0.5", sevColor)}>
-                {severityLabel(incident.severity, translate)}
-              </Badge>
-              <Badge variant="outline" className={cn("text-xs px-2.5 py-0.5", stColor)}>
-                {statusLabel(incident.status, translate)}
-              </Badge>
+          </Card>
+
+          <Card icon={ClipboardList} title={translate("incidents.detail.investigationCorrective")}>
+            <div className="space-y-5">
+              <Field label={translate("incidents.detail.investigationNotes")} htmlFor="incident-investigation-notes">
+                <textarea
+                  id="incident-investigation-notes"
+                  rows={5}
+                  value={investigationNotes}
+                  onChange={(e) => setInvestigationNotes(e.target.value)}
+                  placeholder={translate("incidents.detail.investigationNotesPlaceholder")}
+                  className={`resize-y ${textareaClass}`}
+                  style={{ borderColor: BORDER, color: TEXT }}
+                />
+              </Field>
+              <Field label={translate("incidents.detail.correctiveActions")} htmlFor="incident-corrective-actions">
+                <textarea
+                  id="incident-corrective-actions"
+                  rows={3}
+                  value={correctiveActions}
+                  onChange={(e) => setCorrectiveActions(e.target.value)}
+                  placeholder={translate("incidents.detail.correctiveActionsPlaceholder")}
+                  className={`resize-y ${textareaClass}`}
+                  style={{ borderColor: BORDER, color: TEXT }}
+                />
+              </Field>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <SecondaryButton
+                  onClick={() => {
+                    setTrainingWorkerId(incident.user_id || incident.assigned_investigator_id || "");
+                    setTrainingNewTitle(incident.title ? `Follow-up: ${incident.title}` : "");
+                    setTrainingOpen(true);
+                  }}
+                >
+                  <GraduationCap size={15} />
+                  {translate("incidents.detail.assignTraining")}
+                </SecondaryButton>
+                <PrimaryButton
+                  busy={updateMutation.isPending}
+                  disabled={
+                    investigationNotes === (incident.investigation_notes ?? "") &&
+                    correctiveActions === (incident.corrective_actions ?? "")
+                  }
+                  onClick={() =>
+                    updateMutation.mutate({
+                      investigation_notes: investigationNotes,
+                      corrective_actions: correctiveActions,
+                    })
+                  }
+                >
+                  {translate("incidents.detail.saveNotes")}
+                </PrimaryButton>
+              </div>
             </div>
-          </div>
+          </Card>
+
+          {(patternsLoading || showPatternsPanel) && (
+            <Card icon={History} title={translate("incidents.detail.similarPastIncidents")} description={translate("incidents.detail.similarPastSubtitle")}>
+              {patternsLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-20 w-full rounded-xl" />
+                  <Skeleton className="h-20 w-full rounded-xl" />
+                </div>
+              ) : showPatternsPanel && patternData ? (
+                <div className="space-y-5">
+                  {patternData.ai_summary && (
+                    <div className="space-y-3 rounded-2xl p-4" style={{ background: PURPLE_SOFT }}>
+                      <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: PURPLE }}>
+                        <Sparkles size={15} /> {translate("incidents.detail.aiPatternAnalysis")}
+                      </p>
+                      {[
+                        [translate("incidents.detail.patternRecognised"), patternData.ai_summary.pattern_recognised],
+                        [translate("incidents.detail.pastStrategies"), patternData.ai_summary.past_strategies],
+                        [translate("incidents.detail.recommendations"), patternData.ai_summary.recommendations],
+                      ].map(([heading, body]) => (
+                        <div key={heading}>
+                          <p className="text-sm font-semibold" style={{ color: TEXT }}>{heading}</p>
+                          <p className="mt-0.5 text-sm leading-6" style={{ color: TEXT }}>{body}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <ul className="divide-y" style={{ borderColor: BORDER }}>
+                    {patternData.matches.map((match) => (
+                      <li key={match.incident_id} className="py-3 first:pt-0 last:pb-0">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: MUTED }}>
+                          <span>{match.date ? format(parseISO(match.date), "d MMM yyyy") : "Date not recorded"}</span>
+                          <span>{match.participant_label}</span>
+                          <span className="ml-auto font-semibold" style={{ color: PURPLE }}>
+                            {translateParams("incidents.detail.matchPercent", { percent: String(Math.round(match.similarity_score * 100)) })}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm leading-6" style={{ color: TEXT }}>{match.excerpt}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </Card>
+          )}
         </div>
 
-        <div className="px-6 pb-6 space-y-5">
-          {/* What happened */}
-          <div className="pt-2 border-t border-cc-border">
-            <p className="text-[11px] font-semibold uppercase tracking-widest mb-2 text-cc-muted">{translate("incidents.detail.whatHappened")}</p>
-            <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-cc-text">{incident.description}</p>
-          </div>
+        <div className="space-y-6">
+          <Card icon={Calendar} title={translate("incidents.register.details")}>
+            <dl className="space-y-3 text-sm">
+              {details.map(([term, value]) => (
+                <div key={term} className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-3">
+                  <dt style={{ color: MUTED }}>{term}</dt>
+                  <dd className="font-medium" style={{ color: TEXT }}>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </Card>
 
-          {incident.participant_impact && (
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest mb-2 text-cc-muted">{translate("incidents.detail.participantImpact")}</p>
-              <p className="text-[13px] leading-relaxed text-cc-text">{incident.participant_impact}</p>
+          <Card icon={UserSearch} title={translate("incidents.detail.investigation")} description={translate("incidents.detail.investigationSubtitle")}>
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <p className="text-sm font-medium" style={{ color: TEXT }}>{translate("incidents.detail.assignedInvestigator")}</p>
+                {incident.assigned_investigator_id ? (
+                  <p className="flex items-center gap-1.5 text-sm" style={{ color: TEXT }}>
+                    <CheckCircle2 size={15} style={{ color: "var(--cc-green)" }} />
+                    {investigatorName ?? incident.assigned_investigator_id}
+                  </p>
+                ) : (
+                  <p className="text-sm" style={{ color: MUTED }}>{translate("incidents.detail.noInvestigatorAssigned")}</p>
+                )}
+                <div className="flex gap-2">
+                  <Select value={selectedInvestigator} onValueChange={setSelectedInvestigator}>
+                    <SelectTrigger className="h-10 flex-1 rounded-full px-4 text-sm" style={{ borderColor: BORDER }}>
+                      <SelectValue placeholder={translate("incidents.detail.selectInvestigator")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {eligibleInvestigators.length === 0 ? (
+                        <div className="px-2 py-1.5 text-xs" style={{ color: MUTED }}>{translate("incidents.detail.investigatorNoOptions")}</div>
+                      ) : (
+                        eligibleInvestigators.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <button
+                    type="button"
+                    onClick={() => assignInvestigatorMutation.mutate(selectedInvestigator)}
+                    disabled={!selectedInvestigator || assignInvestigatorMutation.isPending}
+                    className={outlineClass}
+                  >
+                    {assignInvestigatorMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                    {incident.assigned_investigator_id ? "Change" : "Assign"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2 border-t pt-4" style={{ borderColor: BORDER }}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium" style={{ color: TEXT }}>{translate("incidents.detail.interviews")}</p>
+                  <button type="button" onClick={() => setInterviewOpen(true)} className={`${ghostClass} min-h-9 px-3`}>
+                    <Plus size={14} /> {translate("incidents.detail.addInterview")}
+                  </button>
+                </div>
+                {interviewData?.records && interviewData.records.length > 0 ? (
+                  <ul className="divide-y" style={{ borderColor: BORDER }}>
+                    {interviewData.records.map((iv) => (
+                      <li key={iv.id} className="py-2.5 text-sm first:pt-0">
+                        <p className="flex items-center justify-between gap-2">
+                          <span className="font-medium" style={{ color: TEXT }}>{iv.interviewee_name}</span>
+                          <span className="text-xs" style={{ color: MUTED }}>{translate(`incidents.interviewType.${iv.interviewee_type}`)}</span>
+                        </p>
+                        {iv.interviewed_at && <p className="text-xs" style={{ color: MUTED }}>{fmtDateTime(iv.interviewed_at, incident.timezone)}</p>}
+                        {iv.notes && <p className="mt-1" style={{ color: TEXT }}>{iv.notes}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm" style={{ color: MUTED }}>{translate("incidents.detail.noInterviews")}</p>
+                )}
+              </div>
             </div>
-          )}
+          </Card>
 
-          {incident.worker_actions && (
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest mb-2 text-cc-muted">{translate("incidents.detail.immediateActions")}</p>
-              <p className="text-[13px] leading-relaxed text-cc-text">{incident.worker_actions}</p>
-            </div>
-          )}
+          <Card
+            icon={UserX}
+            title={translate("incidents.detail.subjectOfAllegation")}
+            description={translate("incidents.detail.subjectOfAllegationSubtitle")}
+            action={
+              <button type="button" onClick={() => setSubjectOpen(true)} className={`${ghostClass} min-h-9 px-3`}>
+                <Plus size={14} /> {translate("incidents.detail.addSubject")}
+              </button>
+            }
+          >
+            {subjectData?.records && subjectData.records.length > 0 ? (
+              <ul className="divide-y" style={{ borderColor: BORDER }}>
+                {subjectData.records.map((s) => (
+                  <li key={s.id} className="py-2.5 text-sm first:pt-0">
+                    <p className="flex items-center justify-between gap-2">
+                      <span className="font-medium" style={{ color: TEXT }}>{s.subject_name || translate(`incidents.subjectType.${s.subject_type}`)}</span>
+                      <span className="text-xs" style={{ color: MUTED }}>{translate(`incidents.subjectType.${s.subject_type}`)}</span>
+                    </p>
+                    {s.subject_role && <p className="text-xs" style={{ color: MUTED }}>{s.subject_role}</p>}
+                    {s.notes && <p className="mt-1" style={{ color: TEXT }}>{s.notes}</p>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm" style={{ color: MUTED }}>{translate("incidents.detail.noSubjects")}</p>
+            )}
+          </Card>
 
-          {/* Workflow action buttons */}
-          <div className="pt-3 border-t border-cc-border flex flex-wrap gap-2">
-            {canInvestigate && (
-              <Button
-                size="sm"
-                onClick={() => handleStatusChange("under_investigation")}
-                disabled={updateMutation.isPending}
-                className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl h-9 text-xs"
-              >
-                <FileWarning size={13} className="mr-1.5" />
-                {translate("incidents.detail.startInvestigation")}
-              </Button>
+          <Card icon={Shield} title={translate("incidents.detail.auditTrail")}>
+            <ol className="space-y-3">
+              {history.map((item, i) => (
+                <li key={`${item.label}-${i}`} className="flex gap-3">
+                  <span
+                    aria-hidden
+                    className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: item.tone === "danger" ? "var(--cc-danger-text)" : item.tone === "good" ? "var(--cc-green)" : PURPLE }}
+                  />
+                  <div className="min-w-0">
+                    <p className="text-sm" style={{ color: TEXT }}>{item.label}</p>
+                    <p className="text-xs" style={{ color: MUTED }}>{item.at ? fmtDateTime(item.at, incident.timezone) : "Not recorded"}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            {incident.ndis_notification_content && (
+              <div className="mt-4 border-t pt-3" style={{ borderColor: BORDER }}>
+                <button
+                  type="button"
+                  onClick={() => setSubmittedOpen((v) => !v)}
+                  aria-expanded={submittedOpen}
+                  className="text-sm font-semibold underline-offset-4 hover:underline"
+                  style={{ color: PURPLE }}
+                >
+                  {translate("incidents.detail.viewSubmittedNotification")}
+                </button>
+                {submittedOpen && (
+                  <pre className="mt-2 whitespace-pre-wrap rounded-xl p-3 font-mono text-xs" style={{ background: SOFT, color: TEXT }}>
+                    {incident.ndis_notification_content}
+                  </pre>
+                )}
+              </div>
             )}
-            {canResolve && (
-              <Button
-                size="sm"
-                onClick={() => handleStatusChange("resolved")}
-                disabled={updateMutation.isPending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-9 text-xs"
-              >
-                <CheckCircle2 size={13} className="mr-1.5" />
-                {translate("incidents.detail.markResolved")}
-              </Button>
-            )}
-            {canClose && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleStatusChange("closed")}
-                disabled={updateMutation.isPending}
-                className="rounded-xl h-9 text-xs border-cc-border"
-              >
-                <XCircle size={13} className="mr-1.5" />
-                {translate("incidents.detail.closeIncident")}
-              </Button>
-            )}
-            {incident.ndis_reportable_override === undefined || incident.ndis_reportable_override === null ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setOverrideValue(!incident.ndis_reportable);
-                  setOverrideOpen(true);
-                }}
-                className="rounded-xl h-9 text-xs border-cc-border"
-              >
-                <ShieldAlert size={13} className="mr-1.5" />
-                {translate("incidents.detail.overrideClassification")}
-              </Button>
-            ) : null}
-            {updateMutation.isPending && (
-              <Loader2 size={16} className="animate-spin text-slate-400 self-center" />
-            )}
-          </div>
+          </Card>
         </div>
       </div>
 
-      <Dialog open={notifyOpen} onOpenChange={setNotifyOpen}>
-        <DialogContent className="sm:max-w-2xl rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Siren size={16} className="text-red-600" />
-              {translate("incidents.detail.notifyPrepTitle")}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            <p className="text-[12px] text-cc-muted">{translate("incidents.detail.notifyPrepSubtitle")}</p>
-            <Textarea
-              rows={16}
+      {/* ── Side panels ─────────────────────────────────────────────── */}
+      <Sheet open={notifyOpen} onOpenChange={setNotifyOpen}>
+        <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-2xl">
+          <SheetTitle className="sr-only">{translate("incidents.detail.notifyPrepTitle")}</SheetTitle>
+          <SheetDescription className="sr-only">{translate("incidents.detail.notifyPrepSubtitle")}</SheetDescription>
+          <PanelHeader icon={Siren} tone="danger" title={translate("incidents.detail.notifyPrepTitle")} description={translate("incidents.detail.notifyPrepSubtitle")} />
+          <div className="mt-6 flex-1">
+            <textarea
+              aria-label={translate("incidents.detail.notifyPrepTitle")}
+              rows={20}
               value={notifyContent}
               onChange={(e) => setNotifyContent(e.target.value)}
-              className="text-[12px] font-mono resize-none rounded-xl border-cc-border"
+              className={`resize-y font-mono text-xs ${textareaClass}`}
+              style={{ borderColor: BORDER, color: TEXT }}
             />
           </div>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button
-              variant="outline"
+          <PanelFooter>
+            <SecondaryButton
               onClick={() => {
                 navigator.clipboard?.writeText(notifyContent).catch(() => {});
                 toast({ title: translate("incidents.detail.copiedToClipboard") });
               }}
-              className="rounded-xl"
             >
-              {translate("incidents.detail.copyToClipboard")}
-            </Button>
-            <Button variant="outline" onClick={() => setNotifyOpen(false)} className="rounded-xl">
-              {translate("incidents.detail.overrideCancel")}
-            </Button>
-            <Button
+              <Copy size={15} /> {translate("incidents.detail.copyToClipboard")}
+            </SecondaryButton>
+            <PrimaryButton
+              tone="danger"
+              busy={updateMutation.isPending}
               onClick={() =>
                 updateMutation.mutate(
                   { ndis_reported_at: new Date().toISOString(), ndis_notification_content: notifyContent },
                   { onSuccess: () => setNotifyOpen(false) },
                 )
               }
-              disabled={updateMutation.isPending}
-              className="rounded-xl text-white bg-red-600 hover:bg-red-700"
             >
-              {updateMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
               {translate("incidents.detail.markReported")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </PrimaryButton>
+          </PanelFooter>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog open={overrideOpen} onOpenChange={setOverrideOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ShieldAlert size={16} className="text-cc-plum" />
-              {translate("incidents.detail.overrideTitle")}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.ndisReportableFlagged")}</Label>
-              <Select value={overrideValue ? "yes" : "no"} onValueChange={(v) => setOverrideValue(v === "yes")}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="yes">{translate("common.yes")}</SelectItem>
-                  <SelectItem value="no">{translate("common.no")}</SelectItem>
-                </SelectContent>
-              </Select>
+      <Sheet open={overrideOpen} onOpenChange={setOverrideOpen}>
+        <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+          <SheetTitle className="sr-only">{translate("incidents.detail.overrideTitle")}</SheetTitle>
+          <SheetDescription className="sr-only">{translate("incidents.detail.overrideReasonPlaceholder")}</SheetDescription>
+          <PanelHeader icon={ShieldAlert} title={translate("incidents.detail.overrideTitle")} description={translate("incidents.detail.overrideReasonPlaceholder")} />
+          <div className="mt-6 flex-1 space-y-5">
+            <div role="radiogroup" aria-label={translate("incidents.detail.ndisReportableFlagged")} className="grid gap-2 sm:grid-cols-2">
+              <ChoiceCard selected={overrideValue} onSelect={() => setOverrideValue(true)} icon={Siren} title="Reportable" description="The Commission must be notified." />
+              <ChoiceCard selected={!overrideValue} onSelect={() => setOverrideValue(false)} icon={CheckCircle2} title="Not reportable" description="Handled within the organisation." />
             </div>
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.overrideReason")}</Label>
-              <Textarea
-                rows={3}
+            <Field label={translate("incidents.detail.overrideReason")} htmlFor="incident-override-reason">
+              <textarea
+                id="incident-override-reason"
+                rows={4}
                 value={overrideReason}
                 onChange={(e) => setOverrideReason(e.target.value)}
-                placeholder={translate("incidents.detail.overrideReasonPlaceholder")}
-                className="text-[13px] resize-none rounded-xl border-cc-border"
+                className={`resize-y ${textareaClass}`}
+                style={{ borderColor: BORDER, color: TEXT }}
               />
-            </div>
+            </Field>
           </div>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setOverrideOpen(false)} className="rounded-xl">
-              {translate("incidents.detail.overrideCancel")}
-            </Button>
-            <Button
+          <PanelFooter>
+            <SecondaryButton onClick={() => setOverrideOpen(false)}>{translate("incidents.detail.overrideCancel")}</SecondaryButton>
+            <PrimaryButton
+              busy={overrideMutation.isPending}
+              disabled={!overrideReason.trim()}
               onClick={() => overrideMutation.mutate({ is_reportable: overrideValue, reason: overrideReason })}
-              disabled={overrideMutation.isPending || !overrideReason.trim()}
-              className="rounded-xl text-white"
-              style={{ background: "var(--cc-cta)" }}
             >
-              {overrideMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
               {translate("incidents.detail.overrideSubmit")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </PrimaryButton>
+          </PanelFooter>
+        </SheetContent>
+      </Sheet>
 
-      {/* Investigation & corrective actions */}
-      <div className="cc-surface-card lg:col-start-1">
-        <div className="cc-card-header">
-          <div className="flex items-center gap-2">
-            <ClipboardList size={15} className="text-cc-muted" />
-            <p className="cc-card-title">{translate("incidents.detail.investigationCorrective")}</p>
-          </div>
-        </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.investigationNotes")}</Label>
-            <Textarea
-              rows={5}
-              value={investigationNotes}
-              onChange={(e) => setInvestigationNotes(e.target.value)}
-              placeholder={translate("incidents.detail.investigationNotesPlaceholder")}
-              className="text-[13px] resize-none rounded-xl border-cc-border"
-            />
-          </div>
-          <div>
-            <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.correctiveActions")}</Label>
-            <Textarea
-              rows={3}
-              value={correctiveActions}
-              onChange={(e) => setCorrectiveActions(e.target.value)}
-              placeholder={translate("incidents.detail.correctiveActionsPlaceholder")}
-              className="text-[13px] resize-none rounded-xl border-cc-border"
-            />
-          </div>
-          <div className="flex justify-between items-center flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setTrainingWorkerId(incident.user_id || incident.assigned_investigator_id || "");
-                setTrainingNewTitle(incident.title ? `Follow-up: ${incident.title}` : "");
-                setTrainingOpen(true);
-              }}
-              className="rounded-xl h-9 text-[13px]"
-            >
-              <GraduationCap size={14} className="mr-1.5" />
-              {translate("incidents.detail.assignTraining")}
-            </Button>
-            <Button
-              onClick={() =>
-                updateMutation.mutate({
-                  investigation_notes: investigationNotes,
-                  corrective_actions: correctiveActions,
-                })
-              }
-              disabled={updateMutation.isPending}
-              className="rounded-xl h-9 text-[13px] text-white"
-              style={{ background: "var(--cc-cta)" }}
-            >
-              {updateMutation.isPending
-                ? <Loader2 size={13} className="animate-spin mr-1.5" />
-                : null}
-              {translate("incidents.detail.saveNotes")}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <Dialog open={trainingOpen} onOpenChange={setTrainingOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <GraduationCap size={16} className="text-cc-plum" />
-              {translate("incidents.detail.assignTraining")}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.trainingWorker")}</Label>
+      <Sheet open={trainingOpen} onOpenChange={setTrainingOpen}>
+        <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+          <SheetTitle className="sr-only">{translate("incidents.detail.assignTraining")}</SheetTitle>
+          <SheetDescription className="sr-only">{incident.title}</SheetDescription>
+          <PanelHeader icon={GraduationCap} title={translate("incidents.detail.assignTraining")} description={`Follow-up training after "${incident.title}".`} />
+          <div className="mt-6 flex-1 space-y-5">
+            <Field label={translate("incidents.detail.trainingWorker")} htmlFor="incident-training-worker">
               <Select value={trainingWorkerId} onValueChange={setTrainingWorkerId}>
-                <SelectTrigger>
+                <SelectTrigger id="incident-training-worker" className="h-11 rounded-xl px-4 text-sm" style={{ borderColor: BORDER }}>
                   <SelectValue placeholder={translate("incidents.detail.selectInvestigator")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -843,29 +1077,15 @@ export default function IncidentDetail({ id }: { id: string }) {
                   ))}
                 </SelectContent>
               </Select>
+            </Field>
+            <div role="radiogroup" aria-label={translate("incidents.detail.trainingModule")} className="grid gap-2 sm:grid-cols-2">
+              <ChoiceCard selected={trainingMode === "existing"} onSelect={() => setTrainingMode("existing")} icon={BookOpen} title={translate("incidents.detail.trainingPickExisting")} />
+              <ChoiceCard selected={trainingMode === "new"} onSelect={() => setTrainingMode("new")} icon={Plus} title={translate("incidents.detail.trainingCreateNew")} />
             </div>
-
-            <div className="flex gap-1 rounded-xl p-1 bg-cc-soft">
-              {(["existing", "new"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setTrainingMode(m)}
-                  className={cn(
-                    "flex-1 rounded-lg py-1.5 text-xs font-bold transition-colors",
-                    trainingMode === m ? "bg-white text-cc-plum" : "text-cc-muted",
-                  )}
-                >
-                  {m === "existing" ? translate("incidents.detail.trainingPickExisting") : translate("incidents.detail.trainingCreateNew")}
-                </button>
-              ))}
-            </div>
-
             {trainingMode === "existing" ? (
-              <div>
-                <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.trainingModule")}</Label>
+              <Field label={translate("incidents.detail.trainingModule")} htmlFor="incident-training-module">
                 <Select value={trainingModuleId} onValueChange={setTrainingModuleId}>
-                  <SelectTrigger>
+                  <SelectTrigger id="incident-training-module" className="h-11 rounded-xl px-4 text-sm" style={{ borderColor: BORDER }}>
                     <SelectValue placeholder={translate("incidents.detail.trainingChooseModule")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -874,25 +1094,23 @@ export default function IncidentDetail({ id }: { id: string }) {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </Field>
             ) : (
               <>
-                <div>
-                  <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.trainingModuleTitle")}</Label>
-                  <Input value={trainingNewTitle} onChange={(e) => setTrainingNewTitle(e.target.value)} className="rounded-xl border-cc-border" />
-                </div>
-                <div>
-                  <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.trainingModuleDescription")}</Label>
-                  <Input value={trainingNewDescription} onChange={(e) => setTrainingNewDescription(e.target.value)} className="rounded-xl border-cc-border" />
-                </div>
+                <Field label={translate("incidents.detail.trainingModuleTitle")} htmlFor="incident-training-title">
+                  <input id="incident-training-title" value={trainingNewTitle} onChange={(e) => setTrainingNewTitle(e.target.value)} className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
+                </Field>
+                <Field label={translate("incidents.detail.trainingModuleDescription")} htmlFor="incident-training-description" optional>
+                  <input id="incident-training-description" value={trainingNewDescription} onChange={(e) => setTrainingNewDescription(e.target.value)} className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
+                </Field>
               </>
             )}
           </div>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setTrainingOpen(false)} className="rounded-xl">
-              {translate("incidents.detail.overrideCancel")}
-            </Button>
-            <Button
+          <PanelFooter>
+            <SecondaryButton onClick={() => setTrainingOpen(false)}>{translate("incidents.detail.overrideCancel")}</SecondaryButton>
+            <PrimaryButton
+              busy={assignTrainingMutation.isPending || createModuleMutation.isPending}
+              disabled={!trainingWorkerId || (trainingMode === "existing" ? !trainingModuleId : !trainingNewTitle.trim())}
               onClick={() => {
                 if (trainingMode === "new") {
                   createModuleMutation.mutate();
@@ -901,517 +1119,138 @@ export default function IncidentDetail({ id }: { id: string }) {
                   if (mod) assignTrainingMutation.mutate({ moduleId: mod.id, title: mod.title });
                 }
               }}
-              disabled={
-                assignTrainingMutation.isPending ||
-                createModuleMutation.isPending ||
-                !trainingWorkerId ||
-                (trainingMode === "existing" ? !trainingModuleId : !trainingNewTitle.trim())
-              }
-              className="rounded-xl text-white"
-              style={{ background: "var(--cc-cta)" }}
             >
-              {assignTrainingMutation.isPending || createModuleMutation.isPending ? (
-                <Loader2 size={13} className="animate-spin mr-1.5" />
-              ) : null}
               {translate("incidents.detail.assignTraining")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </PrimaryButton>
+          </PanelFooter>
+        </SheetContent>
+      </Sheet>
 
-      {/* Similar past incidents — CARECLIQV2-32 */}
-      {(patternsLoading || showPatternsPanel) && (
-        <div className="cc-surface-card lg:col-start-1">
-          <div className="cc-card-header">
-            <div className="flex items-center gap-2">
-              <History size={15} className="text-cc-muted" />
-              <p className="cc-card-title">{translate("incidents.detail.similarPastIncidents")}</p>
-            </div>
-            <p className="text-[11px] mt-1 text-cc-muted">
-              {translate("incidents.detail.similarPastSubtitle")}
-            </p>
-          </div>
-
-          {patternsLoading ? (
-            <div className="p-6 space-y-3">
-              <Skeleton className="h-20 w-full rounded-xl" />
-              <Skeleton className="h-20 w-full rounded-xl" />
-            </div>
-          ) : showPatternsPanel && patternData ? (
-            <div className="p-6 space-y-5">
-              {patternData.ai_summary && (
-                <div className="cc-plum-panel rounded-xl p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={14} className="text-cc-plum" />
-                    <p className="text-[12px] font-semibold uppercase tracking-widest text-cc-plum">{translate("incidents.detail.aiPatternAnalysis")}</p>
-                  </div>
-                  <div className="space-y-3 text-[13px] leading-relaxed text-cc-text">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1 text-cc-muted">{translate("incidents.detail.patternRecognised")}</p>
-                      <p>{patternData.ai_summary.pattern_recognised}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1 text-cc-muted">{translate("incidents.detail.pastStrategies")}</p>
-                      <p>{patternData.ai_summary.past_strategies}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1 text-cc-muted">{translate("incidents.detail.recommendations")}</p>
-                      <p>{patternData.ai_summary.recommendations}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                {patternData.matches.map((match) => (
-                  <div
-                    key={match.incident_id}
-                    className="rounded-xl p-4 border border-cc-border bg-cc-soft"
-                  >
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-cc-muted">
-                        <span className="flex items-center gap-1">
-                          <Calendar size={11} />
-                          {match.date ? format(parseISO(match.date), "d MMM yyyy") : translate("common.emDash")}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <User size={11} />
-                          {match.participant_label}
-                        </span>
-                      </div>
-                      <Badge variant="outline" className="text-[10px] px-2 py-0 shrink-0 bg-violet-50 text-violet-700 border-violet-200">
-                        {translateParams("incidents.detail.matchPercent", { percent: String(Math.round(match.similarity_score * 100)) })}
-                      </Badge>
-                    </div>
-                    <p className="text-[13px] leading-relaxed text-cc-text">{match.excerpt}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      )}
-
-      </div>
-      <div className="space-y-6">
-
-      {/* Details */}
-      <div className="cc-surface-card lg:col-start-2">
-        <div className="cc-card-header">
-          <div className="flex items-center gap-2">
-            <Calendar size={15} className="text-cc-muted" />
-            <p className="cc-card-title">{translate("incidents.register.details")}</p>
-          </div>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px]">
-            <div>
-              <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5 text-cc-muted">
-                <Calendar size={11} /> {translate("incidents.detail.incidentDate")}
-              </p>
-              <p className="font-medium text-cc-text">
-                {incident.incident_date
-                  ? formatAppDate(incident.incident_date, incident.timezone)
-                  : translate("common.emDash")}
-              </p>
-              <p className="text-[11px] mt-0.5 text-cc-muted">
-                {incident.incident_date
-                  ? formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })
-                  : ""}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.type")}</p>
-              <p className="font-medium text-cc-text">
-                {incidentTypeLabel(incident.incident_type, translate)}
-              </p>
-            </div>
-            {incident.location && (
-              <div>
-                <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5 text-cc-muted">
-                  <MapPin size={11} /> {translate("incidents.detail.location")}
-                </p>
-                <p className="text-cc-text">{incident.location}</p>
-              </div>
-            )}
-            {incident.identified_at && (
-              <div>
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.identifiedAt")}</p>
-                <p className="text-cc-text">{fmtDateTime(incident.identified_at, incident.timezone)}</p>
-              </div>
-            )}
-            {incident.location_type && (
-              <div>
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.locationType")}</p>
-                <p className="text-cc-text">{translate(`incidents.locationType.${incident.location_type}`)}</p>
-              </div>
-            )}
-            {incident.connection_to_service !== undefined && incident.connection_to_service !== null && (
-              <div className="col-span-2">
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.connectionToService")}</p>
-                <p className="text-cc-text">
-                  {incident.connection_to_service ? translate("common.yes") : translate("common.no")}
-                  {incident.connection_to_service_reasoning ? ` — ${incident.connection_to_service_reasoning}` : ""}
-                </p>
-              </div>
-            )}
-            {incident.witnesses_structured && incident.witnesses_structured.length > 0 ? (
-              <div className="col-span-2">
-                <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5 text-cc-muted">
-                  <Users size={11} /> {translate("incidents.detail.structuredWitnesses")}
-                </p>
-                <ul className="text-cc-text space-y-0.5">
-                  {incident.witnesses_structured.map((w, i) => (
-                    <li key={i}>
-                      {w.name}
-                      {w.relationship ? ` (${w.relationship})` : ""}
-                      {w.contact ? ` — ${w.contact}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : incident.witnesses ? (
-              <div>
-                <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5 text-cc-muted">
-                  <Users size={11} /> {translate("incidents.detail.witnesses")}
-                </p>
-                <p className="text-cc-text">{incident.witnesses}</p>
-              </div>
-            ) : null}
-            {incident.practice_standard && (
-              <div className="col-span-2">
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.ndisPracticeStandard")}</p>
-                <p className="flex items-center gap-1.5 text-cc-text">
-                  <Shield size={12} className="text-cc-plum" />
-                  {incident.practice_standard}
-                </p>
-              </div>
-            )}
-            {incident.ndis_reported_at && (
-              <div className="col-span-2">
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.ndisQscNotified")}</p>
-                <p className="flex items-center gap-1.5 text-[13px] font-medium text-emerald-700">
-                  <CheckCircle2 size={13} />
-                  {fmtDateTime(incident.ndis_reported_at, incident.timezone)}
-                </p>
-              </div>
-            )}
-            {incident.ndis_reportable_override !== undefined && incident.ndis_reportable_override !== null && (
-              <div className="col-span-2">
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.overrideOverridden")}</p>
-                <p className="text-cc-text">
-                  {incident.ndis_reportable_override ? translate("common.yes") : translate("common.no")}
-                  {incident.ndis_reportable_override_reason ? ` — ${incident.ndis_reportable_override_reason}` : ""}
-                  {incident.ndis_reportable_override_at
-                    ? ` (${formatAppDate(incident.ndis_reportable_override_at, incident.timezone)})`
-                    : ""}
-                </p>
-              </div>
-            )}
-            {incident.resolved_date && (
-              <div>
-                <p className="text-[11px] font-medium mb-0.5 text-cc-muted">{translate("incidents.detail.resolved")}</p>
-                <p className="text-cc-text">{formatAppDate(incident.resolved_date, incident.timezone)}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Investigation: assigned investigator (conflict-of-interest gated) + interviews */}
-      <div className="cc-surface-card lg:col-start-2">
-        <div className="cc-card-header">
-          <div className="flex items-center gap-2">
-            <UserSearch size={15} className="text-cc-muted" />
-            <p className="cc-card-title">{translate("incidents.detail.investigation")}</p>
-          </div>
-          <p className="text-[11px] mt-1 text-cc-muted">{translate("incidents.detail.investigationSubtitle")}</p>
-        </div>
-        <div className="p-6 space-y-5">
-          <div>
-            <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.assignedInvestigator")}</Label>
-            {incident.assigned_investigator_id ? (
-              <p className="text-[13px] text-cc-text flex items-center gap-1.5">
-                <CheckCircle2 size={13} className="text-emerald-600" />
-                {(team ?? []).find((m) => m.id === incident.assigned_investigator_id)?.full_name ?? incident.assigned_investigator_id}
-              </p>
-            ) : (
-              <p className="text-[13px] text-cc-muted mb-2">{translate("incidents.detail.noInvestigatorAssigned")}</p>
-            )}
-            <div className="flex gap-2 mt-2">
-              <Select value={selectedInvestigator} onValueChange={setSelectedInvestigator}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder={translate("incidents.detail.selectInvestigator")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {eligibleInvestigators.length === 0 ? (
-                    <div className="px-2 py-1.5 text-[12px] text-cc-muted">{translate("incidents.detail.investigatorNoOptions")}</div>
-                  ) : (
-                    eligibleInvestigators.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-              <Button
-                size="sm"
-                onClick={() => assignInvestigatorMutation.mutate(selectedInvestigator)}
-                disabled={!selectedInvestigator || assignInvestigatorMutation.isPending}
-                className="rounded-xl h-9 text-xs text-white shrink-0"
-                style={{ background: "var(--cc-cta)" }}
-              >
-                {assignInvestigatorMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
-                {translate("incidents.detail.assignInvestigator")}
-              </Button>
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-cc-border">
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-[12px] font-medium text-cc-text">{translate("incidents.detail.interviews")}</Label>
-              <Button size="sm" variant="outline" onClick={() => setInterviewOpen(true)} className="rounded-xl h-8 text-xs">
-                <Plus size={12} className="mr-1.5" />
-                {translate("incidents.detail.addInterview")}
-              </Button>
-            </div>
-            <p className="text-[11px] text-cc-muted mb-3">{translate("incidents.detail.interviewsSubtitle")}</p>
-            {interviewData?.records && interviewData.records.length > 0 ? (
-              <div className="space-y-2">
-                {interviewData.records.map((iv) => (
-                  <div key={iv.id} className="rounded-xl border border-cc-border p-3 text-[13px]">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-cc-text">{iv.interviewee_name}</span>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                        {translate(`incidents.interviewType.${iv.interviewee_type}`)}
-                      </Badge>
-                    </div>
-                    {iv.interviewed_at && (
-                      <p className="text-cc-muted text-[11px] mt-0.5">
-                        {fmtDateTime(iv.interviewed_at, incident?.timezone)}
-                      </p>
-                    )}
-                    {iv.notes && <p className="text-cc-text text-[12px] mt-1">{iv.notes}</p>}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-[13px] text-cc-muted">{translate("incidents.detail.noInterviews")}</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <Dialog open={interviewOpen} onOpenChange={setInterviewOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserSearch size={16} className="text-cc-plum" />
-              {translate("incidents.detail.addInterview")}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.subjectType")}</Label>
-              <Select value={interviewType} onValueChange={(v) => setInterviewType(v as typeof interviewType)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(["worker", "participant", "witness", "other"] as const).map((t) => (
-                    <SelectItem key={t} value={t}>{translate(`incidents.interviewType.${t}`)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.subjectName")}</Label>
-              <Input value={interviewName} onChange={(e) => setInterviewName(e.target.value)} className="rounded-xl border-cc-border" />
-            </div>
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.interviewNotes")}</Label>
-              <Textarea
-                rows={4}
-                value={interviewNotes}
-                onChange={(e) => setInterviewNotes(e.target.value)}
-                className="text-[13px] resize-none rounded-xl border-cc-border"
+      <Sheet open={interviewOpen} onOpenChange={setInterviewOpen}>
+        <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+          <SheetTitle className="sr-only">{translate("incidents.detail.addInterview")}</SheetTitle>
+          <SheetDescription className="sr-only">{translate("incidents.detail.interviewsSubtitle")}</SheetDescription>
+          <PanelHeader icon={UserSearch} title={translate("incidents.detail.addInterview")} description={translate("incidents.detail.interviewsSubtitle")} />
+          <div className="mt-6 flex-1 space-y-5">
+            <Field label={translate("incidents.detail.subjectType")}>
+              <PillGroup
+                label={translate("incidents.detail.subjectType")}
+                value={interviewType}
+                onChange={(v) => setInterviewType(v as typeof interviewType)}
+                options={(["worker", "participant", "witness", "other"] as const).map((t) => ({ value: t, label: translate(`incidents.interviewType.${t}`) }))}
               />
-            </div>
+            </Field>
+            <Field label={translate("incidents.detail.subjectName")} htmlFor="incident-interview-name">
+              <input id="incident-interview-name" value={interviewName} onChange={(e) => setInterviewName(e.target.value)} className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
+            </Field>
+            <Field label={translate("incidents.detail.interviewNotes")} htmlFor="incident-interview-notes" optional>
+              <textarea id="incident-interview-notes" rows={5} value={interviewNotes} onChange={(e) => setInterviewNotes(e.target.value)} className={`resize-y ${textareaClass}`} style={{ borderColor: BORDER, color: TEXT }} />
+            </Field>
           </div>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setInterviewOpen(false)} className="rounded-xl">
-              {translate("incidents.detail.overrideCancel")}
-            </Button>
-            <Button
-              onClick={() => addInterviewMutation.mutate()}
-              disabled={addInterviewMutation.isPending || !interviewName.trim()}
-              className="rounded-xl text-white"
-              style={{ background: "var(--cc-cta)" }}
-            >
-              {addInterviewMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
+          <PanelFooter>
+            <SecondaryButton onClick={() => setInterviewOpen(false)}>{translate("incidents.detail.overrideCancel")}</SecondaryButton>
+            <PrimaryButton busy={addInterviewMutation.isPending} disabled={!interviewName.trim()} onClick={() => addInterviewMutation.mutate()}>
               {translate("incidents.detail.addInterview")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </PrimaryButton>
+          </PanelFooter>
+        </SheetContent>
+      </Sheet>
 
-      {/* Subject of allegation — separate from personnel records, coordinator/MD only */}
-      <div className="cc-surface-card lg:col-start-2">
-        <div className="cc-card-header flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <UserX size={15} className="text-cc-muted" />
-              <p className="cc-card-title">{translate("incidents.detail.subjectOfAllegation")}</p>
-            </div>
-            <p className="text-[11px] mt-1 text-cc-muted">{translate("incidents.detail.subjectOfAllegationSubtitle")}</p>
-          </div>
-          <Button size="sm" variant="outline" onClick={() => setSubjectOpen(true)} className="rounded-xl h-8 text-xs shrink-0">
-            <Plus size={12} className="mr-1.5" />
-            {translate("incidents.detail.addSubject")}
-          </Button>
-        </div>
-        <div className="p-6">
-          {subjectData?.records && subjectData.records.length > 0 ? (
-            <div className="space-y-3">
-              {subjectData.records.map((s) => (
-                <div key={s.id} className="rounded-xl border border-cc-border p-3 text-[13px]">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-cc-text">{s.subject_name || translate(`incidents.subjectType.${s.subject_type}`)}</span>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                      {translate(`incidents.subjectType.${s.subject_type}`)}
-                    </Badge>
-                  </div>
-                  {s.subject_role && <p className="text-cc-muted text-[12px] mt-0.5">{s.subject_role}</p>}
-                  {s.notes && <p className="text-cc-text text-[12px] mt-1">{s.notes}</p>}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[13px] text-cc-muted">{translate("incidents.detail.noSubjects")}</p>
-          )}
-        </div>
-      </div>
-
-      <Dialog open={subjectOpen} onOpenChange={setSubjectOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserX size={16} className="text-cc-plum" />
-              {translate("incidents.detail.addSubject")}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.subjectType")}</Label>
-              <Select value={subjectType} onValueChange={(v) => setSubjectType(v as (typeof SUBJECT_TYPES)[number])}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SUBJECT_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>{translate(`incidents.subjectType.${t}`)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.subjectName")}</Label>
-              <Input value={subjectName} onChange={(e) => setSubjectName(e.target.value)} className="rounded-xl border-cc-border" />
-            </div>
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.subjectRole")}</Label>
-              <Input value={subjectRole} onChange={(e) => setSubjectRole(e.target.value)} className="rounded-xl border-cc-border" />
-            </div>
-            <div>
-              <Label className="text-[12px] font-medium mb-1.5 block text-cc-text">{translate("incidents.detail.subjectNotes")}</Label>
-              <Textarea
-                rows={3}
-                value={subjectNotes}
-                onChange={(e) => setSubjectNotes(e.target.value)}
-                className="text-[13px] resize-none rounded-xl border-cc-border"
+      <Sheet open={subjectOpen} onOpenChange={setSubjectOpen}>
+        <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+          <SheetTitle className="sr-only">{translate("incidents.detail.addSubject")}</SheetTitle>
+          <SheetDescription className="sr-only">{translate("incidents.detail.subjectOfAllegationSubtitle")}</SheetDescription>
+          <PanelHeader icon={UserX} title={translate("incidents.detail.addSubject")} description={translate("incidents.detail.subjectOfAllegationSubtitle")} />
+          <div className="mt-6 flex-1 space-y-5">
+            <Field label={translate("incidents.detail.subjectType")}>
+              <PillGroup
+                label={translate("incidents.detail.subjectType")}
+                value={subjectType}
+                onChange={(v) => setSubjectType(v as (typeof SUBJECT_TYPES)[number])}
+                options={SUBJECT_TYPES.map((t) => ({ value: t, label: translate(`incidents.subjectType.${t}`) }))}
               />
-            </div>
+            </Field>
+            <Field label={translate("incidents.detail.subjectName")} htmlFor="incident-subject-name" optional>
+              <input id="incident-subject-name" value={subjectName} onChange={(e) => setSubjectName(e.target.value)} className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
+            </Field>
+            <Field label={translate("incidents.detail.subjectRole")} htmlFor="incident-subject-role" optional>
+              <input id="incident-subject-role" value={subjectRole} onChange={(e) => setSubjectRole(e.target.value)} className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
+            </Field>
+            <Field label={translate("incidents.detail.subjectNotes")} htmlFor="incident-subject-notes" optional>
+              <textarea id="incident-subject-notes" rows={4} value={subjectNotes} onChange={(e) => setSubjectNotes(e.target.value)} className={`resize-y ${textareaClass}`} style={{ borderColor: BORDER, color: TEXT }} />
+            </Field>
           </div>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setSubjectOpen(false)} className="rounded-xl">
-              {translate("incidents.detail.overrideCancel")}
-            </Button>
-            <Button
-              onClick={() => subjectMutation.mutate()}
-              disabled={subjectMutation.isPending}
-              className="rounded-xl text-white"
-              style={{ background: "var(--cc-cta)" }}
-            >
-              {subjectMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
+          <PanelFooter>
+            <SecondaryButton onClick={() => setSubjectOpen(false)}>{translate("incidents.detail.overrideCancel")}</SecondaryButton>
+            <PrimaryButton busy={subjectMutation.isPending} onClick={() => subjectMutation.mutate()}>
               {translate("incidents.detail.addSubject")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </PrimaryButton>
+          </PanelFooter>
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
 
-      {/* Audit trail */}
-      <div className="cc-surface-card lg:col-start-2">
-        <div className="cc-card-header">
-          <div className="flex items-center gap-2">
-            <Shield size={14} className="text-cc-muted" />
-            <p className="cc-card-title">{translate("incidents.detail.auditTrail")}</p>
+/** A titled white card on the incident page. */
+function Card({
+  icon: Icon, title, description, action, children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }} aria-label={title}>
+      <div className="flex items-start justify-between gap-3 border-b px-5 py-4" style={{ borderColor: BORDER }}>
+        <div className="flex min-w-0 items-start gap-2.5">
+          <Icon size={17} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold" style={{ color: TEXT }}>{title}</h2>
+            {description && <p className="mt-0.5 text-sm leading-6" style={{ color: MUTED }}>{description}</p>}
           </div>
         </div>
-        <div className="p-6">
-          <div className="space-y-2 text-[12px] text-cc-muted">
-            <div className="flex justify-between">
-              <span>{translate("incidents.detail.incidentReported")}</span>
-              <span className="font-medium text-cc-text">
-                {incident.reported_date
-                  ? fmtDateTime(incident.reported_date, incident.timezone)
-                  : translate("common.emDash")}
-              </span>
-            </div>
-            {incident.ndis_reportable && (
-              <div className="flex justify-between">
-                <span>{translate("incidents.detail.ndisReportableFlagged")}</span>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-[var(--cc-status-danger-bg)] text-[var(--cc-status-danger)] border-[var(--cc-border)]">
-                  {translate("common.yes")}
-                </Badge>
-              </div>
-            )}
-            {incident.ndis_reported_at && (
-              <div className="flex justify-between">
-                <span>{translate("incidents.detail.reportedToNdisQsc")}</span>
-                <span className="font-medium text-emerald-700">
-                  {formatAppDate(incident.ndis_reported_at, incident.timezone)}
-                </span>
-              </div>
-            )}
-            {incident.resolved_date && (
-              <div className="flex justify-between">
-                <span>{translate("incidents.detail.incidentResolved")}</span>
-                <span className="font-medium text-cc-text">
-                  {formatAppDate(incident.resolved_date, incident.timezone)}
-                </span>
-              </div>
-            )}
-          </div>
-          {incident.ndis_notification_content && (
-            <div className="pt-3 mt-3 border-t border-cc-border">
-              <button
-                type="button"
-                onClick={() => setSubmittedOpen((v) => !v)}
-                className="text-[12px] font-semibold text-cc-plum hover:underline"
-              >
-                {translate("incidents.detail.viewSubmittedNotification")}
-              </button>
-              {submittedOpen && (
-                <pre className="mt-2 whitespace-pre-wrap text-[11px] font-mono text-cc-text bg-cc-soft rounded-xl p-3 border border-cc-border">
-                  {incident.ndis_notification_content}
-                </pre>
-              )}
-            </div>
-          )}
-        </div>
+        {action && <div className="shrink-0 whitespace-nowrap">{action}</div>}
       </div>
+      <div className="p-5">{children}</div>
+    </section>
+  );
+}
 
-      </div>
-      </div>
+/** One answer from a few, as pills. */
+function PillGroup({
+  label, value, options, onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(option.value)}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+            style={{
+              borderColor: selected ? PURPLE : BORDER,
+              background: selected ? PURPLE_SOFT : undefined,
+              color: selected ? PURPLE : TEXT,
+            }}
+          >
+            {selected && <Check size={14} strokeWidth={3} />}
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
