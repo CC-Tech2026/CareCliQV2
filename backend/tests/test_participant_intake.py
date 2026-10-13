@@ -161,6 +161,34 @@ async def test_activate_creates_the_real_participant_record_and_links_it():
 
 
 @pytest.mark.asyncio
+async def test_activating_an_imported_participant_keeps_their_imported_details():
+    existing = {
+        "id": "i-1", "organization_id": "org-1", "status": "signed", "full_name": "Mia Thompson",
+        "ndis_number": "430123456", "service_category": "disability", "source": "import",
+        "web_intake": {
+            "date_of_birth": "1985-03-12",
+            "imported": {"source_system": "shiftcare", "plan_management_type": "plan-managed", "primary_disability": "Autism"},
+        },
+    }
+    table = MagicMock()
+    table.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[{**existing, "status": "active"}])
+    supabase = MagicMock()
+    supabase.table.return_value = table
+
+    with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing), \
+         patch("backend.app.services.participant_intake_service.get_supabase_admin", return_value=supabase), \
+         patch("backend.app.services.participant_service.create_participant", new=AsyncMock(return_value={"id": "p-new"})) as create_participant, \
+         patch("backend.app.services.participant_service.update_participant", new=AsyncMock(return_value={"id": "p-new"})) as update_participant, \
+         patch(f"{DOCS}.signed_intake_agreement", return_value=SIGNED), \
+         patch(f"{DOCS}.attach_intake_agreements", return_value=[SIGNED]):
+        await svc.update_intake("i-1", "org-1", {"status": "active"}, MD_USER)
+
+    assert create_participant.await_args.args[0].primary_disability == "Autism"
+    update_participant.assert_awaited_once()
+    assert update_participant.await_args.args[1].plan_management_type == "plan-managed"
+
+
+@pytest.mark.asyncio
 async def test_sign_requires_awaiting_signatures_status():
     existing = {"id": "i-1", "organization_id": "org-1", "status": "meet_greet", "full_name": "Sam"}
     with patch("backend.app.services.participant_intake_service.get_intake", return_value=existing):

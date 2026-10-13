@@ -20,7 +20,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from ..core.errors import internal_error_detail
-from ..schemas.participant import ParticipantCreate
+from ..schemas.participant import ParticipantCreate, ParticipantUpdate
 from . import participant_service
 from .supabase_client import get_supabase_admin
 
@@ -210,6 +210,8 @@ async def _activate_side_effects(existing: dict[str, Any], merged: dict[str, Any
 
     web_intake = merged.get("web_intake") or {}
     dob = _validate_dob(web_intake, merged.get("service_category"))
+    # Brought across from another system (data_import_service.py).
+    imported = web_intake.get("imported") or {}
 
     create_body = ParticipantCreate(
         full_name=merged["full_name"],
@@ -221,6 +223,7 @@ async def _activate_side_effects(existing: dict[str, Any], merged: dict[str, Any
         plan_end_date=merged.get("plan_end_date"),
         total_budget=_parse_budget(merged.get("total_budget")),
         service_category=merged.get("service_category"),
+        primary_disability=imported.get("primary_disability") or None,
     )
     try:
         participant = await participant_service.create_participant(create_body, current_user)
@@ -228,6 +231,15 @@ async def _activate_side_effects(existing: dict[str, Any], merged: dict[str, Any
         raise HTTPException(status_code=403, detail=str(exc))
     if not participant:
         raise HTTPException(status_code=502, detail="Could not create the participant record.")
+    if imported.get("plan_management_type"):
+        try:
+            await participant_service.update_participant(
+                participant["id"],
+                ParticipantUpdate(plan_management_type=imported["plan_management_type"]),
+                current_user,
+            )
+        except Exception as exc:
+            logger.warning("Imported plan management type not applied to %s: %s", participant["id"], exc)
     _attach_meeting_sessions(existing["id"], existing["organization_id"], participant["id"])
     # The agreement built and signed during onboarding becomes the
     # participant's service agreement of record, supports and all.

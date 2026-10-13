@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
-  ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
+  ArrowLeft, HeartHandshake, ClipboardCheck, FileUp, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users,
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
   SlidersHorizontal, X, AlertTriangle, ArrowUp, ArrowDown, Accessibility, HeartPulse, Link2, Check,
@@ -135,6 +135,7 @@ const SOURCE_META: Record<EnquirySource, { label: string; icon: typeof Mail }> =
   email: { label: "Email", icon: Mail },
   phone_call: { label: "Phone call", icon: PhoneCall },
   coordinator_referral: { label: "Support coordinator referral", icon: Users },
+  import: { label: "Data import", icon: FileUp },
 };
 const sourceMeta = (source: string | null | undefined) =>
   SOURCE_META[source as EnquirySource] ?? { label: "Other", icon: ClipboardCheck };

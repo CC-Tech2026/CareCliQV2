@@ -17,6 +17,8 @@ type Step = {
   done: boolean;
   href: string;
   action: string;
+  /** Bring an existing list across from another system instead. */
+  importHref?: string;
 };
 
 /** First-run setup for a new organisation's managing director. Every tick
@@ -71,6 +73,7 @@ export function OrgSetupChecklist({
       done: staffCount > 0,
       href: "/settings?section=team",
       action: "Invite staff",
+      importHref: "/md/import?kind=staff",
     },
     {
       id: "participants",
@@ -80,6 +83,7 @@ export function OrgSetupChecklist({
       done: participantCount > 0,
       href: "/onboard-participant",
       action: "Add participant",
+      importHref: "/md/import?kind=participants",
     },
   ];
 
@@ -147,14 +151,25 @@ export function OrgSetupChecklist({
                   Done
                 </span>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => onNavigate(step.href)}
-                  className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg bg-cc-plum px-4 text-[13px] font-bold text-white hover:opacity-90"
-                >
-                  {step.action}
-                  <ArrowRight size={14} aria-hidden="true" />
-                </button>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  {step.importHref ? (
+                    <button
+                      type="button"
+                      onClick={() => onNavigate(step.importHref!)}
+                      className="min-h-11 rounded-lg px-3 text-[13px] font-bold text-cc-plum hover:bg-cc-soft"
+                    >
+                      Import a list
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => onNavigate(step.href)}
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-cc-plum px-4 text-[13px] font-bold text-white hover:opacity-90"
+                  >
+                    {step.action}
+                    <ArrowRight size={14} aria-hidden="true" />
+                  </button>
+                </div>
               )}
             </li>
           );

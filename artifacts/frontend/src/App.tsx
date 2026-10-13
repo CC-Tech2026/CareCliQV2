@@ -89,6 +89,7 @@ import PortalLoginPage from "@/pages/portal-login";
 import PortalForgotPasswordPage from "@/pages/portal-forgot-password";
 import { ParticipantPortalProvider } from "@/components/participant-portal/ParticipantPortalContext";
 import MDOnboardingPage from "@/pages/md/onboarding";
+import DataImportPage from "@/pages/md/data-import";
 import MDOnboardingTrainingPage, { MDOnboardingSetupPage } from "@/pages/md/onboarding-training";
 import TagManagementPage from "@/pages/md/tag-management";
 import DevProgressTestPage from "@/pages/dev-progress-test";
@@ -433,6 +434,13 @@ function Router() {
 
       {/* Worker-Participant Matching Enhancement, Phase 1 — shared tag taxonomy,
              same coordinator+MD access as /md/staff-onboarding. */}
+      {/* Move to CareCliQ: CSV import of participants and staff. */}
+      <Route path="/md/import">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <DataImportPage />
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/md/tags">
         <ProtectedRoute allowedRoles={["support_coordinator", "managing_director"]}>
           <TagManagementPage />

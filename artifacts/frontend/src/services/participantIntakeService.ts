@@ -4,7 +4,7 @@ export type IntakeStatus =
   | "enquiry" | "screening" | "declined" | "withdrawn" | "meet_greet"
   | "awaiting_signatures" | "signed" | "active" | "inactive";
 
-export type EnquirySource = "online_form" | "email" | "phone_call" | "coordinator_referral";
+export type EnquirySource = "online_form" | "email" | "phone_call" | "coordinator_referral" | "import";
 
 export type ServiceCategory = "aged_care" | "disability";
 

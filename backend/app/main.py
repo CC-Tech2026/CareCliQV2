@@ -251,6 +251,8 @@ from .api import applicants as applicants_api
 app.include_router(applicants_api.router, prefix="/api")
 from .api import participant_intake as participant_intake_api
 app.include_router(participant_intake_api.router, prefix="/api")
+from .api import data_import as data_import_api
+app.include_router(data_import_api.router, prefix="/api")
 from .api import organization_branding as organization_branding_api
 app.include_router(organization_branding_api.router, prefix="/api")
 from .api import organization_abbrev as organization_abbrev_api
