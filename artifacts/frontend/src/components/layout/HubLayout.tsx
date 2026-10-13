@@ -24,7 +24,6 @@ import {
   Mail,
   DollarSign,
   BarChart3,
-  Files,
   ClipboardCheck,
   GraduationCap,
   MessageSquareWarning,
@@ -86,7 +85,6 @@ const MD_NAV_GROUPS = [
     items: [
       { href: "/hub", label: "Executive Hub", icon: LayoutDashboard },
       { href: "/md/executive", label: "Performance review", icon: BarChart3 },
-      { href: "/reports", label: "Report library", icon: Files },
     ],
   },
   {

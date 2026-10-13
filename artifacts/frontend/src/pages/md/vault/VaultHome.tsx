@@ -17,6 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   FileText,
+  FileBarChart2,
   AlertTriangle,
   ClipboardList,
   Pill,
@@ -94,6 +95,7 @@ const FOLDER_ICONS: Record<string, LucideIcon> = {
   worker_credentials: KeyRound,
   invoices: Receipt,
   audit_packs: ShieldCheck,
+  participant_reports: FileBarChart2,
   consent_onboarding: FileCheck2,
   governance_operational: Building2,
   risk_management: ShieldAlert,

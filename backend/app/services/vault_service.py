@@ -140,6 +140,7 @@ CATEGORY_META: dict[str, dict[str, str]] = {
     "invoices": {"label": "Invoices & Billing Records", "group": "record"},
     "audit_packs": {"label": "Audit Packs & Compliance Reports", "group": "record"},
     "consent_onboarding": {"label": "Signed Consent & Onboarding Docs", "group": "record"},
+    "participant_reports": {"label": "Participant Reports", "group": "record"},
     "governance_operational": {"label": "Governance & Operational Management", "group": "governance"},
     "risk_management": {"label": "Risk Management", "group": "governance"},
     "quality_management": {"label": "Quality Management", "group": "governance"},
@@ -1566,6 +1567,63 @@ def _render_audit_pack(org_id: str, document_id: str, exclude_fields: set[str] |
     return f"{safe}.json", data
 
 
+# Participant reports generated from their care records (the PDFs the old
+# Report library made). Stored in the private report-files bucket and served
+# through the vault, so they're only ever opened by a signed-in user.
+PARTICIPANT_REPORT_BUCKET = "report-files"
+
+
+def _list_participant_reports(org_id: str) -> list[VaultDocument]:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("report_history")
+            .select("id, participant_id, report_type, title, file_path, created_at")
+            .eq("organization_id", org_id)
+            .order("created_at", desc=True)
+            .limit(500)
+            .execute()
+        )
+    except Exception:
+        return []
+    patients = _patient_name_map(org_id)
+    return [
+        VaultDocument(
+            id=row["id"],
+            category="participant_reports",
+            folder_label=CATEGORY_META["participant_reports"]["label"],
+            title=row.get("title") or str(row.get("report_type") or "Participant report").replace("_", " ").capitalize(),
+            person_name=patients.get(row.get("participant_id") or "", "Unknown participant"),
+            person_type="Participant",
+            person_id=row.get("participant_id"),
+            date=str(row.get("created_at") or ""),
+            status="generated",
+            source_table="report_history",
+            source_id=row["id"],
+            has_stored_file=bool(row.get("file_path")),
+        )
+        for row in (resp.data or [])
+    ]
+
+
+def _render_participant_report(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
+    resp = (
+        get_supabase_admin()
+        .table("report_history")
+        .select("id, title, file_path")
+        .eq("id", document_id)
+        .eq("organization_id", org_id)
+        .limit(1)
+        .execute()
+    )
+    row = (resp.data or [None])[0]
+    if not row or not row.get("file_path"):
+        raise HTTPException(status_code=404, detail="Participant report not found.")
+    data = _download_stored_file(PARTICIPANT_REPORT_BUCKET, row["file_path"])
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", row.get("title") or "participant-report").strip("-")
+    return f"{safe}.pdf", data
+
+
 def governance_expiry_status(expiry_date: Any) -> str:
     """on_file, or expiring / expired once a governance upload with an
     expiry date (an insurance certificate, an NDIS registration) nears or
@@ -1719,6 +1777,7 @@ _RECORD_LOADERS = {
     "invoices": _list_invoices,
     "consent_onboarding": _list_consent_onboarding,
     "audit_packs": _list_audit_packs,
+    "participant_reports": _list_participant_reports,
 }
 
 _RECORD_RENDERERS = {
@@ -1730,6 +1789,7 @@ _RECORD_RENDERERS = {
     "invoices": _render_invoice,
     "consent_onboarding": _render_consent_onboarding,
     "audit_packs": _render_audit_pack,
+    "participant_reports": _render_participant_report,
 }
 
 
@@ -2084,6 +2144,7 @@ DOC_TYPE_CODES: dict[str, str] = {
     "applicant_documents": "APL",
     "plan_meeting_sessions": "CON",
     "audit_pack_exports": "AUD",
+    "report_history": "RPT",
     "governance_documents": "POL",
     "governance_records": "GOV",
     "vault_custom_folder_documents": "DOC",
@@ -2113,6 +2174,7 @@ DOC_SOURCE_LABELS: dict[str, str] = {
     "governance_records": "Uploaded",
     "vault_custom_folder_documents": "Uploaded",
     "participant_complaints": "Participant complaint",
+    "report_history": "Generated participant report",
     "operational_feedback": "Staff feedback",
     "vault_registers": "Live register",
 }
@@ -2461,6 +2523,8 @@ def _tree_placement(doc: VaultDocument) -> tuple[str, str] | None:
         return "participant", "clinical_docs"
     if category == "incident_reports":
         return "participant", "incident_reports"
+    if category == "participant_reports":
+        return "participant", "clinical_docs"
     if category == "invoices":
         return "participant", "invoices"
     # An intake's signed agreement PDF is the service agreement, before the
@@ -3838,6 +3902,7 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "worker_credentials": ["credential", "certificate", "certification", "qualification"],
     "invoices": ["invoice", "billing", "payment"],
     "audit_packs": ["audit pack", "audit"],
+    "participant_reports": ["participant report", "progress report", "report"],
     "consent_onboarding": ["consent", "onboarding"],
     "governance_operational": ["governance", "operational management"],
     "risk_management": ["risk"],

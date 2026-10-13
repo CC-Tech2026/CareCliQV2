@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 from ..core.errors import internal_error_detail
 from ..services import ai_service, participant_service, session_service
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
@@ -204,6 +205,35 @@ async def report_history(current_user: dict = Depends(get_current_user)):
     return result.data or []
 
 
+@router.get("/history/{report_id}/file")
+async def report_file(report_id: str, current_user: dict = Depends(get_current_user)):
+    """The generated PDF, for a signed-in user in the same organisation."""
+    _require_report_access(current_user)
+    result = (
+        get_supabase_admin()
+        .table("report_history")
+        .select("id, title, file_path")
+        .eq("id", report_id)
+        .eq("organization_id", get_user_organization_id(current_user))
+        .limit(1)
+        .execute()
+    )
+    row = (result.data or [None])[0]
+    if not row or not row.get("file_path"):
+        raise HTTPException(status_code=404, detail="Report not found")
+    try:
+        data = get_supabase_admin().storage.from_("report-files").download(row["file_path"])
+    except Exception as exc:
+        logger.warning("Report file download failed: %s", exc)
+        raise HTTPException(status_code=502, detail=internal_error_detail("Could not open the report file", exc))
+    safe = "".join(c if c.isalnum() or c in "._-" else "-" for c in (row.get("title") or "report")).strip("-")
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{safe or "report"}.pdf"'},
+    )
+
+
 @router.post("/participant/{participant_id}/generate", status_code=201)
 async def generate_participant_report(
     request: Request,
@@ -259,7 +289,10 @@ async def generate_participant_report(
             pdf_bytes,
             {"content-type": "application/pdf", "upsert": "true"},
         )
-        file_url = supabase.storage.from_("report-files").get_public_url(file_path)
+        # Never a public link: the PDF holds participant health information,
+        # so it's opened through GET /reports/history/{id}/file (or the
+        # vault), which checks who's asking.
+        file_url = None
     except Exception as exc:
         logger.warning("Report PDF storage unavailable: %s", exc)
         raise HTTPException(status_code=502, detail=internal_error_detail("Report PDF storage is not configured", exc))

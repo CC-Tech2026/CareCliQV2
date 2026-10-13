@@ -1,8 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { DirectorReportsHome, DIRECTOR_REPORTS } from "@/components/reports/DirectorReportsHome";
-import { PageHeader, ghostClass } from "@/components/layout/PageKit";
 import { useState, useMemo, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, Redirect, useLocation } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO, differenceInDays, isAfter, subDays } from "date-fns";
 import {
@@ -160,6 +158,20 @@ function ClinicalReportGenerator() {
   });
   const { toast } = useToast();
   const { requireReAuth, modal } = useReAuth();
+
+  // Reports hold participant health information, so they're never a public
+  // link: fetch the PDF as the signed-in user and open it from memory.
+  async function openReportFile(reportId: string) {
+    try {
+      const response = await authenticatedFetch(`/api/reports/history/${reportId}/file`);
+      if (!response.ok) throw new Error("Could not open the report.");
+      const url = URL.createObjectURL(await response.blob());
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      toast({ title: "Could not open the report", description: error instanceof Error ? error.message : undefined, variant: "destructive" });
+    }
+  }
   const [participantId, setParticipantId] = useState("");
   const [reportType, setReportType] = useState("therapy_progress_report");
   const [busy, setBusy] = useState(false);
@@ -181,7 +193,7 @@ function ClinicalReportGenerator() {
       if (!response.ok) throw new Error(payload.detail || "Could not generate report");
       toast({ title: translate("reports.toast.reportGenerated"), description: payload.title });
       refetch();
-      if (payload.file_url) window.open(payload.file_url, "_blank", "noopener,noreferrer");
+      if (payload.id) void openReportFile(payload.id);
     } catch (error) {
       toast({
         title: translate("reports.toast.reportFailed"),
@@ -249,10 +261,10 @@ function ClinicalReportGenerator() {
                     <p className="truncate text-[12px] font-bold" style={{ color: T1 }}>{report.title || report.report_type}</p>
                     <p className="text-[11px]" style={{ color: T3 }}>{report.created_at ? format(parseISO(report.created_at), "dd MMM yyyy") : "Saved"}</p>
                   </div>
-                  {report.file_url && (
-                    <a href={report.file_url} target="_blank" rel="noreferrer" className="text-[12px] font-bold" style={{ color: PLUM }}>
+                  {(report.file_path || report.file_url) && (
+                    <button type="button" onClick={() => void openReportFile(report.id)} className="text-[12px] font-bold" style={{ color: PLUM }}>
                       Download
-                    </a>
+                    </button>
                   )}
                 </div>
               ))}
@@ -1199,18 +1211,10 @@ export default function Reports() {
     export:     <ExportCentreSection />,
   };
 
-  if (isDirector) {
-    const current = DIRECTOR_REPORTS.find(report => report.id === activeTab);
-    return <div className="min-w-0 space-y-8 pb-12">
-      <PageHeader
-        eyebrow={activeTab === "hub" ? "Governance & Strategy" : "Report library"}
-        title={activeTab === "hub" ? "Report library" : current?.title || "Reports"}
-        description={activeTab === "hub" ? "Find, filter and export reports for a selected period. For current priorities and performance trends, use the Executive Hub and Performance review." : current?.description}
-        actions={activeTab !== "hub" ? <button type="button" className={ghostClass} onClick={() => setActiveTab("hub")}>Back to report library</button> : undefined}
-      />
-      {activeTab === "hub" ? <DirectorReportsHome onOpen={id => setActiveTab(id as TabId)} /> : <section className="min-w-0" aria-label={current?.title}>{SECTION_MAP[activeTab]}</section>}
-    </div>;
-  }
+  // Directors' reports now live where the records are: participant reports
+  // in each participant's Vault folder, shift notes and documentation
+  // quality in Audit & Compliance, incidents in Incident reporting.
+  if (isDirector) return <Redirect to="/md/vault" />;
 
   const activeTab_ = TABS.find(t => t.id === activeTab)!;
 

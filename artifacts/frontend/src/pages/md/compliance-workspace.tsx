@@ -1,13 +1,15 @@
 import { Link, Redirect, useSearch } from "wouter";
-import { Activity, ClipboardCheck, FileSearch, FolderLock, ShieldCheck } from "lucide-react";
+import { Activity, ClipboardCheck, FileSearch, FileText, FolderLock, ShieldCheck } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PageHeader, PillTabs, ghostClass } from "@/components/layout/PageKit";
 import QualityOverview from "./compliance";
 import AuditEvidence from "./audit-readiness";
+import ShiftNotesReport from "./shift-notes";
 
 const tabs = [
   { key: "quality", label: "Quality & risk", icon: Activity, detail: "Documentation quality, team trends and staff follow-up." },
+  { key: "shifts", label: "Shift notes", icon: FileText, detail: "Every recent shift note and its documentation score." },
   { key: "overview", label: "Evidence overview", icon: ShieldCheck, detail: "Evidence coverage, with missing and overdue records first." },
   { key: "checklist", label: "Evidence checklist", icon: ClipboardCheck, detail: "Find a requirement, link supporting records and review evidence." },
   { key: "packs", label: "Audit packs", icon: FileSearch, detail: "Export outstanding actions and gather documents for an auditor." },
@@ -36,7 +38,7 @@ export default function ComplianceWorkspace() {
         options={tabs.map(({ key, label, icon, detail }) => ({ key, label, icon, title: detail, href: `/md/compliance?view=${key}` }))}
       />
       <section aria-label={selected.label}>
-        {selected.key === "quality" ? <ProtectedRoute allowedRoles={["managing_director", "super_admin"]}><QualityOverview embedded /></ProtectedRoute> : <ProtectedRoute allowedRoles={["managing_director", "super_admin"]} requiredCapability="governance_vault" capabilityLabel="Audit evidence"><AuditEvidence embedded /></ProtectedRoute>}
+        {selected.key === "quality" ? <ProtectedRoute allowedRoles={["managing_director", "super_admin"]}><QualityOverview embedded /></ProtectedRoute> : selected.key === "shifts" ? <ProtectedRoute allowedRoles={["managing_director", "super_admin"]}><ShiftNotesReport /></ProtectedRoute> : <ProtectedRoute allowedRoles={["managing_director", "super_admin"]} requiredCapability="governance_vault" capabilityLabel="Audit evidence"><AuditEvidence embedded /></ProtectedRoute>}
       </section>
     </div>
   </HubLayout>;

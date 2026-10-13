@@ -472,7 +472,7 @@ export default function MDExecutivePage() {
           }
           description={
             <>
-              Review trends, compare results with targets and identify where leadership attention is needed. Use the Report library for detailed records and exports.
+              Review trends, compare results with targets and identify where leadership attention is needed. Use the Document vault for detailed records and exports.
               <span className="mt-1 block text-xs">Last updated {formatTime(data.generated_at)}</span>
             </>
           }
@@ -487,7 +487,6 @@ export default function MDExecutivePage() {
           <nav aria-label="Management shortcuts" className="-ml-4 flex flex-wrap gap-1">
             {[
               ["Daily priorities", "/hub"],
-              ["Report library", "/reports"],
               ["Staff directory", "/md/staff"],
               ["Document vault", "/md/vault"],
               ["NDIS invoices", "/md/financial"],
