@@ -1104,48 +1104,43 @@ async def get_incident_stats(
 ) -> dict[str, int]:
     supabase = get_supabase_admin()
 
-    try:
-        query = (
-            supabase
-            .table(TABLE)
-            .select(
-                "id, participant_id, status, severity, incident_type, "
-                "ndis_reportable, ndis_reportable_override, reportable_categories, "
-                "participant_harmed, ndis_reported_at, "
-                "incident_date, identified_at"
-            )
-        )
+    stats_columns = (
+        "id, participant_id, status, severity, incident_type, "
+        "ndis_reportable, ndis_reportable_override, reportable_categories, "
+        "participant_harmed, ndis_reported_at, "
+        "incident_date, identified_at"
+    )
 
+    def build(columns: str, by_reporter: bool):
+        query = supabase.table(TABLE).select(columns)
         if org_id:
             query = query.eq("organization_id", org_id)
-
         # Support workers are pre-filtered to their own incidents at the SQL level
-        if reporter_id:
+        if by_reporter and reporter_id:
             query = query.eq("user_id", reporter_id)
+        return query
 
+    try:
         try:
-            result = query.execute()
+            result = build(stats_columns, True).execute()
         except Exception as col_exc:
-            if "42703" in str(col_exc) and reporter_id:
+            if "42703" not in str(col_exc):
+                raise
+            # A database that hasn't had every incident migration applied
+            # (e.g. reportable_categories from 171) used to make the whole
+            # query fail and the stats read 0. Fall back to every column the
+            # table does have, as the incident list already does.
+            logger.warning("incident stats: %s; retrying with all columns", col_exc)
+            try:
+                result = build("*", True).execute()
+            except Exception as retry_exc:
+                if "42703" not in str(retry_exc) or not reporter_id:
+                    raise
                 logger.warning(
                     "incidents.user_id column missing — retrying stats without reporter filter. "
                     "Run supabase_setup.sql to add the column."
                 )
-                retry = (
-                    supabase
-                    .table(TABLE)
-                    .select(
-                        "id, participant_id, status, severity, incident_type, "
-                        "ndis_reportable, ndis_reportable_override, reportable_categories, "
-                        "participant_harmed, ndis_reported_at, "
-                        "incident_date, identified_at"
-                    )
-                )
-                if org_id:
-                    retry = retry.eq("organization_id", org_id)
-                result = retry.execute()
-            else:
-                raise
+                result = build("*", False).execute()
 
         rows = _safe_rows(result.data)
 

@@ -785,18 +785,29 @@ async def compliance_centre_incidents(current_user: dict = Depends(get_current_u
 
     try:
         month_start = app_today().replace(day=1).isoformat()
-        inc_resp = (
-            supabase.table("incidents")
-            .select(
+        def fetch_incidents(columns: str):
+            return (
+                supabase.table("incidents")
+                .select(columns)
+                .eq("organization_id", org_id)
+                .order("incident_date", desc=True)
+                .limit(50)
+                .execute()
+            )
+
+        try:
+            inc_resp = fetch_incidents(
                 "id, participant_id, user_id, incident_type, description, status, severity, "
                 "incident_date, identified_at, reportable_categories, participant_harmed, "
                 "ndis_reportable, ndis_reportable_override"
             )
-            .eq("organization_id", org_id)
-            .order("incident_date", desc=True)
-            .limit(50)
-            .execute()
-        )
+        except Exception as col_exc:
+            # A missing column (an incident migration not yet applied) used to
+            # leave this panel empty; fall back to whatever columns exist.
+            if "42703" not in str(col_exc):
+                raise
+            logger.warning("compliance centre incidents: %s; retrying with all columns", col_exc)
+            inc_resp = fetch_incidents("*")
         rows = inc_resp.data or []
     except Exception as exc:
         logger.warning("compliance centre incidents: fetch failed: %s", exc)
