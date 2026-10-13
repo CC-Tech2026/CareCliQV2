@@ -4,7 +4,7 @@ import {
   ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users,
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
-  SlidersHorizontal, X, AlertTriangle, ArrowUp, ArrowDown,
+  SlidersHorizontal, X, AlertTriangle, ArrowUp, ArrowDown, Accessibility, HeartPulse, Link2, Check,
 } from "lucide-react";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -23,7 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ChoiceCard, Field as PanelField, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass } from "@/pages/md/vault/components/PanelKit";
 import { SectionInfo } from "@/components/ui/section-info";
 import {
   EmptyState,
@@ -137,6 +138,41 @@ const SOURCE_META: Record<EnquirySource, { label: string; icon: typeof Mail }> =
 };
 const sourceMeta = (source: string | null | undefined) =>
   SOURCE_META[source as EnquirySource] ?? { label: "Other", icon: ClipboardCheck };
+
+/** A titled group of fields in the New referral panel. */
+function ReferralSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-4">
+      <h3 className="text-base font-semibold" style={{ color: TEXT }}>{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/** One of a few short options, shown as a pill. */
+function PillChoice({ selected, onSelect, children }: { selected: boolean; onSelect: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className="inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+      style={{
+        borderColor: selected ? "var(--cc-brand-purple)" : BORDER,
+        background: selected ? "var(--cc-brand-purple-soft)" : undefined,
+        color: selected ? "var(--cc-brand-purple)" : TEXT,
+      }}
+    >
+      {selected && <Check size={14} strokeWidth={3} />}
+      {children}
+    </button>
+  );
+}
+
+function FieldError({ children }: { children: React.ReactNode }) {
+  return <span className="font-medium" style={{ color: "var(--cc-danger-text)" }}>{children}</span>;
+}
 
 function daysSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -1450,19 +1486,27 @@ export default function ParticipantOnboardingBoard() {
   const [fundingType, setFundingType] = useState<FundingType | "">("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [source, setSource] = useState<EnquirySource>("online_form");
+  const [source, setSource] = useState<EnquirySource>("phone_call");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const touch = (field: string) => setTouched((t) => (t[field] ? t : { ...t, [field]: true }));
 
   const dobAge = calculateAge(dob);
+  // Aged Care clients usually have no NDIS number or NDIS funding type.
+  const isNdis = serviceCategory === "disability";
+  const emailInvalid = email.trim().length > 0 && !isValidEmail(email);
+  const phoneInvalid = phone.trim().length > 0 && !isValidPhone(phone);
+  const dobInFuture = dobAge !== null && dobAge < 0;
   // What's still missing before an enquiry can be logged, in plain words.
   const referralMissing = [
     !fullName.trim() && "full name",
     !dob.trim() && "date of birth",
-    !ndisNumber.trim() && "NDIS number",
+    isNdis && !ndisNumber.trim() && "NDIS number",
     !isValidEmail(email) && (email.trim() ? "a valid email" : "email"),
   ].filter(Boolean) as string[];
   const agedCareBlocked = serviceCategory === "aged_care" && dob.trim().length > 0 && !isAgedCareEligible(dob);
 
   const [creatingIntake, setCreatingIntake] = useState(false);
+  const referralBlocked = referralMissing.length > 0 || phoneInvalid || agedCareBlocked || dobInFuture;
 
   async function createIntake() {
     if (!dob.trim()) {
@@ -1474,20 +1518,20 @@ export default function ParticipantOnboardingBoard() {
       const intake = await createParticipantIntake({
         full_name: fullName.trim(),
         service_category: serviceCategory,
-        ndis_number: ndisNumber.trim(),
+        ndis_number: isNdis ? ndisNumber.trim() : "",
         email: email.trim(),
         phone: phone.trim(),
         source,
         web_intake: {
           date_of_birth: dob.trim(),
-          funding_type: fundingType || undefined,
+          funding_type: (isNdis && fundingType) || undefined,
           submitted_by: "Provider",
           submitted_at: new Date().toISOString(),
         },
       });
       setIntakes((prev) => [intake, ...prev]);
       setNewIntakeOpen(false);
-      setFullName(""); setServiceCategory("disability"); setDob(""); setNdisNumber(""); setFundingType(""); setEmail(""); setPhone(""); setSource("online_form");
+      setFullName(""); setServiceCategory("disability"); setDob(""); setNdisNumber(""); setFundingType(""); setEmail(""); setPhone(""); setSource("phone_call"); setTouched({});
       navigate(`/onboard-participant?intake=${intake.id}`);
       toast({ title: "Enquiry logged", description: `${intake.full_name} is in the Enquiry column.` });
     } catch (err) {
@@ -1846,124 +1890,203 @@ export default function ParticipantOnboardingBoard() {
         )}
       </div>
 
-      <Sheet open={newIntakeOpen} onOpenChange={setNewIntakeOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
-              <HeartHandshake size={18} style={{ color: PLUM }} /> New referral
-            </SheetTitle>
-            <p className="text-sm" style={{ color: MUTED }}>
-              Log an enquiry to start onboarding. Fields marked <span style={{ color: DANGER }}>*</span> are needed.
-            </p>
-          </SheetHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium" style={{ color: TEXT }}>Full name <span aria-hidden="true" style={{ color: DANGER }}>*</span></label>
-              <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Sam Rivera" autoFocus />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium" style={{ color: TEXT }}>Service category</label>
-                <Select value={serviceCategory} onValueChange={(v) => setServiceCategory(v as ServiceCategory)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="disability">Disability</SelectItem>
-                    <SelectItem value="aged_care">Aged Care</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium" style={{ color: TEXT }}>Date of birth <span aria-hidden="true" style={{ color: DANGER }}>*</span></label>
-                <Input
-                  type="date"
-                  value={dob}
-                  onChange={(e) => setDob(e.target.value)}
-                  aria-invalid={agedCareBlocked}
-                  className={agedCareBlocked ? "border-red-400 focus-visible:ring-red-400" : undefined}
+      <Sheet open={newIntakeOpen} onOpenChange={(next) => { if (!creatingIntake) setNewIntakeOpen(next); }}>
+        <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+          <SheetTitle className="sr-only">New referral</SheetTitle>
+          <SheetDescription className="sr-only">Log a new enquiry to start onboarding.</SheetDescription>
+          <PanelHeader
+            icon={HeartHandshake}
+            title="New referral"
+            description="Log someone who has asked about your services. They start in the Enquiry column and you take it from there."
+          />
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3" style={{ borderColor: BORDER, background: SOFT }}>
+            <p className="text-sm" style={{ color: MUTED }}>Would they rather fill it in themselves?</p>
+            <button
+              type="button"
+              onClick={copyReferralLink}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold underline-offset-4 hover:underline"
+              style={{ color: "var(--cc-brand-purple)" }}
+            >
+              <Link2 size={15} /> Copy referral link
+            </button>
+          </div>
+
+          <form
+            id="new-referral-form"
+            noValidate
+            className="mt-6 flex-1 space-y-7"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setTouched({ fullName: true, dob: true, ndisNumber: true, email: true, phone: true });
+              if (!referralBlocked) void createIntake();
+            }}
+          >
+            <ReferralSection title="What support are they after?">
+              <div role="radiogroup" aria-label="Service category" className="grid gap-2 sm:grid-cols-2">
+                <ChoiceCard
+                  selected={serviceCategory === "disability"}
+                  onSelect={() => setServiceCategory("disability")}
+                  icon={Accessibility}
+                  title="Disability"
+                  description="NDIS participant"
+                />
+                <ChoiceCard
+                  selected={serviceCategory === "aged_care"}
+                  onSelect={() => setServiceCategory("aged_care")}
+                  icon={HeartPulse}
+                  title="Aged Care"
+                  description="Aged 65 and over"
                 />
               </div>
-            </div>
-            {serviceCategory === "aged_care" && (
-              <p className="text-[11px] font-medium" style={{ color: agedCareBlocked ? DANGER : MUTED }}>
-                {agedCareBlocked
-                  ? `Aged Care is only available to participants aged 65 and over${dobAge !== null ? `. This person is ${dobAge}.` : "."}`
-                  : "Aged Care is only available to participants aged 65 and over, so the date of birth confirms eligibility."}
-              </p>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium" style={{ color: TEXT }}>NDIS number <span aria-hidden="true" style={{ color: DANGER }}>*</span></label>
-                <Input value={ndisNumber} onChange={(e) => setNdisNumber(e.target.value)} placeholder="e.g. 430123456" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium" style={{ color: TEXT }}>Funding type</label>
-                <Select value={fundingType} onValueChange={(v) => setFundingType(v as FundingType)}>
-                  <SelectTrigger><SelectValue placeholder="Select funding type" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ndia_managed">NDIA-managed</SelectItem>
-                    <SelectItem value="plan_managed">Plan-managed</SelectItem>
-                    <SelectItem value="self_managed">Self-managed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium" style={{ color: TEXT }}>Email <span aria-hidden="true" style={{ color: DANGER }}>*</span></label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="family@example.com"
-                aria-invalid={email.length > 0 && !isValidEmail(email)}
-                className={email.length > 0 && !isValidEmail(email) ? "border-red-400 focus-visible:ring-red-400" : undefined}
-              />
-              {email.length > 0 && !isValidEmail(email) && (
-                <p className="text-[11px] font-medium" style={{ color: DANGER }}>Enter a valid email address (e.g. name@example.com).</p>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium" style={{ color: TEXT }}>Phone <span className="font-normal" style={{ color: MUTED }}>(optional)</span></label>
-                <Input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="0412 345 678"
-                  aria-invalid={phone.length > 0 && !isValidPhone(phone)}
-                  className={phone.length > 0 && !isValidPhone(phone) ? "border-red-400 focus-visible:ring-red-400" : undefined}
+            </ReferralSection>
+
+            <ReferralSection title="About them">
+              <PanelField label="Full name" htmlFor="referral-name" required hint={touched.fullName && !fullName.trim() ? <FieldError>Enter their name.</FieldError> : undefined}>
+                <input
+                  id="referral-name"
+                  autoFocus
+                  autoComplete="off"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  onBlur={() => touch("fullName")}
+                  placeholder="e.g. Sam Rivera"
+                  aria-invalid={touched.fullName && !fullName.trim()}
+                  className={inputClass}
+                  style={{ borderColor: touched.fullName && !fullName.trim() ? DANGER : BORDER, color: TEXT }}
                 />
-                {phone.length > 0 && !isValidPhone(phone) && (
-                  <p className="text-[11px] font-medium" style={{ color: DANGER }}>Enter a valid phone number.</p>
+              </PanelField>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <PanelField
+                  label="Date of birth"
+                  htmlFor="referral-dob"
+                  required
+                  hint={
+                    dobInFuture ? <FieldError>That date is in the future.</FieldError>
+                    : agedCareBlocked ? <FieldError>Aged Care starts at 65. They are {dobAge}.</FieldError>
+                    : dobAge !== null ? `Age ${dobAge}`
+                    : touched.dob ? <FieldError>Enter their date of birth.</FieldError>
+                    : serviceCategory === "aged_care" ? "Confirms they are 65 or over." : undefined
+                  }
+                >
+                  <input
+                    id="referral-dob"
+                    type="date"
+                    max={new Date().toISOString().slice(0, 10)}
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                    onBlur={() => touch("dob")}
+                    aria-invalid={agedCareBlocked || dobInFuture || (touched.dob && !dob)}
+                    className={inputClass}
+                    style={{ borderColor: agedCareBlocked || dobInFuture || (touched.dob && !dob) ? DANGER : BORDER, color: TEXT }}
+                  />
+                </PanelField>
+                {isNdis && (
+                  <PanelField
+                    label="NDIS number"
+                    htmlFor="referral-ndis"
+                    required
+                    hint={touched.ndisNumber && !ndisNumber.trim() ? <FieldError>Enter their NDIS number.</FieldError> : "On their NDIS plan."}
+                  >
+                    <input
+                      id="referral-ndis"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={ndisNumber}
+                      onChange={(e) => setNdisNumber(e.target.value)}
+                      onBlur={() => touch("ndisNumber")}
+                      placeholder="e.g. 430123456"
+                      aria-invalid={touched.ndisNumber && !ndisNumber.trim()}
+                      className={inputClass}
+                      style={{ borderColor: touched.ndisNumber && !ndisNumber.trim() ? DANGER : BORDER, color: TEXT }}
+                    />
+                  </PanelField>
                 )}
               </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium" style={{ color: TEXT }}>How did they reach you?</label>
-                <Select value={source} onValueChange={(v) => setSource(v as EnquirySource)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="online_form">Web referral</SelectItem>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="phone_call">Phone call</SelectItem>
-                    <SelectItem value="coordinator_referral">Support coordinator referral</SelectItem>
-                  </SelectContent>
-                </Select>
+              {isNdis && (
+                <div className="space-y-1.5">
+                  <p className="flex items-baseline gap-2 text-sm font-medium" style={{ color: TEXT }}>
+                    How is their plan managed?
+                    <span className="text-xs font-normal" style={{ color: MUTED }}>Optional</span>
+                  </p>
+                  <div role="radiogroup" aria-label="Funding type" className="flex flex-wrap gap-2">
+                    {(Object.keys(FUNDING_TYPE_LABEL) as FundingType[]).map((type) => (
+                      <PillChoice key={type} selected={fundingType === type} onSelect={() => setFundingType(fundingType === type ? "" : type)}>
+                        {FUNDING_TYPE_LABEL[type]}
+                      </PillChoice>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </ReferralSection>
+
+            <ReferralSection title="How to reach them">
+              <PanelField
+                label="Email"
+                htmlFor="referral-email"
+                required
+                hint={
+                  touched.email && emailInvalid ? <FieldError>Check the email, e.g. name@example.com.</FieldError>
+                  : touched.email && !email.trim() ? <FieldError>Enter an email so you can send forms to sign.</FieldError>
+                  : "Where intake forms and the service agreement go."
+                }
+              >
+                <input
+                  id="referral-email"
+                  type="email"
+                  autoComplete="off"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => touch("email")}
+                  placeholder="family@example.com"
+                  aria-invalid={touched.email && !isValidEmail(email)}
+                  className={inputClass}
+                  style={{ borderColor: touched.email && !isValidEmail(email) ? DANGER : BORDER, color: TEXT }}
+                />
+              </PanelField>
+              <PanelField label="Phone" htmlFor="referral-phone" optional hint={touched.phone && phoneInvalid ? <FieldError>Check the phone number.</FieldError> : undefined}>
+                <input
+                  id="referral-phone"
+                  type="tel"
+                  autoComplete="off"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  onBlur={() => touch("phone")}
+                  placeholder="0412 345 678"
+                  aria-invalid={touched.phone && phoneInvalid}
+                  className={inputClass}
+                  style={{ borderColor: touched.phone && phoneInvalid ? DANGER : BORDER, color: TEXT }}
+                />
+              </PanelField>
+            </ReferralSection>
+
+            <ReferralSection title="How did they get in touch?">
+              <div role="radiogroup" aria-label="Enquiry source" className="flex flex-wrap gap-2">
+                {(["phone_call", "email", "coordinator_referral", "online_form"] as EnquirySource[]).map((value) => {
+                  const meta = sourceMeta(value);
+                  const Icon = meta.icon;
+                  return (
+                    <PillChoice key={value} selected={source === value} onSelect={() => setSource(value)}>
+                      <Icon size={14} /> {meta.label}
+                    </PillChoice>
+                  );
+                })}
               </div>
-            </div>
-          </div>
-          {referralMissing.length > 0 && (
-            <p className="pb-2 text-xs" style={{ color: MUTED }}>Still needed: {referralMissing.join(", ")}.</p>
-          )}
-          <SheetFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" className="rounded-full" onClick={() => setNewIntakeOpen(false)}>Cancel</Button>
-            <Button
-              variant="navy"
-              className="rounded-full"
-              onClick={createIntake}
-              disabled={creatingIntake || referralMissing.length > 0 || (phone.trim().length > 0 && !isValidPhone(phone)) || agedCareBlocked}
-            >
-              {creatingIntake ? <Loader2 size={14} className="animate-spin" /> : "Log enquiry"}
-            </Button>
-          </SheetFooter>
+            </ReferralSection>
+          </form>
+
+          <PanelFooter>
+            <p className="min-w-0 flex-1 basis-full text-xs leading-5 sm:basis-40" style={{ color: referralBlocked ? MUTED : "var(--cc-green)" }} aria-live="polite">
+              {referralMissing.length ? `Still needed: ${referralMissing.join(", ")}`
+                : agedCareBlocked ? "Aged Care is for people 65 and over."
+                : dobInFuture ? "Check the date of birth."
+                : phoneInvalid ? "Check the phone number."
+                : "Ready to log"}
+            </p>
+            <SecondaryButton onClick={() => setNewIntakeOpen(false)} disabled={creatingIntake}>Cancel</SecondaryButton>
+            <PrimaryButton type="submit" form="new-referral-form" busy={creatingIntake} disabled={referralBlocked}>
+              Log enquiry
+            </PrimaryButton>
+          </PanelFooter>
         </SheetContent>
       </Sheet>
     </>

@@ -56,18 +56,29 @@ export function Field({
   hint,
   htmlFor,
   optional,
+  required,
   children,
 }: {
   label: string;
   hint?: ReactNode;
   htmlFor?: string;
   optional?: boolean;
+  /** Marks the field as needed before the form can be sent. */
+  required?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
       <label htmlFor={htmlFor} className="flex items-baseline gap-2 text-sm font-medium" style={{ color: TEXT }}>
-        {label}
+        <span>
+          {label}
+          {required && (
+            <>
+              <span aria-hidden="true" style={{ color: "var(--cc-danger-text)" }}> *</span>
+              <span className="sr-only"> (required)</span>
+            </>
+          )}
+        </span>
         {optional && <span className="text-xs font-normal" style={{ color: MUTED }}>Optional</span>}
       </label>
       {children}
@@ -204,11 +215,14 @@ export function SecondaryButton({
   );
 }
 
-/** Footer for a side panel: stays at the bottom while the body scrolls. */
+/**
+ * Footer for a side panel: stays at the bottom while the body scrolls. The
+ * negative offsets cancel the panel padding so nothing shows beneath it.
+ */
 export function PanelFooter({ children }: { children: ReactNode }) {
   return (
     <div
-      className="sticky bottom-0 -mx-6 mt-6 flex flex-wrap items-center justify-end gap-2 border-t bg-cc-surface px-6 py-4"
+      className="sticky -bottom-6 -mx-6 -mb-6 mt-6 flex flex-wrap items-center justify-end gap-2 border-t bg-cc-surface px-6 py-4"
       style={{ borderColor: BORDER }}
     >
       {children}
