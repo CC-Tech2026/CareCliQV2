@@ -136,7 +136,7 @@ export function PricingStep({ recommendedTier }: Props) {
         Documentation that holds up when it's checked.
       </h1>
       <p className="mt-2 max-w-md text-[13px] leading-snug" style={{ color: QUIET_INK }}>
-        The first month is free. After that, pick the plan sized to your team. Every plan runs
+        The first month is free. After that, pick the plan sized to your team. Prices exclude GST. Every plan runs
         the same platform, so there's nothing to upgrade into later.
       </p>
 
@@ -225,7 +225,7 @@ export function PricingStep({ recommendedTier }: Props) {
                 >
                   ${price}
                 </span>
-                <span className="text-[13px] font-semibold" style={{ color: QUIET_INK }}>/ month</span>
+                <span className="text-[13px] font-semibold" style={{ color: QUIET_INK }}>/ month + GST</span>
                 {perPerson && (
                   <span className="text-[10.5px] font-semibold" style={{ color: QUIET_INK }}>&nbsp;· {perPerson}</span>
                 )}
