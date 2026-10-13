@@ -319,7 +319,7 @@ export default function Signup() {
     let cancelled = false;
     setInviteLoading(true);
     setInviteError(null);
-    fetch(`/api/invitations/validate/${encodeURIComponent(urlInviteToken)}`)
+    apiFetch(`/api/invitations/validate/${encodeURIComponent(urlInviteToken)}`)
       .then(async (r) => {
         if (!r.ok) {
           const body = await r.json().catch(() => ({}));
@@ -369,7 +369,7 @@ export default function Signup() {
     setCodeBusy(true);
     setEmailCodeError(null);
     try {
-      const res = await fetch(`/api/invitations/${encodeURIComponent(invite.token)}/send-code`, { method: "POST" });
+      const res = await apiFetch(`/api/invitations/${encodeURIComponent(invite.token)}/send-code`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || t("auth.invite.codeSendFailed"));
       setCodeSent(true);
@@ -392,7 +392,7 @@ export default function Signup() {
     setCodeBusy(true);
     setEmailCodeError(null);
     try {
-      const res = await fetch(`/api/invitations/${encodeURIComponent(invite.token)}/verify-code`, {
+      const res = await apiFetch(`/api/invitations/${encodeURIComponent(invite.token)}/verify-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: emailCode }),
