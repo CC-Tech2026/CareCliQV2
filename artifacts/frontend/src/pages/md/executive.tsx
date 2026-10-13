@@ -379,8 +379,9 @@ export default function MDExecutivePage() {
           <Section
             title="Documentation compliance over time"
             description="Weekly average score of shift notes. Bars show how many shifts each week is based on."
+            className="flex flex-col"
           >
-            <Surface className="p-5">
+            <Surface className="flex-1 p-5">
               {trendQuery.isError ? (
                 <div role="status" className="py-10 text-center">
                   <p className="text-base font-semibold" style={{ color: TEXT }}>Compliance trend unavailable</p>
@@ -426,7 +427,7 @@ export default function MDExecutivePage() {
                           y={target}
                           stroke={toneColor("warning")}
                           strokeDasharray="4 3"
-                          label={{ value: `Target ${target}%`, position: "insideTopRight", fontSize: 11, fill: toneColor("warning") }}
+                          label={{ value: `Target ${target}%`, position: "insideBottomLeft", fontSize: 11, fill: toneColor("warning") }}
                         />
                         <Line
                           yAxisId="score"
@@ -451,25 +452,30 @@ export default function MDExecutivePage() {
             </Surface>
           </Section>
 
-          <Section title="Where the shift notes stand" description={`${allNotes} shift notes in the current review window.`}>
-            <Surface className="p-5">
+          <Section title="Where the shift notes stand" description={`${allNotes} shift notes in the current review window.`} className="flex flex-col">
+            <Surface className="flex flex-1 flex-col p-5">
               <div className="flex h-2.5 overflow-hidden rounded-full" style={{ background: SOFT }} aria-hidden="true">
                 {parts.map((p) => (
                   <div key={p.key} style={{ width: `${allNotes ? (p.value / allNotes) * 100 : 0}%`, background: toneColor(p.tone) }} />
                 ))}
               </div>
-              <ul className="mt-4 divide-y" style={{ borderColor: BORDER }}>
+              <ul className="mt-5 flex-1 divide-y" style={{ borderColor: BORDER }}>
                 {[...parts, { key: "not_scored", label: "Not scored yet", value: notScored, tone: "neutral" as Tone }].map((p) => (
-                  <li key={p.key} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <li key={p.key} className="flex items-center justify-between gap-3 py-3.5 text-sm">
                     <span className="flex items-center gap-2" style={{ color: TEXT }}>
                       <span className="h-2 w-2 rounded-full" style={{ background: p.tone === "neutral" ? BORDER : toneColor(p.tone) }} />
                       {p.label}
                     </span>
-                    <span className="font-semibold tabular-nums" style={{ color: TEXT }}>{p.value}</span>
+                    <span className="flex items-baseline gap-2">
+                      <span className="font-semibold tabular-nums" style={{ color: TEXT }}>{p.value}</span>
+                      <span className="w-10 text-right text-xs tabular-nums" style={{ color: MUTED }}>
+                        {allNotes ? `${Math.round((p.value / allNotes) * 100)}%` : "0%"}
+                      </span>
+                    </span>
                   </li>
                 ))}
               </ul>
-              <Link href="/md/compliance?view=shifts" className={`${outlineClass} mt-3 w-full`}>
+              <Link href="/md/compliance?view=shifts" className={`${outlineClass} mt-4 w-full`}>
                 Review shift notes
                 <ArrowRight size={15} />
               </Link>
@@ -479,17 +485,31 @@ export default function MDExecutivePage() {
 
         <Section title="Scorecard" description="Each measure against its target, with where to act on it.">
           <Surface>
+            <div
+              className="hidden grid-cols-[minmax(0,1fr)_110px_190px_190px] items-center gap-4 border-b px-5 py-2.5 text-xs font-medium md:grid"
+              style={{ borderColor: BORDER, color: MUTED }}
+              aria-hidden="true"
+            >
+              <span>Measure</span>
+              <span className="text-right">Now</span>
+              <span>Status</span>
+              <span className="text-right">Where to act</span>
+            </div>
             <RowList>
               {scorecard.map((row) => (
                 <li key={row.label}>
-                  <Link href={row.href} className={`${rowClass} flex-wrap`} aria-label={`${row.label}: ${row.value}. ${row.action}`}>
-                    <span className="min-w-0 flex-1 basis-56">
+                  <Link
+                    href={row.href}
+                    aria-label={`${row.label}: ${row.value}. ${row.action}`}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-4 transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum md:grid-cols-[minmax(0,1fr)_110px_190px_190px]"
+                  >
+                    <span className="min-w-0">
                       <span className="block text-sm font-semibold" style={{ color: TEXT }}>{row.label}</span>
                       <span className="block text-xs" style={{ color: MUTED }}>{row.target}</span>
                     </span>
-                    <span className="w-20 text-right text-lg font-semibold tabular-nums" style={{ color: toneColor(row.tone) }}>{row.value}</span>
-                    <span className="w-40 text-right"><StatusText tone={row.tone}>{row.status}</StatusText></span>
-                    <span className="hidden w-40 items-center justify-end gap-1 text-sm sm:flex" style={{ color: MUTED }}>
+                    <span className="text-right text-lg font-semibold tabular-nums" style={{ color: toneColor(row.tone) }}>{row.value}</span>
+                    <span className="col-span-2 md:col-span-1"><StatusText tone={row.tone}>{row.status}</StatusText></span>
+                    <span className="hidden items-center justify-end gap-1 text-sm md:flex" style={{ color: MUTED }}>
                       {row.action}
                       <ArrowRight size={14} />
                     </span>
@@ -503,7 +523,7 @@ export default function MDExecutivePage() {
         {workersBelow.length > 0 && (
           <Section
             title="Workers who need documentation support"
-            description={`Scoring under ${WORKER_THRESHOLD}% on their shift notes. Lowest first.`}
+            description={`Scoring under ${WORKER_THRESHOLD}% on their shift notes, lowest first. The mark on each bar is the ${WORKER_THRESHOLD}% threshold.`}
             action={<Link href="/md/staff" className={ghostClass}>Open staff <ArrowRight size={14} /></Link>}
           >
             <Surface>
@@ -524,7 +544,14 @@ export default function MDExecutivePage() {
                           {worker.sessions} scored {worker.sessions === 1 ? "shift" : "shifts"}
                         </span>
                       </span>
-                      <span className="text-sm font-semibold tabular-nums" style={{ color: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}>
+                      <span className="relative hidden h-2 w-48 shrink-0 overflow-hidden rounded-full sm:block" style={{ background: SOFT }} aria-hidden="true">
+                        <span
+                          className="absolute inset-y-0 left-0 rounded-full"
+                          style={{ width: `${Math.min(100, Math.max(2, worker.compliance_score))}%`, background: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}
+                        />
+                        <span className="absolute inset-y-0 w-0.5" style={{ left: `${WORKER_THRESHOLD}%`, background: TEXT, opacity: 0.35 }} />
+                      </span>
+                      <span className="w-12 text-right text-sm font-semibold tabular-nums" style={{ color: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}>
                         {Math.round(worker.compliance_score)}%
                       </span>
                       <ArrowRight size={14} style={{ color: MUTED }} />
