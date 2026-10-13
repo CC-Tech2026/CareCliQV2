@@ -960,6 +960,8 @@ async def update_incident(
     supabase = get_supabase_admin()
 
     payload = dict(updates)
+    # An instruction the API handles (raise to critical and alert), never a column.
+    payload.pop("escalate", None)
 
     existing = None
     try:

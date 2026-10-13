@@ -312,6 +312,12 @@ async def update_incident(
             detail="Incident reports cannot be edited. Add a correction note instead.",
         )
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    # Escalating raises the incident to critical and alerts the office team, the same as an
+    # escalated report at creation. "escalate" is an instruction, not a column: left in the
+    # update it failed the write and nothing changed.
+    escalate = bool(updates.pop("escalate", False))
+    if escalate:
+        updates["severity"] = "critical"
     if updates.get("status") in {"closed", "resolved", "reported"} or updates.get("ndis_reported_at"):
         require_recent_reauth(request, user)
     try:
@@ -362,8 +368,25 @@ async def update_incident(
                 reference_number=updated.get("reference_number"),
                 status_label=worker_status_label(str(updated.get("status") or "")),
             )
+    if escalate:
+        alert_org_id = str(user.get("organization_id") or updated.get("organization_id") or "")
+        if alert_org_id:
+            try:
+                await notify_incident_reported(
+                    org_id=alert_org_id,
+                    incident_id=incident_id,
+                    title=f"Incident escalated: {updated.get('title') or 'Incident'}",
+                    message=(updated.get("description") or "")[:500],
+                    severity="critical",
+                    participant_id=str(updated.get("participant_id")) if updated.get("participant_id") else None,
+                    escalate=True,
+                    reference_number=updated.get("reference_number"),
+                )
+            except Exception as exc:
+                # The escalation is saved; a failed alert must not undo it.
+                logger.warning("Escalation alert for incident %s failed: %s", incident_id, exc)
     await audit_service.log_action(
-        action_type="incident.updated",
+        action_type="incident.escalated" if escalate else "incident.updated",
         entity_type="incident",
         entity_id=incident_id,
         user_id=user.get("sub"),
