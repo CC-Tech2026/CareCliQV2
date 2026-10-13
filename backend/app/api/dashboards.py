@@ -782,8 +782,14 @@ async def _md_dashboard_payload(
         "org_alerts": org_alerts,
         "team_compliance_breakdown": {
             "compliant": sum(1 for s in sessions if _score_status(s.get("compliance_score")) == "compliant"),
-            "at_risk": sum(1 for s in sessions if _score_status(s.get("compliance_score")) == "at_risk"),
+            # A shift that hasn't been scored yet isn't "at risk"; counting it
+            # there made this read 15 at risk beside 10 in the shift notes.
+            "at_risk": sum(
+                1 for s in sessions
+                if s.get("compliance_score") is not None and _score_status(s.get("compliance_score")) == "at_risk"
+            ),
             "non_compliant": sum(1 for s in sessions if _score_status(s.get("compliance_score")) == "non_compliant"),
+            "not_scored": sum(1 for s in sessions if s.get("compliance_score") is None),
         },
         "worker_rankings": sorted(
             [

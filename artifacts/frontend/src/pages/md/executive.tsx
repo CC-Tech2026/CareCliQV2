@@ -1,20 +1,10 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { AlertTriangle, ArrowRight, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
 import {
-  AlertTriangle,
-  CheckCircle2,
-  CircleAlert,
-  ShieldCheck,
-  TrendingDown,
-  TrendingUp,
-  Users,
-  Activity,
-  Target,
-  RefreshCw,
-} from "lucide-react";
-import {
+  Bar,
   CartesianGrid,
+  ComposedChart,
   Line,
-  LineChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -23,7 +13,21 @@ import {
 } from "recharts";
 import { Link, useLocation } from "wouter";
 import { HubLayout } from "@/components/layout/HubLayout";
-import { PageHeader, ghostClass } from "@/components/layout/PageKit";
+import {
+  LoadError,
+  PageHeader,
+  RowList,
+  Section,
+  SkeletonBlocks,
+  StatusText,
+  SummaryStrip,
+  Surface,
+  ghostClass,
+  outlineClass,
+  rowClass,
+  toneColor,
+  type Tone,
+} from "@/components/layout/PageKit";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -39,16 +43,9 @@ const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
 const PLUM = "var(--cc-plum)";
 
-const GREEN = "#0F7B57";
-const AMBER = "#9A5B0A";
-const RED = "#B3261E";
-const BLUE = "#2A5C8A";
-
-const GREEN_SOFT = "#E9F5F0";
-const AMBER_SOFT = "#FBF2E6";
-const RED_SOFT = "#FBEAE9";
-const BLUE_SOFT = "#EAF1F7";
 const EMPTY_TREND: TrendPoint[] = [];
+/** Shift notes scoring at or above this count as on target (matches the server). */
+const WORKER_THRESHOLD = 85;
 
 interface MDData {
   timezone?: string;
@@ -62,38 +59,33 @@ interface MDData {
   compliance_target: number;
   incidents_this_month: number;
   goal_achievement_rate: number;
-
   workers_at_risk: Array<{
     id: string;
     full_name: string;
     compliance_score: number;
     sessions: number;
   }>;
-
   org_alerts: Array<{
     type: string;
     severity: string;
     message: string;
   }>;
-
   common_issues: Array<{
     issue: string;
     count: number;
   }>;
-
   team_compliance_breakdown: {
     compliant: number;
     at_risk: number;
     non_compliant: number;
+    not_scored?: number;
   };
-
   worker_rankings: Array<{
     id: string;
     full_name: string;
     compliance_score: number;
     sessions: number;
   }>;
-
   generated_at: string;
 }
 
@@ -105,230 +97,45 @@ interface TrendPoint {
 
 function formatDate(value?: string) {
   if (!value) return "";
-
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(date);
 }
 
 function formatTime(value?: string) {
   if (!value) return "";
-
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
 }
 
-function getHealthState(score: number, target: number) {
-  if (score >= target) {
-    return {
-      label: "Healthy",
-      color: GREEN,
-      soft: GREEN_SOFT,
-      icon: CheckCircle2,
-    };
-  }
-
-  if (score >= target * 0.9) {
-    return {
-      label: "Watch",
-      color: AMBER,
-      soft: AMBER_SOFT,
-      icon: CircleAlert,
-    };
-  }
-
-  return {
-    label: "Requires intervention",
-    color: RED,
-    soft: RED_SOFT,
-    icon: AlertTriangle,
-  };
+function percent(value: number) {
+  return `${Math.round(value * 10) / 10}%`;
 }
 
-function SectionEyebrow({
-  children,
-  right,
-}: {
-  children: React.ReactNode;
-  right?: React.ReactNode;
-}) {
+function scoreTone(score: number, target: number): Tone {
+  if (score >= target) return "good";
+  if (score >= target - 10) return "warning";
+  return "danger";
+}
+
+/** Average score across a run of weeks, weighted by how many shifts each week scored. */
+function weightedAverage(points: Array<{ score: number; sessions: number }>) {
+  const shifts = points.reduce((n, p) => n + p.sessions, 0);
+  if (!shifts) return null;
+  return { score: points.reduce((sum, p) => sum + p.score * p.sessions, 0) / shifts, shifts };
+}
+
+function TrendTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { label: string; score: number; sessions: number } }> }) {
+  if (!active || !payload?.length) return null;
+  const point = payload[0].payload;
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <span
-        className="text-sm font-semibold"
-        style={{ color: MUTED }}
-      >
-        {children}
-      </span>
-
-      {right}
-    </div>
-  );
-}
-
-function Signal({
-  label,
-  value,
-  detail,
-  color,
-  href,
-}: {
-  label: string;
-  value: string | number;
-  detail: string;
-  color: string;
-  /** Opens the page behind this number. */
-  href: string;
-}) {
-  return (
-    <Link
-      href={href}
-      aria-label={`${label}: ${value}`}
-      className="block min-w-0 rounded-lg p-1 -m-1 transition-colors hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
-    >
-      <div className="flex items-center gap-2">
-        <span
-          className="h-1.5 w-1.5 shrink-0 rounded-full"
-          style={{ background: color }}
-        />
-
-        <span
-          className="break-words text-xs font-medium"
-          style={{ color: MUTED }}
-        >
-          {label}
-        </span>
-      </div>
-
-      <p
-        className="mt-2 text-2xl font-semibold tracking-tight"
-        style={{ color: TEXT }}
-      >
-        {value}
+    <div className="rounded-xl border bg-cc-surface px-3 py-2 text-xs" style={{ borderColor: BORDER }}>
+      <p className="font-semibold" style={{ color: TEXT }}>Week {point.label}</p>
+      <p style={{ color: MUTED }}>
+        <span className="font-semibold tabular-nums" style={{ color: TEXT }}>{percent(point.score)}</span> average
+        across {point.sessions} scored {point.sessions === 1 ? "shift" : "shifts"}
       </p>
-
-      <p className="mt-1 text-xs font-medium" style={{ color: MUTED }}>
-        {detail}
-      </p>
-    </Link>
-  );
-}
-
-function GovernanceMetric({
-  icon: Icon,
-  label,
-  value,
-  detail,
-  status,
-  statusColor,
-}: {
-  icon: React.ComponentType<{
-    size?: number;
-    strokeWidth?: number;
-  }>;
-  label: string;
-  value: string;
-  detail: string;
-  status: string;
-  statusColor: string;
-}) {
-  return (
-    <div className="relative">
-      <div className="mb-4 flex items-center justify-between">
-        <div
-          className="flex h-8 w-8 items-center justify-center rounded-lg"
-          style={{
-            background: SOFT,
-            color: PLUM,
-          }}
-        >
-          <Icon size={14} strokeWidth={2.4} />
-        </div>
-
-        <span
-          className="text-xs font-semibold"
-          style={{ color: statusColor }}
-        >
-          {status}
-        </span>
-      </div>
-
-      <p
-        className="text-sm font-semibold"
-        style={{ color: MUTED }}
-      >
-        {label}
-      </p>
-
-      <p
-        className="mt-1.5 text-2xl font-semibold tracking-tight"
-        style={{ color: TEXT }}
-      >
-        {value}
-      </p>
-
-      <p className="mt-1 text-xs leading-4" style={{ color: MUTED }}>
-        {detail}
-      </p>
-    </div>
-  );
-}
-
-function LoadingState() {
-  return (
-    <div className="space-y-8">
-      <div className="space-y-3">
-        <div
-          className="h-2.5 w-28 animate-pulse rounded"
-          style={{ background: SOFT }}
-        />
-
-        <div
-          className="h-9 w-72 max-w-full animate-pulse rounded-lg"
-          style={{ background: SOFT }}
-        />
-
-        <div
-          className="h-3 w-96 max-w-full animate-pulse rounded"
-          style={{ background: SOFT }}
-        />
-      </div>
-
-      <div
-        className="h-[390px] animate-pulse rounded-2xl"
-        style={{ background: SOFT }}
-      />
-
-      <div
-        className="h-[340px] animate-pulse rounded-2xl"
-        style={{ background: SOFT }}
-      />
-
-      <div className="grid gap-5 lg:grid-cols-3">
-        {[1, 2, 3].map((item) => (
-          <div
-            key={item}
-            className="h-48 animate-pulse rounded-2xl"
-            style={{ background: SOFT }}
-          />
-        ))}
-      </div>
     </div>
   );
 }
@@ -363,816 +170,372 @@ export default function MDExecutivePage() {
   });
   const data = overviewQuery.data ?? null;
   const trend = trendQuery.data?.trend ?? EMPTY_TREND;
-  const loading = overviewQuery.isLoading;
-  const error = overviewQuery.isError;
-  const trendError = trendQuery.isError;
   const retry = () => {
     void overviewQuery.refetch();
     void trendQuery.refetch();
   };
 
-  const chartData = useMemo(() => {
-    return trend
-      .filter((item) => item.avg_score !== null)
-      .slice(-13)
-      .map((item) => ({
-        week: item.week.replace(/^\d{4}-/, ""),
-        score: item.avg_score,
-        sessions: item.session_count,
-      }));
-  }, [trend]);
+  const chartData = useMemo(
+    () =>
+      trend
+        .filter((item) => item.avg_score !== null)
+        .slice(-13)
+        .map((item) => ({
+          label: item.week.replace(/^\d{4}-W?/, ""),
+          score: Number(item.avg_score),
+          sessions: item.session_count,
+        })),
+    [trend],
+  );
 
-  const trendChange = useMemo(() => {
-    if (chartData.length < 2) return null;
-
-    const current = Number(chartData[chartData.length - 1].score ?? 0);
-    const previous = Number(chartData[chartData.length - 2].score ?? 0);
-
-    return Math.round((current - previous) * 10) / 10;
+  // Compare four-week blocks, weighted by shifts: a single shift scoring 0
+  // or 100 shouldn't read as the organisation falling or recovering.
+  const comparison = useMemo(() => {
+    const recent = weightedAverage(chartData.slice(-4));
+    const before = weightedAverage(chartData.slice(-8, -4));
+    if (!recent) return null;
+    return { recent, change: before ? recent.score - before.score : null };
   }, [chartData]);
+  const thinWeeks = chartData.filter((p) => p.sessions < 3).length;
 
-  const compliantPercentage = useMemo(() => {
-    if (!data) return 0;
-
-    const { compliant, at_risk, non_compliant } =
-      data.team_compliance_breakdown;
-
-    const total = compliant + at_risk + non_compliant;
-
-    if (!total) return 0;
-
-    return Math.round((compliant / total) * 100);
-  }, [data]);
-
-  if (loading) {
+  if (overviewQuery.isLoading) {
     return (
       <HubLayout>
-        <LoadingState />
-      </HubLayout>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <HubLayout>
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <div role="alert" className="max-w-sm text-center">
-            <div
-              className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl"
-              style={{
-                background: RED_SOFT,
-                color: RED,
-              }}
-            >
-              <AlertTriangle size={20} strokeWidth={2.5} />
-            </div>
-
-            <h2
-              className="mt-4 text-base font-semibold"
-              style={{ color: TEXT }}
-            >
-              {translate("md.executive.loadFailed")}
-            </h2>
-
-            <p className="mt-1 text-sm leading-5" style={{ color: MUTED }}>
-              We couldn't load the executive overview.
-            </p>
-
-            <button
-              type="button"
-              onClick={retry}
-              className="mt-5 rounded-xl px-4 py-2 text-xs font-semibold text-white"
-              style={{ background: PLUM }}
-            >
-              Try again
-            </button>
-          </div>
+        <div className="space-y-8 pb-12">
+          <div className="h-24 w-2/3 animate-pulse rounded-2xl bg-cc-surface" />
+          <SkeletonBlocks count={3} height="h-56" />
         </div>
       </HubLayout>
     );
   }
 
-  const health = getHealthState(data.compliance_score, data.compliance_target);
+  if (overviewQuery.isError || !data) {
+    return (
+      <HubLayout>
+        <div className="space-y-8 pb-12">
+          <PageHeader eyebrow="Governance & Strategy" title="Performance review" />
+          <LoadError onRetry={retry}>
+            <AlertTriangle size={16} style={{ color: toneColor("danger") }} />
+            <span>
+              <span className="font-semibold">{translate("md.executive.loadFailed")}.</span>{" "}
+              <span style={{ color: MUTED }}>We couldn't load the executive overview.</span>
+            </span>
+          </LoadError>
+        </div>
+      </HubLayout>
+    );
+  }
 
-  const HealthIcon = health.icon;
+  const target = data.compliance_target;
+  const gap = Math.max(0, target - data.compliance_score);
+  const complianceTone = scoreTone(data.compliance_score, target);
+  const breakdown = data.team_compliance_breakdown;
+  const notScored = breakdown.not_scored ?? 0;
+  const scoredTotal = breakdown.compliant + breakdown.at_risk + breakdown.non_compliant;
+  const allNotes = scoredTotal + notScored;
+  const parts = [
+    { key: "compliant", label: "Compliant", value: breakdown.compliant, tone: "good" as Tone },
+    { key: "at_risk", label: "At risk", value: breakdown.at_risk, tone: "warning" as Tone },
+    { key: "non_compliant", label: "Non-compliant", value: breakdown.non_compliant, tone: "danger" as Tone },
+  ];
+  const goalTone: Tone = data.goal_achievement_rate >= 50 ? "good" : data.goal_achievement_rate >= 25 ? "warning" : "danger";
+  const workersBelow = [...data.workers_at_risk].sort((a, b) => a.compliance_score - b.compliance_score);
+
+  const scorecard: Array<{ label: string; value: string; target: string; tone: Tone; status: string; href: string; action: string }> = [
+    {
+      label: "Documentation compliance",
+      value: percent(data.compliance_score),
+      target: `${target}% target`,
+      tone: complianceTone,
+      status: data.compliance_score >= target ? "On target" : `${Math.round(gap)} pts below target`,
+      href: "/md/compliance?view=shifts",
+      action: "Review shift notes",
+    },
+    {
+      label: "Workers below the documentation threshold",
+      value: String(workersBelow.length),
+      target: `scoring under ${WORKER_THRESHOLD}%`,
+      tone: workersBelow.length ? "warning" : "good",
+      status: workersBelow.length ? "Support needed" : "Everyone on target",
+      href: "/md/staff",
+      action: "Open staff",
+    },
+    {
+      label: "Participant goal achievement",
+      value: percent(data.goal_achievement_rate),
+      target: "of active goals achieved",
+      tone: goalTone,
+      status: data.goal_achievement_rate >= 50 ? "Progressing" : "Few goals achieved",
+      href: "/onboard-participant/active",
+      action: "View participants",
+    },
+    {
+      label: "Staff retention",
+      value: percent(data.staff_retention_rate),
+      target: `${data.active_staff} active staff`,
+      tone: data.staff_retention_rate >= 85 ? "good" : data.staff_retention_rate >= 70 ? "warning" : "danger",
+      status: data.staff_retention_rate >= 85 ? "Stable" : "Watch turnover",
+      href: "/md/staff",
+      action: "Staff directory",
+    },
+    {
+      label: "Incidents this month",
+      value: String(data.incidents_this_month),
+      target: "recorded since the 1st",
+      tone: data.incidents_this_month ? "warning" : "good",
+      status: data.incidents_this_month ? "Follow up" : "None recorded",
+      href: "/incidents",
+      action: "Incident register",
+    },
+  ];
 
   return (
     <HubLayout>
       <div className="min-w-0 space-y-8 pb-12">
-        {/* ============================================================
-            HEADER
-        ============================================================ */}
         <PageHeader
           eyebrow={`Governance & Strategy · ${formatDate(data.generated_at)}`}
           title={
             <span className="inline-flex items-center gap-2">
               {data.branch ? `${data.branch.name}: performance review` : "Performance review"}
-              <SectionInfo text="Compare performance against targets and review trends across service delivery, workforce and quality." />
+              <SectionInfo text="How the organisation is tracking against its targets over time. Today's to-do list lives on the Executive Hub." />
             </span>
           }
           description={
             <>
-              Review trends, compare results with targets and identify where leadership attention is needed. Use the Document vault for detailed records and exports.
-              <span className="mt-1 block text-xs">Last updated {formatTime(data.generated_at)}</span>
+              How the organisation is tracking against its targets, and which way it's heading.
+              <span className="mt-1 block text-xs">Updated {formatTime(data.generated_at)}</span>
             </>
           }
           actions={
-            <button type="button" onClick={retry} className={ghostClass}>
-              <RefreshCw size={15} />
-              Refresh performance
-            </button>
+            <>
+              <GovernanceTriage
+                variant="floating"
+                onNavigate={navigate}
+                workersAtRisk={data.workers_at_risk}
+                viewAllHref="/hub"
+                viewAllLabel="Executive Hub"
+              />
+              <button type="button" onClick={retry} className={ghostClass}>
+                <RefreshCw size={15} />
+                Refresh
+              </button>
+            </>
           }
         />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <nav aria-label="Management shortcuts" className="-ml-4 flex flex-wrap gap-1">
-            {[
-              ["Daily priorities", "/hub"],
-              ["Staff directory", "/md/staff"],
-              ["Document vault", "/md/vault"],
-              ["NDIS invoices", "/md/financial"],
-              ["Settings", "/settings"],
-            ].map(([label, href]) => (
-              <Link key={href} href={href} className={ghostClass}>
-                {label}
-              </Link>
-            ))}
-          </nav>
-          {multiBranch && (
-            <label className="flex flex-wrap items-center gap-2 text-sm" style={{ color: MUTED }}>
-              <span className="sr-only">Branch</span>
-              <select
-                value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                className="min-h-10 rounded-full border border-cc-border bg-cc-surface px-4 text-sm"
-                style={{ color: TEXT }}
-                aria-label="Filter by branch"
-              >
-                <option value="">All branches</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} ({zoneAbbreviation(new Date(), b.timezone)})
-                  </option>
-                ))}
-              </select>
-              {data.timezone && <span>Times in {zoneAbbreviation(new Date(), data.timezone)}</span>}
-            </label>
-          )}
-        </div>
 
-        {/* ============================================================
-            NEEDS ACTION / EXPOSURE — the triage list
-        ============================================================ */}
-        <GovernanceTriage
-          onNavigate={navigate}
-          workersAtRisk={data.workers_at_risk}
-        />
-
-        {/* ============================================================
-            HOW WE'RE TRACKING — demoted below the triage list
-        ============================================================ */}
-        <div className="mt-10 mb-5 flex items-center gap-2">
-          <span
-            className="text-sm font-semibold"
-            style={{ color: MUTED }}
-          >
-            How we're tracking
-          </span>
-          <span className="h-px flex-1" style={{ background: BORDER }} />
-        </div>
-
-        <div className="grid min-w-0 gap-5 xl:grid-cols-2">
-          <section
-            className="overflow-hidden rounded-2xl bg-cc-surface"
-            style={{ borderColor: BORDER }}
-          >
-            <div>
-              {/* Organisation health */}
-              <div className="relative p-4 sm:p-6">
-                <div className="relative">
-                  <SectionEyebrow
-                    right={
-                      <div
-                        className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5"
-                        style={{
-                          color: health.color,
-                          background: health.soft,
-                        }}
-                      >
-                        <HealthIcon size={11} strokeWidth={2.7} />
-
-                        <span className="text-xs font-semibold">
-                          {health.label}
-                        </span>
-                      </div>
-                    }
-                  >
-                    Organisation health
-                  </SectionEyebrow>
-
-                  <div className="mt-4 flex flex-wrap items-end gap-x-5 gap-y-3">
-                    <span
-                      className="text-5xl font-semibold leading-none tracking-tight sm:text-6xl"
-                      style={{ color: TEXT }}
-                    >
-                      {data.compliance_score}%
-                    </span>
-
-                    <div className="mb-1">
-                      <div className="flex items-center gap-1.5">
-                        {trendChange !== null && (
-                          <>
-                            {trendChange >= 0 ? (
-                              <TrendingUp
-                                size={14}
-                                strokeWidth={2.8}
-                                style={{ color: GREEN }}
-                              />
-                            ) : (
-                              <TrendingDown
-                                size={14}
-                                strokeWidth={2.8}
-                                style={{ color: RED }}
-                              />
-                            )}
-
-                            <span
-                              className="text-sm font-semibold"
-                              style={{
-                                color: trendChange >= 0 ? GREEN : RED,
-                              }}
-                            >
-                              {trendChange >= 0 ? "+" : ""}
-                              {trendChange} pts
-                            </span>
-                          </>
-                        )}
-                      </div>
-
-                      <p
-                        className="mt-1 text-xs font-medium"
-                        style={{ color: MUTED }}
-                      >
-                        {trendChange !== null
-                          ? "versus previous period"
-                          : "No previous period available"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <p
-                    className="mt-6 max-w-md text-sm leading-5"
-                    style={{ color: MUTED }}
-                  >
-                    Organisation-wide compliance is currently{" "}
-                    <strong style={{ color: TEXT }}>
-                      {data.compliance_score >= data.compliance_target
-                        ? "above"
-                        : "below"}
-                    </strong>{" "}
-                    the {data.compliance_target}% governance target.
-                  </p>
-
-                  {/* Signal strip */}
-                  <div
-                    className="mt-5 grid grid-cols-3 gap-3 border-t pt-4"
-                    style={{ borderColor: BORDER }}
-                  >
-                    <Signal
-                      label="Compliance"
-                      value={`${data.compliance_score}%`}
-                      detail={`Target ${data.compliance_target}%`}
-                      color={health.color}
-                      href="/md/compliance"
-                    />
-
-                    <Signal
-                      label="Goals"
-                      value={`${data.goal_achievement_rate}%`}
-                      detail="Achievement rate"
-                      color={data.goal_achievement_rate >= 85 ? GREEN : AMBER}
-                      href="/md/service-delivery"
-                    />
-
-                    <Signal
-                      label="Retention"
-                      value={`${data.staff_retention_rate}%`}
-                      detail="Staff retention"
-                      color={data.staff_retention_rate >= 90 ? GREEN : AMBER}
-                      href="/md/staff"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* ============================================================
-            TREND
-        ============================================================ */}
-          <section className="min-w-0">
-            <div
-              className="h-full overflow-hidden rounded-2xl bg-cc-surface"
-              style={{ borderColor: BORDER }}
+        {multiBranch && (
+          <label className="flex flex-wrap items-center gap-2 text-sm" style={{ color: MUTED }}>
+            <span className="sr-only">Branch</span>
+            <select
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+              className="min-h-10 rounded-full border border-cc-border bg-cc-surface px-4 text-sm"
+              style={{ color: TEXT }}
+              aria-label="Filter by branch"
             >
-              <div className="flex flex-wrap items-end justify-between gap-5 px-6 pt-7 sm:px-8">
-                <div>
-                  <h2
-                    className="text-xl font-semibold tracking-tight"
-                    style={{ color: TEXT }}
-                  >
-                    Compliance trend
-                  </h2>
-
-                  <p
-                    className="mt-1 max-w-xl text-xs leading-5"
-                    style={{ color: MUTED }}
-                  >
-                    Weekly compliance averages provide a high-level indication
-                    of organisational performance over time.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-5">
-                  <div>
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: MUTED }}
-                    >
-                      Current
-                    </p>
-
-                    <p
-                      className="mt-1 text-lg font-semibold"
-                      style={{ color: TEXT }}
-                    >
-                      {data.compliance_score}%
-                    </p>
-                  </div>
-
-                  <div className="h-8 w-px" style={{ background: BORDER }} />
-
-                  <div>
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: MUTED }}
-                    >
-                      Target
-                    </p>
-
-                    <p
-                      className="mt-1 text-lg font-semibold"
-                      style={{ color: AMBER }}
-                    >
-                      {data.compliance_target}%
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {chartData.length > 1 ? (
-                <div className="mt-5 h-[350px] w-full px-2 pb-4 sm:px-5">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={chartData}
-                      margin={{
-                        top: 20,
-                        right: 25,
-                        bottom: 5,
-                        left: -15,
-                      }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="2 5"
-                        stroke={BORDER}
-                        vertical={false}
-                      />
-
-                      <XAxis
-                        dataKey="week"
-                        tick={{
-                          fontSize: 9,
-                          fill: MUTED,
-                        }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-
-                      <YAxis
-                        domain={[50, 100]}
-                        tick={{
-                          fontSize: 9,
-                          fill: MUTED,
-                        }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-
-                      <ReferenceLine
-                        y={data.compliance_target}
-                        stroke={AMBER}
-                        strokeDasharray="6 5"
-                        label={{
-                          value: `TARGET ${data.compliance_target}%`,
-                          position: "insideTopRight",
-                          fontSize: 8,
-                          fontWeight: 800,
-                          fill: AMBER,
-                        }}
-                      />
-
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: 12,
-                          border: `1px solid ${BORDER}`,
-                          boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
-                          fontSize: 10,
-                        }}
-                        labelStyle={{
-                          color: TEXT,
-                          fontWeight: 800,
-                        }}
-                        formatter={(value: number) => [
-                          `${value}%`,
-                          "Compliance",
-                        ]}
-                      />
-
-                      <Line
-                        type="monotone"
-                        dataKey="score"
-                        stroke={PLUM}
-                        strokeWidth={3}
-                        dot={false}
-                        activeDot={{
-                          r: 5,
-                          fill: PLUM,
-                        }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <div
-                  className="mx-6 my-6 flex min-h-40 items-center justify-center rounded-2xl sm:mx-8"
-                  style={{ background: SOFT }}
-                >
-                  <div className="text-center">
-                    <Activity
-                      size={20}
-                      className="mx-auto"
-                      style={{ color: MUTED }}
-                    />
-
-                    <p
-                      className="mt-3 text-sm font-semibold"
-                      style={{ color: TEXT }}
-                    >
-                      {trendError
-                        ? "Compliance trend unavailable"
-                        : "Building your performance trend"}
-                    </p>
-
-                    <p className="mt-1 text-xs" style={{ color: MUTED }}>
-                      {trendError
-                        ? "Refresh the overview to try again. The other figures remain available."
-                        : "More completed sessions will provide historical trend data."}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
-        </div>
-
-        {/* ============================================================
-            GOVERNANCE SIGNALS
-        ============================================================ */}
-        <section className="mt-8">
-          <SectionEyebrow>Executive signals</SectionEyebrow>
-
-          <div
-            className="grid overflow-hidden rounded-2xl bg-cc-surface lg:grid-cols-3"
-            style={{ borderColor: BORDER }}
-          >
-            {/* Workforce */}
-            <div
-              className="p-6 sm:p-7 lg:border-r"
-              style={{ borderColor: BORDER }}
-            >
-              <GovernanceMetric
-                icon={Users}
-                label="Workforce"
-                value={String(data.active_staff)}
-                detail={`${data.support_workers} support workers · ${data.staff_retention_rate}% retention`}
-                status={
-                  data.workers_at_risk.length === 0
-                    ? "Stable"
-                    : `${data.workers_at_risk.length} at risk`
-                }
-                statusColor={data.workers_at_risk.length === 0 ? GREEN : AMBER}
-              />
-
-              <div className="mt-6">
-                <div
-                  className="h-1.5 overflow-hidden rounded-full"
-                  style={{ background: SOFT }}
-                >
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${Math.min(data.staff_retention_rate, 100)}%`,
-                      background:
-                        data.staff_retention_rate >= 90 ? GREEN : AMBER,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Service delivery */}
-            <div
-              className="border-t p-6 sm:p-7 lg:border-r lg:border-t-0"
-              style={{ borderColor: BORDER }}
-            >
-              <GovernanceMetric
-                icon={Activity}
-                label="Service delivery"
-                value={String(data.sessions_this_week)}
-                detail={`${data.active_participants} active participants receiving support`}
-                status={`${data.goal_achievement_rate}% goals`}
-                statusColor={data.goal_achievement_rate >= 85 ? GREEN : AMBER}
-              />
-
-              <div className="mt-6 flex items-center gap-3">
-                <div
-                  className="flex h-8 w-8 items-center justify-center rounded-lg"
-                  style={{
-                    background: BLUE_SOFT,
-                    color: BLUE,
-                  }}
-                >
-                  <Target size={14} strokeWidth={2.4} />
-                </div>
-
-                <div>
-                  <p
-                    className="text-xs font-semibold"
-                    style={{ color: MUTED }}
-                  >
-                    Goal achievement
-                  </p>
-
-                  <p
-                    className="mt-0.5 text-sm font-semibold"
-                    style={{ color: TEXT }}
-                  >
-                    {data.goal_achievement_rate}%
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Governance */}
-            <div className="border-t p-6 sm:p-7 lg:border-t-0">
-              <GovernanceMetric
-                icon={ShieldCheck}
-                label="Governance"
-                value={`${compliantPercentage}%`}
-                detail="Share of compliant records — full breakdown below"
-                status={
-                  data.compliance_score >= data.compliance_target
-                    ? "On target"
-                    : "Below target"
-                }
-                statusColor={
-                  data.compliance_score >= data.compliance_target ? GREEN : RED
-                }
-              />
-
-              <div className="mt-6 flex items-center gap-3">
-                <div
-                  className="flex h-8 w-8 items-center justify-center rounded-lg"
-                  style={{
-                    background:
-                      data.incidents_this_month >= 3 ? RED_SOFT : GREEN_SOFT,
-                    color: data.incidents_this_month >= 3 ? RED : GREEN,
-                  }}
-                >
-                  <AlertTriangle size={14} strokeWidth={2.4} />
-                </div>
-
-                <div>
-                  <p
-                    className="text-xs font-semibold"
-                    style={{ color: MUTED }}
-                  >
-                    Incidents
-                  </p>
-
-                  <p
-                    className="mt-0.5 text-sm font-semibold"
-                    style={{ color: TEXT }}
-                  >
-                    {data.incidents_this_month} this month
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ============================================================
-            COMPLIANCE DISTRIBUTION
-        ============================================================ */}
-        <section className="mt-8">
-          <SectionEyebrow>Compliance composition</SectionEyebrow>
-
-          <div
-            className="rounded-2xl bg-cc-surface p-6 sm:p-8"
-            style={{ borderColor: BORDER }}
-          >
-            <div className="flex flex-col gap-8 lg:flex-row lg:items-center">
-              <div className="min-w-[210px]">
-                <p
-                  className="text-4xl font-semibold tracking-tight"
-                  style={{ color: TEXT }}
-                >
-                  {data.team_compliance_breakdown.compliant +
-                    data.team_compliance_breakdown.at_risk +
-                    data.team_compliance_breakdown.non_compliant}
-                </p>
-
-                <p
-                  className="mt-1 text-xs font-medium"
-                  style={{ color: MUTED }}
-                >
-                  monitored compliance records
-                </p>
-              </div>
-
-              <div className="flex-1">
-                <div
-                  className="flex h-4 overflow-hidden rounded-full"
-                  style={{ background: SOFT }}
-                >
-                  {(() => {
-                    const total =
-                      data.team_compliance_breakdown.compliant +
-                      data.team_compliance_breakdown.at_risk +
-                      data.team_compliance_breakdown.non_compliant;
-
-                    if (!total) return null;
-
-                    return (
-                      <>
-                        <div
-                          style={{
-                            width: `${
-                              (data.team_compliance_breakdown.compliant /
-                                total) *
-                              100
-                            }%`,
-                            background: GREEN,
-                          }}
-                        />
-
-                        <div
-                          style={{
-                            width: `${
-                              (data.team_compliance_breakdown.at_risk / total) *
-                              100
-                            }%`,
-                            background: AMBER,
-                          }}
-                        />
-
-                        <div
-                          style={{
-                            width: `${
-                              (data.team_compliance_breakdown.non_compliant /
-                                total) *
-                              100
-                            }%`,
-                            background: RED,
-                          }}
-                        />
-                      </>
-                    );
-                  })()}
-                </div>
-
-                <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                  <CompositionItem
-                    label="Compliant"
-                    value={data.team_compliance_breakdown.compliant}
-                    color={GREEN}
-                  />
-
-                  <CompositionItem
-                    label="At risk"
-                    value={data.team_compliance_breakdown.at_risk}
-                    color={AMBER}
-                  />
-
-                  <CompositionItem
-                    label="Non-compliant"
-                    value={data.team_compliance_breakdown.non_compliant}
-                    color={RED}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ============================================================
-            COMMON ISSUES
-        ============================================================ */}
-        {data.common_issues.length > 0 && (
-          <section className="mt-8">
-            <SectionEyebrow>Recurring issues</SectionEyebrow>
-
-            <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-              {data.common_issues.slice(0, 6).map((issue) => (
-                <div
-                  key={issue.issue}
-                  className="flex items-center gap-3 border-b pb-3"
-                  style={{ borderColor: BORDER }}
-                >
-                  <span
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
-                    style={{
-                      background: AMBER_SOFT,
-                      color: AMBER,
-                    }}
-                  >
-                    <CircleAlert size={11} strokeWidth={2.5} />
-                  </span>
-
-                  <span
-                    className="min-w-0 flex-1 text-xs font-bold"
-                    style={{ color: TEXT }}
-                  >
-                    {issue.issue}
-                  </span>
-
-                  <span
-                    className="text-xs font-semibold"
-                    style={{ color: MUTED }}
-                  >
-                    {issue.count}
-                  </span>
-                </div>
+              <option value="">All branches</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name} ({zoneAbbreviation(new Date(), b.timezone)})
+                </option>
               ))}
-            </div>
-          </section>
+            </select>
+            {data.timezone && <span>Times in {zoneAbbreviation(new Date(), data.timezone)}</span>}
+          </label>
         )}
 
-        {/* Footer */}
-        <footer className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
-          <p className="text-xs font-medium" style={{ color: MUTED }}>
-            CareCliQ executive governance view
-          </p>
+        <SummaryStrip
+          items={[
+            {
+              value: percent(data.compliance_score),
+              label: "documentation compliance",
+              tone: complianceTone,
+              hint: data.compliance_score >= target ? `At or above the ${target}% target` : `${Math.round(gap)} pts below the ${target}% target`,
+              onClick: () => navigate("/md/compliance?view=shifts"),
+            },
+            {
+              value: percent(data.goal_achievement_rate),
+              label: "goals achieved",
+              tone: goalTone,
+              hint: `${data.active_participants} active participants`,
+              onClick: () => navigate("/onboard-participant/active"),
+            },
+            {
+              value: percent(data.staff_retention_rate),
+              label: "staff retention",
+              hint: `${data.support_workers} support workers`,
+              onClick: () => navigate("/md/staff"),
+            },
+            {
+              value: data.sessions_this_week,
+              label: data.sessions_this_week === 1 ? "shift this week" : "shifts this week",
+              hint: "Recorded since Monday",
+              onClick: () => navigate("/md/schedule"),
+            },
+          ]}
+        />
 
-          <div className="flex items-center gap-2">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: health.color }}
-            />
+        <div className="grid gap-8 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
+          <Section
+            title="Documentation compliance over time"
+            description="Weekly average score of shift notes. Bars show how many shifts each week is based on."
+          >
+            <Surface className="p-5">
+              {trendQuery.isError ? (
+                <div role="status" className="py-10 text-center">
+                  <p className="text-base font-semibold" style={{ color: TEXT }}>Compliance trend unavailable</p>
+                  <p className="mt-1 text-sm" style={{ color: MUTED }}>The other figures on this page are still current. Refresh to try again.</p>
+                </div>
+              ) : trendQuery.isLoading ? (
+                <div className="h-[260px] animate-pulse rounded-xl" style={{ background: SOFT }} />
+              ) : chartData.length < 2 ? (
+                <div className="py-10 text-center">
+                  <p className="text-base font-semibold" style={{ color: TEXT }}>Building your performance trend</p>
+                  <p className="mt-1 text-sm" style={{ color: MUTED }}>A trend appears once two weeks have scored shift notes.</p>
+                </div>
+              ) : (
+                <>
+                  {comparison && (
+                    <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <span className="text-2xl font-semibold tabular-nums tracking-tight" style={{ color: toneColor(scoreTone(comparison.recent.score, target)) }}>
+                        {percent(comparison.recent.score)}
+                      </span>
+                      <span className="text-sm" style={{ color: MUTED }}>
+                        over the last four weeks, across {comparison.recent.shifts} scored {comparison.recent.shifts === 1 ? "shift" : "shifts"}
+                      </span>
+                      {comparison.change !== null && (
+                        <span className="inline-flex items-center gap-1 text-sm font-semibold" style={{ color: toneColor(comparison.change >= 0 ? "good" : "danger") }}>
+                          {comparison.change >= 0 ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
+                          {comparison.change >= 0 ? "+" : ""}
+                          {Math.round(comparison.change * 10) / 10} pts on the four weeks before
+                        </span>
+                      )}
+                    </p>
+                  )}
+                  <div className="mt-4 h-[260px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
+                        <XAxis dataKey="label" tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} tickFormatter={(v) => `W${v}`} />
+                        <YAxis yAxisId="score" domain={[0, 100]} tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                        <YAxis yAxisId="shifts" orientation="right" hide domain={[0, (max: number) => Math.max(4, max * 3)]} />
+                        <Tooltip content={<TrendTooltip />} cursor={{ fill: "var(--cc-soft)" }} />
+                        <Bar yAxisId="shifts" dataKey="sessions" fill="var(--cc-border)" radius={[4, 4, 0, 0]} barSize={18} isAnimationActive={false} />
+                        <ReferenceLine
+                          yAxisId="score"
+                          y={target}
+                          stroke={toneColor("warning")}
+                          strokeDasharray="4 3"
+                          label={{ value: `Target ${target}%`, position: "insideTopRight", fontSize: 11, fill: toneColor("warning") }}
+                        />
+                        <Line
+                          yAxisId="score"
+                          type="linear"
+                          dataKey="score"
+                          isAnimationActive={false}
+                          stroke={PLUM}
+                          strokeWidth={2.5}
+                          dot={{ r: 3.5, fill: PLUM, strokeWidth: 0 }}
+                          activeDot={{ r: 5 }}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {thinWeeks > 0 && (
+                    <p className="mt-3 text-xs" style={{ color: MUTED }}>
+                      {thinWeeks} of these weeks scored fewer than three shifts, so one note moves the whole week. Read the four-week figure above for the direction.
+                    </p>
+                  )}
+                </>
+              )}
+            </Surface>
+          </Section>
 
-            <span className="text-xs font-bold" style={{ color: MUTED }}>
-              {health.label}
-            </span>
-          </div>
-        </footer>
+          <Section title="Where the shift notes stand" description={`${allNotes} shift notes in the current review window.`}>
+            <Surface className="p-5">
+              <div className="flex h-2.5 overflow-hidden rounded-full" style={{ background: SOFT }} aria-hidden="true">
+                {parts.map((p) => (
+                  <div key={p.key} style={{ width: `${allNotes ? (p.value / allNotes) * 100 : 0}%`, background: toneColor(p.tone) }} />
+                ))}
+              </div>
+              <ul className="mt-4 divide-y" style={{ borderColor: BORDER }}>
+                {[...parts, { key: "not_scored", label: "Not scored yet", value: notScored, tone: "neutral" as Tone }].map((p) => (
+                  <li key={p.key} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="flex items-center gap-2" style={{ color: TEXT }}>
+                      <span className="h-2 w-2 rounded-full" style={{ background: p.tone === "neutral" ? BORDER : toneColor(p.tone) }} />
+                      {p.label}
+                    </span>
+                    <span className="font-semibold tabular-nums" style={{ color: TEXT }}>{p.value}</span>
+                  </li>
+                ))}
+              </ul>
+              <Link href="/md/compliance?view=shifts" className={`${outlineClass} mt-3 w-full`}>
+                Review shift notes
+                <ArrowRight size={15} />
+              </Link>
+            </Surface>
+          </Section>
+        </div>
+
+        <Section title="Scorecard" description="Each measure against its target, with where to act on it.">
+          <Surface>
+            <RowList>
+              {scorecard.map((row) => (
+                <li key={row.label}>
+                  <Link href={row.href} className={`${rowClass} flex-wrap`} aria-label={`${row.label}: ${row.value}. ${row.action}`}>
+                    <span className="min-w-0 flex-1 basis-56">
+                      <span className="block text-sm font-semibold" style={{ color: TEXT }}>{row.label}</span>
+                      <span className="block text-xs" style={{ color: MUTED }}>{row.target}</span>
+                    </span>
+                    <span className="w-20 text-right text-lg font-semibold tabular-nums" style={{ color: toneColor(row.tone) }}>{row.value}</span>
+                    <span className="w-40 text-right"><StatusText tone={row.tone}>{row.status}</StatusText></span>
+                    <span className="hidden w-40 items-center justify-end gap-1 text-sm sm:flex" style={{ color: MUTED }}>
+                      {row.action}
+                      <ArrowRight size={14} />
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </RowList>
+          </Surface>
+        </Section>
+
+        {workersBelow.length > 0 && (
+          <Section
+            title="Workers who need documentation support"
+            description={`Scoring under ${WORKER_THRESHOLD}% on their shift notes. Lowest first.`}
+            action={<Link href="/md/staff" className={ghostClass}>Open staff <ArrowRight size={14} /></Link>}
+          >
+            <Surface>
+              <RowList>
+                {workersBelow.map((worker) => (
+                  <li key={worker.id}>
+                    <Link href={`/md/staff?workerId=${encodeURIComponent(worker.id)}`} className={rowClass}>
+                      <span
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cc-soft text-xs font-semibold"
+                        style={{ color: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}
+                        aria-hidden="true"
+                      >
+                        {worker.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold" style={{ color: TEXT }}>{worker.full_name}</span>
+                        <span className="block text-xs" style={{ color: MUTED }}>
+                          {worker.sessions} scored {worker.sessions === 1 ? "shift" : "shifts"}
+                        </span>
+                      </span>
+                      <span className="text-sm font-semibold tabular-nums" style={{ color: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}>
+                        {Math.round(worker.compliance_score)}%
+                      </span>
+                      <ArrowRight size={14} style={{ color: MUTED }} />
+                    </Link>
+                  </li>
+                ))}
+              </RowList>
+            </Surface>
+          </Section>
+        )}
       </div>
     </HubLayout>
-  );
-}
-
-function CompositionItem({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span
-        className="h-2 w-2 shrink-0 rounded-full"
-        style={{ background: color }}
-      />
-
-      <span className="text-xs font-bold" style={{ color: TEXT }}>
-        {label}
-      </span>
-
-      <span className="ml-auto text-xs font-semibold" style={{ color }}>
-        {value}
-      </span>
-    </div>
   );
 }
