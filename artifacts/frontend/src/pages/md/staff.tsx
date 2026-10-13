@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -8,9 +8,7 @@ import {
   AlertTriangle,
   Briefcase,
   ChevronRight,
-  HeartHandshake,
   Search,
-  ShieldCheck,
   Users,
   X,
 } from "lucide-react";
@@ -26,6 +24,9 @@ import { useToast } from "@/hooks/use-toast";
 import {
   getWorkerPipelineOverview,
   getCoordinatorWorkerStats,
+  getTeamCredentials,
+  getOrgAssignments,
+  SUPPORT_ALLOCATION_ROLES,
   deactivateWorker,
   deleteWorkerAccount,
   sendWorkerPasswordReset,
@@ -52,6 +53,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import {
+  employmentLabel,
+  notesStatus,
+  summariseCredentials,
+  type CredentialSummary,
+  type Tone,
+} from "@/lib/directory-insights";
 import { SectionInfo } from "@/components/ui/section-info";
 
 const TEXT = "var(--cc-text)";
@@ -60,15 +68,10 @@ const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
 const PLUM = "var(--cc-plum)";
 const CTA = "var(--cc-cta)";
-const PLUM_SOFT = "var(--cc-plum-soft)";
-const GREEN = "#0F7B57";
-const INFO = "#2A5C8A";
-const AMBER = "#9A5B0A";
-const RED = "#B3261E";
-const SUCCESS_BG = "var(--cc-status-success-bg)";
-const INFO_BG = "var(--cc-status-info-bg)";
-const WARNING_BG = "var(--cc-status-warning-bg)";
-const DANGER_BG = "var(--cc-status-danger-bg)";
+const GREEN = "var(--cc-green)";
+const INFO = "var(--cc-sky)";
+const AMBER = "var(--cc-amber)";
+const RED = "var(--cc-danger-text)";
 
 interface StaffMember {
   id: string;
@@ -89,7 +92,36 @@ interface MDData {
   staff_directory: StaffMember[];
 }
 
-type Filter = "all" | "at_risk" | "strong";
+type Filter = "all" | "at_risk" | "strong" | "credentials";
+type SortKey =
+  | "name"
+  | "compliance"
+  | "participants"
+  | "sessions"
+  | "lastActive"
+  | "credentials"
+  | "thisWeek"
+  | "notes";
+
+/**
+ * Desktop columns. lg shows the essentials; xl adds this week and notes.
+ * Cells hidden at a breakpoint don't take a grid track, so each template
+ * lists only the columns visible at that size.
+ */
+const STAFF_GRID =
+  "lg:grid-cols-[minmax(220px,1.7fr)_minmax(140px,1fr)_88px_120px_minmax(150px,1fr)_20px] " +
+  "xl:grid-cols-[minmax(220px,1.7fr)_minmax(140px,1fr)_88px_100px_minmax(120px,1fr)_120px_minmax(160px,1fr)_20px]";
+
+const STAFF_COLUMNS: { label: string; key?: SortKey; className?: string }[] = [
+  { label: "Staff member", key: "name" },
+  { label: "Credentials", key: "credentials" },
+  { label: "Participants", key: "participants" },
+  { label: "This week", key: "thisWeek", className: "hidden xl:flex" },
+  { label: "Notes", key: "notes", className: "hidden xl:flex" },
+  { label: "Compliance", key: "compliance" },
+  { label: "Status", key: "lastActive" },
+  { label: "" },
+];
 
 function formatLastActive(value?: string) {
   if (!value) return "Never signed in";
@@ -101,7 +133,9 @@ function formatLastActive(value?: string) {
 }
 
 function formatRole(role?: string) {
-  return role ? role.replace(/_/g, " ") : "Support worker";
+  if (!role) return "Support worker";
+  const label = role.replace(/_/g, " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function initials(name: string) {
@@ -111,6 +145,66 @@ function initials(name: string) {
     .slice(0, 2)
     .join("")
     .toUpperCase();
+}
+
+function PersonAvatar({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
+  if (photoUrl) {
+    return (
+      <img
+        src={photoUrl}
+        alt=""
+        className="h-11 w-11 shrink-0 rounded-full object-cover"
+        style={{ background: SOFT }}
+      />
+    );
+  }
+  return (
+    <div
+      aria-hidden
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+      style={{ background: SOFT, color: TEXT }}
+    >
+      {initials(name)}
+    </div>
+  );
+}
+
+/** Rounded filter pill. Selected = solid navy, theme-safe in light and dark. */
+function FilterPill({
+  label,
+  count,
+  selected,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+      style={
+        selected
+          ? { background: TEXT, color: "var(--cc-bg)" }
+          : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` }
+      }
+    >
+      {label}
+      <span className="tabular-nums" style={{ opacity: 0.7 }}>{count}</span>
+    </button>
+  );
+}
+
+function toneColor(tone: Tone) {
+  if (tone === "good") return GREEN;
+  if (tone === "info") return INFO;
+  if (tone === "warning") return AMBER;
+  if (tone === "danger") return RED;
+  return MUTED;
 }
 
 function getScoreColor(score: number) {
@@ -127,195 +221,6 @@ function getScoreLabel(score: number, translate: (key: string) => string) {
   if (score >= 85) return translate("md.staff.onTrack");
   if (score >= 70) return translate("md.staff.needsAttention");
   return translate("md.staff.retentionRisk");
-}
-
-function bgForScore(score: number) {
-  if (score <= 0) return SOFT;
-  if (score >= 90) return SUCCESS_BG;
-  if (score >= 85) return INFO_BG;
-  if (score >= 70) return WARNING_BG;
-  return DANGER_BG;
-}
-
-function StatusBadge({
-  score,
-  translate,
-}: {
-  score: number;
-  translate: (key: string) => string;
-}) {
-  const color = getScoreColor(score);
-
-  return (
-    <span
-      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold"
-      style={{
-        color,
-        borderColor: `${color}30`,
-        background: `${color}10`,
-      }}
-    >
-      {getScoreLabel(score, translate)}
-    </span>
-  );
-}
-
-function ScoreBar({ score }: { score: number }) {
-  const color = getScoreColor(score);
-
-  return (
-    <div className="flex items-center gap-3">
-      <div
-        className="h-2 flex-1 overflow-hidden rounded-full"
-        style={{ background: `${color}12` }}
-      >
-        <div
-          className="h-full rounded-full transition-all"
-          style={{
-            width: `${Math.min(Math.max(score, 0), 100)}%`,
-            background: color,
-          }}
-        />
-      </div>
-
-      <span
-        className="w-9 text-right text-[11px] font-semibold"
-        style={{ color }}
-      >
-        {score > 0 ? `${score}%` : "N/A"}
-      </span>
-    </div>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  sub,
-  accent,
-}: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  accent?: string;
-}) {
-  return (
-    <div className="min-w-0">
-      <p
-        className="text-[9px] font-semibold uppercase tracking-[0.16em]"
-        style={{ color: MUTED }}
-      >
-        {label}
-      </p>
-
-      <div className="mt-1 flex items-baseline gap-2">
-        <span
-          className="text-xl font-semibold tracking-tight"
-          style={{ color: accent ?? TEXT }}
-        >
-          {value}
-        </span>
-
-        {sub && (
-          <span className="text-[10px] font-medium" style={{ color: MUTED }}>
-            {sub}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function KpiTile({
-  label,
-  value,
-  color,
-  bg,
-  icon: Icon,
-  onClick,
-}: {
-  label: string;
-  value: string | number;
-  color: string;
-  bg: string;
-  icon?: typeof Users;
-  onClick?: () => void;
-}) {
-  const content = (
-    <>
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[30px] font-semibold leading-none" style={{ color }}>
-          {value}
-        </p>
-        {Icon && (
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-xl"
-            style={{ background: "rgba(255,255,255,0.65)", color }}
-          >
-            <Icon size={15} />
-          </div>
-        )}
-      </div>
-      <p
-        className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em]"
-        style={{ color: MUTED }}
-      >
-        {label}
-      </p>
-    </>
-  );
-  if (!onClick)
-    return (
-      <div className="rounded-[1.25rem] px-5 py-4.5" style={{ background: bg }}>
-        {content}
-      </div>
-    );
-  return (
-    <button
-      onClick={onClick}
-      className="w-full rounded-[1.25rem] px-5 py-4.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
-      style={{ background: bg }}
-    >
-      {content}
-    </button>
-  );
-}
-
-function SectionHeader({
-  title,
-  info,
-  description,
-  action,
-}: {
-  title: string;
-  info?: string;
-  description?: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-end justify-between gap-4">
-      <div>
-        <h2
-          className="flex items-center gap-1.5 text-[16px] font-semibold tracking-tight"
-          style={{ color: TEXT }}
-        >
-          {title}
-          {info && <SectionInfo text={info} />}
-        </h2>
-
-        {description && (
-          <p
-            className="mt-1 max-w-xl text-[11px] font-medium leading-relaxed"
-            style={{ color: MUTED }}
-          >
-            {description}
-          </p>
-        )}
-      </div>
-
-      {action}
-    </div>
-  );
 }
 
 export default function MDStaffPage() {
@@ -347,6 +252,17 @@ export default function MDStaffPage() {
     queryFn: getCoordinatorWorkerStats,
   });
 
+  // Same key and fetcher as the worker panel and team page, so it's one request.
+  const credentialsQuery = useOrgQuery(["team-credentials"], {
+    queryFn: getTeamCredentials,
+  });
+
+  // Who supports whom. The same source as the worker profile's participants
+  // tab, so the count here matches what opens when you click through.
+  const assignmentsQuery = useOrgQuery(["worker-assignments", "org"], {
+    queryFn: getOrgAssignments,
+  });
+
   const data = dashboardQuery.data ?? null;
   const pipeline = pipelineQuery.data ?? null;
   const workerStats = workerStatsQuery.data ?? null;
@@ -365,10 +281,8 @@ export default function MDStaffPage() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [unassignedOnly, setUnassignedOnly] = useState(false);
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<
-    "name" | "compliance" | "participants" | "sessions" | "lastActive"
-  >("compliance");
-  const [sortAsc, setSortAsc] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortAsc, setSortAsc] = useState(true);
   const [selectedWorker, setSelectedWorker] = useState<StaffMember | null>(
     null,
   );
@@ -387,6 +301,9 @@ export default function MDStaffPage() {
   /** Stat tiles jump to the staff directory with the matching filter/sort. */
   function showDirectory(nextFilter: Filter, sort?: "compliance") {
     setFilter(nextFilter);
+    setSearch("");
+    setRoleFilter("all");
+    setUnassignedOnly(false);
     if (sort) {
       setSortKey(sort);
       setSortAsc(true);
@@ -564,12 +481,66 @@ export default function MDStaffPage() {
     };
   }, [allStaff]);
 
+  const statsById = useMemo(
+    () => new Map((workerStats ?? []).map((worker) => [worker.id, worker])),
+    [workerStats],
+  );
+  const credentialsByUser = useMemo(
+    () => summariseCredentials(credentialsQuery.data ?? []),
+    [credentialsQuery.data],
+  );
+  const credentialsLoading = credentialsQuery.isLoading;
+
+  const participantsByWorker = useMemo(() => {
+    if (!assignmentsQuery.data) return null;
+    const map = new Map<string, Set<string>>();
+    for (const assignment of assignmentsQuery.data) {
+      if (!SUPPORT_ALLOCATION_ROLES.has(assignment.allocated_role)) continue;
+      const set = map.get(assignment.user_id) ?? new Set<string>();
+      set.add(assignment.patient_id);
+      map.set(assignment.user_id, set);
+    }
+    return map;
+  }, [assignmentsQuery.data]);
+
+  /** Participants this person is assigned to support (dashboard count until assignments load). */
+  function participantsFor(worker: StaffMember) {
+    return participantsByWorker
+      ? (participantsByWorker.get(worker.id)?.size ?? 0)
+      : worker.participant_count;
+  }
+
+  /** Expired or soon-expiring credentials, or overdue training/induction. */
+  function hasCredentialIssue(worker: StaffMember) {
+    const summary = credentialsByUser.get(worker.id);
+    const extra = statsById.get(worker.id);
+    return (
+      (summary?.expired ?? 0) > 0 ||
+      (summary?.expiring ?? 0) > 0 ||
+      !!extra?.training_overdue ||
+      !!extra?.induction_overdue
+    );
+  }
+  const credentialIssueCount = allStaff.filter(hasCredentialIssue).length;
+
   const distinctRoles = useMemo(() => {
     const roles = new Set(
       allStaff.map((worker) => worker.role || "support_worker"),
     );
     return Array.from(roles).sort();
   }, [allStaff]);
+
+  // coordinator_id lives on the richer workerStats record (fetched separately
+  // for the org), not on the dashboard's staff_directory summary row — see
+  // Phase 2 of the onboarding/matching plan: coordinator_id assignment is a
+  // gradual rollout, and a worker no one has claimed yet needs to stay findable
+  // rather than silently drop out of the directory.
+  function isUnassigned(worker: StaffMember) {
+    return (
+      (worker.role || "support_worker") === "support_worker" &&
+      !workerStats?.find((w) => w.id === worker.id)?.coordinator_id
+    );
+  }
 
   const filtered = useMemo(() => {
     const normalized = search.trim().toLowerCase();
@@ -585,25 +556,31 @@ export default function MDStaffPage() {
         (filter === "at_risk" &&
           worker.compliance_score > 0 &&
           worker.compliance_score < 85) ||
-        (filter === "strong" && worker.compliance_score >= 90);
+        (filter === "strong" && worker.compliance_score >= 90) ||
+        (filter === "credentials" && hasCredentialIssue(worker));
 
       const matchesRole =
         roleFilter === "all" ||
         (worker.role || "support_worker") === roleFilter;
 
-      // coordinator_id lives on the richer workerStats record (fetched separately
-      // for the org), not on the dashboard's staff_directory summary row — see
-      // Phase 2 of the onboarding/matching plan: coordinator_id assignment is a
-      // gradual rollout, and a worker no one has claimed yet needs to stay findable
-      // rather than silently drop out of the directory.
-      const matchesUnassigned =
-        !unassignedOnly ||
-        (worker.role || "support_worker") !== "support_worker" ||
-        !workerStats?.find((w) => w.id === worker.id)?.coordinator_id;
+      const matchesUnassigned = !unassignedOnly || isUnassigned(worker);
 
       return matchesSearch && matchesFilter && matchesRole && matchesUnassigned;
     });
-  }, [allStaff, filter, roleFilter, search, unassignedOnly, workerStats]);
+  }, [allStaff, filter, roleFilter, search, unassignedOnly, workerStats, credentialsByUser]);
+
+  // Counted from the directory itself (not the wider workerStats list, which
+  // also holds inactive accounts) so the chip matches what the filter shows.
+  const unassignedCount = allStaff.filter(isUnassigned).length;
+  const filtersActive =
+    !!search || filter !== "all" || roleFilter !== "all" || unassignedOnly;
+
+  function resetFilters() {
+    setSearch("");
+    setFilter("all");
+    setRoleFilter("all");
+    setUnassignedOnly(false);
+  }
 
   // Sortable by clicking a column header - the old separate "Leading performers"
   // cards duplicated exactly this (top-3 by compliance) as its own section;
@@ -616,7 +593,7 @@ export default function MDStaffPage() {
         case "name":
           return a.full_name.localeCompare(b.full_name) * dir;
         case "participants":
-          return (a.participant_count - b.participant_count) * dir;
+          return (participantsFor(a) - participantsFor(b)) * dir;
         case "sessions":
           return (a.sessions - b.sessions) * dir;
         case "lastActive":
@@ -625,11 +602,28 @@ export default function MDStaffPage() {
               (b.last_login ? new Date(b.last_login).getTime() : 0)) *
             dir
           );
+        case "credentials": {
+          // Most urgent first when descending: expired outweighs expiring.
+          const weight = (id: string) => {
+            const summary = credentialsByUser.get(id);
+            return (summary?.expired ?? 0) * 100 + (summary?.expiring ?? 0) * 10 + (summary?.awaitingReview ?? 0);
+          };
+          return (weight(a.id) - weight(b.id)) * dir;
+        }
+        case "thisWeek":
+          return ((statsById.get(a.id)?.sessions_this_week ?? 0) - (statsById.get(b.id)?.sessions_this_week ?? 0)) * dir;
+        case "notes": {
+          const weight = (id: string) => {
+            const extra = statsById.get(id);
+            return (extra?.flagged_count ?? 0) * 100 + (extra?.draft_count ?? 0);
+          };
+          return (weight(a.id) - weight(b.id)) * dir;
+        }
         default:
           return (a.compliance_score - b.compliance_score) * dir;
       }
     });
-  }, [filtered, sortKey, sortAsc]);
+  }, [filtered, sortKey, sortAsc, credentialsByUser, statsById, participantsByWorker]);
 
   function handleSort(key: typeof sortKey) {
     if (key === sortKey) setSortAsc((v) => !v);
@@ -647,674 +641,592 @@ export default function MDStaffPage() {
 
   return (
     <HubLayout>
-      <div className="space-y-7 pb-12">
+      <div className="space-y-8 pb-12">
         {/* =========================================================
-            HEADER
+            HEADER: sits on the page, not in a card, so the team list
+            below is the first thing that reads as content.
         ========================================================= */}
 
-        <header>
-          <div className="flex flex-wrap items-end justify-between gap-5">
-            <div>
-              <h1
-                className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
-                style={{ color: TEXT }}
-              >
-                Staff Directory
-                <SectionInfo text="Your organisation's staff: who's active, how they're performing, credentials due, and who's coming through hiring." />
-              </h1>
-            </div>
-
-            <button
-              onClick={() => navigate("/md/staff-onboarding")}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[11px] font-semibold transition hover:opacity-90"
-              style={{
-                background: CTA,
-                color: "#fff",
-              }}
+        <header className="flex flex-wrap items-end justify-between gap-5">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold" style={{ color: MUTED }}>
+              Staff directory
+            </p>
+            <h1
+              className="mt-1 flex items-center gap-2 text-3xl font-semibold tracking-tight"
+              style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
             >
-              <Briefcase size={13} strokeWidth={2.5} />
-              Manage hiring
-              <ArrowRight size={12} strokeWidth={2.5} />
-            </button>
+              Your team
+              <SectionInfo text="Your organisation's staff: who's active, how they're performing, credentials due, and who's coming through hiring." />
+            </h1>
+            <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>
+              The people delivering support to your participants. Open anyone to
+              see their shifts, credentials and training.
+            </p>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => navigate("/md/vault")}>
+
+          <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:gap-2">
+            <button
+              type="button"
+              onClick={() => navigate("/md/vault")}
+              className="min-h-11 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft"
+              style={{ color: TEXT }}
+            >
               Document vault
-            </Button>
-            <Button variant="outline" onClick={() => navigate("/billing")}>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/billing")}
+              className="min-h-11 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft"
+              style={{ color: TEXT }}
+            >
               NDIS invoices
-            </Button>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/md/staff-onboarding")}
+              className="order-first inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum sm:order-none sm:w-auto"
+              style={{ background: CTA, color: "#fff" }}
+            >
+              <Briefcase size={15} />
+              Manage hiring
+            </button>
           </div>
         </header>
 
         {loading ? (
-          <div className="space-y-4">
-            <div
-              className="h-44 animate-pulse rounded-2xl"
-              style={{ background: SOFT }}
-            />
-            <div
-              className="h-72 animate-pulse rounded-2xl"
-              style={{ background: SOFT }}
-            />
+          <div className="space-y-5" role="status" aria-label="Loading your team">
+            <div className="h-11 w-full max-w-xl animate-pulse rounded-full" style={{ background: SOFT }} />
+            <div className="h-11 w-full max-w-sm animate-pulse rounded-full" style={{ background: SOFT }} />
+            <div className="overflow-hidden rounded-3xl bg-cc-surface">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="flex items-center gap-4 border-b px-4 py-4 last:border-b-0 sm:px-6" style={{ borderColor: BORDER }}>
+                  <div className="h-11 w-11 shrink-0 animate-pulse rounded-full" style={{ background: SOFT }} />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 w-40 animate-pulse rounded-full" style={{ background: SOFT }} />
+                    <div className="h-3 w-64 max-w-full animate-pulse rounded-full" style={{ background: SOFT }} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : error || !data ? (
-          <div
-            className="rounded-2xl border bg-white p-10 text-center"
-            style={{ borderColor: BORDER }}
-          >
-            <AlertTriangle size={28} className="mx-auto mb-3 text-orange-500" />
-
-            <p className="text-[14px] font-semibold" style={{ color: TEXT }}>
+          <div className="rounded-3xl bg-cc-surface px-6 py-12 text-center">
+            <AlertTriangle size={26} className="mx-auto mb-3" style={{ color: AMBER }} />
+            <p className="text-sm font-semibold" style={{ color: TEXT }}>
               {translate("md.staff.loadFailed")}
             </p>
+            <button
+              type="button"
+              onClick={refreshStaff}
+              className="mt-4 min-h-11 rounded-full border border-cc-border px-5 text-sm font-semibold"
+              style={{ color: TEXT }}
+            >
+              Try again
+            </button>
           </div>
         ) : (
           <>
             {/* =====================================================
-                WORKFORCE SNAPSHOT
+                AT A GLANCE: one line of numbers instead of a row of
+                tinted tiles. Each figure still jumps to the list.
             ===================================================== */}
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <KpiTile
-                label="Active staff"
-                value={data.active_staff}
-                color={PLUM}
-                bg={PLUM_SOFT}
-                icon={Users}
-                onClick={() => showDirectory("all")}
-              />
-
-              <KpiTile
-                label="Average compliance"
-                value={`${stats.average}%`}
-                color={getScoreColor(stats.average)}
-                bg={bgForScore(stats.average)}
-                icon={ShieldCheck}
-                onClick={() => showDirectory("all", "compliance")}
-              />
-
-              <KpiTile
-                label="Retention"
-                value={`${data.staff_retention_rate}%`}
-                color={getScoreColor(data.staff_retention_rate)}
-                bg={bgForScore(data.staff_retention_rate)}
-                icon={HeartHandshake}
-                onClick={() => showDirectory("all")}
-              />
-
-              <KpiTile
-                label="Needs attention"
-                value={stats.atRisk.length}
-                color={stats.atRisk.length > 0 ? RED : GREEN}
-                bg={stats.atRisk.length > 0 ? DANGER_BG : SUCCESS_BG}
-                icon={AlertTriangle}
-                onClick={
-                  stats.atRisk.length > 0 ? () => showDirectory("at_risk") : undefined
-                }
-              />
+            <div className="flex flex-wrap items-stretch gap-x-2 gap-y-3">
+              {[
+                {
+                  label: "active staff",
+                  value: data.active_staff,
+                  color: TEXT,
+                  onClick: () => showDirectory("all"),
+                },
+                {
+                  label: "average compliance",
+                  value: `${stats.average}%`,
+                  color: getScoreColor(stats.average),
+                  onClick: () => showDirectory("all", "compliance"),
+                },
+                {
+                  label: "retention",
+                  value: `${data.staff_retention_rate}%`,
+                  color: TEXT,
+                  onClick: undefined,
+                },
+                {
+                  label: stats.atRisk.length === 1 ? "needs attention" : "need attention",
+                  value: stats.atRisk.length,
+                  color: stats.atRisk.length > 0 ? AMBER : GREEN,
+                  onClick: stats.atRisk.length > 0 ? () => showDirectory("at_risk") : undefined,
+                },
+                {
+                  label: "with credential issues",
+                  value: credentialsLoading ? "…" : credentialIssueCount,
+                  color: credentialIssueCount > 0 ? RED : GREEN,
+                  onClick: credentialIssueCount > 0 ? () => showDirectory("credentials") : undefined,
+                },
+              ].map((item, index) => {
+                const body = (
+                  <>
+                    <span
+                      className="text-2xl font-semibold tabular-nums tracking-tight"
+                      style={{ color: item.color }}
+                    >
+                      {item.value}
+                    </span>
+                    <span className="text-sm" style={{ color: MUTED }}>
+                      {item.label}
+                    </span>
+                  </>
+                );
+                return (
+                  <div key={item.label} className="flex items-center gap-2">
+                    {index > 0 && (
+                      <span aria-hidden className="mr-2 hidden h-6 w-px sm:block" style={{ background: BORDER }} />
+                    )}
+                    {item.onClick ? (
+                      <button
+                        type="button"
+                        onClick={item.onClick}
+                        className="flex min-h-11 items-center rounded-full px-3 transition hover:bg-cc-soft"
+                      >
+                        <span className="flex items-baseline gap-2">{body}</span>
+                      </button>
+                    ) : (
+                      <div className="flex min-h-11 items-center px-3">
+                        <span className="flex items-baseline gap-2">{body}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* =====================================================
-                STAFF DIRECTORY - leads the page, right after the KPI
-                snapshot: this is the "directory" page, so the actual list
-                of staff shouldn't be buried below analytics sections.
+                THE TEAM: leads the page, it's what people come here for.
             ===================================================== */}
 
-            <section id="staff-directory">
-              <div className="mb-4">
-                <SectionHeader
-                  title="All staff"
-                  description={`${filtered.length} of ${allStaff.length} staff shown`}
-                />
-              </div>
-
-              <div
-                className="overflow-hidden rounded-2xl border bg-white"
-                style={{ borderColor: BORDER }}
-              >
-                {/* Controls */}
-                <div
-                  className="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between"
-                  style={{ borderColor: BORDER }}
-                >
-                  <div className="relative w-full lg:max-w-sm">
-                    <Search
-                      size={14}
-                      className="absolute left-3 top-1/2 -translate-y-1/2"
+            <section id="staff-directory" className="space-y-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative w-full lg:max-w-sm">
+                  <Search
+                    size={16}
+                    className="absolute left-4 top-1/2 -translate-y-1/2"
+                    style={{ color: MUTED }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search by name or email"
+                    aria-label="Search staff by name or email"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="h-11 w-full rounded-full border bg-cc-surface pl-11 pr-11 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
+                    style={{ borderColor: BORDER, color: TEXT }}
+                  />
+                  {search && (
+                    <button
+                      onClick={() => setSearch("")}
+                      aria-label="Clear staff search"
+                      className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full hover:bg-cc-soft"
                       style={{ color: MUTED }}
-                    />
-
-                    <input
-                      type="text"
-                      placeholder="Search staff or email..."
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      className="h-9 w-full rounded-lg border bg-transparent pl-9 pr-8 text-[11px] font-medium outline-none transition focus:ring-2"
-                      style={{
-                        borderColor: BORDER,
-                        color: TEXT,
-                      }}
-                    />
-
-                    {search && (
-                      <button
-                        onClick={() => setSearch("")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2"
-                        style={{ color: MUTED }}
-                      >
-                        <X size={13} />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {distinctRoles.length > 1 && (
-                      <Select value={roleFilter} onValueChange={setRoleFilter}>
-                        <SelectTrigger
-                          className="h-8 w-[150px] rounded-lg border text-[10px] font-semibold"
-                          style={{ borderColor: BORDER, color: MUTED }}
-                        >
-                          <SelectValue placeholder="All roles" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All roles</SelectItem>
-                          {distinctRoles.map((role) => (
-                            <SelectItem
-                              key={role}
-                              value={role}
-                              className="capitalize"
-                            >
-                              {formatRole(role)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-
-                    {(["all", "at_risk", "strong"] as Filter[]).map((item) => {
-                      const active = filter === item;
-
-                      const label =
-                        item === "all"
-                          ? `All ${allStaff.length}`
-                          : item === "at_risk"
-                            ? `At risk ${stats.atRisk.length}`
-                            : `Strong ${stats.strong.length}`;
-
-                      return (
-                        <button
-                          key={item}
-                          onClick={() => setFilter(item)}
-                          className="rounded-lg px-3 py-1.5 text-[10px] font-semibold transition"
-                          style={{
-                            background: active ? CTA : SOFT,
-                            color: active ? "#fff" : MUTED,
-                          }}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-
-                    {workerStats && (
-                      <button
-                        onClick={() => setUnassignedOnly((v) => !v)}
-                        className="rounded-lg px-3 py-1.5 text-[10px] font-semibold transition"
-                        style={{
-                          background: unassignedOnly ? CTA : SOFT,
-                          color: unassignedOnly ? "#fff" : MUTED,
-                        }}
-                      >
-                        Unassigned{" "}
-                        {
-                          workerStats.filter(
-                            (w) =>
-                              w.role === "support_worker" && !w.coordinator_id,
-                          ).length
-                        }
-                      </button>
-                    )}
-                  </div>
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
 
-                {filtered.length === 0 ? (
-                  <div className="px-5 py-14 text-center">
-                    <Users
-                      size={25}
-                      className="mx-auto mb-3"
-                      style={{ color: MUTED }}
-                    />
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+                  {distinctRoles.length > 1 && (
+                    <Select value={roleFilter} onValueChange={setRoleFilter}>
+                      <SelectTrigger
+                        aria-label="Filter staff by role"
+                        className="h-11 w-full rounded-full border bg-cc-surface px-4 text-sm sm:w-[160px]"
+                        style={{ borderColor: BORDER, color: TEXT }}
+                      >
+                        <SelectValue placeholder="All roles" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All roles</SelectItem>
+                        {distinctRoles.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {formatRole(role)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
 
-                    <p
-                      className="text-[13px] font-semibold"
+                  <label className="sr-only" htmlFor="staff-sort">Sort staff</label>
+                  <div className="flex h-11 min-w-0 items-center rounded-full border bg-cc-surface pl-4 focus-within:ring-2 focus-within:ring-cc-plum lg:hidden" style={{ borderColor: BORDER }}>
+                    <select
+                      id="staff-sort"
+                      value={sortKey}
+                      onChange={(event) => {
+                        const key = event.target.value as typeof sortKey;
+                        setSortKey(key);
+                        setSortAsc(key === "name");
+                      }}
+                      className="h-full min-w-0 flex-1 bg-transparent pr-1 text-sm outline-none"
                       style={{ color: TEXT }}
                     >
-                      No staff found
-                    </p>
-
-                    <p
-                      className="mt-1 text-[11px] font-medium"
-                      style={{ color: MUTED }}
+                      <option value="name">Sort by name</option>
+                      <option value="compliance">Sort by compliance</option>
+                      <option value="participants">Sort by participants</option>
+                      <option value="sessions">Sort by sessions</option>
+                      <option value="lastActive">Sort by last active</option>
+                      <option value="credentials">Sort by credentials</option>
+                      <option value="thisWeek">Sort by sessions this week</option>
+                      <option value="notes">Sort by notes to finish</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setSortAsc((value) => !value)}
+                      aria-label={sortAsc ? "Sort descending" : "Sort ascending"}
+                      className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-cc-soft"
+                      style={{ color: TEXT }}
                     >
-                      Try changing your search or filter.
-                    </p>
+                      {sortAsc ? <ArrowUp size={15} /> : <ArrowDown size={15} />}
+                    </button>
                   </div>
-                ) : (
-                  <>
-                    {/* Desktop table */}
-                    <div className="hidden md:block">
-                      <div
-                        className="grid grid-cols-[minmax(240px,1.5fr)_1.2fr_100px_100px_120px_130px_24px] items-center gap-4 border-b px-5 py-3"
-                        style={{
-                          borderColor: BORDER,
-                          background: SOFT,
-                        }}
-                      >
-                        {(
-                          [
-                            ["Staff member", "name"],
-                            ["Compliance", "compliance"],
-                            ["Participants", "participants"],
-                            ["Sessions", "sessions"],
-                            ["Last active", "lastActive"],
-                            ["Status", null],
-                            ["", null],
-                          ] as [string, typeof sortKey | null][]
-                        ).map(([heading, key]) => (
-                          <button
-                            key={heading}
-                            type="button"
-                            disabled={!key}
-                            onClick={() => key && handleSort(key)}
-                            className="flex items-center gap-1 text-left text-[9px] font-semibold uppercase tracking-[0.14em] disabled:cursor-default"
-                            style={{
-                              color: key && sortKey === key ? PLUM : MUTED,
-                            }}
-                          >
-                            {heading}
-                            {key &&
-                              sortKey === key &&
-                              (sortAsc ? (
-                                <ArrowUp size={10} />
-                              ) : (
-                                <ArrowDown size={10} />
-                              ))}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div>
-                        {sortedFiltered.map((worker) => (
-                          <button
-                            key={worker.id}
-                            onClick={() => openWorker(worker)}
-                            className="group grid w-full grid-cols-[minmax(240px,1.5fr)_1.2fr_100px_100px_120px_130px_24px] items-center gap-4 border-b px-5 py-4 text-left transition last:border-b-0 hover:bg-slate-50"
-                            style={{
-                              borderColor: BORDER,
-                            }}
-                          >
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div
-                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
-                                style={{
-                                  background: SOFT,
-                                  color: PLUM,
-                                }}
-                              >
-                                {initials(worker.full_name)}
-                              </div>
-
-                              <div className="min-w-0">
-                                <p
-                                  className="truncate text-[12px] font-semibold"
-                                  style={{ color: TEXT }}
-                                >
-                                  {worker.full_name}
-                                </p>
-
-                                <p
-                                  className="truncate text-[10px] font-medium"
-                                  style={{ color: MUTED }}
-                                >
-                                  {formatRole(worker.role)}
-                                </p>
-                              </div>
-                            </div>
-
-                            <ScoreBar score={worker.compliance_score} />
-
-                            <span
-                              className="text-[12px] font-semibold"
-                              style={{ color: TEXT }}
-                            >
-                              {worker.participant_count}
-                            </span>
-
-                            <span
-                              className="text-[12px] font-semibold"
-                              style={{ color: TEXT }}
-                            >
-                              {worker.sessions}
-                            </span>
-
-                            <span
-                              className="text-[11px] font-medium"
-                              style={{ color: MUTED }}
-                            >
-                              {formatLastActive(worker.last_login)}
-                            </span>
-
-                            <StatusBadge
-                              score={worker.compliance_score}
-                              translate={translate}
-                            />
-
-                            <ChevronRight
-                              size={13}
-                              className="transition group-hover:translate-x-0.5"
-                              style={{ color: MUTED }}
-                            />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Mobile cards */}
-                    <div className="divide-y md:hidden">
-                      {sortedFiltered.map((worker) => (
-                        <button
-                          key={worker.id}
-                          onClick={() => setSelectedWorker(worker)}
-                          className="w-full p-4 text-left"
-                          style={{
-                            borderColor: BORDER,
-                          }}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div
-                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
-                                style={{
-                                  background: SOFT,
-                                  color: PLUM,
-                                }}
-                              >
-                                {initials(worker.full_name)}
-                              </div>
-
-                              <div className="min-w-0">
-                                <p
-                                  className="truncate text-[12px] font-semibold"
-                                  style={{ color: TEXT }}
-                                >
-                                  {worker.full_name}
-                                </p>
-
-                                <p
-                                  className="truncate text-[10px] font-medium"
-                                  style={{ color: MUTED }}
-                                >
-                                  {formatRole(worker.role)}
-                                </p>
-                              </div>
-                            </div>
-
-                            <StatusBadge
-                              score={worker.compliance_score}
-                              translate={translate}
-                            />
-                          </div>
-
-                          <div className="mt-4">
-                            <ScoreBar score={worker.compliance_score} />
-                          </div>
-
-                          <div className="mt-3 flex gap-5">
-                            <Metric
-                              label="Participants"
-                              value={worker.participant_count}
-                            />
-
-                            <Metric label="Sessions" value={worker.sessions} />
-                          </div>
-
-                          <p
-                            className="mt-3 text-[10px] font-medium"
-                            style={{ color: MUTED }}
-                          >
-                            Last active: {formatLastActive(worker.last_login)}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
+                </div>
               </div>
-            </section>
 
-            {/* =====================================================
-                PERFORMANCE DISTRIBUTION - secondary analytics, now below
-                the actual directory rather than blocking access to it.
-            ===================================================== */}
-
-            <section
-              className="rounded-2xl border bg-white p-5"
-              style={{ borderColor: BORDER }}
-            >
-              <SectionHeader
-                title="Performance overview"
-                info="How compliance scores are spread across your team, from strong performers to staff who need support. Staff with no sessions yet aren't counted."
-              />
-
-              <div className="mt-5">
-                <div className="flex h-4 overflow-hidden rounded-full bg-slate-100">
-                  {distribution.strong > 0 && (
-                    <div
-                      style={{
-                        flex: distribution.strong,
-                        background: "#0F7B57",
-                      }}
-                    />
-                  )}
-                  {distribution.onTrack > 0 && (
-                    <div
-                      style={{
-                        flex: distribution.onTrack,
-                        background: "#2A5C8A",
-                      }}
-                    />
-                  )}
-                  {distribution.attention > 0 && (
-                    <div
-                      style={{
-                        flex: distribution.attention,
-                        background: "#9A5B0A",
-                      }}
-                    />
-                  )}
-                  {distribution.risk > 0 && (
-                    <div
-                      style={{ flex: distribution.risk, background: "#B3261E" }}
-                    />
-                  )}
-                </div>
-
-                <div className="mt-5 grid gap-4 sm:grid-cols-4">
-                  {[
-                    {
-                      label: "Strong",
-                      count: distribution.strong,
-                      color: "#0F7B57",
-                    },
-                    {
-                      label: "On track",
-                      count: distribution.onTrack,
-                      color: "#2A5C8A",
-                    },
-                    {
-                      label: "Attention",
-                      count: distribution.attention,
-                      color: "#9A5B0A",
-                    },
-                    {
-                      label: "Risk",
-                      count: distribution.risk,
-                      color: "#B3261E",
-                    },
-                  ].map((item) => (
-                    <div key={item.label}>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-2 w-2 rounded-full"
-                          style={{ background: item.color }}
-                        />
-                        <span
-                          className="text-[10px] font-semibold uppercase tracking-[0.12em]"
-                          style={{ color: MUTED }}
-                        >
-                          {item.label}
-                        </span>
-                      </div>
-                      <p
-                        className="mt-1 text-xl font-semibold"
-                        style={{ color: TEXT }}
-                      >
-                        {item.count}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                {stats.atRisk.length > 0 && (
-                  <button
+              <div className="flex flex-wrap items-center gap-2" aria-label="Filter staff">
+                {(
+                  [
+                    ["all", "Everyone", allStaff.length],
+                    ["at_risk", "Needs attention", stats.atRisk.length],
+                    ["strong", "Strong performers", stats.strong.length],
+                    ["credentials", "Credential issues", credentialIssueCount],
+                  ] as [Filter, string, number][]
+                ).map(([item, label, count]) => (
+                  <FilterPill
+                    key={item}
+                    label={label}
+                    count={count}
+                    selected={filter === item && !unassignedOnly}
                     onClick={() => {
-                      setFilter("at_risk");
-                      document
-                        .getElementById("staff-directory")
-                        ?.scrollIntoView({ behavior: "smooth" });
+                      setFilter(item);
+                      setUnassignedOnly(false);
                     }}
-                    className="mt-5 inline-flex items-center gap-1.5 text-[10px] font-semibold"
-                    style={{ color: "#B3261E" }}
+                  />
+                ))}
+
+                {workerStats && (
+                  <FilterPill
+                    label="No coordinator yet"
+                    count={unassignedCount}
+                    selected={unassignedOnly}
+                    onClick={() => {
+                      setUnassignedOnly((v) => !v);
+                      setFilter("all");
+                    }}
+                  />
+                )}
+
+                {filtersActive && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="min-h-10 px-3 text-sm font-medium underline-offset-4 hover:underline"
+                    style={{ color: PLUM }}
                   >
-                    Review at-risk staff
-                    <ArrowRight size={11} strokeWidth={2.5} />
+                    Clear
                   </button>
                 )}
               </div>
-            </section>
 
-            {/* =====================================================
-                HIRING PIPELINE
-            ===================================================== */}
+              <p role="status" className="text-sm" style={{ color: MUTED }}>
+                {filtered.length === allStaff.length
+                  ? `${allStaff.length} ${allStaff.length === 1 ? "person" : "people"} on your team`
+                  : `Showing ${filtered.length} of ${allStaff.length} people`}
+              </p>
 
-            <section
-              className="rounded-2xl border bg-white p-5"
-              style={{ borderColor: BORDER }}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <SectionHeader title="Hiring" />
-
-                <button
-                  onClick={() => navigate("/md/staff-onboarding")}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-semibold"
-                  style={{
-                    background: SOFT,
-                    color: PLUM,
-                  }}
-                >
-                  Open pipeline
-                  <ArrowRight size={11} strokeWidth={2.5} />
-                </button>
-              </div>
-
-              {pipelineActive && pipeline ? (
-                <div className="mt-5 grid gap-3 md:grid-cols-3">
-                  <div
-                    className="rounded-xl border p-4"
-                    style={{ borderColor: BORDER }}
-                  >
-                    <p
-                      className="text-2xl font-semibold"
-                      style={{ color: TEXT }}
-                    >
-                      {pipeline.kpis.in_pipeline}
-                    </p>
-                    <p
-                      className="mt-1 text-[9px] font-semibold uppercase tracking-[0.14em]"
-                      style={{ color: MUTED }}
-                    >
-                      Candidates in pipeline
-                    </p>
-                  </div>
-
-                  <div
-                    className="rounded-xl border p-4"
-                    style={{ borderColor: BORDER }}
-                  >
-                    <p
-                      className="text-2xl font-semibold"
-                      style={{
-                        color:
-                          pipeline.kpis.credentials_overdue > 0
-                            ? "#9A5B0A"
-                            : TEXT,
-                      }}
-                    >
-                      {pipeline.kpis.credentials_overdue}
-                    </p>
-                    <p
-                      className="mt-1 text-[9px] font-semibold uppercase tracking-[0.14em]"
-                      style={{ color: MUTED }}
-                    >
-                      Credentials overdue
-                    </p>
-                  </div>
-
-                  <div
-                    className="rounded-xl border p-4"
-                    style={{ borderColor: BORDER }}
-                  >
-                    <p
-                      className="text-2xl font-semibold"
-                      style={{ color: TEXT }}
-                    >
-                      {pipeline.kpis.starting_this_week}
-                    </p>
-                    <p
-                      className="mt-1 text-[9px] font-semibold uppercase tracking-[0.14em]"
-                      style={{ color: MUTED }}
-                    >
-                      Starting this week
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  className="mt-5 flex flex-col items-center rounded-xl border p-8 text-center"
-                  style={{ borderColor: BORDER }}
-                >
-                  <Briefcase
-                    size={22}
-                    className="mb-2"
-                    style={{ color: MUTED }}
-                  />
-                  <p
-                    className="text-[12px] font-semibold"
+              {filtered.length === 0 ? (
+                <div className="rounded-3xl bg-cc-surface px-6 py-14 text-center">
+                  <Users size={26} className="mx-auto mb-3" style={{ color: MUTED }} />
+                  <p className="text-base font-semibold" style={{ color: TEXT }}>
+                    {allStaff.length === 0 ? "No one on your team yet" : "No one matches that"}
+                  </p>
+                  <p className="mx-auto mt-1 max-w-md text-sm" style={{ color: MUTED }}>
+                    {allStaff.length === 0
+                      ? "Staff will appear here once their accounts are set up. Open onboarding to see who is on the way."
+                      : "Try another name or clear the filters to see everyone."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (allStaff.length === 0) navigate("/md/staff-onboarding");
+                      else resetFilters();
+                    }}
+                    className="mt-5 min-h-11 rounded-full border border-cc-border px-5 text-sm font-semibold"
                     style={{ color: TEXT }}
                   >
-                    No active recruitment activity
-                  </p>
-                  <p
-                    className="mt-1 max-w-md text-[10px] font-medium"
-                    style={{ color: MUTED }}
+                    {allStaff.length === 0 ? "Open staff onboarding" : "Clear filters"}
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-3xl bg-cc-surface">
+                  {/* Column headers (desktop). Click to sort; phones use the select above. */}
+                  <div
+                    className={`hidden items-center gap-4 border-b px-6 py-3 lg:grid ${STAFF_GRID}`}
+                    style={{ borderColor: BORDER }}
                   >
-                    Candidates and onboarding tasks will appear here as your
-                    workforce grows.
-                  </p>
+                    {STAFF_COLUMNS.map((column) =>
+                      column.key ? (
+                        <button
+                          key={column.label}
+                          type="button"
+                          onClick={() => handleSort(column.key!)}
+                          aria-label={`Sort by ${column.label.toLowerCase()}`}
+                          className={`flex items-center gap-1 text-left text-xs font-medium transition hover:text-cc-text ${column.className ?? ""}`}
+                          style={{ color: sortKey === column.key ? TEXT : MUTED }}
+                        >
+                          {column.label}
+                          {sortKey === column.key &&
+                            (sortAsc ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </button>
+                      ) : (
+                        <span key={column.label || "chevron"} className={`text-xs font-medium ${column.className ?? ""}`} style={{ color: MUTED }}>
+                          {column.label}
+                        </span>
+                      ),
+                    )}
+                  </div>
+
+                  <ul>
+                    {sortedFiltered.map((worker) => {
+                      const scoreColor = getScoreColor(worker.compliance_score);
+                      const scored = worker.compliance_score > 0;
+                      const extra = statsById.get(worker.id);
+                      const credentials = credentialsByUser.get(worker.id);
+                      const trainingOverdue = !!extra?.training_overdue || !!extra?.induction_overdue;
+                      const notes = extra ? notesStatus(extra.draft_count ?? 0, extra.flagged_count ?? 0) : null;
+                      const employment = employmentLabel(extra?.employment_type);
+                      const statusDot = scored
+                        ? { background: scoreColor }
+                        : { boxShadow: `inset 0 0 0 1.5px ${MUTED}` };
+
+                      return (
+                        <li key={worker.id} className="border-b last:border-b-0" style={{ borderColor: BORDER }}>
+                          <button
+                            type="button"
+                            onClick={() => openWorker(worker)}
+                            className={`group flex w-full items-center gap-4 px-4 py-4 text-left transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum sm:px-6 lg:grid ${STAFF_GRID}`}
+                          >
+                            {/* Person */}
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                              <PersonAvatar name={worker.full_name} photoUrl={extra?.profile_photo_url} />
+                              <div className="min-w-0">
+                                <p className="truncate text-[15px] font-semibold" style={{ color: TEXT }}>
+                                  {worker.full_name}
+                                </p>
+                                <p className="mt-0.5 truncate text-sm" style={{ color: MUTED }}>
+                                  {formatRole(worker.role)}
+                                  {employment && ` · ${employment}`}
+                                  {extra?.suburb && <span className="hidden xl:inline">{` · ${extra.suburb}`}</span>}
+                                </p>
+                                {/* Phones and tablets: the column facts, condensed. */}
+                                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs lg:hidden" style={{ color: MUTED }}>
+                                  <span className="flex items-center gap-1.5 font-medium" style={{ color: scored ? scoreColor : MUTED }}>
+                                    <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={statusDot} />
+                                    {getScoreLabel(worker.compliance_score, translate)}
+                                    {scored && ` · ${worker.compliance_score}%`}
+                                  </span>
+                                  {credentials && credentials.tone !== "good" && (
+                                    <span className="font-medium" style={{ color: toneColor(credentials.tone) }}>
+                                      Credentials: {credentials.label}
+                                    </span>
+                                  )}
+                                  {trainingOverdue && (
+                                    <span className="font-medium" style={{ color: RED }}>Training overdue</span>
+                                  )}
+                                  <span>
+                                    {participantsFor(worker)} {participantsFor(worker) === 1 ? "participant" : "participants"}
+                                  </span>
+                                  {notes && notes.tone !== "neutral" && (
+                                    <span className="font-medium" style={{ color: toneColor(notes.tone) }}>Notes: {notes.label}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Credentials & training */}
+                            <div className="hidden min-w-0 lg:block">
+                              {credentialsLoading ? (
+                                <span className="block h-3 w-24 animate-pulse rounded-full" style={{ background: SOFT }} />
+                              ) : credentials ? (
+                                <p className="truncate text-sm font-medium" style={{ color: toneColor(credentials.tone) }}>
+                                  {credentials.label}
+                                </p>
+                              ) : (
+                                <p className="text-sm" style={{ color: MUTED }}>None on file</p>
+                              )}
+                              {trainingOverdue && (
+                                <p className="mt-0.5 text-xs font-medium" style={{ color: RED }}>
+                                  {extra?.induction_overdue ? "Induction overdue" : "Training overdue"}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Participants */}
+                            <p className="hidden text-sm tabular-nums lg:block" style={{ color: TEXT }}>
+                              {participantsFor(worker)}
+                            </p>
+
+                            {/* This week */}
+                            <p className="hidden text-sm tabular-nums xl:block" style={{ color: TEXT }}>
+                              {extra ? extra.sessions_this_week : <span style={{ color: MUTED }}>N/A</span>}
+                              {extra && (
+                                <span style={{ color: MUTED }}> {extra.sessions_this_week === 1 ? "session" : "sessions"}</span>
+                              )}
+                            </p>
+
+                            {/* Notes */}
+                            <p
+                              className="hidden truncate text-sm xl:block"
+                              style={{ color: notes ? toneColor(notes.tone) : MUTED, fontWeight: notes && notes.tone !== "neutral" ? 500 : 400 }}
+                            >
+                              {notes ? notes.label : "N/A"}
+                            </p>
+
+                            {/* Compliance */}
+                            <div className="hidden lg:block">
+                              {scored ? (
+                                <>
+                                  <p className="text-sm font-semibold tabular-nums" style={{ color: scoreColor }}>
+                                    {worker.compliance_score}%
+                                  </p>
+                                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: SOFT }}>
+                                    <div
+                                      className="h-full rounded-full"
+                                      style={{ width: `${Math.min(worker.compliance_score, 100)}%`, background: scoreColor }}
+                                    />
+                                  </div>
+                                </>
+                              ) : (
+                                <p className="text-sm" style={{ color: MUTED }}>Not scored</p>
+                              )}
+                            </div>
+
+                            {/* Status + last active */}
+                            <div className="hidden min-w-0 lg:block">
+                              <p className="flex items-center gap-2 text-sm font-medium" style={{ color: scored ? scoreColor : MUTED }}>
+                                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={statusDot} />
+                                <span className="truncate">{getScoreLabel(worker.compliance_score, translate)}</span>
+                              </p>
+                              <p className="mt-0.5 truncate pl-4 text-xs" style={{ color: MUTED }}>
+                                {worker.last_login ? `Active ${formatLastActive(worker.last_login)}` : "Never signed in"}
+                              </p>
+                            </div>
+
+                            <ChevronRight
+                              size={18}
+                              className="shrink-0 justify-self-end transition group-hover:translate-x-0.5"
+                              style={{ color: MUTED }}
+                            />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               )}
             </section>
+
+            {/* =====================================================
+                HOW THE TEAM IS TRACKING + HIRING: open sections on the
+                page, split by a rule rather than boxed in cards.
+            ===================================================== */}
+
+            <div className="grid gap-10 border-t pt-8 lg:grid-cols-2" style={{ borderColor: BORDER }}>
+              <section>
+                <h2 className="flex items-center gap-1.5 text-lg font-semibold" style={{ color: TEXT }}>
+                  How the team is tracking
+                  <SectionInfo text="How compliance scores are spread across your team, from strong performers to staff who need support. Staff with no sessions yet aren't counted." />
+                </h2>
+
+                <div className="mt-4 flex h-2.5 overflow-hidden rounded-full" style={{ background: SOFT }}>
+                  {distribution.strong > 0 && <div style={{ flex: distribution.strong, background: GREEN }} />}
+                  {distribution.onTrack > 0 && <div style={{ flex: distribution.onTrack, background: INFO }} />}
+                  {distribution.attention > 0 && <div style={{ flex: distribution.attention, background: AMBER }} />}
+                  {distribution.risk > 0 && <div style={{ flex: distribution.risk, background: RED }} />}
+                </div>
+
+                <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm" style={{ color: TEXT }}>
+                  {[
+                    { label: "strong", count: distribution.strong, color: GREEN },
+                    { label: "on track", count: distribution.onTrack, color: INFO },
+                    { label: "need attention", count: distribution.attention, color: AMBER },
+                    { label: "at risk", count: distribution.risk, color: RED },
+                  ].map((item) => (
+                    <li key={item.label} className="flex items-center gap-2">
+                      <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: item.color }} />
+                      <span className="font-semibold tabular-nums">{item.count}</span>
+                      <span style={{ color: MUTED }}>{item.label}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {stats.atRisk.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => showDirectory("at_risk")}
+                    className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold underline-offset-4 hover:underline"
+                    style={{ color: PLUM }}
+                  >
+                    See who needs a hand
+                    <ArrowRight size={14} />
+                  </button>
+                )}
+              </section>
+
+              <section>
+                <h2 className="text-lg font-semibold" style={{ color: TEXT }}>
+                  Hiring
+                </h2>
+
+                {pipelineActive && pipeline ? (
+                  <ul className="mt-4 space-y-2 text-sm" style={{ color: TEXT }}>
+                    <li>
+                      <span className="font-semibold tabular-nums">{pipeline.kpis.in_pipeline}</span>{" "}
+                      <span style={{ color: MUTED }}>
+                        {pipeline.kpis.in_pipeline === 1 ? "candidate" : "candidates"} in the pipeline
+                      </span>
+                    </li>
+                    <li>
+                      <span
+                        className="font-semibold tabular-nums"
+                        style={{ color: pipeline.kpis.credentials_overdue > 0 ? AMBER : TEXT }}
+                      >
+                        {pipeline.kpis.credentials_overdue}
+                      </span>{" "}
+                      <span style={{ color: MUTED }}>
+                        {pipeline.kpis.credentials_overdue === 1 ? "credential" : "credentials"} overdue
+                      </span>
+                    </li>
+                    <li>
+                      <span className="font-semibold tabular-nums">{pipeline.kpis.starting_this_week}</span>{" "}
+                      <span style={{ color: MUTED }}>starting this week</span>
+                    </li>
+                  </ul>
+                ) : (
+                  <p className="mt-4 max-w-md text-sm" style={{ color: MUTED }}>
+                    No one is in recruitment right now. Candidates and onboarding
+                    tasks will show here as your team grows.
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => navigate("/md/staff-onboarding")}
+                  className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold underline-offset-4 hover:underline"
+                  style={{ color: PLUM }}
+                >
+                  Open hiring pipeline
+                  <ArrowRight size={14} />
+                </button>
+              </section>
+            </div>
           </>
         )}
 

@@ -79,7 +79,7 @@ export function AccessibilityPanel({ showHeader = true }: { showHeader?: boolean
   }
 
   return (
-    <div className="w-full space-y-6 pb-24 text-safe">
+    <div className={`w-full min-w-0 space-y-5 text-safe ${showHeader ? "pb-24" : "pb-2"}`}>
       {showHeader && (
         <header>
           <p className="text-xs font-black uppercase tracking-wider" style={{ color: PLUM }}>
@@ -94,6 +94,7 @@ export function AccessibilityPanel({ showHeader = true }: { showHeader?: boolean
         </header>
       )}
 
+      <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-2 lg:items-start">
       <section
         className="rounded-2xl border bg-card p-5 shadow-sm"
         style={{ borderColor: BORDER }}
@@ -105,7 +106,7 @@ export function AccessibilityPanel({ showHeader = true }: { showHeader?: boolean
             {translate("accessibility.fontSize")}
           </h2>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2">
           {FONT_OPTIONS.map((opt) => (
             <Button
               key={opt.id}
@@ -123,7 +124,6 @@ export function AccessibilityPanel({ showHeader = true }: { showHeader?: boolean
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
       <section
         className="flex h-full flex-col rounded-2xl border bg-card p-5 shadow-sm"
         style={{ borderColor: BORDER }}
@@ -210,7 +210,6 @@ export function AccessibilityPanel({ showHeader = true }: { showHeader?: boolean
           </div>
         </div>
       </section>
-      </div>
 
       <section
         className="rounded-2xl border bg-card p-5 shadow-sm"
@@ -231,6 +230,9 @@ export function AccessibilityPanel({ showHeader = true }: { showHeader?: boolean
               type="button"
               role="radio"
               aria-checked={language === opt.id}
+              variant={language === opt.id ? "default" : "outline"}
+              className="h-auto min-h-[44px] whitespace-normal py-2"
+              disabled={saving}
               onClick={() => run(() => setLanguage(opt.id))}
             >
               {opt.label}
@@ -245,6 +247,7 @@ export function AccessibilityPanel({ showHeader = true }: { showHeader?: boolean
           )}
         </p>
       </section>
+      </div>
     </div>
   );
 }

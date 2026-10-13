@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
-import { Loader2, Upload } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { FilePlus2, History, Upload } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import {
+  ChoiceCard,
+  DropZone,
+  Field,
+  PanelFooter,
+  PanelHeader,
+  PrimaryButton,
+  SecondaryButton,
+  inputClass,
+  textareaClass,
+} from "./PanelKit";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
@@ -119,6 +127,8 @@ export function FolderUploadDialog({
     }
   }
 
+  const fieldStyle = { borderColor: "var(--cc-border)", color: "var(--cc-text)" };
+
   return (
     <Sheet
       open={open}
@@ -127,53 +137,47 @@ export function FolderUploadDialog({
         onOpenChange(next);
       }}
     >
-      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Upload to {folderLabel}</SheetTitle>
-        </SheetHeader>
-        <div className="mt-5 space-y-3">
+      <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+        <SheetTitle className="sr-only">Upload to {folderLabel}</SheetTitle>
+        <SheetDescription className="sr-only">Add a document to this folder.</SheetDescription>
+        <PanelHeader
+          icon={Upload}
+          title="Upload a file"
+          description={<>Adding to <strong style={{ color: "var(--cc-text)" }}>{folderLabel}</strong></>}
+        />
+
+        <form
+          id="folder-upload-form"
+          onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }}
+          className="mt-6 flex-1 space-y-5"
+        >
           {canReplace && (
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setMode("new")}
-                className="rounded-lg border p-2.5 text-left"
-                style={{
-                  borderColor: mode === "new" ? "var(--cc-plum)" : "var(--cc-border)",
-                  background: mode === "new" ? "var(--cc-active-bg)" : "transparent",
-                }}
-              >
-                <p className="text-[12.5px] font-bold" style={{ color: "var(--cc-text)" }}>
-                  New policy
-                </p>
-                <p className="mt-0.5 text-[11px]" style={{ color: "var(--cc-muted)" }}>
-                  Doesn't replace anything
-                </p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("replace")}
-                className="rounded-lg border p-2.5 text-left"
-                style={{
-                  borderColor: mode === "replace" ? "var(--cc-plum)" : "var(--cc-border)",
-                  background: mode === "replace" ? "var(--cc-active-bg)" : "transparent",
-                }}
-              >
-                <p className="text-[12.5px] font-bold" style={{ color: "var(--cc-text)" }}>
-                  New version
-                </p>
-                <p className="mt-0.5 text-[11px]" style={{ color: "var(--cc-muted)" }}>
-                  Replaces an existing policy
-                </p>
-              </button>
+            <div className="space-y-2" role="radiogroup" aria-label="New policy or new version">
+              <ChoiceCard
+                selected={mode === "new"}
+                onSelect={() => setMode("new")}
+                icon={FilePlus2}
+                title="A new policy"
+                description="Doesn't replace anything already in this folder."
+              />
+              <ChoiceCard
+                selected={mode === "replace"}
+                onSelect={() => setMode("replace")}
+                icon={History}
+                title="A new version"
+                description="Replaces a policy. The previous version is kept as history."
+              />
             </div>
           )}
 
           {mode === "replace" && (
-            <div>
+            <Field
+              label="Which policy is this replacing?"
+              hint="Its title and description are copied in below. Edit them and attach the revised file."
+            >
               <Select value={replaceId} onValueChange={setReplaceId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Which policy is this replacing?" />
+                <SelectTrigger className="h-11 rounded-xl px-4" aria-label="Policy being replaced">
+                  <SelectValue placeholder="Choose a policy" />
                 </SelectTrigger>
                 <SelectContent>
                   {existingDocuments?.map((d) => (
@@ -183,68 +187,80 @@ export function FolderUploadDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="mt-1.5 text-[11px]" style={{ color: "var(--cc-muted)" }}>
-                Its title and description are copied in below — edit them and attach the revised file. The
-                previous version is kept, not deleted, and stays available as history.
-              </p>
-            </div>
+            </Field>
           )}
 
-          <Input placeholder="Document title" value={title} onChange={(e) => setTitle(e.target.value)} />
-          {withDescription && (
-            <Textarea
-              rows={3}
-              placeholder="Description (optional)"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+          <DropZone
+            file={file}
+            onFile={(f) => {
+              setFile(f);
+              // Name the document after its file if no title's been given yet.
+              if (f && !title.trim()) setTitle(f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "));
+            }}
+            accept="application/pdf,image/jpeg,image/png"
+            hint="PDF, JPG or PNG, up to 20 MB"
+          />
+
+          <Field label="Document title" htmlFor="upload-title">
+            <input
+              id="upload-title"
+              placeholder="e.g. Incident management policy"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className={inputClass}
+              style={fieldStyle}
             />
+          </Field>
+          {withDescription && (
+            <Field label="Description" htmlFor="upload-description" optional>
+              <textarea
+                id="upload-description"
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className={textareaClass}
+                style={fieldStyle}
+              />
+            </Field>
           )}
           {canReplace && (
-            <Input
-              placeholder="Version label (optional, e.g. v2 2026)"
-              value={versionLabel}
-              onChange={(e) => setVersionLabel(e.target.value)}
-            />
+            <Field label="Version label" htmlFor="upload-version" optional>
+              <input
+                id="upload-version"
+                placeholder="e.g. v2 2026"
+                value={versionLabel}
+                onChange={(e) => setVersionLabel(e.target.value)}
+                className={inputClass}
+                style={fieldStyle}
+              />
+            </Field>
           )}
           {withWorkerVisibility && (
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border p-3" style={{ borderColor: "var(--cc-border)" }}>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition hover:bg-cc-soft"
+              style={{ borderColor: visibleToWorkers ? "var(--cc-brand-purple)" : "var(--cc-border)" }}
+            >
               <Checkbox checked={visibleToWorkers} onCheckedChange={(v) => setVisibleToWorkers(v === true)} className="mt-0.5" />
               <span>
-                <span className="block text-[12.5px] font-semibold" style={{ color: "var(--cc-text)" }}>
-                  Visible to workers
+                <span className="block text-sm font-semibold" style={{ color: "var(--cc-text)" }}>
+                  Share with workers
                 </span>
-                <span className="block text-[11px]" style={{ color: "var(--cc-muted)" }}>
-                  Staff will be able to read this policy and acknowledge it. Off by default — turn on only for
-                  documents every worker should read.
+                <span className="mt-0.5 block text-xs leading-5" style={{ color: "var(--cc-muted)" }}>
+                  Staff can read this policy and acknowledge it. Off by default: turn on only for documents every worker
+                  should read.
                 </span>
               </span>
             </label>
           )}
-          <label
-            className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed py-6 text-[12.5px] font-semibold"
-            style={{ borderColor: "var(--cc-border)", color: "var(--cc-muted)" }}
-          >
-            <Upload size={15} />
-            {file ? file.name : "Choose a PDF or image, max 20MB"}
-            <input
-              type="file"
-              accept="application/pdf,image/jpeg,image/png"
-              className="hidden"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            />
-          </label>
-        </div>
-        <SheetFooter className="mt-5">
-          <Button
-            disabled={submitting}
-            className="w-full gap-2"
-            onClick={() => void handleSubmit()}
-            style={{ background: "var(--cc-plum)", color: "white" }}
-          >
-            {submitting && <Loader2 size={14} className="animate-spin" />}
-            {mode === "replace" ? "Upload new version" : "Upload document"}
-          </Button>
-        </SheetFooter>
+        </form>
+
+        <PanelFooter>
+          <SecondaryButton onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</SecondaryButton>
+          <PrimaryButton type="submit" form="folder-upload-form" busy={submitting} disabled={!file || !title.trim()}>
+            <Upload size={16} />
+            {mode === "replace" ? "Upload new version" : "Upload file"}
+          </PrimaryButton>
+        </PanelFooter>
       </SheetContent>
     </Sheet>
   );

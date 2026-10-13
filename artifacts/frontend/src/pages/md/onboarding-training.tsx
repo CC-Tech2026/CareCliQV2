@@ -20,12 +20,19 @@ import {
   X,
   Loader2,
   ClipboardCheck,
+  Search,
+  ListChecks,
+  ShieldCheck,
+  BookOpen,
 } from "lucide-react";
 import { TrainingReviews } from "@/components/training/TrainingReviews";
 import { TrainingModuleEditor } from "@/components/training/TrainingModuleEditor";
 import { SharedResourceAccess } from "@/components/training/WorkerResourceLibrary";
 import { CourseCover } from "@/components/training/CourseCover";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { EmptyState, LoadError, PageHeader, PillTabs, SkeletonBlocks, StatusText, ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { ChoiceCard, Field, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass, textareaClass } from "@/pages/md/vault/components/PanelKit";
 import { SectionInfo } from "@/components/ui/section-info";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
@@ -551,184 +558,104 @@ function StageSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
-      <div
-        className="h-full w-full max-w-md overflow-y-auto bg-white shadow-xl flex flex-col"
-        style={{ borderLeft: `1px solid ${BORDER}` }}
-      >
-        <div
-          className="flex items-center justify-between border-b px-5 py-4"
-          style={{ borderColor: BORDER }}
+    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+        <SheetTitle className="sr-only">Edit stage</SheetTitle>
+        <SheetDescription className="sr-only">Change what a new starter does in this onboarding stage.</SheetDescription>
+        <PanelHeader icon={ListChecks} title="Edit stage" description="What a new starter does in this stage, and what counts as done." />
+        <form
+          id="stage-form"
+          className="mt-6 flex-1 space-y-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (title.trim() && !saving) void handleSave();
+          }}
         >
-          <h3 className="text-[15px] font-black" style={{ color: TEXT }}>
-            Edit Stage
-          </h3>
-          <button
-            onClick={onClose}
-            aria-label="Close panel"
-            className="rounded-lg p-1 hover:bg-gray-100"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="flex-1 space-y-5 p-5">
-          <div>
-            <label
-              className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]"
-              style={{ color: MUTED }}
-            >
-              Stage Name
-            </label>
+          <Field label="Stage name" htmlFor="stage-name">
             <input
+              id="stage-name"
               aria-label="Stage name"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
-              style={{ borderColor: BORDER }}
+              className={inputClass}
+              style={{ borderColor: BORDER, color: TEXT }}
             />
-          </div>
-
-          <div>
-            <label
-              className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]"
-              style={{ color: MUTED }}
-            >
-              Instructions
-            </label>
+          </Field>
+          <Field label="Instructions" htmlFor="stage-instructions">
             <textarea
+              id="stage-instructions"
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               rows={5}
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none resize-none focus:ring-1"
-              style={{ borderColor: BORDER }}
+              className={`resize-none ${textareaClass}`}
+              style={{ borderColor: BORDER, color: TEXT }}
               placeholder="Describe what the new starter should do in this stage…"
             />
-          </div>
-
-          <div>
-            <label
-              className="mb-3 block text-[11px] font-black uppercase tracking-[0.12em]"
-              style={{ color: MUTED }}
-            >
-              Completion Requirements
-            </label>
-            <div className="space-y-2">
-              {COMPLETION_KEYS.map(({ key, label }) => (
-                <label
-                  key={key}
-                  className="flex items-center gap-3 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!reqs[key]}
-                    onChange={() => toggleReq(key)}
-                    className="h-4 w-4 rounded accent-[#1E3A5F]"
-                  />
-                  <span
-                    className="text-[13px] font-medium"
-                    style={{ color: TEXT }}
-                  >
-                    {label}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <label
-                className="text-[11px] font-black uppercase tracking-[0.12em]"
-                style={{ color: MUTED }}
-              >
-                Attach Resources
+          </Field>
+          <div className="space-y-2">
+            <p className="text-sm font-medium" style={{ color: TEXT }}>Completion requirements</p>
+            {COMPLETION_KEYS.map(({ key, label }) => (
+              <label key={key} className="flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 transition hover:bg-cc-soft" style={{ borderColor: reqs[key] ? "var(--cc-brand-purple)" : BORDER, background: reqs[key] ? "var(--cc-brand-purple-soft)" : undefined }}>
+                <input
+                  type="checkbox"
+                  checked={!!reqs[key]}
+                  onChange={() => toggleReq(key)}
+                  className="h-4 w-4 rounded accent-[color:var(--cc-brand-purple)]"
+                />
+                <span className="text-sm font-medium" style={{ color: TEXT }}>{label}</span>
               </label>
+            ))}
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium" style={{ color: TEXT }}>Attach resources</p>
               {!resourcesLoaded && (
-                <button
-                  onClick={loadResources}
-                  className="text-[11px] font-bold underline"
-                  style={{ color: PLUM }}
-                >
+                <button type="button" onClick={loadResources} className={ghostClass}>
                   {resourcesLoading ? "Loading…" : "Load resources"}
                 </button>
               )}
             </div>
             {resourcesLoaded && allResources.length === 0 && (
-              <p className="text-[12px]" style={{ color: MUTED }}>
+              <p className="text-sm" style={{ color: MUTED }}>
                 No resources in library yet. Upload some in the Resources tab.
               </p>
             )}
             {resourcesLoaded && allResources.length > 0 && (
-              <div
-                className="max-h-44 overflow-y-auto space-y-1.5 rounded-lg border p-2"
-                style={{ borderColor: BORDER }}
-              >
+              <div className="max-h-56 space-y-1.5 overflow-y-auto">
                 {allResources.map((r) => (
-                  <label
-                    key={r.id}
-                    className="flex items-center gap-2.5 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-gray-50"
-                  >
+                  <label key={r.id} className="flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 transition hover:bg-cc-soft" style={{ borderColor: attachedIds.has(r.id) ? "var(--cc-brand-purple)" : BORDER, background: attachedIds.has(r.id) ? "var(--cc-brand-purple-soft)" : undefined }}>
                     <input
                       type="checkbox"
                       checked={attachedIds.has(r.id)}
                       onChange={() => toggleAttach(r.id)}
-                      className="h-4 w-4 rounded accent-[#1E3A5F] shrink-0"
+                      className="h-4 w-4 shrink-0 rounded accent-[color:var(--cc-brand-purple)]"
                     />
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className="truncate text-[12px] font-semibold"
-                        style={{ color: TEXT }}
-                      >
-                        {r.name}
-                      </p>
-                      <p
-                        className="text-[10px] font-medium uppercase"
-                        style={{ color: MUTED }}
-                      >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium" style={{ color: TEXT }}>{r.name}</span>
+                      <span className="block text-xs capitalize" style={{ color: MUTED }}>
                         {r.resource_type}
                         {r.category ? ` · ${r.category}` : ""}
-                      </p>
-                    </div>
+                      </span>
+                    </span>
                   </label>
                 ))}
               </div>
             )}
             {attachedIds.size > 0 && (
-              <p
-                className="mt-1.5 text-[11px] font-bold"
-                style={{ color: PLUM }}
-              >
-                {attachedIds.size} resource{attachedIds.size !== 1 ? "s" : ""}{" "}
-                will be attached on save
+              <p className="text-xs font-semibold" style={{ color: "var(--cc-brand-purple)" }}>
+                {attachedIds.size} resource{attachedIds.size !== 1 ? "s" : ""} will be attached on save
               </p>
             )}
           </div>
-        </div>
-
-        <div
-          className="flex justify-end gap-2 border-t px-5 py-4"
-          style={{ borderColor: BORDER }}
-        >
-          <button
-            onClick={onClose}
-            className="rounded-lg border px-4 py-2 text-[13px] font-bold"
-            style={{ borderColor: BORDER, color: MUTED }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !title.trim()}
-            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-black text-white disabled:opacity-50"
-            style={{ background: "var(--cc-cta)" }}
-          >
-            {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-            Save Stage
-          </button>
-        </div>
-      </div>
-    </div>
+        </form>
+        <PanelFooter>
+          <SecondaryButton onClick={onClose} disabled={saving}>Cancel</SecondaryButton>
+          <PrimaryButton type="submit" form="stage-form" busy={saving} disabled={!title.trim()}>
+            Save stage
+          </PrimaryButton>
+        </PanelFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -1917,12 +1844,12 @@ function ModulesTab({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-[14px] font-semibold" style={{ color: TEXT }}>
-            Training Modules
+          <h2 className="text-lg font-semibold" style={{ color: TEXT }}>
+            Training modules
           </h2>
-          <p className="mt-0.5 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="mt-0.5 text-sm" style={{ color: MUTED }}>
             Create courses, curate learning materials and set requirements for
             new hires.
           </p>
@@ -1932,30 +1859,37 @@ function ModulesTab({
             setEditingModule(undefined);
             setShowForm(true);
           }}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold text-white shrink-0"
-          style={{ background: "var(--cc-cta)" }}
+          className={`${ctaClass} w-full shrink-0 sm:w-auto`}
         >
-          <Plus size={12} strokeWidth={2.5} /> New Module
+          <Plus size={15} /> New module
         </button>
       </div>
 
-      <label className="block">
-        <span className="sr-only">Search training modules</span>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search training modules"
-          className="w-full rounded-xl border bg-card px-4 py-3 text-sm sm:max-w-sm"
-        />
-      </label>
-
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <label className="grid gap-1.5 text-sm font-medium text-cc-text">
-          Show modules
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <label className="relative block w-full sm:max-w-sm">
+          <span className="sr-only">Search training modules</span>
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search training modules"
+            className="h-11 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
+            style={{ borderColor: BORDER, color: TEXT }}
+          />
+        </label>
+        <div className="flex items-center gap-3">
+        {!loading && !error && (
+          <p role="status" className="text-sm text-cc-muted">
+            {visibleModules.length} of {modules.length} modules
+          </p>
+        )}
+        <label className="text-sm text-cc-text">
+          <span className="sr-only">Show modules</span>
           <select
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
-            className="min-h-11 rounded-lg border bg-card px-3 text-sm"
+            className="min-h-10 rounded-full border bg-cc-surface px-4 text-sm"
+            style={{ borderColor: BORDER }}
           >
             <option value="all">All modules</option>
             <option value="available">Available to workers</option>
@@ -1963,85 +1897,49 @@ function ModulesTab({
             <option value="new-hire">Assigned to new hires</option>
           </select>
         </label>
-        {!loading && !error && (
-          <p role="status" className="text-sm text-cc-muted">
-            {visibleModules.length} of {modules.length} modules
-          </p>
-        )}
+        </div>
       </div>
       {loading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-16 animate-pulse rounded-xl"
-              style={{ background: SOFT }}
-            />
-          ))}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3].map((i) => <div key={i} className="h-72 animate-pulse rounded-2xl bg-cc-surface" />)}
         </div>
       ) : error ? (
-        <div
-          className="rounded-xl border p-10 text-center"
-          style={{ borderColor: BORDER }}
-        >
-          <AlertTriangle
-            size={32}
-            className="mx-auto mb-3"
-            style={{ color: CORAL }}
-          />
-          <p className="font-semibold" style={{ color: TEXT }}>
-            Could not load training modules
-          </p>
-          <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>
-            <button onClick={load} className="underline">
-              Try again
-            </button>
-          </p>
-        </div>
+        <LoadError onRetry={load}>
+          <AlertTriangle size={16} style={{ color: "var(--cc-danger-text)" }} />
+          <span className="font-semibold">Could not load training modules</span>
+        </LoadError>
       ) : modules.length === 0 ? (
-        <div
-          className="rounded-xl border p-10 text-center"
-          style={{ borderColor: BORDER }}
-        >
-          <GraduationCap
-            size={32}
-            className="mx-auto mb-3"
-            style={{ color: MUTED }}
-          />
-          <p className="font-semibold" style={{ color: TEXT }}>
-            No training modules yet
-          </p>
-          <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>
-            Create one and mark it auto-assign to make it mandatory for new
-            hires.
-          </p>
-        </div>
+        <EmptyState
+          icon={GraduationCap}
+          title="No training modules yet"
+          body="Create one and mark it auto-assign to make it mandatory for new hires."
+        />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {visibleModules.map((m) => (
             <div
               key={m.id}
-              className="flex h-full flex-col rounded-2xl border bg-card p-3 shadow-sm"
-              style={{ borderColor: BORDER }}
+              className="flex h-full flex-col rounded-2xl bg-cc-surface p-3"
             >
               <CourseCover
                 title={m.title}
                 count={m.resources?.length}
                 color={m.cover_color}
                 imageUrl={m.cover_url}
+                className="h-28"
               />
               <div className="flex flex-1 flex-col gap-4 p-2 pt-4">
                 <div className="min-w-0 flex-1">
                   <p
-                    className="min-min-h-11 text-sm font-bold leading-5"
+                    className="text-base font-semibold leading-6"
                     style={{ color: TEXT }}
                   >
                     {m.title}
                   </p>
-                  <span
-                    className={`mt-2 inline-flex rounded-full px-2 py-1 text-xs font-bold ${m.is_locked ? "bg-amber-100 text-amber-900" : "bg-emerald-50 text-emerald-700"}`}
-                  >
-                    {m.is_locked ? "Under maintenance" : "Available to workers"}
+                  <span className="mt-0.5 block">
+                    <StatusText tone={m.is_locked ? "warning" : "good"}>
+                      {m.is_locked ? "Under maintenance" : "Available to workers"}
+                    </StatusText>
                   </span>
                   {m.description && (
                     <p
@@ -2062,8 +1960,8 @@ function ModulesTab({
                     )}
                     {m.requires_certification && (
                       <span
-                        className="rounded-full px-2 py-0.5 text-xs font-semibold"
-                        style={{ background: SOFT, color: PLUM }}
+                        className="rounded-full px-2.5 py-0.5 text-xs font-medium"
+                        style={{ background: SOFT, color: TEXT }}
                       >
                         Certification required
                       </span>
@@ -2071,13 +1969,13 @@ function ModulesTab({
                   </div>
                 </div>
 
-                <div className="mt-auto grid gap-2 border-t pt-4">
+                <div className="mt-auto flex flex-wrap items-center gap-2 border-t pt-4" style={{ borderColor: BORDER }}>
                   <button
                     onClick={() => {
                       setEditingModule(m);
                       setShowForm(true);
                     }}
-                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 text-xs font-bold text-primary-foreground"
+                    className={outlineClass}
                   >
                     <Pencil size={14} /> Manage module
                   </button>
@@ -2085,8 +1983,8 @@ function ModulesTab({
                     onClick={() => toggleFlag(m, "auto_assign_on_hire")}
                     disabled={updatingId !== null}
                     aria-pressed={m.auto_assign_on_hire}
-                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold disabled:opacity-50"
-                    style={{ borderColor: BORDER, color: MUTED }}
+                    className={`${ghostClass} min-h-10 text-xs`}
+                    style={{ color: m.auto_assign_on_hire ? TEXT : MUTED }}
                   >
                     {updatingId === m.id && (
                       <Loader2 size={13} className="animate-spin" />
@@ -2106,10 +2004,11 @@ function ModulesTab({
         !error &&
         modules.length > 0 &&
         visibleModules.length === 0 && (
-          <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No modules match your search and filter.
-            <button type="button" onClick={() => { setSearch(""); setFilter("all"); }} className="mx-auto mt-3 block rounded-lg border px-3 py-2 text-xs font-semibold hover:bg-muted">Clear filters</button>
-          </p>
+          <EmptyState
+            icon={Search}
+            title="No modules match your search and filter."
+            action={<button type="button" onClick={() => { setSearch(""); setFilter("all"); }} className={outlineClass}>Clear filters</button>}
+          />
         )}
     </div>
   );
@@ -2155,122 +2054,77 @@ function InductionFormSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
-      <div
-        className="h-full w-full max-w-md overflow-y-auto bg-white shadow-xl flex flex-col"
-        style={{ borderLeft: `1px solid ${BORDER}` }}
-      >
-        <div
-          className="flex items-center justify-between border-b px-5 py-4"
-          style={{ borderColor: BORDER }}
+    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+        <SheetTitle className="sr-only">New induction item</SheetTitle>
+        <SheetDescription className="sr-only">Add an item to the induction checklist.</SheetDescription>
+        <PanelHeader icon={ClipboardCheck} title="New induction item" description="Something every new worker reads, watches or does before their first shifts." />
+        <form
+          id="induction-item-form"
+          className="mt-6 flex-1 space-y-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (title.trim() && !saving) void handleSave();
+          }}
         >
-          <h3 className="text-[15px] font-black" style={{ color: TEXT }}>
-            New Induction Item
-          </h3>
-          <button
-            onClick={onClose}
-            aria-label="Close panel"
-            className="rounded-lg p-1 hover:bg-gray-100"
-          >
-            <X size={16} style={{ color: MUTED }} />
-          </button>
-        </div>
-
-        <div className="flex-1 space-y-5 p-5">
-          <div>
-            <label
-              className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]"
-              style={{ color: MUTED }}
-            >
-              Title
-            </label>
+          <Field label="Title" htmlFor="induction-title">
             <input
+              id="induction-title"
               autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Meet your team"
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
-              style={{ borderColor: BORDER }}
+              className={inputClass}
+              style={{ borderColor: BORDER, color: TEXT }}
             />
-          </div>
-
-          <div>
-            <label
-              className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]"
-              style={{ color: MUTED }}
-            >
-              Description
-            </label>
+          </Field>
+          <Field label="Description" htmlFor="induction-description" optional>
             <textarea
+              id="induction-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none resize-none focus:ring-1"
-              style={{ borderColor: BORDER }}
+              className={`resize-none ${textareaClass}`}
+              style={{ borderColor: BORDER, color: TEXT }}
               placeholder="What should a new worker do for this item?"
             />
-          </div>
-
-          <div>
-            <label
-              className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em]"
-              style={{ color: MUTED }}
-            >
-              Resource link
-            </label>
+          </Field>
+          <Field label="Resource link" htmlFor="induction-link" optional hint="A reading, video or policy link.">
             <input
+              id="induction-link"
               value={contentUrl}
               onChange={(e) => setContentUrl(e.target.value)}
-              placeholder="Optional — a reading, video, or policy link"
-              className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
-              style={{ borderColor: BORDER }}
+              placeholder="https://"
+              className={inputClass}
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+          </Field>
+          <div className="space-y-2" role="radiogroup" aria-label="Requirement">
+            <p className="text-sm font-medium" style={{ color: TEXT }}>Requirement</p>
+            <ChoiceCard
+              selected={isMandatory}
+              onSelect={() => setIsMandatory(true)}
+              icon={ShieldCheck}
+              title="Mandatory"
+              description="Applies to every worker in the org. Rostering is blocked until it's complete."
+            />
+            <ChoiceCard
+              selected={!isMandatory}
+              onSelect={() => setIsMandatory(false)}
+              icon={BookOpen}
+              title="Optional"
+              description="Informational only. Never blocks rostering."
             />
           </div>
-
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isMandatory}
-              onChange={(e) => setIsMandatory(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded accent-[#1E3A5F]"
-            />
-            <span className="text-[13px] font-medium" style={{ color: TEXT }}>
-              Mandatory
-              <span
-                className="mt-0.5 block text-[11px] font-normal"
-                style={{ color: MUTED }}
-              >
-                Applies to every worker in the org. Rostering is blocked until
-                it's complete. Uncheck for optional/informational items that
-                never block anything.
-              </span>
-            </span>
-          </label>
-        </div>
-
-        <div
-          className="flex justify-end gap-2 border-t px-5 py-4"
-          style={{ borderColor: BORDER }}
-        >
-          <button
-            onClick={onClose}
-            className="rounded-lg border px-4 py-2 text-[13px] font-bold"
-            style={{ borderColor: BORDER, color: MUTED }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !title.trim()}
-            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-black text-white disabled:opacity-50"
-            style={{ background: "var(--cc-cta)" }}
-          >
-            {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-            Create Item
-          </button>
-        </div>
-      </div>
-    </div>
+        </form>
+        <PanelFooter>
+          <SecondaryButton onClick={onClose} disabled={saving}>Cancel</SecondaryButton>
+          <PrimaryButton type="submit" form="induction-item-form" busy={saving} disabled={!title.trim()}>
+            Create item
+          </PrimaryButton>
+        </PanelFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -2471,60 +2325,31 @@ export default function MDOnboardingTrainingPage() {
 
   return (
     <HubLayout>
-      <div className="space-y-6 pb-10">
+      <div className="space-y-8 pb-12">
         {!editing && (
           <>
-            <div className="flex flex-wrap items-center gap-4">
-              <button
-                onClick={() => navigate("/md/onboarding")}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
-                style={{ color: MUTED, background: SOFT }}
-              >
-                <ArrowLeft size={13} strokeWidth={2.5} /> Back to Onboarding
-              </button>
-              <div>
-                <h1
-                  className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
-                  style={{ color: TEXT }}
-                >
+            <PageHeader
+              back={
+                <button type="button" onClick={() => navigate("/md/onboarding")} className={`${ghostClass} -ml-4`}>
+                  <ArrowLeft size={15} /> Back to Onboarding
+                </button>
+              }
+              eyebrow="Workforce & People"
+              title={
+                <span className="inline-flex items-center gap-2">
                   Competency & Training
                   <SectionInfo text={translate("md.onboarding.subtitle")} />
-                </h1>
-              </div>
-              <div
-                className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg"
-                style={{ background: SOFT, color: PLUM }}
-              >
-                <GraduationCap size={16} strokeWidth={2.5} />
-              </div>
-            </div>
+                </span>
+              }
+              description="Training modules, shared resources and completion reviews for your workforce."
+            />
 
-            <div
-              aria-label="Training sections"
-              className="grid grid-cols-1 gap-1 rounded-xl p-1 sm:grid-cols-3"
-              style={{ background: SOFT }}
-            >
-              {TAB_KEYS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  aria-pressed={activeTab === tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className="min-h-11 min-w-0 rounded-lg px-3 py-2 text-sm font-semibold transition"
-                  style={{
-                    background:
-                      activeTab === tab.id ? "var(--cc-bg)" : "transparent",
-                    color: activeTab === tab.id ? PLUM : MUTED,
-                    boxShadow:
-                      activeTab === tab.id
-                        ? "0 1px 3px rgba(0,0,0,0.08)"
-                        : "none",
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+            <PillTabs<(typeof TAB_KEYS)[number]["id"]>
+              label="Training sections"
+              value={activeTab}
+              onChange={setActiveTab}
+              options={TAB_KEYS.map((tab) => ({ key: tab.id, label: tab.label }))}
+            />
           </>
         )}
         {activeTab === "modules" && <ModulesTab onEditingChange={setEditing} />}

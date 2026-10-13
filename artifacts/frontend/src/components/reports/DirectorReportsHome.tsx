@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { ArrowRight } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { ArrowRight, FolderLock, Search, Siren } from "lucide-react";
+import { ctaClass, outlineClass } from "@/components/layout/PageKit";
 
 export const DIRECTOR_REPORTS = [
   {
@@ -73,68 +72,70 @@ export function DirectorReportsHome({
         .includes(search.trim().toLowerCase()),
   );
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cc-border bg-cc-surface p-4">
-        <div>
-          <h2 className="text-sm font-semibold">Incident reporting</h2>
-          <p className="mt-1 text-sm text-cc-muted">
-            Record a new incident or follow up an existing report.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/incidents"
-            className="inline-flex min-h-11 items-center rounded-lg border border-cc-border px-4 text-sm font-medium text-cc-plum"
-          >
-            View incident register
-          </Link>
-          <Link
-            href="/incidents/new"
-            className="inline-flex min-h-11 items-center rounded-lg bg-cc-plum px-4 text-sm font-semibold text-white"
-          >
-            Report an incident
-          </Link>
-        </div>
+    <div className="space-y-8">
+      <div className="overflow-hidden rounded-2xl bg-cc-surface">
+        <ul className="divide-y divide-cc-border">
+          <li className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cc-soft text-cc-muted" aria-hidden="true">
+                <Siren className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-cc-text">Incident reporting</h2>
+                <p className="mt-0.5 text-sm text-cc-muted">Record a new incident or follow up an existing report.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/incidents" className={outlineClass}>View incident register</Link>
+              <Link href="/incidents/new" className={ctaClass}>Report an incident</Link>
+            </div>
+          </li>
+          <li>
+            <section className="flex flex-wrap items-center justify-between gap-3 px-5 py-4" aria-label="Saved documents">
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cc-soft text-cc-muted" aria-hidden="true">
+                  <FolderLock className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-cc-text">Looking for a saved document?</h2>
+                  <p className="mt-0.5 text-sm text-cc-muted">
+                    Use the Vault to find stored files and organise evidence packs. Use Reports to review performance and generate reports.
+                  </p>
+                </div>
+              </div>
+              <Link href="/md/vault" className={outlineClass}>
+                Open Vault
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </section>
+          </li>
+        </ul>
       </div>
-      <section
-        className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-cc-border bg-cc-surface p-4 sm:p-5"
-        aria-label="Saved documents"
-      >
-        <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-cc-text">
-            Looking for a saved document?
-          </h2>
-          <p className="mt-1 text-sm text-cc-muted">
-            Use the Vault to find stored files and organise evidence packs. Use
-            Reports to review performance and generate reports.
-          </p>
+
+      <section className="space-y-4" aria-label="Find a management report">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-cc-text">Reports</h2>
+            <p className="mt-0.5 text-sm text-cc-muted" aria-live="polite">
+              {filtered.length} reports and workspaces. Available record filters are shown inside each report.
+            </p>
+          </div>
         </div>
-        <Link
-          href="/md/vault"
-          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-cc-border px-4 text-sm font-semibold text-cc-plum"
-        >
-          Open Vault
-          <ArrowRight className="h-4 w-4" />
-        </Link>
-      </section>
-      <section
-        className="rounded-xl border border-cc-border bg-cc-surface p-4 sm:p-5"
-        aria-label="Find a management report"
-      >
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <label className="min-w-0 flex-1 text-sm font-medium">
-            Find a report
-            <Input
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <label className="relative block w-full sm:max-w-sm">
+            <span className="sr-only">Find a report</span>
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cc-muted" />
+            <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search reports, invoices or audit"
-              className="mt-1 min-h-11"
+              className="h-11 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-4 text-sm text-cc-text outline-none transition focus:ring-2 focus:ring-cc-plum"
             />
           </label>
-          <label className="text-sm font-medium">
-            Reporting area
+          <label className="text-sm text-cc-text">
+            <span className="sr-only">Reporting area</span>
             <select
-              className="mt-1 block min-h-11 w-full rounded-md border border-cc-border bg-cc-surface px-3 sm:w-56"
+              className="min-h-10 w-full rounded-full border border-cc-border bg-cc-surface px-4 text-sm sm:w-56"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             >
@@ -149,65 +150,57 @@ export function DirectorReportsHome({
             </select>
           </label>
         </div>
-        <p className="mt-3 text-sm text-cc-muted" aria-live="polite">
-          {filtered.length} reports and workspaces. Available record filters are
-          shown inside each report.
-        </p>
-      </section>
-      {!filtered.length ? (
-        <div className="rounded-xl border border-cc-border p-6 text-center">
-          <p>No reports match your search.</p>
-          <Button
-            variant="link"
-            onClick={() => {
-              setSearch("");
-              setCategory("All areas");
-            }}
-          >
-            Clear filters
-          </Button>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {filtered.map((report) => (
-            <article
-              key={report.id}
-              className="flex min-w-0 flex-col rounded-xl border border-cc-border bg-cc-surface p-5"
+
+        {!filtered.length ? (
+          <div className="rounded-2xl bg-cc-surface px-6 py-12 text-center">
+            <Search className="mx-auto mb-3 h-6 w-6 text-cc-muted" />
+            <p className="text-base font-semibold text-cc-text">No reports match your search.</p>
+            <button
+              type="button"
+              className={`${outlineClass} mt-4`}
+              onClick={() => {
+                setSearch("");
+                setCategory("All areas");
+              }}
             >
-              <p className="text-xs font-semibold text-cc-muted">
-                {report.category}
-              </p>
-              <h2 className="mt-2 text-lg font-semibold text-cc-text">
-                {report.title}
-              </h2>
-              <p className="mb-4 mt-2 text-sm leading-relaxed text-cc-muted">
-                {report.description}
-              </p>
-              <div className="mt-auto border-t border-cc-border pt-3">
-                {"href" in report ? (
-                  <Link
-                    href={report.href}
-                    className="flex min-h-11 items-center justify-between gap-3 text-sm font-semibold text-cc-plum"
-                  >
-                    Open workspace
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                ) : (
-                  <button
-                    aria-label={`Open ${report.title}`}
-                    onClick={() => onOpen(report.id)}
-                    className="flex min-h-11 w-full items-center justify-between gap-3 text-left text-sm font-semibold text-cc-plum"
-                  >
-                    Open report
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-      <p className="rounded-xl bg-cc-soft p-4 text-sm text-cc-muted">
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {filtered.map((report) => (
+              <article
+                key={report.id}
+                className="flex min-w-0 flex-col rounded-2xl bg-cc-surface p-5"
+              >
+                <p className="text-xs font-semibold text-cc-muted">{report.category}</p>
+                <h2 className="mt-1 text-base font-semibold text-cc-text">{report.title}</h2>
+                <p className="mb-4 mt-1 text-sm leading-6 text-cc-muted">{report.description}</p>
+                <div className="mt-auto">
+                  {"href" in report ? (
+                    <Link href={report.href} className={outlineClass}>
+                      Open workspace
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label={`Open ${report.title}`}
+                      onClick={() => onOpen(report.id)}
+                      className={outlineClass}
+                    >
+                      Open report
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <p className="text-sm text-cc-muted">
         For one participant's records, open their profile and choose Export
         records. Use these reports for organisation-wide review.
       </p>

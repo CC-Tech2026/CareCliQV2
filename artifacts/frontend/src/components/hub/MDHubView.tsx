@@ -12,6 +12,7 @@ import {
   Clock,
   Timer,
   Zap,
+  RefreshCw,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { appLocalDateKey } from "@/lib/datetime";
@@ -128,7 +129,7 @@ function CapacityMeter({ used, total }: { used: number; total: number }) {
       <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: `${color}1F` }}>
         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <p className="mt-1.5 text-[10px] font-bold" style={{ color: MUTED }}>
+      <p className="mt-1.5 text-[11px] font-bold" style={{ color: MUTED }}>
         {available} spot{available === 1 ? "" : "s"} available for new participants
       </p>
     </div>
@@ -141,8 +142,8 @@ function MetricBreakdown({ items }: { items: Array<{ label: string; value: numbe
     <div className="mt-3 flex items-center gap-4 border-t pt-3" style={{ borderColor: BORDER }}>
       {items.map((item) => (
         <div key={item.label}>
-          <p className="text-[15px] font-black" style={{ color: item.color ?? TEXT }}>{formatNumber(item.value)}</p>
-          <p className="text-[9px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{item.label}</p>
+          <p className="text-[15px] font-semibold" style={{ color: item.color ?? TEXT }}>{formatNumber(item.value)}</p>
+          <p className="text-xs font-semibold" style={{ color: MUTED }}>{item.label}</p>
         </div>
       ))}
     </div>
@@ -227,16 +228,16 @@ function ActiveStaffCard({
   return (
     <button
       onClick={onClick}
-      className="flex flex-col justify-start rounded-2xl border overflow-hidden text-left transition-colors hover:bg-cc-soft"
+      className="flex flex-col justify-start rounded-2xl bg-cc-surface overflow-hidden text-left transition-colors hover:bg-cc-soft"
       style={{ borderColor: BORDER, background: SURFACE }}
     >
-      <div className="relative w-full flex-1 px-5 py-5">
-        <div className="absolute right-5 top-1/2 -translate-y-1/2">
-          <StaffCompositionRing supportWorkers={supportWorkers} coordinators={coordinators} />
+      <div className="flex w-full flex-1 flex-wrap items-center gap-4 px-5 py-5">
+        <div className="shrink-0">
+          <StaffCompositionRing supportWorkers={supportWorkers} coordinators={coordinators} size={112} stroke={12} />
         </div>
 
-        <div className="pr-32">
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>Active staff</p>
+        <div className="min-w-0 flex-1 basis-32">
+          <p className="text-xs font-semibold" style={{ color: MUTED }}>Active staff</p>
 
           <div className="mt-3 flex flex-col gap-1.5">
             <RingLegendItem color={PLUM} value={supportWorkers} label="Support workers" />
@@ -246,7 +247,7 @@ function ActiveStaffCard({
           <p className="mt-3 text-[11px]" style={{ color: MUTED }}>{retentionRate}% retention · {formatNumber(total)} active in total</p>
         </div>
       </div>
-      <span className="flex w-full items-center justify-between border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-plum">Open staff directory<ArrowRight size={14} /></span>
+      <span className="flex w-full items-center justify-between border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-text">Open staff directory<ArrowRight size={14} /></span>
     </button>
   );
 }
@@ -283,14 +284,14 @@ function ExecutiveMetric({
   const content = (
     <div className="w-full px-5 py-5">
       <p
-        className="text-[10px] font-bold uppercase tracking-[0.14em]"
+        className="text-xs font-semibold"
         style={{ color: MUTED }}
       >
         {label}
       </p>
 
       <p
-        className="mt-2 text-[26px] font-black tracking-tight"
+        className="mt-2 text-[30px] font-semibold tracking-tight tabular-nums"
         style={{ color: TEXT }}
       >
         {value}
@@ -313,7 +314,7 @@ function ExecutiveMetric({
   // so the four numbers read as separate facts, not one continuous block.
   if (!onClick) {
     return (
-      <div className="rounded-2xl border overflow-hidden" style={{ borderColor: BORDER, background: SURFACE }}>
+      <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ borderColor: BORDER, background: SURFACE }}>
         {content}
       </div>
     );
@@ -322,11 +323,11 @@ function ExecutiveMetric({
   return (
     <button
       onClick={onClick}
-      className="flex flex-col justify-start rounded-2xl border overflow-hidden text-left transition-colors hover:bg-cc-soft"
+      className="flex flex-col justify-start rounded-2xl bg-cc-surface overflow-hidden text-left transition-colors hover:bg-cc-soft"
       style={{ borderColor: BORDER, background: SURFACE }}
     >
       {content}
-      <span className="flex w-full items-center justify-between gap-2 border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-plum">{label === "Support visits" ? "Review the schedule" : "Review participant outcomes"}<ArrowRight size={14} /></span>
+      <span className="flex w-full items-center justify-between gap-2 border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-text">{label === "Support visits" ? "Review the schedule" : "Review participant outcomes"}<ArrowRight size={14} /></span>
     </button>
   );
 }
@@ -339,8 +340,8 @@ function ExecutiveMetric({
 function ParticipantStat({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
     <div>
-      <p className="text-[17px] font-black" style={{ color: color ?? TEXT }}>{formatNumber(value)}</p>
-      <p className="text-[9px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+      <p className="text-xl font-semibold tabular-nums" style={{ color: color ?? TEXT }}>{formatNumber(value)}</p>
+      <p className="mt-1 text-xs" style={{ color: MUTED }}>{label}</p>
     </div>
   );
 }
@@ -352,11 +353,11 @@ export function DemandCapacityPanel({ data, loading, error, onRetry, onNavigate 
   data?: MdDemandCapacity; loading: boolean; error: boolean;
   onRetry: () => void; onNavigate: (path: string) => void;
 }) {
-  if (error) return <div role="alert" className="rounded-xl border border-cc-border bg-cc-surface p-5 text-sm">
+  if (error) return <div role="alert" className="rounded-2xl bg-cc-surface p-5 text-sm">
     <p>Enquiries and available hours could not be loaded.</p>
     <button type="button" onClick={onRetry} className="mt-3 min-h-11 font-semibold text-cc-plum">Try again</button>
   </div>;
-  if (loading || !data) return <div role="status" className="rounded-xl border border-cc-border bg-cc-surface p-5 text-sm text-cc-muted">Loading enquiries and available hours...</div>;
+  if (loading || !data) return <div role="status" className="rounded-2xl bg-cc-surface p-5 text-sm text-cc-muted">Loading enquiries and available hours...</div>;
   const reliable = Math.round(data.capacity.reliable_hours);
   const casual = Math.round(data.capacity.casual_hours);
   const cards = [
@@ -365,13 +366,13 @@ export function DemandCapacityPanel({ data, loading, error, onRetry, onNavigate 
     { title: "Available this week", value: formatNumber(reliable + casual) + " h", detail: reliable + " h permanent staff / " + casual + " h casual staff", action: "Review staff availability", path: "/md/schedule", icon: Zap },
   ];
   return <section aria-label="Demand and capacity" className="space-y-3">
-    <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-base font-semibold text-cc-text">Plan your next move</h2><span className="text-xs text-cc-muted">Enquiries and this week's capacity</span></div>
-    <div className="grid gap-3 md:grid-cols-3">
-      {cards.map(({ title, value, detail, action, path, icon: Icon }) => <button key={title} type="button" onClick={() => onNavigate(path)} className="group flex min-w-0 flex-col rounded-xl border border-cc-border bg-cc-surface p-4 text-left transition-colors hover:border-cc-plum focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum">
-        <div className="flex w-full items-center justify-between gap-2"><span className="text-sm font-medium text-cc-muted">{title}</span><Icon size={16} className="shrink-0 text-cc-plum" /></div>
+    <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-lg font-semibold text-cc-text">Plan your next move</h2><span className="text-xs text-cc-muted">Enquiries and this week's capacity</span></div>
+    <div className="grid gap-4 md:grid-cols-3">
+      {cards.map(({ title, value, detail, action, path, icon: Icon }) => <button key={title} type="button" onClick={() => onNavigate(path)} className="group flex min-w-0 flex-col rounded-2xl bg-cc-surface p-5 text-left transition-colors hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum">
+        <div className="flex w-full items-center justify-between gap-2"><span className="text-sm font-medium text-cc-muted">{title}</span><Icon size={16} className="shrink-0 text-cc-muted" /></div>
         <p className="mt-4 text-3xl font-semibold tracking-tight text-cc-text">{value}</p>
         <p className="mb-4 mt-2 text-xs leading-relaxed text-cc-muted">{detail}</p>
-        <span className="mt-auto flex w-full items-center justify-between gap-2 border-t border-cc-border pt-3 text-xs font-semibold text-cc-plum">{action}<ArrowRight size={14} className="shrink-0 transition-transform group-hover:translate-x-1" /></span>
+        <span className="mt-auto flex w-full items-center justify-between gap-2 border-t border-cc-border pt-3 text-xs font-semibold text-cc-text">{action}<ArrowRight size={14} className="shrink-0 transition-transform group-hover:translate-x-1" /></span>
       </button>)}
     </div>
     <p className="text-xs leading-relaxed text-cc-muted">Available hours are based on recorded availability and rostered work. Confirm worker suitability and casual availability before offering support.{data.capacity.workers_without_availability > 0 && " " + data.capacity.workers_without_availability + " workers have no availability recorded and are excluded."}</p>
@@ -393,33 +394,33 @@ function ParticipantOverviewCard({
   const planStatus = byPlanStatus ?? { pending: 0, review: 0, expired: 0 };
 
   return (
-    <div className="rounded-2xl border overflow-hidden" style={{ borderColor: BORDER, background: SURFACE }}>
-      <div className="flex items-center justify-between px-6 py-5 border-b" style={{ borderColor: BORDER }}>
+    <section aria-label="Participant overview" className="flex min-w-0 flex-col rounded-2xl bg-cc-surface" style={{ borderColor: BORDER, background: SURFACE }}>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b px-5 py-3" style={{ borderColor: BORDER }}>
         <div>
-          <h3 className="text-[13px] font-black" style={{ color: TEXT }}>Participant overview</h3>
-          <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>Caseload composition and plan status</p>
+          <h3 className="text-sm font-semibold" style={{ color: TEXT }}>Participant overview</h3>
+          <p className="mt-1 text-xs" style={{ color: MUTED }}>Caseload composition and plan status</p>
         </div>
-        <button onClick={onNavigate} className="flex items-center gap-1 text-[11px] font-bold" style={{ color: PLUM }}>
+        <button onClick={onNavigate} className="flex min-h-11 items-center gap-1 text-[11px] font-bold" style={{ color: PLUM }}>
           View participants <ArrowRight size={12} />
         </button>
       </div>
 
-      <div className="grid gap-6 px-6 py-6 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-        <div>
-          <p className="text-[40px] font-black leading-none tracking-tight" style={{ color: PLUM }}>{formatNumber(total)}</p>
-          <p className="mt-1 text-[11px]" style={{ color: MUTED }}>Total participants</p>
-          <div className="mt-4 flex items-center gap-6">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-8 gap-y-6 p-5">
+        <div className="flex flex-wrap items-center gap-5">
+          <div><p className="text-[32px] font-semibold leading-none tracking-tight tabular-nums" style={{ color: PLUM }}>{formatNumber(total)}</p>
+          <p className="mt-1 text-[11px]" style={{ color: MUTED }}>Total participants</p></div>
+          <div className="flex items-center gap-5">
             <ParticipantStat label="Male" value={sex.male} />
             <ParticipantStat label="Female" value={sex.female} />
-            {sex.unspecified > 0 && <ParticipantStat label="Others" value={sex.unspecified} />}
+            {sex.unspecified > 0 && <ParticipantStat label="Unspecified" value={sex.unspecified} />}
           </div>
         </div>
 
-        <span className="hidden h-24 w-px sm:block" style={{ background: BORDER }} />
+        <span className="hidden h-12 w-px sm:block" style={{ background: BORDER }} />
 
         <div>
           <div className="mb-3 flex items-center gap-1.5">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>Plan status</p>
+            <p className="text-xs font-semibold" style={{ color: MUTED }}>Plan status</p>
             <Popover>
               <PopoverTrigger asChild>
                 <button type="button" aria-label="What does plan status mean?" className="flex h-3.5 w-3.5 items-center justify-center rounded-full hover:opacity-70" style={{ color: MUTED }}>
@@ -440,7 +441,7 @@ function ParticipantOverviewCard({
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -465,7 +466,7 @@ function ComplianceCard({
 
   return (
     <section
-      className="overflow-hidden rounded-2xl border"
+      className="overflow-hidden rounded-2xl bg-cc-surface"
       style={{
         borderColor: BORDER,
         background: SURFACE,
@@ -484,7 +485,7 @@ function ComplianceCard({
             />
 
             <h2
-              className="text-[14px] font-black"
+              className="text-[14px] font-semibold"
               style={{ color: TEXT }}
             >
               Compliance health
@@ -513,7 +514,7 @@ function ComplianceCard({
         <div>
           <div className="flex items-end gap-2">
             <span
-              className="text-[44px] font-black leading-none tracking-[-0.04em]"
+              className="text-[44px] font-semibold leading-none tracking-[-0.04em]"
               style={{
                 color: belowTarget ? RED : TEXT,
               }}
@@ -530,7 +531,7 @@ function ComplianceCard({
           </div>
 
           <div
-            className="mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
             style={{
               background: belowTarget ? "#FBEAE9" : "#E9F5F0",
               color: belowTarget ? RED : GREEN,
@@ -551,14 +552,14 @@ function ComplianceCard({
         <div>
           <div className="mb-2 flex items-center justify-between">
             <span
-              className="text-[10px] font-bold"
+              className="text-[11px] font-bold"
               style={{ color: MUTED }}
             >
               Current performance
             </span>
 
             <span
-              className="text-[10px] font-bold"
+              className="text-[11px] font-bold"
               style={{ color: TEXT }}
             >
               {target}% target
@@ -580,14 +581,14 @@ function ComplianceCard({
 
           <div className="mt-3 flex items-center justify-between">
             <span
-              className="text-[10px]"
+              className="text-[11px]"
               style={{ color: MUTED }}
             >
               Organisation compliance score
             </span>
 
             <span
-              className="text-[10px] font-semibold"
+              className="text-[11px] font-semibold"
               style={{
                 color: belowTarget ? RED : GREEN,
               }}
@@ -616,7 +617,7 @@ export function DocumentationInsights({ data, onNavigate }: { data: Pick<MDData,
     { label: "Priority review (below 60%)", count: summary.priority_review, color: RED },
     { label: "Not scored", count: summary.unscored, color: MUTED },
   ] : [];
-  return <section aria-label="Documentation quality and follow-up" className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
+  return <section aria-label="Documentation quality and follow-up" className="overflow-hidden rounded-2xl bg-cc-surface">
     <header className="border-b border-cc-border p-5"><h2 className="text-base font-semibold text-cc-text">Documentation quality: where to focus</h2><p className="mt-1 text-sm text-cc-muted">Based on the latest available session records, up to 400. Scores describe documentation checks, not overall regulatory compliance.</p></header>
     <div className="grid gap-6 p-5 lg:grid-cols-2">
       <div>
@@ -627,7 +628,7 @@ export function DocumentationInsights({ data, onNavigate }: { data: Pick<MDData,
           <dl className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">{bands.map(band => <div key={band.label} className="flex items-center justify-between gap-2 text-xs"><dt className="flex items-center gap-2 text-cc-muted"><span className="h-2 w-2 rounded-full" style={{ background: band.color }} />{band.label}</dt><dd className="font-semibold text-cc-text">{band.count}</dd></div>)}</dl>
         </>}
         <h3 className="mt-6 text-sm font-semibold text-cc-text">Follow up with staff</h3>
-        <div className="mt-2 divide-y divide-cc-border">{(data.workers_at_risk ?? []).slice(0, 4).map(worker => <button type="button" key={worker.id} onClick={() => onNavigate("/md/staff?workerId=" + encodeURIComponent(worker.id) + "&tab=shifts")} className="flex min-h-12 w-full items-center justify-between gap-3 py-3 text-left text-sm"><span><span className="font-semibold text-cc-text">{worker.full_name}</span><span className="mt-1 block text-xs text-cc-muted">{worker.compliance_score}% across {worker.sessions} sessions. Review shift documentation.</span></span><ArrowRight size={16} className="shrink-0 text-cc-plum" /></button>)}</div>
+        <div className="mt-2 divide-y divide-cc-border">{(data.workers_at_risk ?? []).slice(0, 4).map(worker => <button type="button" key={worker.id} onClick={() => onNavigate("/md/staff?workerId=" + encodeURIComponent(worker.id) + "&tab=shifts")} className="flex min-h-12 w-full items-center justify-between gap-3 py-3 text-left text-sm"><span><span className="font-semibold text-cc-text">{worker.full_name}</span><span className="mt-1 block text-xs text-cc-muted">{worker.compliance_score}% across {worker.sessions} sessions. Review shift documentation.</span></span><ArrowRight size={16} className="shrink-0 text-cc-muted" /></button>)}</div>
         {!data.workers_at_risk?.length && <p className="mt-2 text-xs text-cc-muted">No staff follow-up items returned in this snapshot.</p>}
       </div>
       <div><h3 className="text-sm font-semibold text-cc-text">Most frequently recorded issues</h3><p className="mt-1 text-xs leading-relaxed text-cc-muted">Mentions in rule flags, recommendations and compliance notes. One session may contribute more than once; these are not confirmed root causes.</p>
@@ -661,12 +662,12 @@ function ComplianceTrend({
     }));
 
   if (chartData.filter(item => item.score !== null).length < 2) {
-    return <p className="rounded-xl border border-cc-border p-4 text-sm text-cc-muted">A trend will appear once at least two weeks have scored documentation.</p>;
+    return <p className="rounded-2xl bg-cc-surface p-4 text-sm text-cc-muted">A trend will appear once at least two weeks have scored documentation.</p>;
   }
 
   return (
     <section
-      className="rounded-2xl border"
+      className="rounded-2xl bg-cc-surface"
       style={{
         borderColor: BORDER,
         background: SURFACE,
@@ -678,7 +679,7 @@ function ComplianceTrend({
       >
         <div>
           <h2
-            className="text-[14px] font-black"
+            className="text-[14px] font-semibold"
             style={{ color: TEXT }}
           >
             Documentation quality over time
@@ -693,7 +694,7 @@ function ComplianceTrend({
         </div>
 
         <div
-          className="hidden items-center gap-1.5 text-[10px] font-bold sm:flex"
+          className="hidden items-center gap-1.5 text-[11px] font-bold sm:flex"
           style={{ color: MUTED }}
         >
           <span
@@ -881,8 +882,8 @@ interface RevenueReport {
 function BillingStat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div>
-      <p className="text-[17px] font-black" style={{ color: color ?? TEXT }}>{value}</p>
-      <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
+      <p className="text-[17px] font-semibold" style={{ color: color ?? TEXT }}>{value}</p>
+      <p className="mt-0.5 text-xs font-semibold" style={{ color: MUTED }}>{label}</p>
     </div>
   );
 }
@@ -923,14 +924,14 @@ function RevenueChart() {
   const invoiceCount = report?.invoice_count ?? 0;
 
   return (
-    <section className="flex h-full flex-col rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
+    <section className="flex h-full flex-col rounded-2xl bg-cc-surface" style={{ borderColor: BORDER, background: SURFACE }}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 sm:px-6" style={{ borderColor: BORDER }}>
         <div>
-          <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Revenue</h2>
+          <h2 className="text-[14px] font-semibold" style={{ color: TEXT }}>Revenue</h2>
           <p className="mt-1 text-[11px]" style={{ color: MUTED }}>Billed vs. paid, {REVENUE_PERIOD_META[period].window}</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="hidden items-center gap-3 text-[10px] font-bold sm:flex" style={{ color: MUTED }}>
+          <div className="hidden items-center gap-3 text-[11px] font-bold sm:flex" style={{ color: MUTED }}>
             <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: BLUE }} /> Billed</span>
             <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: GREEN }} /> Paid</span>
           </div>
@@ -1034,7 +1035,7 @@ function FinancialSummary({
 
   return (
     <section
-      className="rounded-2xl border"
+      className="rounded-2xl bg-cc-surface"
       style={{
         borderColor: BORDER,
         background: SURFACE,
@@ -1053,7 +1054,7 @@ function FinancialSummary({
             />
 
             <h2
-              className="text-[14px] font-black"
+              className="text-[14px] font-semibold"
               style={{ color: TEXT }}
             >
               Financial snapshot
@@ -1129,14 +1130,14 @@ function FinancialMetric({
   return (
     <div className="px-5 py-4">
       <p
-        className="text-[9px] font-black uppercase tracking-[0.15em]"
+        className="text-xs font-semibold"
         style={{ color: MUTED }}
       >
         {label}
       </p>
 
       <p
-        className="mt-1 text-[21px] font-black"
+        className="mt-1 text-[21px] font-semibold"
         style={{
           color: warning ? RED : TEXT,
         }}
@@ -1146,7 +1147,7 @@ function FinancialMetric({
 
       {detail && (
         <p
-          className="mt-0.5 flex items-center gap-1 text-[10px]"
+          className="mt-0.5 flex items-center gap-1 text-[11px]"
           style={{ color: trend !== undefined && trend !== null ? (trend >= 0 ? GREEN : RED) : MUTED }}
         >
           {trend !== undefined && trend !== null ? (
@@ -1200,8 +1201,9 @@ export function MDHubView() {
 
   if (loading) {
     return (
-      <div className="space-y-5">
-        <div className="grid gap-5 xl:grid-cols-2">
+      <div role="status" aria-label="Loading executive briefing" className="space-y-4 motion-reduce:[&_*]:animate-none">
+        <span className="sr-only">Loading executive briefing…</span>
+        <div className="grid gap-2 xl:grid-cols-2">
           <div
             className="h-64 animate-pulse rounded-2xl"
             style={{ background: SOFT }}
@@ -1213,7 +1215,7 @@ export function MDHubView() {
         </div>
 
         <div
-          className="grid overflow-hidden rounded-2xl border sm:grid-cols-2 xl:grid-cols-4"
+          className="grid overflow-hidden rounded-2xl bg-cc-surface sm:grid-cols-2 xl:grid-cols-4"
           style={{ borderColor: BORDER }}
         >
           {[1, 2, 3, 4].map((item) => (
@@ -1237,10 +1239,11 @@ export function MDHubView() {
   /* Error                                                                    */
   /* ------------------------------------------------------------------------ */
 
-  if (error || !data) {
+  if (!data) {
     return (
       <div
-        className="rounded-2xl border p-10 text-center"
+        role="alert"
+        className="rounded-2xl bg-cc-surface p-10 text-center"
         style={{
           borderColor: BORDER,
           background: SURFACE,
@@ -1253,7 +1256,7 @@ export function MDHubView() {
         />
 
         <p
-          className="text-[14px] font-black"
+          className="text-[14px] font-semibold"
           style={{ color: TEXT }}
         >
           {translate("hub.mdHub.loadFailed")}
@@ -1265,6 +1268,10 @@ export function MDHubView() {
         >
           {translate("hub.mdHub.retryHint")}
         </p>
+        <button type="button" disabled={overviewQuery.isFetching} onClick={() => void overviewQuery.refetch()} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg bg-cc-plum px-4 text-sm font-semibold text-white disabled:opacity-60">
+          <RefreshCw size={16} className={overviewQuery.isFetching ? "animate-spin motion-reduce:animate-none" : ""} aria-hidden="true" />
+          {overviewQuery.isFetching ? "Retrying…" : "Try again"}
+        </button>
       </div>
     );
   }
@@ -1274,45 +1281,28 @@ export function MDHubView() {
   /* ------------------------------------------------------------------------ */
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-cc-plum">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cc-border pb-3">
+        <p role="status" className="text-xs text-cc-muted">
+          {error ? "Refresh failed. Showing the last available overview." : overviewQuery.isFetching ? "Updating overview…" : "Organisation overview"}
+        </p>
+        <button type="button" disabled={overviewQuery.isFetching} onClick={() => void overviewQuery.refetch()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-cc-border bg-cc-surface px-3 text-sm font-semibold text-cc-text hover:bg-cc-soft disabled:opacity-60">
+          <RefreshCw size={14} aria-hidden="true" className={overviewQuery.isFetching ? "animate-spin motion-reduce:animate-none" : ""} />
+          {overviewQuery.isFetching ? "Refreshing…" : "Refresh overview"}
+        </button>
+      </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Waiting list + participant overview (left) + needs action /        */}
-      {/* exposure (right) — a two-column row rather than the triage list's  */}
-      {/* usual full width, since it's paired with real content instead of   */}
-      {/* sitting next to blank canvas (see the "sidebar" variant note in    */}
-      {/* GovernanceTriage). Revenue moves below "How we're tracking".       */}
-      {/* ------------------------------------------------------------------ */}
-
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="order-2 flex min-w-0 flex-col gap-5 xl:order-1">
+      {/* Keep operational summaries together beside the action list. */}
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="order-2 flex min-w-0 flex-col gap-4 xl:order-1">
           <DemandCapacityPanel data={demandQuery.data} loading={demandQuery.isLoading} error={demandQuery.isError} onRetry={() => { void demandQuery.refetch(); }} onNavigate={navigate} />
+          <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
           <ParticipantOverviewCard
             total={data.active_participants}
             bySex={data.participants_by_sex}
             byPlanStatus={data.participants_by_plan_status}
             onNavigate={() => navigate("/patients")}
           />
-        </div>
-        <div className="order-1 min-w-0 xl:order-2"><GovernanceTriage variant="sidebar" onNavigate={navigate} workersAtRisk={data.workers_at_risk} /></div>
-      </div>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* How we're tracking — demoted below the triage list                 */}
-      {/* ------------------------------------------------------------------ */}
-
-      <div className="space-y-5">
-        <div className="flex items-center gap-2">
-          <span
-            className="text-[10px] font-black uppercase tracking-[0.16em]"
-            style={{ color: MUTED }}
-          >
-            How we're tracking
-          </span>
-          <span className="h-px flex-1" style={{ background: BORDER }} />
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <ActiveStaffCard
             total={data.active_staff}
             retentionRate={data.staff_retention_rate}
@@ -1320,6 +1310,26 @@ export function MDHubView() {
             coordinators={data.coordinators}
             onClick={() => navigate("/md/staff")}
           />
+          </div>
+
+
+      {/* ------------------------------------------------------------------ */}
+      {/* How we're tracking — demoted below the triage list                 */}
+      {/* ------------------------------------------------------------------ */}
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span
+            className="text-xs font-semibold"
+            style={{ color: MUTED }}
+          >
+            How we're tracking
+          </span>
+          <span className="h-px flex-1" style={{ background: BORDER }} />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+
 
           <ExecutiveMetric
             label="Support visits"
@@ -1338,16 +1348,22 @@ export function MDHubView() {
           />
         </div>
 
+      </div>
+        </div>
+        <aside className="order-1 min-w-0 xl:relative xl:order-2 xl:self-stretch"><div className="xl:absolute xl:inset-0"><GovernanceTriage variant="sidebar" onNavigate={navigate} workersAtRisk={data.workers_at_risk} /></div></aside>
+      </div>
+      <div className="space-y-4">
         <DocumentationInsights data={data} onNavigate={navigate} />
-        {trendQuery.isError ? <div role="alert" className="rounded-xl border border-cc-border p-4 text-sm">Documentation trend could not be loaded. <button type="button" className="font-semibold text-cc-plum" onClick={() => void trendQuery.refetch()}>Try again</button></div> : trendQuery.isLoading ? <p role="status" className="text-sm text-cc-muted">Loading documentation trend...</p> : <ComplianceTrend trend={trendQuery.data?.trend ?? []} target={data.compliance_target} />}
+        {trendQuery.isError ? <div role="alert" className="rounded-2xl bg-cc-surface p-4 text-sm">Documentation trend could not be loaded. <button type="button" className="font-semibold text-cc-plum" onClick={() => void trendQuery.refetch()}>Try again</button></div> : trendQuery.isLoading ? <p role="status" className="text-sm text-cc-muted">Loading documentation trend...</p> : <ComplianceTrend trend={trendQuery.data?.trend ?? []} target={data.compliance_target} />}
 
-        <button type="button" onClick={() => navigate("/md/executive")} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-cc-border bg-cc-surface px-5 py-3 text-left text-sm font-semibold text-cc-plum">Review performance and longer-term trends<ArrowRight size={16} /></button>
+        <button type="button" onClick={() => navigate("/md/executive")} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl bg-cc-surface px-5 py-3 text-left text-sm font-semibold text-cc-text hover:bg-cc-soft">Review performance and longer-term trends<ArrowRight size={16} /></button>
       </div>
 
 
       <FinancialSummary
         onNavigate={() => navigate("/md/financial")}
       />
+
     </div>
   );
 }

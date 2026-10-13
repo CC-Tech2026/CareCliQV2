@@ -2,7 +2,7 @@ import { afterEach, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { User, CreditCard } from "lucide-react";
-import { SettingsNavigation } from "./SettingsNavigation";
+import { SettingsNavigation, resolveSettingsSection } from "./SettingsNavigation";
 const items = [
   { id: "account", label: "Account", icon: User },
   { id: "billing", label: "Billing & Subscription", icon: CreditCard },
@@ -43,4 +43,17 @@ it("filters navigation without losing the selected section", () => {
       .getByRole("button", { name: "Account" })
       .getAttribute("aria-current"),
   ).toBe("page");
+});
+
+it("finds sections by their description", () => {
+  render(<SettingsNavigation items={[{ id: "security", label: "Security", description: "Password and signed-in devices", icon: User }]} active="security" onChange={() => {}} />);
+  fireEvent.change(screen.getByRole("searchbox", { name: "Find a setting" }), { target: { value: "devices" } });
+  expect(screen.getByRole("button", { name: /Security/ })).toBeTruthy();
+  expect(screen.queryByRole("status")).toBeNull();
+});
+it("resolves section links only from the allowed sections", () => {
+  expect(resolveSettingsSection("?section=billing", ["account", "security"], "account")).toBe("account");
+  expect(resolveSettingsSection("?billing=1", ["account", "billing"], "account")).toBe("billing");
+  expect(resolveSettingsSection("?section=security", ["account", "security"], "account")).toBe("security");
+  expect(resolveSettingsSection("?section=missing", ["account"], "account")).toBe("account");
 });

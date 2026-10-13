@@ -34,10 +34,10 @@ export function ParticipantPlanTab({
   const { translate, translateParams } = useAccessibility();
 
   return (
-    <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+    <section className="rounded-2xl border border-cc-border bg-cc-surface p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <DollarSign className="h-3.5 w-3.5 text-[#E8457A]" />
-        <h4 className="text-[13px] font-black text-[#1A1A2E]">
+        <h4 className="text-[13px] font-semibold text-cc-text">
           {translate("patients.section.ndisFunding")}
         </h4>
         <div className="ml-auto">{editAction}</div>
@@ -53,11 +53,11 @@ export function ParticipantPlanTab({
         <div className="space-y-3">
           {/* Plan meta */}
           {budget?.plan_number && (
-            <div className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-              <p className="text-[9px] font-black uppercase tracking-wider text-[#6A6A77] mb-1">
+            <div className="rounded-lg bg-cc-surface border border-cc-border px-3 py-2">
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted mb-1">
                 {translate("patients.field.planNumber")}
               </p>
-              <p className="text-[12px] font-bold text-[#1A1A2E]">
+              <p className="text-[12px] font-bold text-cc-text">
                 {budget.plan_number}
               </p>
             </div>
@@ -83,13 +83,13 @@ export function ParticipantPlanTab({
             ].map(({ lbl, val, flagged }) => (
               <div
                 key={lbl}
-                className={`rounded-lg border px-3 py-2 ${flagged ? "bg-red-50 border-red-200" : "bg-white border-purple-100/60"}`}
+                className={`rounded-lg border px-3 py-2 ${flagged ? "bg-red-50 border-red-200" : "bg-cc-surface border-cc-border"}`}
               >
-                <p className="text-[9px] font-black uppercase tracking-wider text-[#6A6A77] leading-none mb-1">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted leading-none mb-1">
                   {lbl}
                 </p>
                 <p
-                  className={`text-[12px] font-black truncate ${flagged ? "text-red-700" : "text-[#1A1A2E]"}`}
+                  className={`text-[12px] font-semibold truncate ${flagged ? "text-red-700" : "text-cc-text"}`}
                 >
                   {val}
                 </p>
@@ -103,12 +103,12 @@ export function ParticipantPlanTab({
           )}
           {/* Budget utilisation bar */}
           {totalBudget > 0 && (
-            <div className="rounded-xl border border-purple-100/60 bg-white p-3">
+            <div className="rounded-xl border border-cc-border bg-cc-surface p-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[12px] font-bold text-[#1A1A2E]">
+                <span className="text-[12px] font-bold text-cc-text">
                   {translate("patients.budget.utilisation")}
                 </span>
-                <span className="text-[11px] font-black text-[#6A6A77]">
+                <span className="text-[11px] font-semibold text-cc-muted">
                   {Math.round((usedBudget / totalBudget) * 100)}%
                 </span>
               </div>
@@ -129,20 +129,20 @@ export function ParticipantPlanTab({
               if (categoryBudgets.length === 0) return null;
               return (
                 <div className="space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-[#6A6A77]">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-cc-muted">
                     {translate("patients.budget.byCategory")}
                   </p>
                   {categoryBudgets.map((item) => (
                     <div
                       key={item.category || item.category_label}
-                      className={`rounded-xl border p-3 ${item.overspent ? "border-red-200 bg-red-50" : "border-purple-100/60 bg-white"}`}
+                      className={`rounded-xl border p-3 ${item.overspent ? "border-red-200 bg-red-50" : "border-cc-border bg-cc-surface"}`}
                     >
                       <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <span className="text-[12px] font-bold text-[#1A1A2E] truncate">
+                        <span className="text-[12px] font-bold text-cc-text truncate">
                           {item.category_label || item.category}
                         </span>
                         <span
-                          className={`text-[11px] font-black shrink-0 ${item.overspent ? "text-red-700" : "text-[#6A6A77]"}`}
+                          className={`text-[11px] font-semibold shrink-0 ${item.overspent ? "text-red-700" : "text-cc-muted"}`}
                         >
                           {item.overspent
                             ? "Over budget"
@@ -157,7 +157,7 @@ export function ParticipantPlanTab({
                           }}
                         />
                       </div>
-                      <p className="mt-1.5 text-[10px] font-medium text-[#6A6A77]">
+                      <p className="mt-1.5 text-[11px] font-medium text-cc-muted">
                         {translateParams("patients.budget.categoryUsage", {
                           used: money(item.used),
                           remaining: money(item.remaining),

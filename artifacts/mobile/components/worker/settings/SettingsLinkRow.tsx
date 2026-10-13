@@ -25,6 +25,7 @@ export function SettingsLinkRow({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={value ? `${label}, ${value}` : label}
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
@@ -72,7 +73,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
+    minHeight: 64,
   },
   iconWrap: {
     width: 40,
@@ -81,7 +83,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  copy: { flex: 1, gap: 3 },
+  copy: { flex: 1, minWidth: 0, gap: 3 },
   label: { fontSize: 15, lineHeight: 20 },
   value: { fontSize: 13, lineHeight: 19 },
 });

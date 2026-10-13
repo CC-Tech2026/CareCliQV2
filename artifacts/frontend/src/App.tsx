@@ -63,8 +63,7 @@ import MDExecutivePage from "@/pages/md/executive";
 import MDSchedulePage from "@/pages/md/schedule";
 import MDServiceDeliveryPage from "@/pages/md/service-delivery";
 import MDStaffPage from "@/pages/md/staff";
-import MDCompliancePage from "@/pages/md/compliance";
-import MDAuditReadinessPage from "@/pages/md/audit-readiness";
+import MDCompliancePage, { LegacyAuditRedirect } from "@/pages/md/compliance-workspace";
 import MDVaultHomePage from "@/pages/md/vault/VaultHome";
 import MDVaultFolderPage from "@/pages/md/vault/VaultFolder";
 import MDVaultTreeFolderPage from "@/pages/md/vault/VaultTreeFolder";
@@ -345,14 +344,14 @@ function Router() {
       </Route>
 
       <Route path="/md/compliance">
-        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+        <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Audit & Compliance">
           <MDCompliancePage />
         </ProtectedRoute>
       </Route>
 
       <Route path="/md/audit-readiness">
         <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Audit readiness">
-          <MDAuditReadinessPage />
+          <LegacyAuditRedirect />
         </ProtectedRoute>
       </Route>
 
@@ -366,6 +365,22 @@ function Router() {
         {(params) => (
           <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Governance & policy document vault">
             <MDVaultTreeFolderPage top={params.top} />
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/md/vault/tree/:top/person/:personId">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Governance & policy document vault">
+            <MDVaultTreeFolderPage top={params.top} personId={params.personId} />
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/md/vault/tree/:top/person/:personId/:sub">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="governance_vault" capabilityLabel="Governance & policy document vault">
+            <MDVaultTreeFolderPage top={params.top} personId={params.personId} sub={params.sub} />
           </ProtectedRoute>
         )}
       </Route>

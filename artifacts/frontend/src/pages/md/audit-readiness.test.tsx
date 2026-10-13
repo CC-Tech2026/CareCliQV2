@@ -113,7 +113,7 @@ it("reports evidence readiness without claiming compliance", async () => {
 
 it("critical gaps tile opens the checklist filtered to them", async () => {
   renderAt("/md/audit-readiness");
-  fireEvent.click(await screen.findByRole("button", { name: /Critical gaps/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /critical gaps/i }));
   expect(await screen.findByText("1 of 3 items")).toBeTruthy();
   expect(screen.getByRole("button", { name: /Risk management/ })).toBeTruthy();
   expect(screen.queryByRole("button", { name: /Worker Screening/ })).toBeNull();

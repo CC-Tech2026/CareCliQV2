@@ -29,7 +29,7 @@ export interface IncidentCardData {
 }
 
 /** "Due in 6h 12m" / "Overdue by 2h 5m" — same deadline the backend escalation job uses. */
-function formatNotificationCountdown(dueAtIso: string, overdue: boolean): string {
+export function formatNotificationCountdown(dueAtIso: string, overdue: boolean): string {
   const diffMs = Math.abs(parseISO(dueAtIso).getTime() - Date.now());
   const hours = Math.floor(diffMs / 3_600_000);
   const minutes = Math.floor((diffMs % 3_600_000) / 60_000);
@@ -43,6 +43,13 @@ const ACCENT_BORDER: Record<Accent, string> = {
   rd: "border-l-[#E24B4A]",
   am: "border-l-[#EF9F27]",
   gn: "border-l-[#3B9E5A]",
+};
+
+/** Row variant: the accent is a dot, in the same status colours as the vault. */
+const ACCENT_DOT: Record<Accent, string> = {
+  rd: "var(--cc-danger-text)",
+  am: "var(--cc-amber)",
+  gn: "var(--cc-green)",
 };
 
 const TYPE_BADGE: Record<string, { icon: typeof ShieldAlert; className: string }> = {
@@ -75,6 +82,8 @@ interface Props {
   onEscalate?: (id: string) => void;
   translate: (key: string) => string;
   showFlaggedNote?: boolean;
+  /** "row" sits inside a divided list (the incident register); "card" stands alone. */
+  variant?: "card" | "row";
 }
 
 export function IncidentAccordionCard({
@@ -89,7 +98,9 @@ export function IncidentAccordionCard({
   onEscalate,
   translate,
   showFlaggedNote,
+  variant = "card",
 }: Props) {
+  const row = variant === "row";
   const [open, setOpen] = useState(false);
   const accent = accentFor(incident);
   const typeCfg = TYPE_BADGE[incident.incident_type] ?? TYPE_BADGE.other;
@@ -106,12 +117,18 @@ export function IncidentAccordionCard({
         : "bg-[#FCEBEB] text-[#791F1F]";
 
   return (
-    <div className={cn("rounded-xl border border-[var(--cc-border)] bg-white overflow-hidden border-l-[3px]", ACCENT_BORDER[accent])}>
+    <div className={row ? "overflow-hidden" : cn("rounded-xl border border-[var(--cc-border)] bg-white overflow-hidden border-l-[3px]", ACCENT_BORDER[accent])}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-[var(--cc-soft)] transition-colors border-b border-[var(--cc-border)]"
+        aria-expanded={open}
+        className={
+          row
+            ? cn("w-full flex items-center gap-2.5 px-4 py-3.5 sm:px-5 text-left hover:bg-[var(--cc-soft)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum", open && "border-b border-[var(--cc-border)]")
+            : "w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-[var(--cc-soft)] transition-colors border-b border-[var(--cc-border)]"
+        }
       >
+        {row && <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: ACCENT_DOT[accent] }} />}
         <span className="text-[11px] font-semibold text-[var(--cc-muted)] font-mono shrink-0">
           {incident.reference_number || incident.id.slice(0, 8).toUpperCase()}
         </span>

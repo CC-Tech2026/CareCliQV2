@@ -25,9 +25,11 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { SectionInfo } from "@/components/ui/section-info";
+import { PageHeader, StatusText, SummaryStrip, ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
+import { ChoiceCard, DropZone, Field, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass, textareaClass } from "@/pages/md/vault/components/PanelKit";
 import {
   AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, Briefcase, CalendarDays, ChevronDown, ChevronRight, ChevronUp, Clock, Clock3, CheckCircle2,
-  Copy, FileText, ClipboardCheck, Gauge, LayoutGrid, Loader2, Mail, RefreshCw,
+  Copy, FileText, ClipboardCheck, Users, Gauge, LayoutGrid, Loader2, Mail, RefreshCw,
   Rows3, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserPlus, UserX, X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -40,7 +42,7 @@ import { getOnboardingAlerts } from "@/services/hubService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   getHire, addHireDocument, uploadHireDocumentFile,
   deleteHireDocument, sendForSignature, sendHireInvite,
@@ -209,7 +211,7 @@ const DOC_TYPE_META: Record<string, { label: string; icon: typeof FileText }> = 
 function StatusBadge({ status }: { status: EmployeeHire["status"] }) {
   const meta = STATUS_META[status];
   return (
-    <span className="text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap" style={{ background: meta.bg, color: meta.color }}>
+    <span className="whitespace-nowrap text-xs font-semibold" style={{ color: meta.color }}>
       {meta.label}
     </span>
   );
@@ -222,14 +224,14 @@ function ReadinessCard({ categories }: { categories: ReadinessCategory[] }) {
   const totalMax = categories.reduce((s, c) => s + c.max, 0);
   const score = totalMax > 0 ? (totalAchieved / totalMax) * 5 : 0;
   return (
-    <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+    <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
       <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-        <Gauge size={16} style={{ color: PLUM }} />
-        <p className="text-sm font-black" style={{ color: TEXT }}>Readiness</p>
+        <Gauge size={16} style={{ color: MUTED }} />
+        <p className="text-base font-semibold" style={{ color: TEXT }}>Readiness</p>
       </div>
       <div className="p-5">
         <div className="flex items-end gap-1.5">
-          <p className="text-[30px] font-black leading-none" style={{ color: PLUM }}>{score.toFixed(1)}</p>
+          <p className="text-3xl font-semibold leading-none tabular-nums tracking-tight" style={{ color: TEXT }}>{score.toFixed(1)}</p>
           <p className="pb-1 text-xs font-semibold" style={{ color: MUTED }}>/ 5.0</p>
         </div>
         <div className="mt-4 space-y-3">
@@ -266,11 +268,11 @@ function SignatureCard({
 }: { label: string; signedName?: string | null; signedAt?: string | null; pendingLabel: string }) {
   const signed = !!signedAt;
   return (
-    <div className="rounded-lg p-3.5 border" style={{ background: signed ? SUCCESS_BG : SOFT, borderColor: signed ? "transparent" : BORDER }}>
-      <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: signed ? SUCCESS : MUTED }}>{label}</p>
+    <div className="rounded-2xl p-4" style={{ background: signed ? SUCCESS_BG : SOFT }}>
+      <p className="text-xs font-semibold" style={{ color: signed ? SUCCESS : MUTED }}>{label}</p>
       {signed ? (
         <div className="mt-1.5">
-          <p className="text-sm font-black flex items-center gap-1.5" style={{ color: TEXT }}>
+          <p className="text-sm font-semibold flex items-center gap-1.5" style={{ color: TEXT }}>
             <CheckCircle2 size={14} style={{ color: SUCCESS }} /> {signedName}
           </p>
           <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>
@@ -410,7 +412,7 @@ function HireDetail({
               <ArrowLeft size={14} style={{ color: MUTED }} />
             </button>
             {index >= 0 && (
-              <span className="px-1 text-[11px] font-semibold" style={{ color: MUTED }}>{index + 1} of {hires.length}</span>
+              <span className="px-1 text-xs font-medium" style={{ color: MUTED }}>{index + 1} of {hires.length}</span>
             )}
             <button
               onClick={() => hasNext && onNavigate(hires[index + 1].id)}
@@ -426,7 +428,7 @@ function HireDetail({
           <Avatar name={hire.full_name} size={44} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-black truncate" style={{ color: TEXT }}>{hire.full_name}</h2>
+              <h2 className="truncate text-xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{hire.full_name}</h2>
               <StatusBadge status={hire.status} />
             </div>
             <p className="mt-1 truncate text-xs" style={{ color: MUTED }}>
@@ -442,9 +444,9 @@ function HireDetail({
 
           {/* Profile */}
           <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: SURFACE }}>
-            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Profile</p>
+            <p className="text-base font-semibold" style={{ color: TEXT }}>Profile</p>
             {hire.resume_summary ? (
-              <p className="mt-3 text-[13px] leading-relaxed" style={{ color: TEXT }}>{hire.resume_summary}</p>
+              <p className="mt-2 text-sm leading-6" style={{ color: TEXT }}>{hire.resume_summary}</p>
             ) : (
               <p className="mt-3 text-[12px]" style={{ color: MUTED }}>No resume summary available for this hire.</p>
             )}
@@ -460,7 +462,7 @@ function HireDetail({
             )}
             {hasCredentials && (
               <div className="mt-4 border-t pt-4" style={{ borderColor: BORDER }}>
-                <p className="text-[9px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Self-reported credentials</p>
+                <p className="text-xs font-semibold" style={{ color: MUTED }}>Self-reported credentials</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {hire.credentials_claimed!.map((c) => (
                     <span key={c.type} className="rounded-full px-3 py-1 text-[11px] font-bold" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
@@ -475,9 +477,9 @@ function HireDetail({
           {/* Documents */}
           <div className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
             <div className="flex items-center justify-between gap-3 px-6 py-5">
-              <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Documents</p>
+              <p className="text-base font-semibold" style={{ color: TEXT }}>Documents</p>
               {hire.status === "draft" && (
-                <button onClick={() => setAddDocOpen(true)} className="flex items-center gap-1.5 text-[11px] font-black transition-colors hover:opacity-70" style={{ color: PLUM }}>
+                <button onClick={() => setAddDocOpen(true)} className={outlineClass}>
                   <FileText size={12} /> Add document
                 </button>
               )}
@@ -492,15 +494,15 @@ function HireDetail({
                   const meta = DOC_TYPE_META[d.document_type] ?? DOC_TYPE_META.other;
                   return (
                     <div key={d.id} className="flex items-center justify-between gap-3 px-6 py-3.5">
-                      <span className="truncate text-[13px] font-bold" style={{ color: TEXT }}>{d.title}</span>
+                      <span className="truncate text-sm font-medium" style={{ color: TEXT }}>{d.title}</span>
                       <div className="flex shrink-0 items-center gap-3">
                         {d.file_url ? (
-                          <span className="rounded-full px-2.5 py-1 text-[9.5px] font-black uppercase tracking-wide" style={{ background: SUCCESS_BG, color: SUCCESS }}>Attached</span>
+                          <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: SUCCESS_BG, color: SUCCESS }}>Attached</span>
                         ) : (
-                          <span className="rounded-full px-2.5 py-1 text-[9.5px] font-black uppercase tracking-wide" style={{ background: SOFT, color: MUTED }}>No file</span>
+                          <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: SOFT, color: MUTED }}>No file</span>
                         )}
                         {d.file_url && (
-                          <a href={d.file_url} target="_blank" rel="noreferrer" className="text-[11px] font-bold underline" style={{ color: PLUM }}>View</a>
+                          <a href={d.file_url} target="_blank" rel="noreferrer" className="text-sm font-medium underline-offset-4 hover:underline" style={{ color: TEXT }}>View</a>
                         )}
                         {hire.status === "draft" && (
                           <button onClick={() => removeDocMut.mutate(d.id)} className="rounded-lg p-1 hover:bg-black/5" aria-label="Remove document">
@@ -517,7 +519,7 @@ function HireDetail({
 
           {/* Signatures */}
           <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: SURFACE }}>
-            <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Signatures</p>
+            <p className="text-base font-semibold" style={{ color: TEXT }}>Signatures</p>
             <div className="mt-4 space-y-3">
               <div className="grid sm:grid-cols-2 gap-3">
                 <SignatureCard label="Employer" signedName={hire.employer_signed_name} signedAt={hire.employer_signed_at} pendingLabel="Not yet sent" />
@@ -525,7 +527,7 @@ function HireDetail({
               </div>
 
               {hire.status === "draft" && (
-                <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending || documents.length === 0}>
+                <Button variant="navy" className="min-h-11 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending || documents.length === 0}>
                   {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send for signature
                 </Button>
               )}
@@ -534,7 +536,7 @@ function HireDetail({
                 const offerExpiry = expiryStatus(hire.employer_signed_at, OFFER_LINK_TTL_DAYS);
                 return (
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: WARNING_BG }}>
+                    <div className="flex items-center gap-2 rounded-2xl px-4 py-3" style={{ background: WARNING_BG }}>
                       <Mail size={14} style={{ color: WARNING }} className="shrink-0" />
                       <div className="flex-1">
                         <p className="text-xs" style={{ color: TEXT }}>Emailed to {hire.email}. Waiting for their signature.</p>
@@ -555,7 +557,7 @@ function HireDetail({
                         <Copy size={13} style={{ color: MUTED }} />
                       </button>
                     </div>
-                    <Button variant="outline" className="w-full gap-2 rounded-lg" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
+                    <Button variant="outline" className="min-h-11 w-full gap-2 rounded-full" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
                       {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={13} />} Resend offer email
                     </Button>
                   </div>
@@ -564,20 +566,20 @@ function HireDetail({
 
               {hire.status === "expired" && (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: DANGER_BG }}>
+                  <div className="flex items-center gap-2 rounded-2xl px-4 py-3" style={{ background: DANGER_BG }}>
                     <AlertTriangle size={14} style={{ color: DANGER }} className="shrink-0" />
                     <p className="text-xs flex-1" style={{ color: TEXT }}>
                       The offer link expired after {OFFER_LINK_TTL_DAYS} days without a signature. Resend to issue a fresh link.
                     </p>
                   </div>
-                  <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
+                  <Button variant="navy" className="min-h-11 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
                     {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Resend offer
                   </Button>
                 </div>
               )}
 
               {hire.status === "signed" && (
-                <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={() => sendInviteMut.mutate()} disabled={sendInviteMut.isPending}>
+                <Button variant="navy" className="min-h-11 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendInviteMut.mutate()} disabled={sendInviteMut.isPending}>
                   {sendInviteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send login invite
                 </Button>
               )}
@@ -586,7 +588,7 @@ function HireDetail({
                 const inviteExpiry = expiryStatus(hire.invited_at, INVITE_TOKEN_TTL_DAYS);
                 return (
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: inviteExpiry?.expired ? DANGER_BG : SUCCESS_BG }}>
+                    <div className="flex items-center gap-2 rounded-2xl px-4 py-3" style={{ background: inviteExpiry?.expired ? DANGER_BG : SUCCESS_BG }}>
                       {inviteExpiry?.expired ? (
                         <AlertTriangle size={16} style={{ color: DANGER }} className="shrink-0" />
                       ) : (
@@ -603,7 +605,7 @@ function HireDetail({
                     </div>
                     <Button
                       variant={inviteExpiry?.expired ? "navy" : "outline"}
-                      className="w-full gap-2 rounded-lg"
+                      className="min-h-11 w-full gap-2 rounded-full"
                       onClick={() => sendInviteMut.mutate()}
                       disabled={sendInviteMut.isPending}
                     >
@@ -614,7 +616,7 @@ function HireDetail({
               })()}
 
               {hire.status === "completed" && (
-                <div className="flex items-center gap-2 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
+                <div className="flex items-center gap-2 rounded-2xl px-4 py-3" style={{ background: SUCCESS_BG }}>
                   <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
                   <p className="text-xs font-bold" style={{ color: SUCCESS }}>Login invite sent — account activated.</p>
                 </div>
@@ -623,7 +625,7 @@ function HireDetail({
           </div>
 
           {(hire.status === "invited" || hire.status === "completed") && (
-            <div className="flex items-center gap-2.5 rounded-2xl p-4 border" style={{ background: INFO_BG, borderColor: BORDER }}>
+            <div className="flex items-center gap-2.5 rounded-2xl px-4 py-3" style={{ background: INFO_BG }}>
               <ShieldCheck size={16} style={{ color: INFO }} className="shrink-0" />
               <p className="text-xs" style={{ color: TEXT }}>
                 {hire.full_name.split(" ")[0]} will appear in the Credentials/Training columns below once they finish setting up their account, and can't be rostered until onboarding is complete.
@@ -634,51 +636,44 @@ function HireDetail({
       </div>
 
       <Sheet open={addDocOpen} onOpenChange={setAddDocOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
-              <FileText size={18} style={{ color: PLUM }} /> Add document
-            </SheetTitle>
-          </SheetHeader>
-          <div className="space-y-3 py-1">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Document type</label>
+        <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+          <SheetTitle className="sr-only">Add document</SheetTitle>
+          <SheetDescription className="sr-only">Add a document to this hire's file.</SheetDescription>
+          <PanelHeader icon={FileText} title="Add document" description={`Kept on ${hire.full_name}'s onboarding file.`} />
+          <form
+            id="add-hire-document-form"
+            className="mt-6 flex-1 space-y-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (docTitle.trim() && !addDocMut.isPending) addDocMut.mutate();
+            }}
+          >
+            <Field label="Document type" htmlFor="hire-doc-type">
               <Select value={docType} onValueChange={setDocType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="hire-doc-type" className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="offer_letter">Offer letter</SelectItem>
                   <SelectItem value="service_agreement">Service agreement</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Title</label>
-              <Input value={docTitle} onChange={(e) => setDocTitle(e.target.value)} placeholder="e.g. Offer of Employment" autoFocus />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Notes (optional)</label>
-              <Input value={docNotes} onChange={(e) => setDocNotes(e.target.value)} placeholder="Any context for this document" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>File (PDF or image, optional)</label>
-              <FileDropZone
-                accept="application/pdf,image/jpeg,image/png"
-                onFiles={(files) => setDocFile(files[0] ?? null)}
-                className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]"
-                style={{ borderColor: BORDER, color: docFile ? TEXT : MUTED }}
-              >
-                <Upload size={14} />
-                {docFile ? docFile.name : "Choose or drop a file"}
-              </FileDropZone>
-            </div>
-          </div>
-          <SheetFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setAddDocOpen(false)}>Cancel</Button>
-            <Button variant="navy" onClick={() => addDocMut.mutate()} disabled={!docTitle.trim() || addDocMut.isPending}>
-              {addDocMut.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null} Save document
-            </Button>
-          </SheetFooter>
+            </Field>
+            <Field label="Title" htmlFor="hire-doc-title">
+              <input id="hire-doc-title" value={docTitle} onChange={(e) => setDocTitle(e.target.value)} placeholder="e.g. Offer of Employment" autoFocus className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
+            </Field>
+            <Field label="Notes" htmlFor="hire-doc-notes" optional>
+              <input id="hire-doc-notes" value={docNotes} onChange={(e) => setDocNotes(e.target.value)} placeholder="Any context for this document" className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
+            </Field>
+            <Field label="File" optional>
+              <DropZone file={docFile} onFile={setDocFile} accept="application/pdf,image/jpeg,image/png" hint="PDF or image" />
+            </Field>
+          </form>
+          <PanelFooter>
+            <SecondaryButton onClick={() => setAddDocOpen(false)} disabled={addDocMut.isPending}>Cancel</SecondaryButton>
+            <PrimaryButton type="submit" form="add-hire-document-form" busy={addDocMut.isPending} disabled={!docTitle.trim()}>
+              Save document
+            </PrimaryButton>
+          </PanelFooter>
         </SheetContent>
       </Sheet>
     </div>
@@ -800,13 +795,13 @@ function ColumnHeading({
           title={openAllTitle}
         >
           <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
-          <p className="text-[13px] font-black underline decoration-dotted underline-offset-2" style={{ color: TEXT }}>{label}</p>
+          <p className="text-sm font-semibold underline decoration-dotted underline-offset-2" style={{ color: TEXT }}>{label}</p>
           <ChevronRight size={12} style={{ color }} />
         </button>
       ) : (
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
-          <p className="text-[13px] font-black" style={{ color: TEXT }}>{label}</p>
+          <p className="text-sm font-semibold" style={{ color: TEXT }}>{label}</p>
         </div>
       )}
       {onOpenAll ? (
@@ -814,7 +809,7 @@ function ColumnHeading({
           {count}
         </span>
       ) : (
-        <span className="text-[13px] font-bold" style={{ color: MUTED }}>{count}</span>
+        <span className="text-sm tabular-nums" style={{ color: MUTED }}>{count}</span>
       )}
     </div>
   );
@@ -862,11 +857,10 @@ function DroppableColumn<T>({
   return (
     <div
       ref={setNodeRef}
-      className="flex min-h-[220px] w-[300px] shrink-0 scale-100 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 transition-all duration-150 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink"
+      className="flex min-h-[220px] w-[300px] shrink-0 scale-100 flex-col gap-3 rounded-2xl p-4 transition-all duration-150 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink"
       style={{
-        background: active ? "var(--cc-plum-soft)" : `${color}12`,
+        background: active ? "var(--cc-plum-soft)" : "var(--cc-bg)",
         opacity: disabled ? 0.5 : 1,
-        borderTopColor: color,
         outline: active ? `2px dashed ${PLUM}` : "2px dashed transparent",
         outlineOffset: -6,
         transform: active ? "scale(1.012)" : "scale(1)",
@@ -876,7 +870,7 @@ function DroppableColumn<T>({
       <div className="flex min-h-[120px] flex-1 flex-col gap-2.5">
         {pageItems.map(renderItem)}
         {items.length === 0 && (
-          <p className="rounded-xl border border-dashed py-8 text-center text-[10px] font-medium" style={{ color: MUTED }}>
+          <p className="rounded-xl border border-dashed py-8 text-center text-xs" style={{ color: MUTED, borderColor: BORDER }}>
             {active ? "Drop here" : emptyLabel}
           </p>
         )}
@@ -902,12 +896,12 @@ function StaticColumn<T>({
   const clampedPage = Math.min(page, totalPages - 1);
   const pageItems = items.slice(clampedPage * COLUMN_PAGE_SIZE, clampedPage * COLUMN_PAGE_SIZE + COLUMN_PAGE_SIZE);
   return (
-    <div className="flex min-h-[220px] w-[300px] shrink-0 flex-col gap-3 rounded-[1.25rem] border-t-[3px] p-4 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink" style={{ background: `${color}12`, borderTopColor: color }}>
+    <div className="flex min-h-[220px] w-[300px] shrink-0 flex-col gap-3 rounded-2xl p-4 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink" style={{ background: "var(--cc-bg)" }}>
       <ColumnHeading label={label} count={items.length} color={color} onOpenAll={onOpenAll} openAllTitle={openAllTitle} />
       <div className="flex min-h-[120px] flex-1 flex-col gap-2.5">
         {pageItems.map(renderItem)}
         {items.length === 0 && (
-          <p className="rounded-xl border border-dashed py-8 text-center text-[10px] font-medium" style={{ color: MUTED }}>{emptyLabel}</p>
+          <p className="rounded-xl border border-dashed py-8 text-center text-xs" style={{ color: MUTED, borderColor: BORDER }}>{emptyLabel}</p>
         )}
       </div>
       <ColumnPager page={clampedPage} totalPages={totalPages} onChange={setPage} />
@@ -987,81 +981,70 @@ function NewApplicantSheet({ onClose, onCreated }: { onClose: () => void; onCrea
 
   return (
     <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
-            <UserPlus size={18} style={{ color: PLUM }} /> New Applicant
-          </SheetTitle>
-        </SheetHeader>
-        <div className="space-y-3 py-1">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Full name</label>
-            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Jordan Smith" autoFocus />
+      <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+        <SheetTitle className="sr-only">New candidate</SheetTitle>
+        <SheetDescription className="sr-only">Add a candidate to the interview stage.</SheetDescription>
+        <PanelHeader icon={UserPlus} title="New candidate" description="They start in the Interview column. You can move them along once you've met." />
+        <form
+          id="new-applicant-form"
+          className="mt-6 flex-1 space-y-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleSave();
+          }}
+        >
+          <Field label="Full name" htmlFor="applicant-name">
+            <input id="applicant-name" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Jordan Smith" autoFocus className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Email" htmlFor="applicant-email">
+              <input id="applicant-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jordan@example.com" className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
+            </Field>
+            <Field label="Phone" htmlFor="applicant-phone" optional>
+              <input id="applicant-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0412 345 678" className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
+            </Field>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Email</label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jordan@example.com" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Phone (optional)</label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0412 345 678" />
+          <div className="space-y-2" role="radiogroup" aria-label="Role">
+            <p className="text-sm font-medium" style={{ color: TEXT }}>Role</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <ChoiceCard selected={role === "support_worker"} onSelect={() => setRole("support_worker")} icon={Users} title="Support Worker" description="Delivers shifts with participants." />
+              <ChoiceCard selected={role === "support_coordinator"} onSelect={() => setRole("support_coordinator")} icon={ClipboardCheck} title="Support Coordinator" description="Plans and coordinates supports." />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Role</label>
-              <Select value={role} onValueChange={(v) => setRole(v as "support_worker" | "support_coordinator")}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="support_worker">Support Worker</SelectItem>
-                  <SelectItem value="support_coordinator">Support Coordinator</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Resume / CV (optional)</label>
-            <FileDropZone
-              accept="application/pdf,image/jpeg,image/png"
-              onFiles={(files) => setResumeFile(files[0] ?? null)}
-              className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]"
-              style={{ borderColor: BORDER, color: resumeFile ? TEXT : MUTED }}
-            >
-              <Upload size={14} />
-              {resumeFile ? resumeFile.name : "Choose or drop a file (PDF or image)"}
-            </FileDropZone>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Other files (optional)</label>
+          <Field label="Resume or CV" optional>
+            <DropZone file={resumeFile} onFile={setResumeFile} accept="application/pdf,image/jpeg,image/png" hint="PDF or image" />
+          </Field>
+          <Field label="Other files" optional hint="Cover letter, ID or anything else to keep with the application.">
             <FileDropZone
               accept="application/pdf,image/jpeg,image/png"
               multiple
               onFiles={(files) => setOtherFiles((prev) => [...prev, ...files])}
-              className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]"
+              className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-4 text-sm font-medium transition hover:bg-cc-soft"
               style={{ borderColor: BORDER, color: MUTED }}
             >
-              <Upload size={14} />
-              Add or drop cover letter, ID, or other files
+              <Upload size={16} />
+              Add or drop files
             </FileDropZone>
             {otherFiles.length > 0 && (
-              <div className="space-y-1">
+              <div className="mt-2 space-y-1.5">
                 {otherFiles.map((f, i) => (
-                  <div key={`${f.name}-${i}`} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5" style={{ background: SOFT }}>
-                    <span className="truncate text-xs font-medium" style={{ color: TEXT }}>{f.name}</span>
-                    <button type="button" onClick={() => setOtherFiles((prev) => prev.filter((_, idx) => idx !== i))} className="shrink-0 rounded p-0.5 hover:bg-black/5" aria-label={`Remove ${f.name}`}>
-                      <X size={12} style={{ color: MUTED }} />
+                  <div key={`${f.name}-${i}`} className="flex items-center justify-between gap-2 rounded-xl px-3 py-2" style={{ background: SOFT }}>
+                    <span className="truncate text-sm" style={{ color: TEXT }}>{f.name}</span>
+                    <button type="button" onClick={() => setOtherFiles((prev) => prev.filter((_, idx) => idx !== i))} className="shrink-0 rounded-full p-1 hover:bg-black/5" aria-label={`Remove ${f.name}`}>
+                      <X size={14} style={{ color: MUTED }} />
                     </button>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        </div>
-        <SheetFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button variant="navy" onClick={handleSave} disabled={!fullName.trim() || !email.trim() || saving}>
-            {saving ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null} Add Applicant
-          </Button>
-        </SheetFooter>
+          </Field>
+        </form>
+        <PanelFooter>
+          <SecondaryButton onClick={onClose} disabled={saving}>Cancel</SecondaryButton>
+          <PrimaryButton type="submit" form="new-applicant-form" busy={saving} disabled={!fullName.trim() || !email.trim()}>
+            Add candidate
+          </PrimaryButton>
+        </PanelFooter>
       </SheetContent>
     </Sheet>
   );
@@ -1191,7 +1174,7 @@ function ApplicantDetailSheet({
                 <ArrowLeft size={14} style={{ color: MUTED }} />
               </button>
               {index >= 0 && (
-                <span className="px-1 text-[11px] font-semibold" style={{ color: MUTED }}>{index + 1} of {applicants.length}</span>
+                <span className="px-1 text-xs font-medium" style={{ color: MUTED }}>{index + 1} of {applicants.length}</span>
               )}
               <button
                 onClick={() => hasNext && onNavigate(applicants[index + 1].id)}
@@ -1207,10 +1190,8 @@ function ApplicantDetailSheet({
               <Avatar name={applicant.full_name} size={44} color={STAGE_COLOR.interview} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base font-black truncate" style={{ color: TEXT }}>{applicant.full_name}</h2>
-                  <span className="rounded-full px-2.5 py-1 text-[10px] font-black capitalize" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
-                    {applicant.stage === "applied" ? "Applied" : "Interview"}
-                  </span>
+                  <h2 className="truncate text-xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{applicant.full_name}</h2>
+                  <StatusText tone="info">{applicant.stage === "applied" ? "Applied" : "Interview"}</StatusText>
                 </div>
                 <p className="mt-1 truncate text-xs" style={{ color: MUTED }}>
                   {applicant.email}{applicant.phone ? ` · ${applicant.phone}` : ""} · <span className="capitalize">{applicant.role.replace(/_/g, " ")}</span>
@@ -1219,7 +1200,7 @@ function ApplicantDetailSheet({
             </div>
 
             <div className="mt-5 flex items-center justify-between gap-3">
-              <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Hiring Process</p>
+              <p className="text-base font-semibold" style={{ color: TEXT }}>Hiring Process</p>
               {stageOptions.length > 0 && (
                 <div className="flex items-center gap-2">
                   {stageOptions.map((opt) => {
@@ -1230,10 +1211,7 @@ function ApplicantDetailSheet({
                         key={opt.value}
                         onClick={() => onMoveStage(opt.value)}
                         disabled={movePending}
-                        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black disabled:opacity-60"
-                        style={goingBack
-                          ? { background: SOFT, color: MUTED }
-                          : { background: PLUM, color: "#fff" }}
+                        className={goingBack ? outlineClass : ctaClass}
                       >
                         {movePending ? <Loader2 size={12} className="animate-spin" /> : null} {opt.label}
                       </button>
@@ -1249,9 +1227,9 @@ function ApplicantDetailSheet({
               <ReadinessCard categories={readinessCategories} />
 
               <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: SURFACE }}>
-                <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Profile</p>
+                <p className="text-base font-semibold" style={{ color: TEXT }}>Profile</p>
                 {applicant.resume_summary ? (
-                  <p className="mt-3 text-[13px] leading-relaxed" style={{ color: TEXT }}>{applicant.resume_summary}</p>
+                  <p className="mt-2 text-sm leading-6" style={{ color: TEXT }}>{applicant.resume_summary}</p>
                 ) : (
                   <p className="mt-3 text-[12px]" style={{ color: MUTED }}>No resume summary yet. Add a resume below to build one automatically.</p>
                 )}
@@ -1267,7 +1245,7 @@ function ApplicantDetailSheet({
                 )}
                 {hasCredentials && (
                   <div className="mt-4 border-t pt-4" style={{ borderColor: BORDER }}>
-                    <p className="text-[9px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Self-reported credentials</p>
+                    <p className="text-xs font-semibold" style={{ color: MUTED }}>Self-reported credentials</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {applicant.credentials_claimed!.map((c) => (
                         <span key={c.type} className="rounded-full px-3 py-1 text-[11px] font-bold" style={{ background: "var(--cc-plum-soft)", color: PLUM }}>
@@ -1281,16 +1259,16 @@ function ApplicantDetailSheet({
 
               <div className="overflow-hidden rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
                 <div className="flex items-center justify-between gap-3 px-6 py-5">
-                  <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Documents</p>
-                  <button onClick={() => setAddOpen((v) => !v)} className="flex items-center gap-1.5 text-[11px] font-black transition-colors hover:opacity-70" style={{ color: PLUM }}>
+                  <p className="text-base font-semibold" style={{ color: TEXT }}>Documents</p>
+                  <button onClick={() => setAddOpen((v) => !v)} className={outlineClass}>
                     <Upload size={12} /> Add file
                   </button>
                 </div>
 
                 {addOpen && (
-                  <div className="space-y-3 border-t px-6 py-5" style={{ borderColor: BORDER, background: SOFT }}>
+                  <div className="space-y-3 border-t px-6 py-5" style={{ borderColor: BORDER }}>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Document type</label>
+                      <label className="text-sm font-medium" style={{ color: TEXT }}>Document type</label>
                       <Select value={docType} onValueChange={(v) => setDocType(v as ApplicantDocumentType)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -1304,15 +1282,15 @@ function ApplicantDetailSheet({
                     <FileDropZone
                       accept="application/pdf,image/jpeg,image/png"
                       onFiles={(files) => setDocFile(files[0] ?? null)}
-                      className="flex items-center gap-2 rounded-lg border border-dashed bg-white px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-black/[0.02]"
-                      style={{ borderColor: BORDER, color: docFile ? TEXT : MUTED }}
+                      className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed bg-cc-surface px-4 py-4 text-sm font-medium transition hover:bg-cc-soft"
+                      style={{ borderColor: docFile ? "var(--cc-brand-purple)" : BORDER, color: docFile ? TEXT : MUTED }}
                     >
                       <Upload size={14} />
                       {docFile ? docFile.name : "Choose or drop a file (PDF or image)"}
                     </FileDropZone>
                     <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="sm" onClick={() => { setAddOpen(false); setDocFile(null); }}>Cancel</Button>
-                      <Button variant="navy" size="sm" onClick={() => addDocMut.mutate()} disabled={!docFile || addDocMut.isPending}>
+                      <Button variant="outline" size="sm" className="min-h-10 rounded-full px-4" onClick={() => { setAddOpen(false); setDocFile(null); }}>Cancel</Button>
+                      <Button variant="navy" size="sm" className="min-h-10 rounded-full px-4 text-white" style={{ background: "var(--cc-cta)" }} onClick={() => addDocMut.mutate()} disabled={!docFile || addDocMut.isPending}>
                         {addDocMut.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null} Upload
                       </Button>
                     </div>
@@ -1327,11 +1305,11 @@ function ApplicantDetailSheet({
                       const meta = APPLICANT_DOC_TYPE_META[d.document_type] ?? APPLICANT_DOC_TYPE_META.other;
                       return (
                         <div key={d.id} className="flex items-center justify-between gap-3 px-6 py-3.5">
-                          <span className="truncate text-[13px] font-bold" style={{ color: TEXT }}>{meta.label}</span>
+                          <span className="truncate text-sm font-medium" style={{ color: TEXT }}>{meta.label}</span>
                           <div className="flex shrink-0 items-center gap-3">
-                            <span className="rounded-full px-2.5 py-1 text-[9.5px] font-black uppercase tracking-wide" style={{ background: SUCCESS_BG, color: SUCCESS }}>Uploaded</span>
+                            <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: SUCCESS_BG, color: SUCCESS }}>Uploaded</span>
                             {d.file_url && (
-                              <a href={d.file_url} target="_blank" rel="noreferrer" className="text-[11px] font-bold underline" style={{ color: PLUM }}>View</a>
+                              <a href={d.file_url} target="_blank" rel="noreferrer" className="text-sm font-medium underline-offset-4 hover:underline" style={{ color: TEXT }}>View</a>
                             )}
                             <button onClick={() => removeDocMut.mutate(d.id)} className="rounded-lg p-1 hover:bg-black/5" aria-label={`Remove ${d.title}`}>
                               <Trash2 size={13} style={{ color: MUTED }} />
@@ -1345,14 +1323,14 @@ function ApplicantDetailSheet({
               </div>
 
               <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: SURFACE }}>
-                <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Notes</p>
+                <p className="text-base font-semibold" style={{ color: TEXT }}>Notes</p>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   onBlur={() => { if (notes !== (applicant.notes ?? "")) notesMut.mutate(notes); }}
                   rows={4}
                   placeholder="Write a note about this candidate…"
-                  className="mt-3 w-full resize-none rounded-lg border px-3 py-2.5 text-[12px] outline-none focus:ring-1"
+                  className={`mt-3 resize-none ${textareaClass}`}
                   style={{ borderColor: BORDER, color: TEXT }}
                 />
                 {notesMut.isPending && <p className="mt-1.5 text-[10px]" style={{ color: MUTED }}>Saving…</p>}
@@ -1360,8 +1338,8 @@ function ApplicantDetailSheet({
 
               <button
                 onClick={onReject}
-                className="rounded-full border-2 px-5 py-2 text-[12px] font-black transition-colors hover:bg-black/[0.02]"
-                style={{ borderColor: "var(--cc-status-critical)", color: "var(--cc-status-critical)" }}
+                className={outlineClass}
+                style={{ color: "var(--cc-danger-text)" }}
               >
                 Reject
               </button>
@@ -1493,34 +1471,6 @@ function routeForOnboardingSource(source: string | undefined): string {
   return "/md/staff-onboarding";
 }
 
-function KpiTile({ label, value, color, bg, icon: Icon, active, onClick }: { label: string; value: number; color: string; bg: string; icon?: typeof Clock3; active?: boolean; onClick?: () => void }) {
-  const content = (
-    <>
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[30px] font-black leading-none" style={{ color }}>{value}</p>
-        {Icon && (
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "rgba(255,255,255,0.65)", color }}>
-            <Icon size={15} />
-          </div>
-        )}
-      </div>
-      <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>{label}</p>
-      {active && <div className="mt-3 h-1 w-8 rounded-full" style={{ background: color }} />}
-    </>
-  );
-  if (!onClick) return <div className="rounded-[1.25rem] px-5 py-4.5" style={{ background: bg }}>{content}</div>;
-  return (
-    <button
-      onClick={onClick}
-      aria-pressed={active}
-      className="w-full rounded-[1.25rem] px-5 py-4.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
-      style={{ background: bg, outline: active ? `2px solid ${color}` : undefined, outlineOffset: active ? 2 : undefined }}
-    >
-      {content}
-    </button>
-  );
-}
-
 // ── List view ─────────────────────────────────────────────────────────
 
 type PipelineRow = {
@@ -1553,7 +1503,7 @@ function PipelineListView({
 
   return (
     <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="grid grid-cols-[1fr_140px_140px_1fr_76px] gap-3 border-b px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.1em]" style={{ borderColor: BORDER, color: MUTED }}>
+      <div className="grid grid-cols-[1fr_140px_140px_1fr_76px] gap-3 border-b px-5 py-2.5 text-xs font-medium" style={{ borderColor: BORDER, color: MUTED }}>
         <SortHeader label="Candidate" k="name" />
         <SortHeader label="Role" k="name" className="hidden sm:flex" />
         <SortHeader label="Stage" k="stage" />
@@ -1790,77 +1740,80 @@ export default function StaffOnboardingBoard() {
 
   return (
     <>
-      <div className="space-y-5 pb-10">
+      <div className="space-y-6 pb-12">
         {hireGrant && <TemporaryAccessBanner grant={hireGrant} label={hireGrantLabel} />}
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <button
-              onClick={() => navigate("/hub")}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
-              style={{ color: MUTED, background: SOFT }}
-            >
-              <ArrowLeft size={13} strokeWidth={2.5} /> Back to Hub
+        <PageHeader
+          back={
+            <button type="button" onClick={() => navigate("/hub")} className={`${ghostClass} -ml-4`}>
+              <ArrowLeft size={15} /> Back to Hub
             </button>
-            <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>
+          }
+          eyebrow="Workforce & People"
+          title={
+            <span className="inline-flex items-center gap-2">
               Staff Onboarding
               <SectionInfo text="Manage candidates from interview through activation, and track them through credentials and training." />
-            </h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {data && (
-              <span className="hidden text-[10px] font-medium sm:inline" style={{ color: MUTED }}>{listRows.length} visible</span>
-            )}
-            {pipelineQuery.dataUpdatedAt > 0 && (
-              <span className="hidden items-center gap-1.5 text-[10px] font-medium sm:flex" style={{ color: MUTED }}>
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: SUCCESS }} />
-                Updated {new Date(pipelineQuery.dataUpdatedAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}
-              </span>
-            )}
-            <GovernanceTriage
-              variant="floating"
-              onNavigate={navigate}
-              fetchAlerts={getOnboardingAlerts}
-              routeForSource={routeForOnboardingSource}
-              viewAllHref="/md/staff-onboarding"
-              viewAllLabel="Staff Onboarding"
-            />
-            <Button variant="navy" className="gap-2 rounded-lg shrink-0" onClick={() => setShowNew(true)}>
-              <UserPlus size={15} /> New candidate
-            </Button>
-          </div>
-        </div>
+            </span>
+          }
+          description={
+            <>
+              Candidates from interview through to their first shift, with credentials and training tracked on the way.
+              {pipelineQuery.dataUpdatedAt > 0 && (
+                <span className="ml-1 inline-flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: SUCCESS }} />
+                  Updated {new Date(pipelineQuery.dataUpdatedAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}
+                </span>
+              )}
+            </>
+          }
+          actions={
+            <>
+              <GovernanceTriage
+                variant="floating"
+                onNavigate={navigate}
+                fetchAlerts={getOnboardingAlerts}
+                routeForSource={routeForOnboardingSource}
+                viewAllHref="/md/staff-onboarding"
+                viewAllLabel="Staff Onboarding"
+              />
+              <button type="button" className={`${ctaClass} shrink-0`} onClick={() => setShowNew(true)}>
+                <UserPlus size={15} /> New candidate
+              </button>
+            </>
+          }
+        />
 
         {pipelineQuery.isLoading ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map((i) => <div key={i} className="h-28 animate-pulse rounded-[1.25rem]" style={{ background: SOFT }} />)}
-            </div>
+            <div className="h-11 w-2/3 animate-pulse rounded-full bg-cc-bg" />
             <div className="flex gap-3 overflow-hidden">
-              {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-[420px] min-w-[250px] flex-1 animate-pulse rounded-[1.25rem]" style={{ background: SOFT }} />)}
+              {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-[420px] min-w-[250px] flex-1 animate-pulse rounded-2xl bg-cc-bg" />)}
             </div>
           </div>
         ) : !data ? (
-          <div className="rounded-2xl border p-8 text-center" style={{ borderColor: BORDER }}>
-            <p className="font-black" style={{ color: TEXT }}>Could not load Staff Onboarding</p>
-            <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>Reload the page to try again.</p>
+          <div role="alert" className="rounded-2xl bg-cc-bg px-6 py-12 text-center">
+            <p className="text-base font-semibold" style={{ color: TEXT }}>Could not load Staff Onboarding</p>
+            <p className="mt-1 text-sm" style={{ color: MUTED }}>Reload the page to try again.</p>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <KpiTile label="In progress" value={inPipelineCount} color={PLUM} bg="var(--cc-plum-soft)" icon={UserPlus} active={activeKpi === "pipeline"} onClick={() => setKpiFilter("pipeline")} />
-              <KpiTile label="Credentials overdue" value={data.kpis.credentials_overdue} color={AMBER} bg={WARNING_BG} icon={ShieldCheck} active={activeKpi === "credentials"} onClick={() => setKpiFilter("credentials")} />
-              <KpiTile label="Starting this week" value={data.kpis.starting_this_week} color={GREEN} bg={SUCCESS_BG} icon={CalendarDays} active={activeKpi === "starting"} onClick={() => { setActiveKpi("starting"); setStageFilter("all"); }} />
-              <KpiTile label="Auto-deactivated / month" value={data.kpis.auto_deactivated_month} color={TEXT} bg={SOFT} icon={UserX} active={activeKpi === "deactivated"} onClick={() => { setActiveKpi("deactivated"); setStageFilter("all"); setNotProceedingOpen(true); }} />
-            </div>
+            <SummaryStrip
+              items={[
+                { value: inPipelineCount, label: "in progress", onClick: () => setKpiFilter("pipeline"), active: activeKpi === "pipeline" },
+                { value: data.kpis.credentials_overdue, label: "credentials overdue", tone: data.kpis.credentials_overdue ? "warning" : "good", onClick: () => setKpiFilter("credentials"), active: activeKpi === "credentials" },
+                { value: data.kpis.starting_this_week, label: "starting this week", tone: data.kpis.starting_this_week ? "good" : undefined, onClick: () => { setActiveKpi("starting"); setStageFilter("all"); }, active: activeKpi === "starting" },
+                { value: data.kpis.auto_deactivated_month, label: "auto-deactivated this month", onClick: () => { setActiveKpi("deactivated"); setStageFilter("all"); setNotProceedingOpen(true); }, active: activeKpi === "deactivated" },
+              ]}
+            />
 
-            <div className="flex flex-col gap-3 rounded-[1.25rem] border bg-white p-3 sm:flex-row sm:items-center" style={{ borderColor: BORDER }}>
-              <div className="relative min-w-0 flex-1">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
-                <Input value={search} onChange={(e) => { setSearch(e.target.value); setActiveKpi(null); }} placeholder="Search candidates..." className="h-10 rounded-xl border-0 bg-[#F8F7F4] pl-9 text-[12px] shadow-none focus-visible:ring-1" />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative min-w-0 flex-1 sm:max-w-sm">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+                <Input aria-label="Search candidates" value={search} onChange={(e) => { setSearch(e.target.value); setActiveKpi(null); }} placeholder="Search candidates" className="h-11 rounded-full bg-cc-surface pl-11 pr-9 text-sm" />
                 {search && <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5"><X size={13} style={{ color: MUTED }} /></button>}
               </div>
               <Select value={stageFilter} onValueChange={(value) => { setStageFilter(value); setActiveKpi(null); }}>
-                <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-[#F8F7F4] text-[12px] shadow-none sm:w-[150px]"><SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="All stages" /></SelectTrigger>
+                <SelectTrigger className="h-10 w-full rounded-full bg-cc-surface px-4 text-sm sm:ml-auto sm:w-[170px]"><SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="All stages" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All stages</SelectItem>
                   <SelectItem value="applied">Applied</SelectItem>
@@ -1872,40 +1825,40 @@ export default function StaffOnboardingBoard() {
                 </SelectContent>
               </Select>
               {(search || stageFilter !== "all" || activeKpi) && (
-                <button onClick={clearFilters} className="flex h-10 shrink-0 items-center justify-center gap-1 rounded-xl px-3 text-[11px] font-bold hover:bg-black/5" style={{ color: MUTED }}>
-                  <X size={13} /> Clear
+                <button onClick={clearFilters} className={`${ghostClass} min-h-10 shrink-0`}>
+                  <X size={14} /> Clear
                 </button>
               )}
-              <div className="flex h-10 shrink-0 items-center gap-0.5 rounded-xl p-1" style={{ background: "#F8F7F4" }}>
+              <div className="flex shrink-0 items-center rounded-full border p-1" style={{ borderColor: BORDER }} role="group" aria-label="View">
                 <button
                   onClick={() => setView("kanban")}
                   aria-pressed={view === "kanban"}
                   title="Board view"
-                  className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-black transition-all"
-                  style={{ background: view === "kanban" ? "white" : "transparent", color: view === "kanban" ? PLUM : MUTED, boxShadow: view === "kanban" ? "var(--cc-shadow-sm)" : "none" }}
+                  className="flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition"
+                  style={view === "kanban" ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { color: MUTED }}
                 >
-                  <LayoutGrid size={13} /> Board
+                  <LayoutGrid size={15} /> Board
                 </button>
                 <button
                   onClick={() => setView("list")}
                   aria-pressed={view === "list"}
                   title="List view"
-                  className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-black transition-all"
-                  style={{ background: view === "list" ? "white" : "transparent", color: view === "list" ? PLUM : MUTED, boxShadow: view === "list" ? "var(--cc-shadow-sm)" : "none" }}
+                  className="flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition"
+                  style={view === "list" ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { color: MUTED }}
                 >
-                  <Rows3 size={13} /> List
+                  <Rows3 size={15} /> List
                 </button>
               </div>
             </div>
 
-            <div className="flex items-start gap-2.5 rounded-2xl border px-4 py-3" style={{ background: "var(--cc-plum-soft)", borderColor: "#D9D2F8" }}>
-              <Settings2 size={14} style={{ color: PLUM }} className="mt-0.5 shrink-0" />
+            <div className="flex items-start gap-3 rounded-2xl bg-cc-bg px-5 py-3.5">
+              <Settings2 size={16} style={{ color: MUTED }} className="mt-0.5 shrink-0" />
               <div className="min-w-0 flex-1">
                 <button onClick={() => setRulesOpen((v) => !v)} className="flex w-full items-center gap-2 text-left">
-                  <p className="text-[12px] font-medium" style={{ color: TEXT }}><span className="font-black">System rules</span> <span className="hidden sm:inline">· reminders and inactivity controls</span></p>
-                  {rulesOpen ? <ChevronUp size={14} className="ml-auto shrink-0" style={{ color: PLUM }} /> : <ChevronDown size={14} className="ml-auto shrink-0" style={{ color: PLUM }} />}
+                  <p className="text-sm" style={{ color: TEXT }}><span className="font-semibold">System rules</span> <span className="hidden sm:inline" style={{ color: MUTED }}>· reminders and inactivity controls</span></p>
+                  {rulesOpen ? <ChevronUp size={15} className="ml-auto shrink-0" style={{ color: MUTED }} /> : <ChevronDown size={15} className="ml-auto shrink-0" style={{ color: MUTED }} />}
                 </button>
-                {rulesOpen && <p className="mt-2 border-t pt-2 text-[11px] leading-5" style={{ color: MUTED, borderColor: "#D9D2F8" }}>Reminders sent automatically at 3 days if credentials or training are incomplete · accounts auto-deactivated after 14 days of inactivity.</p>}
+                {rulesOpen && <p className="mt-2 border-t pt-2 text-sm leading-6" style={{ color: MUTED, borderColor: BORDER }}>Reminders sent automatically at 3 days if credentials or training are incomplete · accounts auto-deactivated after 14 days of inactivity.</p>}
               </div>
             </div>
 
@@ -1983,9 +1936,9 @@ export default function StaffOnboardingBoard() {
               <PipelineListView rows={listRows} sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
             )}
 
-            <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
-              <button onClick={() => setNotProceedingOpen((v) => !v)} className="flex w-full items-center gap-2 px-5 py-4 transition-colors hover:bg-black/[0.015]">
-                <p className="text-[12px] font-black" style={{ color: MUTED }}>Not proceeding</p>
+            <div className="overflow-hidden rounded-2xl bg-cc-bg">
+              <button onClick={() => setNotProceedingOpen((v) => !v)} className="flex w-full items-center gap-2 px-5 py-4 transition-colors hover:bg-cc-soft">
+                <p className="text-sm font-semibold" style={{ color: TEXT }}>Not proceeding</p>
                 <span className="rounded-full px-2 py-0.5 text-[10px] font-black" style={{ background: SOFT, color: MUTED }}>{notProceedingCount}</span>
                 {notProceedingOpen ? <ChevronUp size={14} className="ml-auto" style={{ color: MUTED }} /> : <ChevronDown size={14} className="ml-auto" style={{ color: MUTED }} />}
               </button>

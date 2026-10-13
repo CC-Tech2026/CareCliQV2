@@ -9,6 +9,7 @@ import {
   Users,
   Activity,
   Target,
+  RefreshCw,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -22,6 +23,7 @@ import {
 } from "recharts";
 import { Link, useLocation } from "wouter";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { PageHeader, ghostClass } from "@/components/layout/PageKit";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -169,7 +171,7 @@ function SectionEyebrow({
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <span
-        className="text-xs font-semibold uppercase tracking-[0.18em]"
+        className="text-sm font-semibold"
         style={{ color: MUTED }}
       >
         {children}
@@ -260,7 +262,7 @@ function GovernanceMetric({
         </div>
 
         <span
-          className="text-xs font-semibold uppercase tracking-wide"
+          className="text-xs font-semibold"
           style={{ color: statusColor }}
         >
           {status}
@@ -268,7 +270,7 @@ function GovernanceMetric({
       </div>
 
       <p
-        className="text-xs font-semibold uppercase tracking-[0.13em]"
+        className="text-sm font-semibold"
         style={{ color: MUTED }}
       >
         {label}
@@ -309,12 +311,12 @@ function LoadingState() {
       </div>
 
       <div
-        className="h-[390px] animate-pulse rounded-3xl"
+        className="h-[390px] animate-pulse rounded-2xl"
         style={{ background: SOFT }}
       />
 
       <div
-        className="h-[340px] animate-pulse rounded-3xl"
+        className="h-[340px] animate-pulse rounded-2xl"
         style={{ background: SOFT }}
       />
 
@@ -456,64 +458,33 @@ export default function MDExecutivePage() {
 
   return (
     <HubLayout>
-      <div className="min-w-0 space-y-5 pb-10">
+      <div className="min-w-0 space-y-8 pb-12">
         {/* ============================================================
             HEADER
         ============================================================ */}
-        <header className="border-b pb-5" style={{ borderColor: BORDER }}>
-          <div className="flex items-start gap-4">
-            <div className="min-w-0 flex-1">
-              <span className="text-xs font-bold" style={{ color: MUTED }}>
-                {formatDate(data.generated_at)}
-              </span>
-
-              <h1
-                className="mt-2 flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl"
-                style={{ color: TEXT }}
-              >
-                {data.branch ? `${data.branch.name}: performance review` : "Performance review"}
-                <SectionInfo text="Compare performance against targets and review trends across service delivery, workforce and quality." />
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm text-cc-muted">Review trends, compare results with targets and identify where leadership attention is needed. Use the Report library for detailed records and exports.</p>
-              {multiBranch && (
-                <label className="mt-2 flex items-center gap-2 text-[11px] font-semibold" style={{ color: MUTED }}>
-                  Branch
-                  <select
-                    value={branchId}
-                    onChange={(e) => setBranchId(e.target.value)}
-                    className="rounded-lg border bg-white px-2 py-1 text-[12px] font-semibold"
-                    style={{ color: TEXT }}
-                    aria-label="Filter by branch"
-                  >
-                    <option value="">All branches</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} ({zoneAbbreviation(new Date(), b.timezone)})
-                      </option>
-                    ))}
-                  </select>
-                  {data.timezone && <span>· times in {zoneAbbreviation(new Date(), data.timezone)}</span>}
-                </label>
-              )}
-            </div>
-
-            <div className="hidden text-right sm:block">
-              <p
-                className="text-xs font-semibold uppercase tracking-[0.15em]"
-                style={{ color: MUTED }}
-              >
-                Last updated
-              </p>
-
-              <p className="mt-1 text-xs font-bold" style={{ color: TEXT }}>
-                {formatTime(data.generated_at)}
-              </p>
-            </div>
-          </div>
-          <nav
-            aria-label="Management shortcuts"
-            className="mt-4 flex flex-wrap gap-2"
-          >
+        <PageHeader
+          eyebrow={`Governance & Strategy · ${formatDate(data.generated_at)}`}
+          title={
+            <span className="inline-flex items-center gap-2">
+              {data.branch ? `${data.branch.name}: performance review` : "Performance review"}
+              <SectionInfo text="Compare performance against targets and review trends across service delivery, workforce and quality." />
+            </span>
+          }
+          description={
+            <>
+              Review trends, compare results with targets and identify where leadership attention is needed. Use the Report library for detailed records and exports.
+              <span className="mt-1 block text-xs">Last updated {formatTime(data.generated_at)}</span>
+            </>
+          }
+          actions={
+            <button type="button" onClick={retry} className={ghostClass}>
+              <RefreshCw size={15} />
+              Refresh performance
+            </button>
+          }
+        />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <nav aria-label="Management shortcuts" className="-ml-4 flex flex-wrap gap-1">
             {[
               ["Daily priorities", "/hub"],
               ["Report library", "/reports"],
@@ -522,23 +493,32 @@ export default function MDExecutivePage() {
               ["NDIS invoices", "/md/financial"],
               ["Settings", "/settings"],
             ].map(([label, href]) => (
-              <Link
-                key={href}
-                href={href}
-                className="inline-flex min-h-11 items-center rounded-lg border border-cc-border bg-cc-surface px-3 text-sm font-medium text-cc-text hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
-              >
+              <Link key={href} href={href} className={ghostClass}>
                 {label}
               </Link>
             ))}
-            <button
-              type="button"
-              onClick={retry}
-              className="min-h-11 rounded-lg px-3 text-sm font-medium text-cc-plum hover:bg-cc-soft"
-            >
-              Refresh performance
-            </button>
           </nav>
-        </header>
+          {multiBranch && (
+            <label className="flex flex-wrap items-center gap-2 text-sm" style={{ color: MUTED }}>
+              <span className="sr-only">Branch</span>
+              <select
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+                className="min-h-10 rounded-full border border-cc-border bg-cc-surface px-4 text-sm"
+                style={{ color: TEXT }}
+                aria-label="Filter by branch"
+              >
+                <option value="">All branches</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({zoneAbbreviation(new Date(), b.timezone)})
+                  </option>
+                ))}
+              </select>
+              {data.timezone && <span>Times in {zoneAbbreviation(new Date(), data.timezone)}</span>}
+            </label>
+          )}
+        </div>
 
         {/* ============================================================
             NEEDS ACTION / EXPOSURE — the triage list
@@ -553,7 +533,7 @@ export default function MDExecutivePage() {
         ============================================================ */}
         <div className="mt-10 mb-5 flex items-center gap-2">
           <span
-            className="text-xs font-semibold uppercase tracking-[0.18em]"
+            className="text-sm font-semibold"
             style={{ color: MUTED }}
           >
             How we're tracking
@@ -563,7 +543,7 @@ export default function MDExecutivePage() {
 
         <div className="grid min-w-0 gap-5 xl:grid-cols-2">
           <section
-            className="overflow-hidden rounded-2xl border bg-white"
+            className="overflow-hidden rounded-2xl bg-cc-surface"
             style={{ borderColor: BORDER }}
           >
             <div>
@@ -692,7 +672,7 @@ export default function MDExecutivePage() {
         ============================================================ */}
           <section className="min-w-0">
             <div
-              className="h-full overflow-hidden rounded-2xl border bg-white"
+              className="h-full overflow-hidden rounded-2xl bg-cc-surface"
               style={{ borderColor: BORDER }}
             >
               <div className="flex flex-wrap items-end justify-between gap-5 px-6 pt-7 sm:px-8">
@@ -716,7 +696,7 @@ export default function MDExecutivePage() {
                 <div className="flex items-center gap-5">
                   <div>
                     <p
-                      className="text-xs font-semibold uppercase tracking-[0.14em]"
+                      className="text-sm font-semibold"
                       style={{ color: MUTED }}
                     >
                       Current
@@ -734,7 +714,7 @@ export default function MDExecutivePage() {
 
                   <div>
                     <p
-                      className="text-xs font-semibold uppercase tracking-[0.14em]"
+                      className="text-sm font-semibold"
                       style={{ color: MUTED }}
                     >
                       Target
@@ -872,7 +852,7 @@ export default function MDExecutivePage() {
           <SectionEyebrow>Executive signals</SectionEyebrow>
 
           <div
-            className="grid overflow-hidden rounded-2xl border bg-white lg:grid-cols-3"
+            className="grid overflow-hidden rounded-2xl bg-cc-surface lg:grid-cols-3"
             style={{ borderColor: BORDER }}
           >
             {/* Workforce */}
@@ -937,7 +917,7 @@ export default function MDExecutivePage() {
 
                 <div>
                   <p
-                    className="text-xs font-semibold uppercase tracking-wide"
+                    className="text-xs font-semibold"
                     style={{ color: MUTED }}
                   >
                     Goal achievement
@@ -984,7 +964,7 @@ export default function MDExecutivePage() {
 
                 <div>
                   <p
-                    className="text-xs font-semibold uppercase tracking-wide"
+                    className="text-xs font-semibold"
                     style={{ color: MUTED }}
                   >
                     Incidents
@@ -1009,7 +989,7 @@ export default function MDExecutivePage() {
           <SectionEyebrow>Compliance composition</SectionEyebrow>
 
           <div
-            className="rounded-2xl border bg-white p-6 sm:p-8"
+            className="rounded-2xl bg-cc-surface p-6 sm:p-8"
             style={{ borderColor: BORDER }}
           >
             <div className="flex flex-col gap-8 lg:flex-row lg:items-center">

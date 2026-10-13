@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, has_active_grant, is_managing_director
 from ..core.security import get_current_user
-from ..services import vault_service
+from ..services import vault_service, vault_size_service
 from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/md-vault", tags=["md-vault"])
@@ -33,6 +33,14 @@ def _client_ip(request: Request) -> str | None:
 async def get_vault_stats(current_user: dict = Depends(get_current_user)):
     org_id = _require_md(current_user)
     return vault_service.list_vault_stats(org_id)
+
+
+@router.get("/sizes")
+async def get_vault_sizes(current_user: dict = Depends(get_current_user)):
+    """Byte size of every folder. Documents not measured yet are counted in
+    "pending" and measured in the background; poll until it reaches 0."""
+    org_id = _require_md(current_user)
+    return vault_size_service.folder_sizes(org_id)
 
 
 @router.get("/folders")
@@ -81,6 +89,23 @@ async def post_custom_folder(body: CustomFolderRequest, current_user: dict = Dep
     org_id = _require_md(current_user)
     user_id = get_user_id(current_user)
     return vault_service.create_custom_folder(org_id, body.label, body.description, user_id, body.group)
+
+
+class RenameFolderRequest(BaseModel):
+    label: str
+
+
+@router.patch("/custom-folders/{folder_id}")
+async def patch_custom_folder(folder_id: str, body: RenameFolderRequest, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return vault_service.rename_custom_folder(org_id, folder_id, body.label)
+
+
+@router.delete("/custom-folders/{folder_id}")
+async def delete_custom_folder(folder_id: str, current_user: dict = Depends(get_current_user)):
+    """Soft-deletes a folder an MD created, with its files. Built-in folders can't be deleted."""
+    org_id = _require_md(current_user)
+    return {"removed_files": vault_service.delete_custom_folder(org_id, folder_id)}
 
 
 @router.post("/custom-folders/{folder_id}/documents", status_code=201)
@@ -134,14 +159,31 @@ async def get_vault_tree(current_user: dict = Depends(get_current_user)):
     return {"folders": vault_service.list_vault_tree(org_id)}
 
 
+@router.get("/tree/search")
+async def get_tree_search(
+    q: str = Query(default="", max_length=200),
+    flagged: bool = Query(default=False),
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_md(current_user)
+    return {"results": vault_service.search_vault_tree(org_id, q, flagged)}
+
+
+@router.get("/tree/{top}/people")
+async def get_tree_people(top: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return {"people": vault_service.list_tree_people(org_id, top)}
+
+
 @router.get("/tree/{top}/{sub}/documents")
 async def get_tree_subfolder_documents(
     top: str,
     sub: str,
+    person_id: str | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ):
     org_id = _require_md(current_user)
-    return {"documents": vault_service.list_tree_subfolder_documents(org_id, top, sub)}
+    return {"documents": vault_service.list_tree_subfolder_documents(org_id, top, sub, person_id)}
 
 
 @router.get("/folders/{category}/documents/{document_id}/file")
@@ -233,6 +275,7 @@ async def post_governance_document(
     file: UploadFile = File(...),
     supersedes_document_id: str | None = Form(None),
     version_label: str | None = Form(None),
+    expiry_date: str | None = Form(None),
     visible_to_workers: bool = Form(False),
     current_user: dict = Depends(get_current_user),
 ):
@@ -246,6 +289,7 @@ async def post_governance_document(
         org_id, folder_key, title, description, user_id, raw, content_type,
         supersedes_document_id=supersedes_document_id or None,
         version_label=version_label or None,
+        expiry_date=expiry_date or None,
     )
     if visible_to_workers:
         doc = vault_service.set_governance_document_worker_visibility(org_id, doc["id"], True)

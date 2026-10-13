@@ -12,19 +12,37 @@ export interface VaultZipProgress {
  * file's real bytes are fetched one at a time from the vault API before
  * being added to the archive, so the progress bar reflects actual network
  * activity rather than a simulated interval. */
+export interface VaultZipOptions {
+  /** Subfolder inside the ZIP for a document, e.g. its vault folder's name. */
+  folderFor?: (ref: DocRef) => string | undefined;
+  /** Extra files added at the top level, e.g. a register or cover note. */
+  extras?: { name: string; content: Blob | string }[];
+}
+
+/** Safe as a ZIP folder name on Windows and macOS. */
+function zipFolderName(name: string) {
+  return name.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 80) || "Documents";
+}
+
 export async function buildVaultZip(
   refs: DocRef[],
-  onProgress?: (progress: VaultZipProgress) => void
+  onProgress?: (progress: VaultZipProgress) => void,
+  options: VaultZipOptions = {}
 ): Promise<{ blob: Blob; documentCount: number }> {
   const plan = await planPack(refs);
   const zip = new JSZip();
   const usedNames = new Set<string>();
 
+  for (const extra of options.extras ?? []) {
+    zip.file(dedupeFilename(extra.name, usedNames), extra.content);
+  }
+
   for (let i = 0; i < plan.length; i++) {
     const item = plan[i];
     const originalRef = refs.find((r) => r.category === item.category && r.id === item.id);
     const { filename, blob } = await fetchDocumentFile(item.category, item.id, originalRef?.exclude_fields ?? []);
-    zip.file(dedupeFilename(filename, usedNames), blob);
+    const folder = options.folderFor?.(originalRef ?? item);
+    zip.file(dedupeFilename(folder ? `${zipFolderName(folder)}/${filename}` : filename, usedNames), blob);
     onProgress?.({ done: i + 1, total: plan.length });
   }
 

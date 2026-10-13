@@ -1,17 +1,16 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Fragment } from "react";
 import { Link, useLocation } from "wouter";
 import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
-  Clock3,
   ShieldCheck,
   ShieldAlert,
   FileCheck2,
   Users,
   ChevronRight,
-  CircleAlert,
-  Activity,
+  FolderLock,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import {
@@ -25,7 +24,21 @@ import {
   ReferenceLine,
 } from "recharts";
 import { HubLayout } from "@/components/layout/HubLayout";
-import { SectionInfo } from "@/components/ui/section-info";
+import {
+  LoadError,
+  PageHeader,
+  RowList,
+  Section,
+  SkeletonBlocks,
+  StatusText,
+  SummaryStrip,
+  Surface,
+  ctaClass,
+  ghostClass,
+  rowClass,
+  toneColor,
+  type Tone,
+} from "@/components/layout/PageKit";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const TEXT = "var(--cc-text)";
@@ -34,9 +47,10 @@ const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
 const PLUM = "var(--cc-plum)";
 
-const GREEN = "#0F7B57";
-const AMBER = "#9A5B0A";
-const RED = "#B3261E";
+// Compliance severity stays traffic-light red/amber/green, never brand colours.
+const GREEN = toneColor("good");
+const AMBER = toneColor("warning");
+const RED = toneColor("danger");
 
 interface MDData {
   compliance_score: number;
@@ -75,10 +89,10 @@ interface TrendPoint {
 
 type AuditStatus = "ready" | "attention" | "pending";
 
-function getScoreColor(score: number) {
-  if (score >= 85) return GREEN;
-  if (score >= 70) return AMBER;
-  return RED;
+function scoreTone(score: number): Tone {
+  if (score >= 85) return "good";
+  if (score >= 70) return "warning";
+  return "danger";
 }
 
 function getScoreLabel(score: number) {
@@ -105,170 +119,78 @@ function getAuditStatus(
   return "pending";
 }
 
-function StatusPill({ status }: { status: AuditStatus }) {
-  const config = {
-    ready: {
-      label: "Ready",
-      color: GREEN,
-      background: "#E9F5F0",
-      border: "#BFDDD1",
-      Icon: CheckCircle2,
-    },
-    attention: {
-      label: "Attention required",
-      color: RED,
-      background: "#FBEAE9",
-      border: "#E4B9B6",
-      Icon: CircleAlert,
-    },
-    pending: {
-      label: "Pending",
-      color: AMBER,
-      background: "#FBF2E6",
-      border: "#E3CBA0",
-      Icon: Clock3,
-    },
-  }[status];
+const AUDIT_STATUS: Record<AuditStatus, { tone: Tone; overall: string; item: string }> = {
+  ready: { tone: "good", overall: "Ready", item: "Complete" },
+  attention: { tone: "danger", overall: "Attention required", item: "Review" },
+  pending: { tone: "warning", overall: "Pending", item: "Pending" },
+};
 
-  const Icon = config.Icon;
+function initials(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
 
+function IconTile({ icon: Icon, tone }: { icon: React.ComponentType<{ size?: number }>; tone: Tone }) {
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
-      style={{
-        color: config.color,
-        background: config.background,
-        borderColor: config.border,
-      }}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+      style={{ background: SOFT, color: tone === "neutral" ? MUTED : toneColor(tone) }}
+      aria-hidden="true"
     >
-      <Icon size={11} strokeWidth={2.5} />
-      {config.label}
+      <Icon size={16} />
     </span>
   );
 }
 
-function SectionHeader({
-  eyebrow,
-  title,
-  description,
-  action,
-}: {
-  eyebrow?: string;
-  title: string;
-  description?: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-5 flex items-start justify-between gap-4">
-      <div>
-        {eyebrow && (
-          <p
-            className="mb-1 text-xs font-semibold uppercase tracking-[0.18em]"
-            style={{ color: MUTED }}
-          >
-            {eyebrow}
-          </p>
-        )}
-
-        <h2
-          className="text-[15px] font-semibold tracking-[-0.01em]"
-          style={{ color: TEXT }}
-        >
-          {title}
-        </h2>
-
-        {description && (
-          <p
-            className="mt-1 max-w-2xl text-sm font-medium leading-relaxed"
-            style={{ color: MUTED }}
-          >
-            {description}
-          </p>
-        )}
-      </div>
-
-      {action}
-    </div>
-  );
-}
-
-function ReadinessItem({
-  icon: Icon,
+function ReadinessRow({
+  icon,
   label,
   description,
   status,
 }: {
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  icon: React.ComponentType<{ size?: number }>;
   label: string;
   description: string;
   status: AuditStatus;
 }) {
-  const config = {
-    ready: {
-      color: GREEN,
-      background: "#E9F5F0",
-      border: "#BFDDD1",
-      label: "Complete",
-    },
-    attention: {
-      color: RED,
-      background: "#FBEAE9",
-      border: "#E4B9B6",
-      label: "Review",
-    },
-    pending: {
-      color: AMBER,
-      background: "#FBF2E6",
-      border: "#E3CBA0",
-      label: "Pending",
-    },
-  }[status];
-
+  const config = AUDIT_STATUS[status];
   return (
-    <div
-      className="flex items-center gap-3 rounded-xl border px-3.5 py-3"
-      style={{
-        borderColor: BORDER,
-        background: "#fff",
-      }}
-    >
-      <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-        style={{
-          background: config.background,
-          color: config.color,
-        }}
-      >
-        <Icon size={16} strokeWidth={2.4} />
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <p className="text-[12px] font-semibold" style={{ color: TEXT }}>
-          {label}
-        </p>
-
-        <p
-          className="mt-0.5 text-xs font-medium leading-relaxed"
-          style={{ color: MUTED }}
-        >
-          {description}
-        </p>
-      </div>
-
-      <span
-        className="shrink-0 rounded-full px-2 py-1 text-xs font-semibold"
-        style={{
-          background: config.background,
-          color: config.color,
-        }}
-      >
-        {config.label}
+    <li className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+      <IconTile icon={icon} tone={config.tone} />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold" style={{ color: TEXT }}>{label}</span>
+        <span className="block text-xs" style={{ color: MUTED }}>{description}</span>
       </span>
-    </div>
+      <StatusText tone={config.tone}>{config.item}</StatusText>
+    </li>
   );
 }
 
-export default function MDCompliancePage() {
+function WorkerRow({ worker, tone }: { worker: MDData["worker_rankings"][number]; tone: Tone }) {
+  return (
+    <li className="flex items-center gap-3 px-4 py-3 sm:px-5">
+      <span
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+        style={{ background: SOFT, color: toneColor(tone) }}
+        aria-hidden="true"
+      >
+        {initials(worker.full_name)}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold" style={{ color: TEXT }}>{worker.full_name}</span>
+        <span className="block text-xs" style={{ color: MUTED }}>{worker.sessions} sessions</span>
+      </span>
+      <span className="text-sm font-semibold tabular-nums" style={{ color: toneColor(tone) }}>{worker.compliance_score}%</span>
+    </li>
+  );
+}
+
+export default function MDCompliancePage({ embedded = false }: { embedded?: boolean }) {
+  const Layout = embedded ? Fragment : HubLayout;
   const { translate } = useAccessibility();
   const [, navigate] = useLocation();
 
@@ -338,6 +260,9 @@ export default function MDCompliancePage() {
     const atRiskPercent =
       total > 0 ? Math.round((breakdown.at_risk / total) * 100) : 0;
 
+    const nonCompliantPercent =
+      total > 0 ? Math.max(0, 100 - compliantPercent - atRiskPercent) : 0;
+
     const highAlerts = data.org_alerts.filter(
       (alert) => alert.severity === "high",
     ).length;
@@ -366,6 +291,7 @@ export default function MDCompliancePage() {
       total,
       compliantPercent,
       atRiskPercent,
+      nonCompliantPercent,
       highAlerts,
       readiness,
       strongestWorkers,
@@ -375,977 +301,332 @@ export default function MDCompliancePage() {
   }, [data]);
 
   return (
-    <HubLayout>
-      <div className="space-y-6 pb-12">
-        {/* -----------------------------------------------------------
-            HEADER
-        ------------------------------------------------------------ */}
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1
-              className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
-              style={{ color: TEXT }}
-            >
-              Audit & Compliance
-              <SectionInfo text="Quality posture, risk signals, and audit readiness across the organisation." />
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-cc-muted">
-              Review compliance risks, evidence readiness and staff follow-up in
-              one place.
-            </p>
-          </div>
-          <nav aria-label="Compliance actions" className="flex flex-wrap gap-2">
-            <Link
-              href="/md/audit-readiness"
-              className="inline-flex min-h-11 items-center rounded-lg border border-cc-border px-3 text-sm font-medium"
-            >
-              Audit readiness
-            </Link>
-            <Link
-              href="/md/vault"
-              className="inline-flex min-h-11 items-center rounded-lg border border-cc-border px-3 text-sm font-medium"
-            >
-              Document vault
-            </Link>
-            <Link
-              href="/md/onboarding/training"
-              className="inline-flex min-h-11 items-center rounded-lg border border-cc-border px-3 text-sm font-medium"
-            >
-              Competency & training
-            </Link>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => setRetryKey((key) => key + 1)}
-              className="min-h-11 rounded-lg px-3 text-sm font-medium text-cc-plum disabled:opacity-50"
-            >
-              Refresh
-            </button>
-          </nav>
-        </header>
+    <Layout>
+      <div className="space-y-8 pb-12">
+        {!embedded && (
+          <PageHeader
+            eyebrow="Oversight & Risk"
+            title="Audit & Compliance"
+            description="Review compliance risks, evidence readiness and staff follow-up in one place."
+            actions={
+              <>
+                <Link href="/md/compliance?view=overview" className={ghostClass}>Audit readiness</Link>
+                <Link href="/md/vault" className={ghostClass}><FolderLock size={16} />Document vault</Link>
+                <Link href="/md/onboarding/training" className={ghostClass}>Competency & training</Link>
+              </>
+            }
+          />
+        )}
 
         {loading ? (
-          <div className="space-y-4">
-            <div
-              className="h-[270px] animate-pulse rounded-3xl"
-              style={{ background: SOFT }}
-            />
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div
-                className="h-[280px] animate-pulse rounded-2xl"
-                style={{ background: SOFT }}
-              />
-              <div
-                className="h-[280px] animate-pulse rounded-2xl"
-                style={{ background: SOFT }}
-              />
-            </div>
+          <div className="space-y-6">
+            <div className="h-11 w-2/3 animate-pulse rounded-full bg-cc-surface" />
+            <SkeletonBlocks count={2} height="h-56" />
           </div>
         ) : error || !data || !derived ? (
-          <div
-            role="alert"
-            className="rounded-2xl border bg-white p-6 text-center"
-            style={{ borderColor: BORDER }}
-          >
-            <AlertTriangle
-              size={28}
-              className="mx-auto mb-3"
-              style={{ color: "#9A5B0A" }}
-            />
-
-            <p className="font-semibold" style={{ color: TEXT }}>
-              {translate("md.compliance.loadFailed")}
-            </p>
-
-            <p className="mt-1 text-sm" style={{ color: MUTED }}>
-              We could not load the organisation quality data.
-            </p>
-            <button
-              type="button"
-              onClick={() => setRetryKey((key) => key + 1)}
-              className="mt-4 min-h-11 rounded-lg border px-4 text-sm font-medium"
-            >
-              Try again
-            </button>
-          </div>
+          <LoadError onRetry={() => setRetryKey((key) => key + 1)}>
+            <AlertTriangle size={16} style={{ color: AMBER }} />
+            <span>
+              <span className="font-semibold">{translate("md.compliance.loadFailed")}.</span>{" "}
+              <span style={{ color: MUTED }}>We could not load the organisation quality data.</span>
+            </span>
+          </LoadError>
         ) : (
           <>
-            {/* -------------------------------------------------------
-                COMMAND CENTRE HERO
-            -------------------------------------------------------- */}
-            <section
-              className="overflow-hidden rounded-3xl border bg-white shadow-sm"
-              style={{ borderColor: BORDER }}
-            >
-              <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
-                {/* Left */}
-                <div className="relative p-6 sm:p-8">
-                  <div
-                    className="absolute right-0 top-0 h-40 w-40 rounded-full opacity-40 blur-3xl"
-                    style={{
-                      background:
-                        derived.readiness === "ready" ? "#BFDDD1" : "#E4B9B6",
-                    }}
-                  />
-
-                  <div className="relative">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="flex h-9 w-9 items-center justify-center rounded-xl"
-                        style={{
-                          background: SOFT,
-                          color: PLUM,
-                        }}
-                      >
-                        <ShieldCheck size={18} strokeWidth={2.3} />
-                      </div>
-
-                      <div>
-                        <p
-                          className="text-xs font-semibold uppercase tracking-[0.16em]"
-                          style={{ color: MUTED }}
-                        >
-                          Current quality posture
-                        </p>
-
-                        <p
-                          className="text-[12px] font-semibold"
-                          style={{ color: TEXT }}
-                        >
-                          Organisation compliance
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-8 flex flex-wrap items-end gap-5">
-                      <div>
-                        <div
-                          className="text-5xl font-semibold leading-[0.85] tracking-[-0.06em]"
-                          style={{
-                            color: getScoreColor(data.compliance_score),
-                          }}
-                        >
-                          {data.compliance_score}
-                          <span className="text-[32px]">%</span>
-                        </div>
-
-                        <div className="mt-3 flex items-center gap-2">
-                          <StatusPill status={derived.readiness} />
-
-                          <span
-                            className="text-xs font-bold"
-                            style={{ color: MUTED }}
-                          >
-                            Target {data.compliance_target}%
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="pb-1">
-                        <p
-                          className="text-[13px] font-semibold"
-                          style={{ color: TEXT }}
-                        >
-                          {getScoreLabel(data.compliance_score)}
-                        </p>
-
-                        <p
-                          className="mt-1 max-w-xs text-sm font-medium leading-relaxed"
-                          style={{ color: MUTED }}
-                        >
-                          {data.compliance_score >= data.compliance_target
-                            ? "The organisation is currently operating at or above its compliance target."
-                            : "The organisation is below target. Focus should remain on the highest-impact quality gaps."}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Target progress */}
-                    <div className="mt-8 max-w-xl">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span
-                          className="text-xs font-semibold uppercase tracking-[0.12em]"
-                          style={{ color: MUTED }}
-                        >
-                          Progress toward target
-                        </span>
-
-                        <span
-                          className="text-xs font-semibold"
-                          style={{ color: TEXT }}
-                        >
-                          {Math.max(
-                            0,
-                            data.compliance_target - data.compliance_score,
-                          )}
-                          pts to target
-                        </span>
-                      </div>
-
-                      <div
-                        className="h-2 overflow-hidden rounded-full"
-                        style={{ background: SOFT }}
-                      >
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{
-                            width: `${Math.min(data.compliance_score, 100)}%`,
-                            background: getScoreColor(data.compliance_score),
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right */}
-                <div
-                  className="border-t p-6 lg:border-l lg:border-t-0 sm:p-8"
-                  style={{
-                    borderColor: BORDER,
-                    background: "#FCFCFD",
-                  }}
-                >
-                  <p
-                    className="text-xs font-semibold uppercase tracking-[0.16em]"
-                    style={{ color: MUTED }}
-                  >
-                    Where attention is going
-                  </p>
-
-                  <div className="mt-5 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="h-2 w-2 rounded-full"
-                        style={{ background: GREEN }}
-                      />
-
-                      <div className="flex-1">
-                        <div className="flex justify-between">
-                          <span
-                            className="text-sm font-bold"
-                            style={{ color: TEXT }}
-                          >
-                            Compliant
-                          </span>
-
-                          <span
-                            className="text-sm font-semibold"
-                            style={{ color: TEXT }}
-                          >
-                            {derived.compliantPercent}%
-                          </span>
-                        </div>
-
-                        <div
-                          className="mt-1.5 h-1.5 rounded-full"
-                          style={{ background: BORDER }}
-                        >
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${derived.compliantPercent}%`,
-                              background: GREEN,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="h-2 w-2 rounded-full"
-                        style={{ background: AMBER }}
-                      />
-
-                      <div className="flex-1">
-                        <div className="flex justify-between">
-                          <span
-                            className="text-sm font-bold"
-                            style={{ color: TEXT }}
-                          >
-                            At risk
-                          </span>
-
-                          <span
-                            className="text-sm font-semibold"
-                            style={{ color: TEXT }}
-                          >
-                            {derived.atRiskPercent}%
-                          </span>
-                        </div>
-
-                        <div
-                          className="mt-1.5 h-1.5 rounded-full"
-                          style={{ background: BORDER }}
-                        >
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${derived.atRiskPercent}%`,
-                              background: AMBER,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="h-2 w-2 rounded-full"
-                        style={{ background: RED }}
-                      />
-
-                      <div className="flex-1">
-                        <div className="flex justify-between">
-                          <span
-                            className="text-sm font-bold"
-                            style={{ color: TEXT }}
-                          >
-                            Non-compliant
-                          </span>
-
-                          <span
-                            className="text-sm font-semibold"
-                            style={{ color: TEXT }}
-                          >
-                            {data.team_compliance_breakdown.non_compliant}
-                          </span>
-                        </div>
-
-                        <div
-                          className="mt-1.5 h-1.5 rounded-full"
-                          style={{ background: BORDER }}
-                        >
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width:
-                                derived.total > 0
-                                  ? `${Math.min(
-                                      100,
-                                      (data.team_compliance_breakdown
-                                        .non_compliant /
-                                        derived.total) *
-                                        100,
-                                    )}%`
-                                  : "0%",
-                              background: RED,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    className="mt-7 rounded-xl border p-3.5"
-                    style={{
-                      borderColor: BORDER,
-                      background: "#fff",
-                    }}
-                  >
-                    <div className="flex items-start gap-3">
-                      <Activity
-                        size={15}
-                        className="mt-0.5 shrink-0"
-                        style={{ color: PLUM }}
-                      />
-
-                      <div>
-                        <p
-                          className="text-xs font-semibold uppercase tracking-[0.1em]"
-                          style={{ color: MUTED }}
-                        >
-                          Quality signal
-                        </p>
-
-                        <p
-                          className="mt-1 text-sm font-semibold leading-relaxed"
-                          style={{ color: TEXT }}
-                        >
-                          {derived.highAlerts > 0
-                            ? `${derived.highAlerts} high-priority alert${derived.highAlerts > 1 ? "s" : ""} require executive attention.`
-                            : "No high-priority compliance alerts are currently active."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* -------------------------------------------------------
-                ATTENTION + AUDIT READINESS
-            -------------------------------------------------------- */}
-            <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-              {/* Attention */}
-              <section
-                className="rounded-2xl border bg-white p-5 shadow-sm"
-                style={{ borderColor: BORDER }}
-              >
-                <SectionHeader
-                  eyebrow="Executive attention"
-                  title="What needs attention"
-                  description="The highest-impact signals currently affecting organisational quality."
-                  action={
-                    <button
-                      onClick={() => navigate("/md/staff")}
-                      className="hidden items-center gap-1 text-xs font-semibold sm:flex"
-                      style={{ color: PLUM }}
-                    >
-                      Review staff
-                      <ArrowRight size={11} />
-                    </button>
-                  }
-                />
-
-                {derived.topIssues.length === 0 &&
-                derived.attentionWorkers.length === 0 &&
-                derived.highAlerts === 0 ? (
-                  <div
-                    className="flex items-center gap-3 rounded-xl border p-4"
-                    style={{
-                      borderColor: "#BFDDD1",
-                      background: "#E9F5F0",
-                    }}
-                  >
-                    <CheckCircle2 size={18} style={{ color: GREEN }} />
-
-                    <div>
-                      <p
-                        className="text-[12px] font-semibold"
-                        style={{ color: "#0B5F44" }}
-                      >
-                        No immediate quality risks
-                      </p>
-
-                      <p
-                        className="mt-0.5 text-xs font-medium"
-                        style={{ color: "#0F7B57" }}
-                      >
-                        Current compliance signals are within expected operating
-                        range.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {derived.highAlerts > 0 && (
-                      <div
-                        className="flex items-center gap-3 rounded-xl border px-3.5 py-3"
-                        style={{
-                          borderColor: "#E4B9B6",
-                          background: "#FBEAE9",
-                        }}
-                      >
-                        <ShieldAlert size={16} style={{ color: RED }} />
-
-                        <div className="flex-1">
-                          <p
-                            className="text-sm font-semibold"
-                            style={{ color: TEXT }}
-                          >
-                            High-priority compliance alerts
-                          </p>
-
-                          <p
-                            className="mt-0.5 text-xs font-medium"
-                            style={{ color: MUTED }}
-                          >
-                            {derived.highAlerts} alert
-                            {derived.highAlerts > 1 ? "s" : ""} currently
-                            require review.
-                          </p>
-                        </div>
-
-                        <ChevronRight size={14} style={{ color: MUTED }} />
-                      </div>
-                    )}
-
-                    {derived.topIssues.slice(0, 3).map((issue, index) => (
-                      <div
-                        key={`${issue.issue}-${index}`}
-                        className="flex items-center gap-3 rounded-xl border px-3.5 py-3"
-                        style={{ borderColor: BORDER }}
-                      >
-                        <div
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                          style={{
-                            background: index === 0 ? "#FBEAE9" : SOFT,
-                            color: index === 0 ? RED : PLUM,
-                          }}
-                        >
-                          <AlertTriangle size={14} strokeWidth={2.4} />
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className="truncate text-sm font-semibold"
-                            style={{ color: TEXT }}
-                          >
-                            {issue.issue}
-                          </p>
-
-                          <p
-                            className="mt-0.5 text-xs font-medium"
-                            style={{ color: MUTED }}
-                          >
-                            Appeared {issue.count} times
-                          </p>
-                        </div>
-
-                        <span
-                          className="rounded-full px-2 py-1 text-xs font-semibold"
-                          style={{
-                            background: index === 0 ? "#FBEAE9" : SOFT,
-                            color: index === 0 ? RED : MUTED,
-                          }}
-                        >
-                          Priority {index + 1}
-                        </span>
-                      </div>
-                    ))}
-
-                    {derived.attentionWorkers.length > 0 && (
-                      <div
-                        className="rounded-xl border px-3.5 py-3"
-                        style={{
-                          borderColor: BORDER,
-                          background: "#FCFCFD",
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Users size={14} style={{ color: AMBER }} />
-
-                          <p
-                            className="text-xs font-semibold"
-                            style={{ color: TEXT }}
-                          >
-                            {derived.attentionWorkers.length} workers below the
-                            85% quality threshold
-                          </p>
-                        </div>
-
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {derived.attentionWorkers.map((worker) => (
-                            <span
-                              key={worker.id}
-                              className="rounded-full px-2 py-1 text-xs font-bold"
-                              style={{
-                                background: SOFT,
-                                color: MUTED,
-                              }}
-                            >
-                              {worker.full_name} · {worker.compliance_score}%
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
-
-              {/* Audit readiness */}
-              <section
-                className="rounded-2xl border bg-white p-5 shadow-sm"
-                style={{ borderColor: BORDER }}
-              >
-                <SectionHeader
-                  eyebrow="Governance"
-                  title="Audit readiness"
-                  description="Executive view of whether the organisation is ready to evidence compliance."
-                  action={<StatusPill status={derived.readiness} />}
-                />
-
-                <div className="space-y-2">
-                  <ReadinessItem
-                    icon={FileCheck2}
-                    label="Session evidence"
-                    description="Session documentation and compliance outcomes."
-                    status={
-                      data.team_compliance_breakdown.non_compliant === 0
-                        ? "ready"
-                        : "attention"
-                    }
-                  />
-
-                  <ReadinessItem
-                    icon={ShieldCheck}
-                    label="Compliance target"
-                    description={`Organisation score against the ${data.compliance_target}% target.`}
-                    status={
-                      data.compliance_score >= data.compliance_target
-                        ? "ready"
-                        : "attention"
-                    }
-                  />
-
-                  <ReadinessItem
-                    icon={AlertTriangle}
-                    label="High-priority alerts"
-                    description="Open alerts requiring executive review."
-                    status={derived.highAlerts === 0 ? "ready" : "attention"}
-                  />
-
-                  <ReadinessItem
-                    icon={Users}
-                    label="Worker credentials"
-                    description="Credential and certification currency."
-                    status="pending"
-                  />
-
-                  <ReadinessItem
-                    icon={FileCheck2}
-                    label="Training evidence"
-                    description="Current staff training records."
-                    status="pending"
-                  />
-                </div>
-              </section>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <SummaryStrip
+                items={[
+                  { value: `${data.compliance_score}%`, label: `organisation score, target ${data.compliance_target}%`, tone: scoreTone(data.compliance_score) },
+                  { value: `${derived.compliantPercent}%`, label: "compliant", tone: "good" },
+                  { value: `${derived.atRiskPercent}%`, label: "at risk", tone: derived.atRiskPercent ? "warning" : undefined },
+                  {
+                    value: data.team_compliance_breakdown.non_compliant,
+                    label: "non-compliant",
+                    tone: data.team_compliance_breakdown.non_compliant ? "danger" : "good",
+                    onClick: () => navigate("/md/staff"),
+                  },
+                  { value: derived.highAlerts, label: derived.highAlerts === 1 ? "high-priority alert" : "high-priority alerts", tone: derived.highAlerts ? "danger" : "good" },
+                ]}
+              />
+              <button type="button" onClick={() => setRetryKey((key) => key + 1)} className={ghostClass}>
+                Refresh
+              </button>
             </div>
 
-            {/* -------------------------------------------------------
-                COMPLIANCE TREND
-            -------------------------------------------------------- */}
-            {trendError && (
-              <p
-                role="status"
-                className="rounded-xl border border-cc-border p-4 text-sm text-cc-muted"
-              >
-                The compliance trend could not be loaded. Refresh to try again;
-                the other records remain available.
-              </p>
-            )}
-            {chartData.length > 1 && (
-              <section
-                className="rounded-2xl border bg-white p-5 shadow-sm"
-                style={{ borderColor: BORDER }}
-              >
-                <SectionHeader
-                  eyebrow="Quality trajectory"
-                  title="Compliance trajectory"
-                  description="Use the trend to understand direction, not as another headline KPI."
-                />
-
-                <div className="h-[230px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={chartData}
-                      margin={{
-                        top: 5,
-                        right: 15,
-                        bottom: 0,
-                        left: -20,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-
-                      <XAxis
-                        dataKey="week"
-                        tick={{
-                          fontSize: 12,
-                          fill: MUTED,
-                        }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-
-                      <YAxis
-                        domain={[50, 100]}
-                        tick={{
-                          fontSize: 12,
-                          fill: MUTED,
-                        }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-
-                      <ReferenceLine
-                        y={data.compliance_target}
-                        stroke={AMBER}
-                        strokeDasharray="4 3"
-                      />
-
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: 10,
-                          border: `1px solid ${BORDER}`,
-                          fontSize: 11,
-                        }}
-                        formatter={(value: number) => [
-                          `${value}%`,
-                          "Weekly score",
-                        ]}
-                      />
-
-                      <Line
-                        type="monotone"
-                        dataKey="score"
-                        stroke={PLUM}
-                        strokeWidth={3}
-                        dot={false}
-                        activeDot={{
-                          r: 4,
-                          fill: PLUM,
-                        }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </section>
-            )}
-
-            {/* -------------------------------------------------------
-                QUALITY ISSUES + PEOPLE
-            -------------------------------------------------------- */}
-            <div className="grid gap-5 lg:grid-cols-2">
-              {/* Issues */}
-              <section
-                className="rounded-2xl border bg-white p-5 shadow-sm"
-                style={{ borderColor: BORDER }}
-              >
-                <SectionHeader
-                  eyebrow="Root causes"
-                  title="Recurring quality issues"
-                  description="Where repeated compliance failures are occurring."
-                />
-
-                {derived.topIssues.length === 0 ? (
-                  <div
-                    className="rounded-xl p-5 text-center"
-                    style={{ background: SOFT }}
-                  >
-                    <CheckCircle2
-                      size={22}
-                      className="mx-auto mb-2"
-                      style={{ color: GREEN }}
-                    />
-
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: TEXT }}
-                    >
-                      No recurring issues detected
+            {/* Posture: where the score sits against target, and how the team splits */}
+            <Surface className="p-5 sm:p-6">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-base font-semibold" style={{ color: TEXT }}>
+                      {getScoreLabel(data.compliance_score)}
                     </p>
+                    <StatusText tone={AUDIT_STATUS[derived.readiness].tone}>
+                      {AUDIT_STATUS[derived.readiness].overall}
+                    </StatusText>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {derived.topIssues.map((issue, index) => {
-                      const max = derived.topIssues[0]?.count || 1;
-
-                      const width = (issue.count / max) * 100;
-
-                      return (
-                        <div key={`${issue.issue}-${index}`}>
-                          <div className="mb-1.5 flex items-center justify-between gap-3">
-                            <span
-                              className="truncate text-sm font-bold"
-                              style={{ color: TEXT }}
-                            >
-                              {issue.issue}
-                            </span>
-
-                            <span
-                              className="shrink-0 text-xs font-semibold"
-                              style={{ color: MUTED }}
-                            >
-                              {issue.count} occurrences
-                            </span>
-                          </div>
-
-                          <div
-                            className="h-2 overflow-hidden rounded-full"
-                            style={{ background: SOFT }}
-                          >
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${width}%`,
-                                background:
-                                  index === 0
-                                    ? RED
-                                    : index === 1
-                                      ? AMBER
-                                      : PLUM,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-
-              {/* People */}
-              <section
-                className="rounded-2xl border bg-white p-5 shadow-sm"
-                style={{ borderColor: BORDER }}
-              >
-                <SectionHeader
-                  eyebrow="People quality"
-                  title="Worker quality signals"
-                  description="A concise view of strongest performers and workers requiring support."
-                  action={
-                    <button
-                      onClick={() => navigate("/md/staff")}
-                      className="flex items-center gap-1 text-xs font-semibold"
-                      style={{ color: PLUM }}
-                    >
-                      View staff
-                      <ArrowRight size={11} />
-                    </button>
-                  }
-                />
-
-                <div className="space-y-2">
-                  {derived.attentionWorkers.slice(0, 3).map((worker) => (
-                    <div
-                      key={`risk-${worker.id}`}
-                      className="flex items-center gap-3 rounded-xl border px-3 py-2.5"
-                      style={{ borderColor: BORDER }}
-                    >
-                      <div
-                        className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold"
-                        style={{
-                          background: "#FBEAE9",
-                          color: RED,
-                        }}
-                      >
-                        {worker.full_name
-                          .split(" ")
-                          .map((name) => name[0])
-                          .slice(0, 2)
-                          .join("")
-                          .toUpperCase()}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className="truncate text-sm font-semibold"
-                          style={{ color: TEXT }}
-                        >
-                          {worker.full_name}
-                        </p>
-
-                        <p
-                          className="text-xs font-medium"
-                          style={{ color: MUTED }}
-                        >
-                          {worker.sessions} sessions
-                        </p>
-                      </div>
-
-                      <span
-                        className="text-sm font-semibold"
-                        style={{ color: RED }}
-                      >
-                        {worker.compliance_score}%
+                  <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>
+                    {data.compliance_score >= data.compliance_target
+                      ? "The organisation is at or above its compliance target."
+                      : "The organisation is below target. Focus on the highest-impact quality gaps first."}
+                  </p>
+                  <div className="mt-4">
+                    <div className="mb-1.5 flex justify-between text-xs" style={{ color: MUTED }}>
+                      <span>Progress toward {data.compliance_target}% target</span>
+                      <span className="font-semibold tabular-nums" style={{ color: TEXT }}>
+                        {Math.max(0, data.compliance_target - data.compliance_score)} pts to go
                       </span>
                     </div>
-                  ))}
-
-                  {derived.strongestWorkers.slice(0, 2).map((worker) => (
-                    <div
-                      key={`strong-${worker.id}`}
-                      className="flex items-center gap-3 rounded-xl border px-3 py-2.5"
-                      style={{ borderColor: BORDER }}
-                    >
+                    <div className="relative h-2 overflow-hidden rounded-full" style={{ background: SOFT }}>
                       <div
-                        className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold"
-                        style={{
-                          background: "#E9F5F0",
-                          color: GREEN,
-                        }}
-                      >
-                        {worker.full_name
-                          .split(" ")
-                          .map((name) => name[0])
-                          .slice(0, 2)
-                          .join("")
-                          .toUpperCase()}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className="truncate text-sm font-semibold"
-                          style={{ color: TEXT }}
-                        >
-                          {worker.full_name}
-                        </p>
-
-                        <p
-                          className="text-xs font-medium"
-                          style={{ color: MUTED }}
-                        >
-                          {worker.sessions} sessions
-                        </p>
-                      </div>
-
-                      <span
-                        className="text-sm font-semibold"
-                        style={{ color: GREEN }}
-                      >
-                        {worker.compliance_score}%
-                      </span>
+                        className="h-full rounded-full"
+                        style={{ width: `${Math.min(data.compliance_score, 100)}%`, background: toneColor(scoreTone(data.compliance_score)) }}
+                      />
                     </div>
-                  ))}
-                </div>
-              </section>
-            </div>
-
-            {/* -------------------------------------------------------
-                EXECUTIVE FOOTER
-            -------------------------------------------------------- */}
-            <section
-              className="flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between"
-              style={{
-                borderColor: BORDER,
-                background: SOFT,
-              }}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                  style={{
-                    background: "#fff",
-                    color: PLUM,
-                  }}
-                >
-                  <ShieldCheck size={16} strokeWidth={2.4} />
+                  </div>
                 </div>
 
                 <div>
-                  <p className="text-sm font-semibold" style={{ color: TEXT }}>
-                    Executive quality decision
+                  <p className="text-base font-semibold" style={{ color: TEXT }}>How the team splits</p>
+                  <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>
+                    {derived.total} {derived.total === 1 ? "record" : "records"} scored across the organisation.
                   </p>
+                  <div className="mt-4 flex h-2 overflow-hidden rounded-full" style={{ background: SOFT }} aria-hidden="true">
+                    <div style={{ width: `${derived.compliantPercent}%`, background: GREEN }} />
+                    <div style={{ width: `${derived.atRiskPercent}%`, background: AMBER }} />
+                    <div style={{ width: `${derived.nonCompliantPercent}%`, background: RED }} />
+                  </div>
+                  <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs" style={{ color: MUTED }}>
+                    {[
+                      { label: "Compliant", pct: derived.compliantPercent, color: GREEN },
+                      { label: "At risk", pct: derived.atRiskPercent, color: AMBER },
+                      { label: "Non-compliant", pct: derived.nonCompliantPercent, color: RED },
+                    ].map((part) => (
+                      <li key={part.label} className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full" style={{ background: part.color }} />
+                        {part.label}
+                        <span className="font-semibold tabular-nums" style={{ color: TEXT }}>{part.pct}%</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </Surface>
 
-                  <p
-                    className="mt-0.5 max-w-2xl text-xs font-medium leading-relaxed"
-                    style={{ color: MUTED }}
-                  >
+            <div className="grid gap-8 lg:grid-cols-2">
+              <Section
+                title="What needs attention"
+                description="The signals with the most impact on quality right now."
+                action={
+                  <button type="button" onClick={() => navigate("/md/staff")} className={ghostClass}>
+                    Review staff <ArrowRight size={14} />
+                  </button>
+                }
+              >
+                <Surface>
+                  {derived.topIssues.length === 0 &&
+                  derived.attentionWorkers.length === 0 &&
+                  derived.highAlerts === 0 ? (
+                    <div className="flex items-center gap-3 px-5 py-6">
+                      <CheckCircle2 size={18} style={{ color: GREEN }} />
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: TEXT }}>No immediate quality risks</p>
+                        <p className="text-xs" style={{ color: MUTED }}>Compliance signals are within the expected range.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <RowList>
+                      {derived.highAlerts > 0 && (
+                        <li>
+                          <button type="button" onClick={() => navigate("/md/staff")} className={rowClass}>
+                            <IconTile icon={ShieldAlert} tone="danger" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-semibold" style={{ color: TEXT }}>High-priority compliance alerts</span>
+                              <span className="block text-xs" style={{ color: MUTED }}>
+                                {derived.highAlerts} {derived.highAlerts === 1 ? "alert needs" : "alerts need"} review.
+                              </span>
+                            </span>
+                            <ChevronRight size={16} style={{ color: MUTED }} />
+                          </button>
+                        </li>
+                      )}
+                      {derived.topIssues.slice(0, 3).map((issue, index) => (
+                        <li key={`${issue.issue}-${index}`} className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+                          <IconTile icon={AlertTriangle} tone={index === 0 ? "danger" : "warning"} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold" style={{ color: TEXT }}>{issue.issue}</span>
+                            <span className="block text-xs" style={{ color: MUTED }}>Appeared {issue.count} times</span>
+                          </span>
+                          <StatusText tone={index === 0 ? "danger" : "neutral"}>Priority {index + 1}</StatusText>
+                        </li>
+                      ))}
+                      {derived.attentionWorkers.length > 0 && (
+                        <li className="px-4 py-3.5 sm:px-5">
+                          <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: TEXT }}>
+                            <Users size={15} style={{ color: AMBER }} />
+                            {derived.attentionWorkers.length} {derived.attentionWorkers.length === 1 ? "worker" : "workers"} below the 85% quality threshold
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {derived.attentionWorkers.map((worker) => (
+                              <span key={worker.id} className="rounded-full px-2.5 py-1 text-xs" style={{ background: SOFT, color: TEXT }}>
+                                {worker.full_name} · <span className="font-semibold tabular-nums">{worker.compliance_score}%</span>
+                              </span>
+                            ))}
+                          </div>
+                        </li>
+                      )}
+                    </RowList>
+                  )}
+                </Surface>
+              </Section>
+
+              <Section
+                title="Audit readiness"
+                description="Whether the organisation can evidence compliance today."
+                action={<StatusText tone={AUDIT_STATUS[derived.readiness].tone}>{AUDIT_STATUS[derived.readiness].overall}</StatusText>}
+              >
+                <Surface>
+                  <RowList>
+                    <ReadinessRow
+                      icon={FileCheck2}
+                      label="Session evidence"
+                      description="Session documentation and compliance outcomes."
+                      status={data.team_compliance_breakdown.non_compliant === 0 ? "ready" : "attention"}
+                    />
+                    <ReadinessRow
+                      icon={ShieldCheck}
+                      label="Compliance target"
+                      description={`Organisation score against the ${data.compliance_target}% target.`}
+                      status={data.compliance_score >= data.compliance_target ? "ready" : "attention"}
+                    />
+                    <ReadinessRow
+                      icon={AlertTriangle}
+                      label="High-priority alerts"
+                      description="Open alerts that need executive review."
+                      status={derived.highAlerts === 0 ? "ready" : "attention"}
+                    />
+                    <ReadinessRow
+                      icon={Users}
+                      label="Worker credentials"
+                      description="Credential and certification currency."
+                      status="pending"
+                    />
+                    <ReadinessRow
+                      icon={FileCheck2}
+                      label="Training evidence"
+                      description="Current staff training records."
+                      status="pending"
+                    />
+                  </RowList>
+                </Surface>
+              </Section>
+            </div>
+
+            {trendError && (
+              <p role="status" className="rounded-2xl bg-cc-surface px-5 py-4 text-sm" style={{ color: MUTED }}>
+                The compliance trend could not be loaded. Refresh to try again; the other records are still available.
+              </p>
+            )}
+            {chartData.length > 1 && (
+              <Section title="Compliance trajectory" description="Weekly average score for the last quarter. The dashed line is your target.">
+                <Surface className="p-5">
+                  <div className="h-[230px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData} margin={{ top: 5, right: 15, bottom: 0, left: -20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
+                        <XAxis dataKey="week" tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} />
+                        <YAxis domain={[50, 100]} tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} />
+                        <ReferenceLine y={data.compliance_target} stroke={AMBER} strokeDasharray="4 3" />
+                        <Tooltip
+                          contentStyle={{ borderRadius: 12, border: `1px solid ${BORDER}`, fontSize: 12 }}
+                          formatter={(value: number) => [`${value}%`, "Weekly score"]}
+                        />
+                        <Line type="monotone" dataKey="score" stroke={PLUM} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: PLUM }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Surface>
+              </Section>
+            )}
+
+            <div className="grid gap-8 lg:grid-cols-2">
+              <Section title="Recurring quality issues" description="Where the same compliance failures keep happening.">
+                <Surface className="p-5">
+                  {derived.topIssues.length === 0 ? (
+                    <p className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
+                      <CheckCircle2 size={16} style={{ color: GREEN }} />
+                      No recurring issues detected.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {derived.topIssues.map((issue, index) => {
+                        const max = derived.topIssues[0]?.count || 1;
+                        return (
+                          <div key={`${issue.issue}-${index}`}>
+                            <div className="mb-1.5 flex items-center justify-between gap-3">
+                              <span className="truncate text-sm font-semibold" style={{ color: TEXT }}>{issue.issue}</span>
+                              <span className="shrink-0 text-xs tabular-nums" style={{ color: MUTED }}>{issue.count} times</span>
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full" style={{ background: SOFT }}>
+                              <div
+                                className="h-full rounded-full"
+                                style={{ width: `${(issue.count / max) * 100}%`, background: index === 0 ? RED : index === 1 ? AMBER : MUTED }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Surface>
+              </Section>
+
+              <Section
+                title="Worker quality signals"
+                description="Workers who need support, and the strongest performers."
+                action={
+                  <button type="button" onClick={() => navigate("/md/staff")} className={ghostClass}>
+                    View staff <ArrowRight size={14} />
+                  </button>
+                }
+              >
+                <Surface>
+                  {derived.attentionWorkers.length === 0 && derived.strongestWorkers.length === 0 ? (
+                    <p className="px-5 py-6 text-sm" style={{ color: MUTED }}>No worker scores yet.</p>
+                  ) : (
+                    <RowList>
+                      {derived.attentionWorkers.slice(0, 3).map((worker) => (
+                        <WorkerRow key={`risk-${worker.id}`} worker={worker} tone="danger" />
+                      ))}
+                      {derived.strongestWorkers.slice(0, 2).map((worker) => (
+                        <WorkerRow key={`strong-${worker.id}`} worker={worker} tone="good" />
+                      ))}
+                    </RowList>
+                  )}
+                </Surface>
+              </Section>
+            </div>
+
+            <Surface className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <IconTile icon={ShieldCheck} tone={AUDIT_STATUS[derived.readiness].tone} />
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: TEXT }}>Executive quality decision</p>
+                  <p className="mt-0.5 max-w-2xl text-sm leading-6" style={{ color: MUTED }}>
                     {derived.readiness === "ready"
-                      ? "The organisation is currently positioned for audit readiness. Continue monitoring recurring issues and evidence quality."
-                      : "The organisation has quality signals requiring attention before it can be considered fully audit-ready."}
+                      ? "The organisation is positioned for audit. Keep watching recurring issues and evidence quality."
+                      : "Some quality signals need attention before the organisation is fully audit ready."}
                   </p>
                 </div>
               </div>
-
-              <button
-                onClick={() => navigate("/md/staff")}
-                className="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-                style={{ background: "var(--cc-cta)" }}
-              >
+              <button type="button" onClick={() => navigate("/md/staff")} className={`${ctaClass} shrink-0`}>
                 Review quality team
-                <ArrowRight size={12} />
+                <ArrowRight size={15} />
               </button>
-            </section>
+            </Surface>
           </>
         )}
       </div>
-    </HubLayout>
+    </Layout>
   );
 }

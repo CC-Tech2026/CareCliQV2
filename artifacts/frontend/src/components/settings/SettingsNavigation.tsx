@@ -4,8 +4,15 @@ import { Search } from "lucide-react";
 type NavigationItem<T extends string> = {
   id: T;
   label: string;
+  description?: string;
   icon: ComponentType<{ className?: string; style?: CSSProperties }>;
 };
+export function resolveSettingsSection<T extends string>(search: string, allowed: readonly T[], fallback: T): T {
+  const params = new URLSearchParams(search);
+  const requested = params.get("section") || (params.has("billing") ? "billing" : fallback);
+  return allowed.includes(requested as T) ? requested as T : fallback;
+}
+
 const GROUPS = [
   { title: "Personal", ids: ["account", "security", "privacy", "accessibility"] },
   { title: "Organisation", ids: ["provider", "branding", "billing", "branches", "team", "delegatedAccess"] },
@@ -29,8 +36,19 @@ export function SettingsNavigation<T extends string>({
   return (
     <nav
       aria-label="Settings sections"
-      className="w-full min-w-0 lg:w-60 lg:shrink-0"
+      className="w-full min-w-0 space-y-3 lg:sticky lg:top-24 lg:w-56 lg:shrink-0 lg:self-start"
     >
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-cc-muted" />
+          <input
+            aria-label="Find a setting"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Find a setting"
+            className="h-11 w-full rounded-lg border border-cc-border bg-cc-surface pl-9 pr-2 text-sm text-cc-text"
+          />
+        </div>
       <div
         className="rounded-xl border border-cc-border p-3 lg:hidden"
         style={{ background: "var(--cc-surface)" }}
@@ -59,32 +77,21 @@ export function SettingsNavigation<T extends string>({
         </select>
       </div>
       <div
-        className="sticky top-[160px] hidden max-h-[calc(100dvh-180px)] space-y-4 overflow-y-auto rounded-xl border border-cc-border p-3 lg:block"
+        className={(search.trim() ? "block " : "hidden lg:block ") + "max-h-[calc(100dvh-220px)] space-y-3 overflow-y-auto rounded-xl border border-cc-border p-3"}
         style={{ background: "var(--cc-surface)" }}
       >
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-cc-muted" />
-          <input
-            aria-label="Find a setting"
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Find a setting"
-            className="h-11 w-full rounded-lg border border-cc-border bg-transparent pl-9 pr-2 text-sm text-cc-text"
-          />
-        </div>
         {groups.map((group) => {
           const visible = group.items.filter((item) =>
-            item.label.toLowerCase().includes(search.trim().toLowerCase()),
+            (item.label + " " + (item.description ?? "")).toLowerCase().includes(search.trim().toLowerCase()),
           );
           if (!visible.length) return null;
           return (
             <div key={group.title}>
-              <p className="px-3 pb-1.5 text-xs font-medium text-cc-muted">
+              <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-cc-muted">
                 {group.title}
               </p>
               <div className="space-y-0.5">
-                {visible.map(({ id, label, icon: Icon }) => (
+                {visible.map(({ id, label, description, icon: Icon }) => (
                   <button
                     key={id}
                     type="button"
@@ -99,7 +106,7 @@ export function SettingsNavigation<T extends string>({
                     }}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
-                    <span className="min-w-0 break-words">{label}</span>
+                    <span className="min-w-0 break-words"><span className="block">{label}</span>{description && search.trim() && <span className="mt-0.5 block text-xs font-normal leading-relaxed text-cc-muted">{description}</span>}</span>
                   </button>
                 ))}
               </div>
@@ -107,7 +114,7 @@ export function SettingsNavigation<T extends string>({
           );
         })}
         {!items.some((item) =>
-          item.label.toLowerCase().includes(search.trim().toLowerCase()),
+          (item.label + " " + (item.description ?? "")).toLowerCase().includes(search.trim().toLowerCase()),
         ) && (
           <div className="px-3 text-sm text-cc-muted" role="status">
             No matching sections.

@@ -43,11 +43,13 @@ export function DocumentPreviewPane({
   customizableFields: string[];
   excludedFields: Set<string>;
   onToggleExcludedField: (field: string) => void;
-  selectedDocs: VaultDocument[];
-  onRemoveSelected: (id: string) => void;
-  bulkExcludedFields: Set<string>;
-  onToggleExcludedFieldForAll: (field: string) => void;
-  onShare: () => void;
+  selectedDocs?: VaultDocument[];
+  onRemoveSelected?: (id: string) => void;
+  bulkExcludedFields?: Set<string>;
+  onToggleExcludedFieldForAll?: (field: string) => void;
+  /** Shows the old "Selected for sharing" basket under the preview. Pages now
+   * share from their header into the share window instead. */
+  onShare?: () => void;
 }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewKind, setPreviewKind] = useState<PreviewKind | null>(null);
@@ -313,6 +315,7 @@ function toggleFullscreen() {
         )}
       </div>
 
+      {onShare && selectedDocs && onRemoveSelected && bulkExcludedFields && onToggleExcludedFieldForAll && (
       <div className="flex flex-col gap-2 p-3.5">
         <p className="text-[12.5px] font-bold" style={{ color: "var(--cc-text)" }}>
           Selected for sharing ({selectedDocs.length})
@@ -375,6 +378,7 @@ function toggleFullscreen() {
           Share with auditor
         </Button>
       </div>
+      )}
     </div>
   );
 }

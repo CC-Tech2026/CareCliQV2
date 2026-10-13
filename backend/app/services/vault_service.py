@@ -26,11 +26,17 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, NotRequired, TypedDict
+from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import HTTPException
 
 from ..core.errors import internal_error_detail
+from .audit_readiness_service import INACTIVE_PARTICIPANT_STATUSES
+from .audit_readiness_service import load_profile as load_audit_profile
+from .credential_status import live_status
+from .credential_verification_service import canonical_credential_type
+from .onboarding_escalation_service import REQUIRED_CREDENTIAL_TYPES
 from .organization_branding_service import build_pdf_letterhead, get_letterhead
 from .supabase_client import get_supabase_admin, signed_storage_url
 
@@ -82,7 +88,8 @@ class VaultDocument(TypedDict):
     subtype: NotRequired[str | None]
 
 
-GOVERNANCE_FOLDER_KEYS = (
+# The nine Practice Standards policy folders: Policy & Procedures > Core Module.
+POLICY_CORE_KEYS = (
     "governance_operational",
     "risk_management",
     "quality_management",
@@ -93,6 +100,36 @@ GOVERNANCE_FOLDER_KEYS = (
     "continuity_of_supports",
     "emergency_disaster_management",
 )
+
+# Policy & Procedures > Module 1 to 5A, with the registration group that
+# makes each one apply to an organisation (None: the organisation decides).
+POLICY_MODULES: dict[str, tuple[str, str | None]] = {
+    "policy_module_1": ("Module 1", "0104"),
+    "policy_module_2": ("Module 2", "0110"),
+    "policy_module_3": ("Module 3", "0118"),
+    "policy_module_4": ("Module 4", "0132"),
+    "policy_module_5": ("Module 5", "0131"),
+    "policy_module_5a": ("Module 5A", None),
+}
+
+# The organisation's own records: the Governance folder.
+GOVERNANCE_RECORD_FOLDERS: dict[str, str] = {
+    "gov_business_continuity": "Business & Continuity Plan",
+    "gov_conflict_of_interest": "Conflict of Interest",
+    "gov_emergency_management": "Emergency Management",
+    "gov_feedback_complaints": "Feedback & Complaints",
+    "gov_incident_management": "Incident Management",
+    "gov_insurances": "Insurances",
+    "gov_meeting_minutes": "Meeting Minutes",
+    "gov_ndis_registration": "NDIS Registration",
+    "gov_quality_management": "Quality Management",
+    "gov_risk_management": "Risk Management",
+    "gov_training": "Training",
+}
+
+# Every folder stored in governance_documents (uploads) and policy_documents
+# (in-app drafts).
+GOVERNANCE_FOLDER_KEYS = (*POLICY_CORE_KEYS, *POLICY_MODULES, *GOVERNANCE_RECORD_FOLDERS)
 
 CATEGORY_META: dict[str, dict[str, str]] = {
     "session_notes": {"label": "Session & Progress Notes", "group": "record"},
@@ -112,6 +149,8 @@ CATEGORY_META: dict[str, dict[str, str]] = {
     "human_resource_management": {"label": "Human Resource Management", "group": "governance"},
     "continuity_of_supports": {"label": "Continuity of Supports", "group": "governance"},
     "emergency_disaster_management": {"label": "Emergency & Disaster Management", "group": "governance"},
+    **{key: {"label": label, "group": "governance"} for key, (label, _) in POLICY_MODULES.items()},
+    **{key: {"label": label, "group": "governance"} for key, label in GOVERNANCE_RECORD_FOLDERS.items()},
 }
 
 # Statuses across every source table that mean "needs an MD's attention" —
@@ -898,7 +937,7 @@ def _list_credentials(org_id: str) -> list[VaultDocument]:
         resp = (
             get_supabase_admin()
             .table("credentials")
-            .select("id, user_id, credential_type, title, status, issue_date, file_path")
+            .select("id, user_id, credential_type, title, status, issue_date, expiry_date, file_path")
             .eq("organization_id", org_id)
             .order("issue_date", desc=True)
             .limit(500)
@@ -917,10 +956,11 @@ def _list_credentials(org_id: str) -> list[VaultDocument]:
             person_type="Worker",
             person_id=row.get("user_id"),
             date=str(row.get("issue_date") or ""),
-            status=row.get("status") or "pending_review",
+            # The stored column never moves to expired on its own.
+            status=live_status(row.get("expiry_date"), row.get("status")),
             source_table="credentials",
             source_id=row["id"],
-            subtype=row.get("credential_type"),
+            subtype=canonical_credential_type(row.get("credential_type")) or None,
             has_stored_file=bool(row.get("file_path")),
         )
         for row in (resp.data or [])
@@ -1526,16 +1566,33 @@ def _render_audit_pack(org_id: str, document_id: str, exclude_fields: set[str] |
     return f"{safe}.json", data
 
 
+def governance_expiry_status(expiry_date: Any) -> str:
+    """on_file, or expiring / expired once a governance upload with an
+    expiry date (an insurance certificate, an NDIS registration) nears or
+    passes it — the same 60-day window as worker credentials."""
+    if not expiry_date:
+        return "on_file"
+    status = live_status(str(expiry_date), "valid")
+    return "on_file" if status == "valid" else status
+
+
+def _display_date(value: Any) -> str:
+    try:
+        return datetime.fromisoformat(str(value)[:10]).strftime("%d %b %Y").lstrip("0")
+    except ValueError:
+        return str(value)
+
+
 def _list_governance(org_id: str, folder_key: str) -> list[VaultDocument]:
     # Only current versions - a superseded row stays in the database (its
     # own version-history entry, reachable via list_governance_document_versions)
     # but is deliberately excluded from the folder's day-to-day list so an
     # MD always lands on the version that's actually in force.
-    try:
-        resp = (
+    def fetch(columns: str):
+        return (
             get_supabase_admin()
             .table("governance_documents")
-            .select("id, title, created_at")
+            .select(columns)
             .eq("organization_id", org_id)
             .eq("folder_key", folder_key)
             .is_("deleted_at", "null")
@@ -1544,8 +1601,15 @@ def _list_governance(org_id: str, folder_key: str) -> list[VaultDocument]:
             .limit(300)
             .execute()
         )
+
+    try:
+        resp = fetch("id, title, created_at, expiry_date")
     except Exception:
-        return []
+        # expiry_date arrives with migration 240; list without it until then.
+        try:
+            resp = fetch("id, title, created_at")
+        except Exception:
+            return []
     org_name = _org_name(org_id)
     doc_ids = [row["id"] for row in (resp.data or [])]
     policy_doc_by_governance_id = _policy_document_id_by_governance_id(org_id, doc_ids)
@@ -1553,15 +1617,17 @@ def _list_governance(org_id: str, folder_key: str) -> list[VaultDocument]:
     docs = []
     for row in resp.data or []:
         first_id, version = first_versions.get(row["id"], (row["id"], 1))
+        expiry = row.get("expiry_date")
         docs.append(VaultDocument(
             id=row["id"],
             category=folder_key,
             folder_label=CATEGORY_META[folder_key]["label"],
-            title=row.get("title") or "Policy document",
+            title=row.get("title") or ("Document" if folder_key in GOVERNANCE_RECORD_FOLDERS else "Policy document"),
             person_name=org_name,
             person_type="Organisation",
             date=str(row.get("created_at") or ""),
-            status="on_file",
+            status=governance_expiry_status(expiry),
+            detail=f"Expires {_display_date(expiry)}" if expiry else None,
             source_table="governance_documents",
             source_id=row["id"],
             has_stored_file=True,
@@ -1851,6 +1917,63 @@ async def upload_custom_folder_document(
     return result.data[0] if result.data else payload
 
 
+def _forget_custom_folder(org_id: str, folder_id: str) -> None:
+    """Drop the cached folder list and contents so a rename or delete shows at once."""
+    _ttl_cache.pop(f"custom_folders:{org_id}", None)
+    _ttl_cache.pop(f"docs:{org_id}:{_custom_folder_category(folder_id)}", None)
+
+
+def _require_custom_folder(org_id: str, folder_id: str) -> None:
+    existing = (
+        get_supabase_admin()
+        .table("vault_custom_folders")
+        .select("id")
+        .eq("id", folder_id)
+        .eq("organization_id", org_id)
+        .is_("deleted_at", "null")
+        .limit(1)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Folder not found.")
+
+
+def rename_custom_folder(org_id: str, folder_id: str, label: str) -> dict[str, Any]:
+    if not label.strip():
+        raise HTTPException(status_code=422, detail="Folder name is required.")
+    _require_custom_folder(org_id, folder_id)
+    get_supabase_admin().table("vault_custom_folders").update({"label": label.strip()}).eq("id", folder_id).eq(
+        "organization_id", org_id
+    ).execute()
+    _forget_custom_folder(org_id, folder_id)
+    return {"id": folder_id, "label": label.strip(), "category": _custom_folder_category(folder_id)}
+
+
+def delete_custom_folder(org_id: str, folder_id: str) -> int:
+    """Remove a folder someone created, and the files in it, from the vault.
+
+    Soft delete (deleted_at), like a single file: nothing is erased, so a
+    folder removed by mistake can be restored and an auditor can still be
+    shown what existed. Built-in folders are views over live records and
+    can't be deleted. Returns how many files were removed with it."""
+    _require_custom_folder(org_id, folder_id)
+    now = datetime.now(timezone.utc).isoformat()
+    supabase = get_supabase_admin()
+    removed = (
+        supabase.table("vault_custom_folder_documents")
+        .update({"deleted_at": now})
+        .eq("folder_id", folder_id)
+        .eq("organization_id", org_id)
+        .is_("deleted_at", "null")
+        .execute()
+    )
+    supabase.table("vault_custom_folders").update({"deleted_at": now}).eq("id", folder_id).eq(
+        "organization_id", org_id
+    ).execute()
+    _forget_custom_folder(org_id, folder_id)
+    return len(removed.data or [])
+
+
 def delete_custom_folder_document(org_id: str, folder_id: str, document_id: str) -> None:
     supabase = get_supabase_admin()
     existing = (
@@ -1962,7 +2085,11 @@ DOC_TYPE_CODES: dict[str, str] = {
     "plan_meeting_sessions": "CON",
     "audit_pack_exports": "AUD",
     "governance_documents": "POL",
+    "governance_records": "GOV",
     "vault_custom_folder_documents": "DOC",
+    "participant_complaints": "CMP",
+    "operational_feedback": "FDB",
+    "vault_registers": "REG",
 }
 
 # Where each kind of document comes from, in the words the listing uses.
@@ -1983,7 +2110,11 @@ DOC_SOURCE_LABELS: dict[str, str] = {
     "plan_meeting_sessions": "Plan meeting",
     "audit_pack_exports": "Generated by the vault",
     "governance_documents": "Uploaded",
+    "governance_records": "Uploaded",
     "vault_custom_folder_documents": "Uploaded",
+    "participant_complaints": "Participant complaint",
+    "operational_feedback": "Staff feedback",
+    "vault_registers": "Live register",
 }
 
 REGISTER_BATCH = 500
@@ -1992,6 +2123,8 @@ REGISTER_BATCH = 500
 def _doc_kind(doc: VaultDocument) -> str:
     if doc["source_table"] == "ndis_plans" and doc["category"] == "consent_onboarding":
         return "plan_agreements"
+    if doc["category"] in GOVERNANCE_RECORD_FOLDERS:
+        return "governance_records"
     return doc["source_table"]
 
 
@@ -2098,7 +2231,13 @@ def _load_category_docs(org_id: str, category: str) -> list[VaultDocument]:
         elif category not in CATEGORY_META:
             raise HTTPException(status_code=404, detail="Unknown vault category.")
         elif category in GOVERNANCE_FOLDER_KEYS:
-            docs = _list_governance(org_id, category)
+            # Uploads, plus what the app itself records for this folder
+            # (complaints, registers): see vault_record_feeds.
+            from . import vault_record_feeds
+
+            docs = _list_governance(org_id, category) + vault_record_feeds.list_feed_documents(
+                org_id, category, folder_label=CATEGORY_META[category]["label"], org_name=_org_name(org_id),
+            )
         else:
             loader = _RECORD_LOADERS.get(category)
             docs = loader(org_id) if loader else []
@@ -2175,7 +2314,12 @@ def render_document_file(
     elif category not in CATEGORY_META:
         raise HTTPException(status_code=404, detail="Unknown vault category.")
     elif category in GOVERNANCE_FOLDER_KEYS:
-        filename, data = _render_governance_file(org_id, category, document_id)
+        from . import vault_record_feeds
+
+        if vault_record_feeds.is_feed_document(document_id):
+            filename, data = vault_record_feeds.render_feed_document(org_id, category, document_id)
+        else:
+            filename, data = _render_governance_file(org_id, category, document_id)
     else:
         renderer = _RECORD_RENDERERS.get(category)
         if not renderer:
@@ -2217,34 +2361,39 @@ def get_folder_meta(org_id: str, category: str) -> dict[str, Any] | None:
     if not meta:
         return None
     docs = _load_category_docs(org_id, category)
-    return _folder_meta_from_docs(category, meta["label"], meta["group"], False, docs)
+    folder = _folder_meta_from_docs(category, meta["label"], meta["group"], False, docs)
+    folder["tree_path"] = category_tree_path(category)
+    return folder
 
 
-# ── Organised folders: three top-level folders, each with subfolders ─────────
+# ── Organised folders: top-level folders, each with subfolders ───────────────
 # A view over the same documents as the flat category folders. Every document
-# lands in at most one subfolder. Governance subfolders are the categories
-# themselves; participant and staff subfolders group several categories, so
-# they're decided per document. Subfolders with no documents are left out.
+# lands in at most one subfolder. Governance and Policy & Procedures
+# subfolders are categories with their own folder page (Core Module holds the
+# nine Practice Standards policy folders); participant and staff subfolders
+# group several categories, so
+# they're decided per document, and sit inside a folder per person. Every
+# subfolder is listed, empty or not: an empty folder that should hold
+# something is a gap the MD needs to see before an auditor does.
 
 VAULT_TREE_TOPS: dict[str, str] = {
     "governance": "Governance",
     "participant": "Participant Folder",
+    "policy": "Policy & Procedures",
     "staff": "Staff Folder",
 }
 
 VAULT_TREE_SUBFOLDERS: dict[str, list[tuple[str, str]]] = {
-    "governance": [
-        (key, CATEGORY_META[key]["label"])
-        for key in (*GOVERNANCE_FOLDER_KEYS, "audit_packs")
-    ],
+    "governance": list(GOVERNANCE_RECORD_FOLDERS.items()),
+    "policy": [("core_module", "Core Module")] + [(key, label) for key, (label, _) in POLICY_MODULES.items()],
     "participant": [
+        ("behaviour_support", "Behaviour Support"),
         ("clinical_docs", "Clinical Docs"),
+        ("emergency_risk", "Emergency & Risk"),
         ("incident_reports", "Incident Reports"),
         ("intake_docs", "Intake Docs"),
         ("invoices", "Invoices"),
         ("service_support", "Service A & Support P"),
-        ("behaviour_support", "Behaviour Support"),
-        ("emergency_risk", "Emergency & Risk"),
         ("sil_docs", "SIL Docs"),
         ("support_coordination", "Support Coordination Docs"),
     ],
@@ -2258,34 +2407,73 @@ VAULT_TREE_SUBFOLDERS: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
+# The tops that hold a folder per person, and who that person is.
+TREE_PERSON_TYPES: dict[str, str] = {"participant": "Participant", "staff": "Worker"}
+
+# Every credential type the app offers, by canonical type (see
+# canonical_credential_type), including the free-text labels the team page
+# still saves for allied health and "Other". A type missing here is left out
+# of the organised folders and logged, never guessed into one.
 STAFF_CREDENTIAL_SUBFOLDERS: dict[str, str] = {
     "ndis_screening": "checks",
     "wwcc": "checks",
     "police_check": "checks",
+    "code_of_conduct": "contracts_info",
+    "professional_indemnity_insurance": "contracts_info",
     "first_aid": "first_aid_cpr",
     "cpr": "first_aid_cpr",
+    "first_aid/cpr": "first_aid_cpr",
     "drivers_licence": "id_documents",
+    "qualification": "training_qualifications",
+    "manual_handling": "training_qualifications",
+    "infection_control": "training_qualifications",
+    "medication_admin": "training_qualifications",
+    "ahpra_registration": "training_qualifications",
+    "discipline_specific_certificate": "training_qualifications",
+    "other": "training_qualifications",
+    "vehicle_insurance": "vehicle_insurance",
+    "vehicle_registration": "vehicle_insurance",
 }
+
+_unplaced_credential_types: set[str] = set()
+
+
+def _credential_subfolder(credential_type: str | None) -> str | None:
+    key = canonical_credential_type(credential_type)
+    sub = STAFF_CREDENTIAL_SUBFOLDERS.get(key)
+    if sub is None and key not in _unplaced_credential_types:
+        _unplaced_credential_types.add(key)
+        logger.warning("Vault: credential type %r has no staff subfolder, left out of the organised folders", credential_type)
+    return sub
 
 
 def _tree_placement(doc: VaultDocument) -> tuple[str, str] | None:
     category = doc["category"]
-    if category in GOVERNANCE_FOLDER_KEYS or category == "audit_packs":
+    if category in GOVERNANCE_RECORD_FOLDERS:
         return "governance", category
+    if category == "audit_packs":
+        return "governance", "gov_quality_management"
+    if category in POLICY_CORE_KEYS:
+        return "policy", "core_module"
+    if category in POLICY_MODULES:
+        return "policy", category
     if category in ("session_notes", "medication_records"):
         return "participant", "clinical_docs"
     if category == "incident_reports":
         return "participant", "incident_reports"
     if category == "invoices":
         return "participant", "invoices"
-    if category == "ndis_plans" or doc["source_table"] in ("service_agreements", "ndis_plans"):
+    # An intake's signed agreement PDF is the service agreement, before the
+    # participant is active.
+    if category == "ndis_plans" or doc["source_table"] in ("service_agreements", "ndis_plans", "participant_intakes"):
         return "participant", "service_support"
     if category == "consent_onboarding":
         if doc["person_type"] == "Participant":
             return "participant", "intake_docs"
         return "staff", "contracts_info"
     if category == "worker_credentials":
-        return "staff", STAFF_CREDENTIAL_SUBFOLDERS.get(doc.get("subtype") or "", "training_qualifications")
+        sub = _credential_subfolder(doc.get("subtype"))
+        return ("staff", sub) if sub else None
     return None
 
 
@@ -2301,34 +2489,416 @@ def _tree_documents(org_id: str) -> dict[tuple[str, str], list[VaultDocument]]:
     return grouped
 
 
+# ── Gaps: which subfolders each person, or the organisation, must fill ───────
+
+# Credentials every active worker must hold (the onboarding gate's list), by
+# the subfolder they file into.
+REQUIRED_STAFF_CREDENTIALS: dict[str, tuple[str, ...]] = {
+    sub: tuple(t for t in REQUIRED_CREDENTIAL_TYPES if STAFF_CREDENTIAL_SUBFOLDERS[t] == sub)
+    for sub in dict.fromkeys(STAFF_CREDENTIAL_SUBFOLDERS[t] for t in REQUIRED_CREDENTIAL_TYPES)
+}
+
+REQUIRED_CREDENTIAL_LABELS: dict[str, str] = {
+    "ndis_screening": "NDIS Worker Screening Check",
+    "wwcc": "Working with Children Check",
+    "code_of_conduct": "Code of Conduct acknowledgement",
+    "first_aid": "First Aid",
+    "cpr": "CPR",
+    "manual_handling": "Manual handling",
+    "infection_control": "Infection control",
+    "medication_admin": "Medication administration",
+}
+
+# Participant subfolders every active participant must have something in.
+REQUIRED_PARTICIPANT_SUBFOLDERS = {"service_support", "intake_docs", "emergency_risk"}
+
+# Governance records every registered provider must hold.
+REQUIRED_GOVERNANCE_SUBFOLDERS = {
+    "gov_business_continuity", "gov_conflict_of_interest", "gov_emergency_management",
+    "gov_insurances", "gov_ndis_registration", "gov_risk_management",
+}
+
+GAP_STATES = {"missing", "expired"}
+
+
+def _folder_state(
+    docs: list[VaultDocument], required: bool, required_types: tuple[str, ...] = ()
+) -> tuple[str, list[str]]:
+    """complete, missing, expired or not_applicable, plus what's missing or
+    lapsed when the folder needs particular credentials. A rejected document
+    is not on file; an expired one is on file but doesn't count as current."""
+    on_file = [d for d in docs if d["status"] != "rejected"]
+    if not required:
+        return ("complete" if on_file else "not_applicable"), []
+    if not required_types:
+        if any(d["status"] != "expired" for d in on_file):
+            return "complete", []
+        return ("expired" if on_file else "missing"), []
+    missing: list[str] = []
+    lapsed: list[str] = []
+    for credential_type in required_types:
+        held = [d for d in on_file if d.get("subtype") == credential_type]
+        label = REQUIRED_CREDENTIAL_LABELS.get(credential_type, _humanise(credential_type))
+        if not held:
+            missing.append(label)
+        elif all(d["status"] == "expired" for d in held):
+            lapsed.append(f"{label} (expired)")
+    if missing:
+        return "missing", missing + lapsed
+    if lapsed:
+        return "expired", lapsed
+    return "complete", []
+
+
+def _participant_facts(org_id: str) -> dict[str, dict[str, Any]]:
+    """Each participant's status and the services that make a folder
+    required: a behaviour support plan, and SIL or support coordination lines
+    on a live service agreement."""
+    def compute() -> dict[str, dict[str, Any]] | _Uncached:
+        supabase = get_supabase_admin()
+        try:
+            rows = (
+                supabase.table("participants")
+                .select("id, full_name, plan_status, behaviour_support_plan, is_purged")
+                .eq("organization_id", org_id)
+                .execute()
+            ).data or []
+        except Exception as exc:
+            logger.warning("Vault: participants for the organised folders failed for org %s: %s", org_id, exc)
+            return _Uncached({})
+        facts = {
+            str(r["id"]): {
+                "name": r.get("full_name") or "Unknown participant",
+                # A purged record (past its retention date) has no plan status.
+                "active": not r.get("is_purged")
+                and str(r.get("plan_status") or "active").lower() not in INACTIVE_PARTICIPANT_STATUSES,
+                "behaviour_support": bool(str(r.get("behaviour_support_plan") or "").strip()),
+                "sil": False,
+                "support_coordination": False,
+            }
+            for r in rows
+        }
+        try:
+            agreements = (
+                supabase.table("service_agreements")
+                .select("id, participant_id")
+                .eq("organization_id", org_id)
+                .in_("status", ["active", "pending_signature"])
+                .execute()
+            ).data or []
+            participant_by_agreement = {str(a["id"]): str(a["participant_id"]) for a in agreements}
+            lines = []
+            if participant_by_agreement:
+                lines = (
+                    supabase.table("service_agreement_supports")
+                    .select("service_agreement_id, support_item_code")
+                    .in_("service_agreement_id", list(participant_by_agreement))
+                    .execute()
+                ).data or []
+        except Exception as exc:
+            logger.warning("Vault: agreement lines for the organised folders failed for org %s: %s", org_id, exc)
+            return _Uncached(facts)
+        for line in lines:
+            person = facts.get(participant_by_agreement.get(str(line.get("service_agreement_id")), ""))
+            parts = str(line.get("support_item_code") or "").split("_")
+            if not person:
+                continue
+            # NDIS item numbers: category_item_registrationgroup_...
+            # Registration group 0115 is daily tasks in shared living (SIL);
+            # support category 07 is support coordination.
+            if len(parts) > 2 and parts[2] == "0115":
+                person["sil"] = True
+            if parts[0] == "07":
+                person["support_coordination"] = True
+        return facts
+
+    return _cached(f"tree_participants:{org_id}", compute)
+
+
+def _worker_facts(org_id: str) -> dict[str, dict[str, Any]]:
+    """Every user's name and whether they're an active support worker. Only
+    support workers get a staff folder of their own unless they hold
+    documents."""
+    def compute() -> dict[str, dict[str, Any]] | _Uncached:
+        try:
+            rows = (
+                get_supabase_admin().table("users")
+                .select("id, full_name, role, is_active")
+                .eq("organization_id", org_id)
+                .execute()
+            ).data or []
+        except Exception as exc:
+            logger.warning("Vault: workers for the organised folders failed for org %s: %s", org_id, exc)
+            return _Uncached({})
+        return {
+            str(r["id"]): {
+                "name": r.get("full_name") or "Unknown worker",
+                "support_worker": r.get("role") == "support_worker",
+                "active": r.get("is_active") is not False,
+            }
+            for r in rows
+        }
+
+    return _cached(f"tree_workers:{org_id}", compute)
+
+
+def _tree_person_key(doc: VaultDocument) -> str:
+    """The person folder a document sits in: the participant or worker it's
+    about, or, for someone who isn't one yet (an intake, an applicant, a new
+    hire), their name."""
+    if doc.get("person_id"):
+        return str(doc["person_id"])
+    return "name:" + " ".join((doc.get("person_name") or "").lower().split())
+
+
+def _person_required(top: str, sub: str, person: dict[str, Any]) -> bool:
+    if not person["active"]:
+        return False
+    if top == "participant":
+        return sub in REQUIRED_PARTICIPANT_SUBFOLDERS or bool(person.get(sub))
+    if sub == "vehicle_insurance":
+        return person["drives"]
+    return sub in REQUIRED_STAFF_CREDENTIALS
+
+
+def list_tree_people(org_id: str, top: str) -> list[dict[str, Any]]:
+    """The people in a participant or staff folder, each with the state of
+    every one of their subfolders. Participants and support workers are
+    listed even with no documents, so a missing file shows."""
+    person_type = TREE_PERSON_TYPES.get(top)
+    if not person_type:
+        raise HTTPException(status_code=404, detail="Unknown vault folder.")
+    grouped = _tree_documents(org_id)
+    refs = _person_refs(org_id).get(person_type, {})
+    if top == "participant":
+        facts = _participant_facts(org_id)
+        listed = set(facts)
+        sub_keys = ("behaviour_support", "sil", "support_coordination")
+    else:
+        facts = _worker_facts(org_id)
+        listed = {pid for pid, f in facts.items() if f["support_worker"]}
+        sub_keys = ()
+    sub_key_map = {"sil": "sil_docs", "support_coordination": "support_coordination"}
+
+    people: dict[str, dict[str, Any]] = {}
+
+    def person_for(key: str, name: str) -> dict[str, Any]:
+        if key not in people:
+            fact = facts.get(key)
+            if fact:
+                status = "active" if fact["active"] else "exited"
+            else:
+                # Not (or no longer) on the participant or staff list.
+                status = "prospective" if key.startswith("name:") else "exited"
+            people[key] = {
+                "id": key,
+                "name": (fact or {}).get("name") or name or f"Unknown {person_type.lower()}",
+                "ref": refs.get(key),
+                "status": status,
+                # Requirements apply to active participants and active
+                # support workers, not office staff who happen to hold a file.
+                "active": status == "active" and (top == "participant" or fact["support_worker"]),
+                "drives": False,
+                "docs": {},
+                **{sub_key_map.get(k, k): bool((fact or {}).get(k)) for k in sub_keys},
+            }
+        return people[key]
+
+    for key in listed:
+        person_for(key, "")
+    for (doc_top, sub), docs in grouped.items():
+        if doc_top != top:
+            continue
+        for doc in docs:
+            key = _tree_person_key(doc)
+            if key == "name:":
+                logger.warning("Vault: %s document %s has no person, filed under an unknown person", top, doc["id"])
+            person = person_for(key, doc.get("person_name") or "")
+            person["docs"].setdefault(sub, []).append(doc)
+            if doc.get("subtype") == "drivers_licence" and doc["status"] != "rejected":
+                person["drives"] = True
+
+    out = []
+    for person in people.values():
+        subfolders = []
+        for sub, label in VAULT_TREE_SUBFOLDERS[top]:
+            docs = person["docs"].get(sub, [])
+            required = _person_required(top, sub, person)
+            types = REQUIRED_STAFF_CREDENTIALS.get(sub, ()) if top == "staff" else ()
+            state, missing = _folder_state(docs, required, types)
+            subfolders.append({"key": sub, "label": label, "count": len(docs), "state": state, "missing": missing})
+        out.append({
+            "id": person["id"],
+            "name": person["name"],
+            "ref": person["ref"],
+            "status": person["status"],
+            "document_count": sum(s["count"] for s in subfolders),
+            "gap_count": sum(1 for s in subfolders if s["state"] in GAP_STATES),
+            "subfolders": subfolders,
+        })
+    return sorted(out, key=lambda p: (p["status"] != "active", p["name"].lower()))
+
+
+def _registered_groups(org_id: str) -> frozenset[str]:
+    """The NDIS registration groups the organisation set in Audit Readiness,
+    which decide the Practice Standards modules that apply to it."""
+    def compute() -> frozenset[str] | _Uncached:
+        try:
+            return frozenset(load_audit_profile(org_id).registration_groups)
+        except Exception as exc:
+            logger.warning("Vault: audit profile unavailable for org %s: %s", org_id, exc)
+            return _Uncached(frozenset())
+
+    return _cached(f"tree_registration:{org_id}", compute)
+
+
+def _core_module_sections(docs: list[VaultDocument]) -> list[dict[str, Any]]:
+    """Core Module's nine policy areas, each required."""
+    sections = []
+    for key in POLICY_CORE_KEYS:
+        section_docs = [d for d in docs if d["category"] == key]
+        state, _ = _folder_state(section_docs, True)
+        sections.append({
+            "key": key, "label": CATEGORY_META[key]["label"], "count": len(section_docs),
+            "state": state, "category": key,
+        })
+    return sections
+
+
+def _org_subfolder(top: str, sub: str, label: str, docs: list[VaultDocument], groups: frozenset[str]) -> dict[str, Any]:
+    """A Governance or Policy & Procedures subfolder, with its state."""
+    out: dict[str, Any] = {"key": sub, "label": label, "count": len(docs), "category": sub, "missing": []}
+    if sub == "core_module":
+        sections = _core_module_sections(docs)
+        gaps = [s for s in sections if s["state"] in GAP_STATES]
+        out.update(
+            category=None, sections=sections, gap_count=len(gaps), missing=[s["label"] for s in gaps],
+            state="missing" if gaps else "complete",
+        )
+        return out
+    if top == "policy":
+        group = POLICY_MODULES[sub][1]
+        required = bool(group and group in groups)
+    else:
+        required = sub in REQUIRED_GOVERNANCE_SUBFOLDERS
+    state, _ = _folder_state(docs, required)
+    out.update(state=state, gap_count=1 if state in GAP_STATES else 0)
+    return out
+
+
 def list_vault_tree(org_id: str) -> list[dict[str, Any]]:
     grouped = _tree_documents(org_id)
+    groups = _registered_groups(org_id)
     tops: list[dict[str, Any]] = []
     for top_key, top_label in VAULT_TREE_TOPS.items():
+        people = list_tree_people(org_id, top_key) if top_key in TREE_PERSON_TYPES else None
         subfolders = []
         for sub_key, sub_label in VAULT_TREE_SUBFOLDERS[top_key]:
-            count = len(grouped.get((top_key, sub_key), []))
-            if count == 0:
+            docs = grouped.get((top_key, sub_key), [])
+            if people is None:
+                subfolders.append(_org_subfolder(top_key, sub_key, sub_label, docs, groups))
                 continue
+            # Across everyone: how many people this folder is a gap for.
+            gaps = sum(
+                1 for p in people for s in p["subfolders"]
+                if s["key"] == sub_key and s["state"] in GAP_STATES
+            )
             subfolders.append({
                 "key": sub_key,
                 "label": sub_label,
-                "count": count,
-                "category": sub_key if top_key == "governance" else None,
+                "count": len(docs),
+                "state": "missing" if gaps else ("complete" if docs else "not_applicable"),
+                "gap_count": gaps,
+                "category": None,
+                "missing": [],
             })
         tops.append({
             "key": top_key,
             "label": top_label,
             "count": sum(s["count"] for s in subfolders),
+            "gap_count": sum(s["gap_count"] for s in subfolders),
+            "gap_people": sum(1 for p in people if p["gap_count"]) if people is not None else None,
+            "person_level": people is not None,
             "subfolders": subfolders,
         })
     return tops
 
 
-def list_tree_subfolder_documents(org_id: str, top: str, sub: str) -> list[VaultDocument]:
+def category_tree_path(category: str) -> list[dict[str, str]]:
+    """Where a flat category's folder page sits in the organised folders, as
+    the breadcrumb above it: e.g. Policy & Procedures > Core Module for a
+    Practice Standards policy folder."""
+    policy = {"label": VAULT_TREE_TOPS["policy"], "href": "/md/vault/tree/policy"}
+    governance = {"label": VAULT_TREE_TOPS["governance"], "href": "/md/vault/tree/governance"}
+    if category in POLICY_CORE_KEYS:
+        return [policy, {"label": "Core Module", "href": "/md/vault/tree/policy/core_module"}]
+    if category in POLICY_MODULES:
+        return [policy]
+    if category in GOVERNANCE_RECORD_FOLDERS:
+        return [governance]
+    if category == "audit_packs":
+        return [governance, {
+            "label": GOVERNANCE_RECORD_FOLDERS["gov_quality_management"],
+            "href": "/md/vault/gov_quality_management",
+        }]
+    return []
+
+
+def _tree_location(top: str, sub: str, doc: VaultDocument, people_names: dict[str, str]) -> tuple[list[str], str]:
+    """A placed document's folder path (labels) and the page that shows it."""
+    sub_label = dict(VAULT_TREE_SUBFOLDERS[top])[sub]
+    path = [VAULT_TREE_TOPS[top]]
+    if top in TREE_PERSON_TYPES:
+        key = _tree_person_key(doc)
+        path += [people_names.get(key) or doc.get("person_name") or "Unknown", sub_label]
+        return path, f"/md/vault/tree/{top}/person/{quote(key, safe='')}/{sub}"
+    path.append(sub_label)
+    if sub == "core_module":
+        path.append(CATEGORY_META[doc["category"]]["label"])
+    return path, f"/md/vault/{sub if top == 'governance' else doc['category']}"
+
+
+VAULT_SEARCH_LIMIT = 100
+
+
+def search_vault_tree(org_id: str, query: str = "", flagged_only: bool = False) -> list[dict[str, Any]]:
+    """Documents across the organised folders matching a person's name, a
+    title, a document ID or a folder name, each with its full folder path.
+    With flagged_only and no query, every document needing review."""
+    terms = query.lower().split()
+    if not terms and not flagged_only:
+        return []
+    grouped = _tree_documents(org_id)
+    names = {
+        top: {p["id"]: p["name"] for p in list_tree_people(org_id, top)}
+        for top in TREE_PERSON_TYPES
+    }
+    results = []
+    for (top, sub), docs in grouped.items():
+        for doc in docs:
+            if flagged_only and doc["status"] not in FLAGGED_STATUSES:
+                continue
+            path, href = _tree_location(top, sub, doc, names.get(top, {}))
+            haystack = " ".join([
+                doc.get("title") or "", doc.get("person_name") or "", doc.get("doc_id") or "",
+                doc.get("reference") or "", doc.get("person_ref") or "", " ".join(path),
+            ]).lower()
+            if all(t in haystack for t in terms):
+                results.append({"document": doc, "path": path, "href": href})
+    results.sort(key=lambda r: r["document"].get("date") or "", reverse=True)
+    return results[:VAULT_SEARCH_LIMIT]
+
+
+def list_tree_subfolder_documents(
+    org_id: str, top: str, sub: str, person_id: str | None = None
+) -> list[VaultDocument]:
+    """One subfolder's documents: one person's when person_id is given,
+    otherwise everyone's (the "by type" view)."""
     if sub not in dict(VAULT_TREE_SUBFOLDERS.get(top, [])):
         raise HTTPException(status_code=404, detail="Unknown vault folder.")
     docs = _tree_documents(org_id).get((top, sub), [])
+    if person_id:
+        docs = [d for d in docs if _tree_person_key(d) == person_id]
     return sorted(docs, key=lambda d: d.get("date") or "", reverse=True)
 
 
@@ -2483,9 +3053,15 @@ async def upload_governance_document(
     content_type: str,
     supersedes_document_id: str | None = None,
     version_label: str | None = None,
+    expiry_date: str | None = None,
 ) -> dict[str, Any]:
     if folder_key not in GOVERNANCE_FOLDER_KEYS:
         raise HTTPException(status_code=422, detail="Invalid governance folder.")
+    if expiry_date:
+        try:
+            expiry_date = datetime.fromisoformat(expiry_date[:10]).date().isoformat()
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Expiry date must be a date (YYYY-MM-DD).")
     if not title.strip():
         raise HTTPException(status_code=422, detail="Document title is required.")
     if content_type not in GOVERNANCE_ALLOWED_TYPES:
@@ -2532,6 +3108,8 @@ async def upload_governance_document(
         "file_size_bytes": len(file_bytes),
         "uploaded_by": uploaded_by,
     }
+    if expiry_date:
+        payload["expiry_date"] = expiry_date
     result = supabase.table("governance_documents").insert(payload).execute()
     new_doc = result.data[0] if result.data else payload
 

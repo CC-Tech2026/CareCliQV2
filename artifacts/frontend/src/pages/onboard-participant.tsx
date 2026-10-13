@@ -1,11 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users,
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
-  SlidersHorizontal, X, AlertTriangle,
+  SlidersHorizontal, X, AlertTriangle, ArrowUp, ArrowDown, Accessibility, HeartPulse, Link2, Check,
 } from "lucide-react";
+import { useGetParticipants } from "@workspace/api-client-react";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { WORKER_STATS_KEY } from "@/lib/query-keys";
+import {
+  getCoordinatorWorkerStats,
+  getOrgAssignments,
+  SUPPORT_ALLOCATION_ROLES,
+  type WorkerStats,
+} from "@/services/coordinatorService";
+import { budgetUsage, planEndStatus, planManagementLabel, type Tone } from "@/lib/directory-insights";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -13,8 +23,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ChoiceCard, Field as PanelField, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass } from "@/pages/md/vault/components/PanelKit";
 import { SectionInfo } from "@/components/ui/section-info";
+import {
+  EmptyState,
+  LoadError,
+  PageHeader,
+  SkeletonBlocks,
+  RowList,
+  StatusText,
+  SummaryStrip,
+  Surface,
+  ctaClass as kitCtaClass,
+  ghostClass as kitGhostClass,
+  outlineClass as kitOutlineClass,
+  type Tone as KitTone,
+} from "@/components/layout/PageKit";
+import { ResponseSheet } from "@/components/feedback/ResponseSheet";
+import { useQueryClient } from "@tanstack/react-query";
+import { PARTICIPANT_COMPLAINTS_KEY } from "@/lib/query-keys";
+import {
+  createParticipantComplaint,
+  listParticipantComplaints,
+  updateParticipantComplaint,
+  type ComplaintStatus,
+  type ParticipantComplaint,
+} from "@/services/participantComplaintsService";
 import { MeetGreetCapture } from "@/components/onboarding/MeetGreetCapture";
 import { MeetGreetSummaryPanel } from "@/components/onboarding/MeetGreetSummaryPanel";
 import {
@@ -53,19 +88,9 @@ const DANGER_BG = "var(--cc-status-danger-bg)";
 const CRITICAL = "var(--cc-status-critical)";
 const CRITICAL_BG = "var(--cc-status-critical-bg)";
 const CORAL = "var(--cc-coral)";
-// "New" badge matches Staff Onboarding's ApplicantCard exactly — same
-// neutral bg/text pairing and coral dot, not a colored pill like the
-// other badges here.
+
 const NEW_BADGE_BG = "#EEF1F5";
 const NEW_BADGE_TEXT = "#3D5A6C";
-
-/**
- * Participant onboarding pipeline (Enquiry → Screening → Meet & Greet →
- * Service Agreement → Activate), backed by /api/participant-intakes — see
- * participantIntakeService.ts. The public referral form (participant-
- * referral.tsx) files Enquiries here through the public intake endpoint.
- * Complaints (below) remain local/mock.
- */
 
 const FUNDING_TYPE_LABEL: Record<FundingType, string> = {
   ndia_managed: "NDIA-managed",
@@ -76,22 +101,17 @@ const FUNDING_TYPE_LABEL: Record<FundingType, string> = {
 const GENDER_FIXED_VALUES = new Set(GENDER_OPTIONS.map((o) => o.value).filter((v) => v !== "self_describe"));
 const PRONOUN_FIXED_VALUES = new Set(PRONOUN_OPTIONS.map((o) => o.value).filter((v) => v !== "self_describe"));
 
-/** Maps a stored value to which option should show selected — anything that
- *  isn't one of the fixed values (including legacy free text) is treated as
- *  "self-describe" so its actual text shows in the accompanying box. */
 function selectValueForOption(value: string | undefined, fixedValues: Set<string>): string {
   if (!value) return "";
   return fixedValues.has(value) ? value : "self_describe";
 }
 
-/** Read-only display label for a stored gender/pronoun value. */
 function labelForOption(value: string | undefined, options: { value: string; label: string }[]): string | undefined {
   if (!value) return undefined;
   if (value === "self_describe") return undefined;
   return options.find((o) => o.value === value)?.label ?? value;
 }
 
-/** Aged Care is only available to participants aged 65 and over. */
 function calculateAge(dob?: string): number | null {
   if (!dob) return null;
   const birth = new Date(dob);
@@ -108,10 +128,6 @@ function isAgedCareEligible(dob?: string): boolean {
   return age !== null && age >= 65;
 }
 
-// Intake/ScreeningManualChecks/NextOfKinEntry/WebIntakeForm now live in
-// participantIntakeService.ts (the wire format returned by the backend);
-// aliased here so the rest of this file's many references don't need to
-// change one by one.
 type Intake = ParticipantIntake;
 
 const SOURCE_META: Record<EnquirySource, { label: string; icon: typeof Mail }> = {
@@ -120,9 +136,43 @@ const SOURCE_META: Record<EnquirySource, { label: string; icon: typeof Mail }> =
   phone_call: { label: "Phone call", icon: PhoneCall },
   coordinator_referral: { label: "Support coordinator referral", icon: Users },
 };
-/** An unrecognised source shouldn't take the page down. */
 const sourceMeta = (source: string | null | undefined) =>
   SOURCE_META[source as EnquirySource] ?? { label: "Other", icon: ClipboardCheck };
+
+/** A titled group of fields in the New referral panel. */
+function ReferralSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-4">
+      <h3 className="text-base font-semibold" style={{ color: TEXT }}>{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/** One of a few short options, shown as a pill. */
+function PillChoice({ selected, onSelect, children }: { selected: boolean; onSelect: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className="inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+      style={{
+        borderColor: selected ? "var(--cc-brand-purple)" : BORDER,
+        background: selected ? "var(--cc-brand-purple-soft)" : undefined,
+        color: selected ? "var(--cc-brand-purple)" : TEXT,
+      }}
+    >
+      {selected && <Check size={14} strokeWidth={3} />}
+      {children}
+    </button>
+  );
+}
+
+function FieldError({ children }: { children: React.ReactNode }) {
+  return <span className="font-medium" style={{ color: "var(--cc-danger-text)" }}>{children}</span>;
+}
 
 function daysSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -133,8 +183,6 @@ function isValidEmail(value: string): boolean {
   return EMAIL_PATTERN.test(value.trim());
 }
 
-// Accepts digits, spaces, parentheses, +, - only, with a sane digit count
-// (covers AU mobiles/landlines and most international formats).
 const PHONE_ALLOWED_CHARS = /^[\d\s()+-]+$/;
 function isValidPhone(value: string): boolean {
   const trimmed = value.trim();
@@ -154,7 +202,6 @@ const STATUS_META: Record<IntakeStatus, { label: string; bg: string; color: stri
   inactive: { label: "Inactive", bg: WARNING_BG, color: WARNING },
 };
 
-// Five-stage journey shown as a stepper in the detail view's sidebar.
 const STEPS = [
   { key: "enquiry", label: "Enquiry", icon: Mail },
   { key: "screening", label: "Screening", icon: ClipboardCheck },
@@ -176,9 +223,6 @@ function stepIndexForStatus(status: IntakeStatus): number {
   }
 }
 
-// The landing page groups participants into these five working columns.
-// Declined and withdrawn intakes have left the pipeline entirely — dead
-// ends, so they don't get a column and aren't shown on the board.
 const BOARD_COLUMNS = [
   { id: "enquiry", label: "Enquiry" },
   { id: "screening", label: "Screening" },
@@ -189,31 +233,25 @@ const BOARD_COLUMNS = [
 
 type BoardColumnId = (typeof BOARD_COLUMNS)[number]["id"];
 
-// Per-column accent colors — same visual language as Staff Onboarding's
-// STAGE_COLOR (colored top border + dot + tinted count pill per column).
-// Provider capacity — dummy inputs for now, since there's no live feed from
-// the Workforce/Staff directory into this page yet. Used at Screening to
-// automatically reflect whether the organisation has room to take on a new
-// participant, based on active caseload vs. what the current support worker
-// headcount can reasonably carry.
 const TOTAL_SUPPORT_WORKERS = 5;
 const MAX_CASELOAD_PER_WORKER = 6;
 
-// Rest of the provider's screening profile — service area now comes from
-// the org's real branches (Settings → Provider/Branches); language/funding
-// are still dummy until there's a real settings source for those too.
 const PROVIDER_LANGUAGES = ["English", "Mandarin", "Vietnamese", "Arabic", "Punjabi"];
 const PROVIDER_ACCEPTS_NDIA_MANAGED = true;
 
-// "active" intentionally reuses the exact same green as staff's Active
-// column since it's the same underlying concept on both boards.
-const COLUMN_COLOR: Record<BoardColumnId, string> = {
+const STAGE_COLOR: Record<string, string> = {
   enquiry: "#8A78D6",
   screening: "#D39B42",
   meet_greet: "#3B82F6",
   service_agreement: "#C77D3E",
   active: "#0F7B57",
 };
+
+/** Still working through onboarding: on the board, not yet active, not closed. */
+function inPipeline(status: IntakeStatus): boolean {
+  const column = columnIdForStatus(status);
+  return column !== null && column !== "active";
+}
 
 function columnIdForStatus(status: IntakeStatus): BoardColumnId | null {
   switch (status) {
@@ -228,36 +266,6 @@ function columnIdForStatus(status: IntakeStatus): BoardColumnId | null {
   }
 }
 
-/** KPI stat tile — same tinted-background + icon-badge pattern as Staff Onboarding's KpiTile. Selectable when onClick is given: filters the board/list below to matching participants. */
-function KpiTile({ label, value, color, bg, icon: Icon, active, onClick }: { label: string; value: number; color: string; bg: string; icon?: typeof Clock3; active?: boolean; onClick?: () => void }) {
-  const content = (
-    <>
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[30px] font-black leading-none" style={{ color }}>{value}</p>
-        {Icon && (
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "rgba(255,255,255,0.65)", color }}>
-            <Icon size={15} />
-          </div>
-        )}
-      </div>
-      <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>{label}</p>
-      {active && <div className="mt-3 h-1 w-8 rounded-full" style={{ background: color }} />}
-    </>
-  );
-  if (!onClick) return <div className="rounded-[1.25rem] px-5 py-4.5" style={{ background: bg }}>{content}</div>;
-  return (
-    <button
-      onClick={onClick}
-      aria-pressed={active}
-      className="w-full rounded-[1.25rem] px-5 py-4.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
-      style={{ background: bg, outline: active ? `2px solid ${color}` : undefined, outlineOffset: active ? 2 : undefined }}
-    >
-      {content}
-    </button>
-  );
-}
-
-/** Small pill badge used on board cards (New / Aging / Easy Capture ready / Awaiting sign / Complete). */
 function CardBadge({ icon: Icon, label, color, bg, dot }: { icon?: typeof Clock3; label: string; color: string; bg: string; dot?: string }) {
   return (
     <span
@@ -270,7 +278,6 @@ function CardBadge({ icon: Icon, label, color, bg, dot }: { icon?: typeof Clock3
   );
 }
 
-/** Board-card badge for a given intake, or null if none applies. */
 function badgeForIntake(intake: Intake): { icon?: typeof Clock3; label: string; color: string; bg: string; dot?: string } | null {
   const column = columnIdForStatus(intake.status);
   const age = daysSince(intake.created_at);
@@ -292,7 +299,6 @@ function badgeForIntake(intake: Intake): { icon?: typeof Clock3; label: string; 
   return null;
 }
 
-/** Board-card subtitle (second line) for a given intake. */
 function subtitleForIntake(intake: Intake): string {
   if (intake.board_subtitle) return intake.board_subtitle;
   const column = columnIdForStatus(intake.status);
@@ -351,36 +357,39 @@ function StatusBadge({ status }: { status: IntakeStatus }) {
   );
 }
 
-/** One participant card inside a board column — same shape as Staff Onboarding's ApplicantCard/OversightCard. */
 function ParticipantCard({ intake, onClick }: { intake: Intake; onClick: () => void }) {
   const badge = badgeForIntake(intake);
   const subtitle = subtitleForIntake(intake);
   const column = columnIdForStatus(intake.status);
-  const accent = column ? COLUMN_COLOR[column] : PLUM;
+  const accent = column ? STAGE_COLOR[column] : PLUM;
+  const waiting = inPipeline(intake.status) ? daysSince(intake.created_at) : null;
   return (
     <button
       onClick={onClick}
-      className="group w-full rounded-2xl border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
-      style={{ background: SURFACE, borderColor: BORDER, borderLeft: `3px solid ${accent}` }}
+      className="group relative w-full rounded-2xl border bg-cc-surface p-4 text-left transition-colors hover:border-[color:var(--cc-brand-purple)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+      style={{ borderColor: BORDER }}
     >
       <div className="flex items-start gap-3">
         <Avatar name={intake.full_name} size={36} color={accent} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-black" style={{ color: TEXT }}>{intake.full_name}</p>
-          <p className="mt-0.5 truncate text-[10px] font-medium" style={{ color: MUTED }}>{subtitle}</p>
+          <p className="truncate text-sm font-semibold" style={{ color: TEXT }}>{intake.full_name}</p>
+          <p className="mt-0.5 truncate text-xs" style={{ color: MUTED }}>{subtitle}</p>
         </div>
       </div>
-      {badge && <div className="mt-2"><CardBadge {...badge} /></div>}
+      {(badge || waiting !== null) && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {badge && <CardBadge {...badge} />}
+          {waiting !== null && (
+            <span className="text-xs font-medium" style={{ color: waiting >= 7 ? DANGER : MUTED }}>
+              {waiting === 0 ? "Referred today" : `Waiting ${waiting} ${waiting === 1 ? "day" : "days"}`}
+            </span>
+          )}
+        </div>
+      )}
     </button>
   );
 }
 
-/**
- * Horizontal stepper at the top of the detail view. Each step is one "page"
- * of the flow — clicking a reached step (done or current) switches the
- * single content panel below to that step; steps not reached yet are
- * disabled since there's nothing to show there.
- */
 function HorizontalStepper({ status, viewedStep, onSelect }: { status: IntakeStatus; viewedStep: number; onSelect: (i: number) => void }) {
   if (status === "declined" || status === "withdrawn") {
     const meta = STATUS_META[status];
@@ -420,7 +429,7 @@ function HorizontalStepper({ status, viewedStep, onSelect }: { status: IntakeSta
               >
                 {done ? <CheckCircle2 size={18} /> : <Icon size={16} />}
               </div>
-              <p className="text-[11px] font-bold whitespace-nowrap" style={{ color: selected || isCurrent ? TEXT : MUTED }}>{s.label}</p>
+              <p className="whitespace-nowrap text-xs font-medium" style={{ color: selected || isCurrent ? TEXT : MUTED }}>{s.label}</p>
             </button>
             {!last && <div className="h-[2px] flex-1 mx-2" style={{ background: i < current ? SUCCESS : BORDER, marginBottom: 20 }} />}
           </div>
@@ -429,79 +438,6 @@ function HorizontalStepper({ status, viewedStep, onSelect }: { status: IntakeSta
     </div>
   );
 }
-
-// ── Participant complaints (dummy — no backend yet) ──────────────────────
-
-type ComplaintStatus = "open" | "in_review" | "resolved";
-
-type ParticipantComplaint = {
-  id: string;
-  participant_name: string;
-  subject: string;
-  description: string;
-  filed_at: string;
-  status: ComplaintStatus;
-  /** What the MD did to address it — required whenever the status is moved off "open". */
-  resolution_notes?: string;
-  responded_at?: string;
-};
-
-const COMPLAINT_STATUS_META: Record<ComplaintStatus, { label: string; bg: string; color: string }> = {
-  open: { label: "Open", bg: DANGER_BG, color: DANGER },
-  in_review: { label: "In review", bg: WARNING_BG, color: WARNING },
-  resolved: { label: "Resolved", bg: SUCCESS_BG, color: SUCCESS },
-};
-
-// Exported so HubLayout's nav badge can reflect the open-complaint count
-// without needing a shared store — this is still just the static seed
-// (no backend), so the badge won't move as complaints get addressed within
-// a session, same limitation as the rest of this local-state build.
-export const SEED_COMPLAINTS: ParticipantComplaint[] = [
-  {
-    id: "1",
-    participant_name: "Sam Rivera",
-    subject: "Support worker punctuality",
-    description: "Sam's family reported that the assigned support worker has arrived 20-30 minutes late to the last three scheduled visits without notice.",
-    filed_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
-    status: "open",
-  },
-  {
-    id: "2",
-    participant_name: "Priya Nair",
-    subject: "Missed scheduled visit",
-    description: "A community access session was missed entirely with no call ahead. Priya was left waiting for over an hour before contacting the office.",
-    filed_at: new Date(Date.now() - 5 * 86_400_000).toISOString(),
-    status: "open",
-  },
-  {
-    id: "3",
-    participant_name: "Priya Nair",
-    subject: "Communication concerns",
-    description: "Requested that session updates be shared with her support coordinator as agreed, but this hasn't been happening consistently.",
-    filed_at: new Date(Date.now() - 9 * 86_400_000).toISOString(),
-    status: "in_review",
-  },
-  {
-    id: "4",
-    participant_name: "Harold Whitfield",
-    subject: "Billing discrepancy",
-    description: "Eleanor (spouse) flagged that the last invoice included a support session that did not take place. Finance has been notified to review.",
-    filed_at: new Date(Date.now() - 14 * 86_400_000).toISOString(),
-    status: "in_review",
-  },
-  {
-    id: "5",
-    participant_name: "Harold Whitfield",
-    subject: "Personal care approach",
-    description: "Raised a concern about a support worker's approach during personal care. Has since been resolved after a conversation with the coordinator and a worker reassignment.",
-    filed_at: new Date(Date.now() - 21 * 86_400_000).toISOString(),
-    status: "resolved",
-  },
-];
-
-// ── List view ─────────────────────────────────────────────────────────
-// Same table layout as Staff Onboarding's PipelineListView — sortable
-// Name/Stage columns, colored stage pill, meta line, click-through row.
 
 type ParticipantListRow = {
   id: string;
@@ -569,327 +505,756 @@ function ParticipantListView({
   );
 }
 
-/**
- * Dedicated full-page roster of Active participants — reached by clicking
- * the "Active" column header on the board (a proper page, not just an
- * in-place filter, since MDs use this as a reference list on its own).
- */
-function ActiveParticipantsPage({
-  intakes, onBack, onOpen, onOpenComplaints,
-}: { intakes: Intake[]; onBack: () => void; onOpen: (id: string) => void; onOpenComplaints: () => void }) {
+export interface ParticipantSnapshot {
+  workerName?: string | null;
+  planStart?: string | null;
+  planEnd?: string | null;
+  totalBudget?: number | string | null;
+  usedBudget?: number | string | null;
+  planManagement?: string | null;
+  activeGoals?: number;
+  completedGoals?: number;
+}
+
+type ParticipantSort = "name" | "worker" | "planEnd" | "budget";
+type ParticipantFocus = "planDue" | "noWorker" | "budget";
+
+const PARTICIPANT_GRID =
+  "lg:grid-cols-[minmax(220px,1.6fr)_minmax(140px,1fr)_minmax(130px,1fr)_minmax(150px,1fr)_120px_20px] " +
+  "xl:grid-cols-[minmax(220px,1.6fr)_minmax(140px,1fr)_minmax(130px,1fr)_minmax(160px,1fr)_120px_100px_130px_20px]";
+
+const PARTICIPANT_COLUMNS: { label: string; key?: ParticipantSort; className?: string }[] = [
+  { label: "Participant", key: "name" },
+  { label: "Support worker", key: "worker" },
+  { label: "Plan ends", key: "planEnd" },
+  { label: "Budget", key: "budget" },
+  { label: "Funding", className: "hidden xl:block" },
+  { label: "Goals", className: "hidden xl:block" },
+  { label: "Status" },
+  { label: "" },
+];
+
+function toneColor(tone: Tone) {
+  if (tone === "good") return "var(--cc-green)";
+  if (tone === "info") return "var(--cc-sky)";
+  if (tone === "warning") return "var(--cc-amber)";
+  if (tone === "danger") return "var(--cc-danger-text)";
+  return MUTED;
+}
+
+export function ActiveParticipantsPage({
+  intakes, onBack, onOpen, onOpenComplaints, loadFailed = false, onRetry, details, detailsLoading = false,
+}: {
+  intakes: Intake[]; onBack: () => void; onOpen: (id: string) => void; onOpenComplaints: () => void;
+  loadFailed?: boolean; onRetry?: () => void;
+  details?: Record<string, ParticipantSnapshot>;
+  detailsLoading?: boolean;
+}) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<"all" | ServiceCategory>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
-  const q = search.trim().toLowerCase();
-  const rows = intakes
+  const [focus, setFocus] = useState<ParticipantFocus | null>(null);
+  const [sortKey, setSortKey] = useState<ParticipantSort>("name");
+  const [sortAsc, setSortAsc] = useState(true);
+
+  const roster = intakes
     .filter((i) => columnIdForStatus(i.status) === "active")
-    .filter((i) => !q || i.full_name.toLowerCase().includes(q) || i.ndis_number.toLowerCase().includes(q))
-    .filter((i) => categoryFilter === "all" || i.service_category === categoryFilter)
-    .filter((i) => statusFilter === "all" || i.status === statusFilter)
-    .sort((a, b) => (b.activated_at ?? "").localeCompare(a.activated_at ?? ""));
+    .map((intake) => {
+      const snapshot = details?.[intake.id];
+      const planStart = snapshot?.planStart ?? intake.plan_start_date ?? null;
+      const planEnd = snapshot?.planEnd ?? intake.plan_end_date ?? null;
+      return {
+        intake,
+        snapshot,
+        plan: planEndStatus(planEnd),
+        budget: budgetUsage(snapshot?.totalBudget ?? intake.total_budget, snapshot?.usedBudget, { start: planStart, end: planEnd }),
+        funding: planManagementLabel(snapshot?.planManagement),
+      };
+    });
+
+  const needs = {
+    planDue: (r: (typeof roster)[number]) => r.plan.tone === "danger" || r.plan.tone === "warning",
+    noWorker: (r: (typeof roster)[number]) => r.snapshot?.workerName === null,
+    budget: (r: (typeof roster)[number]) => r.budget.tone === "danger" || r.budget.tone === "warning",
+  };
+  const focusCounts = {
+    planDue: roster.filter(needs.planDue).length,
+    noWorker: roster.filter(needs.noWorker).length,
+    budget: roster.filter(needs.budget).length,
+  };
+
+  const q = search.trim().toLowerCase();
+  const dir = sortAsc ? 1 : -1;
+  const rows = roster
+    .filter(({ intake: i }) => !q || i.full_name.toLowerCase().includes(q) || i.ndis_number.toLowerCase().includes(q))
+    .filter(({ intake: i }) => categoryFilter === "all" || i.service_category === categoryFilter)
+    .filter(({ intake: i }) => statusFilter === "all" || i.status === statusFilter)
+    .filter((r) => !focus || needs[focus](r))
+    .sort((a, b) => {
+      if (sortKey === "worker") {
+        return (a.snapshot?.workerName ?? "").localeCompare(b.snapshot?.workerName ?? "") * dir;
+      }
+      if (sortKey === "planEnd") {
+        const da = a.plan.days ?? Number.MAX_SAFE_INTEGER;
+        const db = b.plan.days ?? Number.MAX_SAFE_INTEGER;
+        return (da - db) * dir;
+      }
+      if (sortKey === "budget") return ((a.budget.percent ?? -1) - (b.budget.percent ?? -1)) * dir;
+      return a.intake.full_name.localeCompare(b.intake.full_name) * dir;
+    });
+
   const activeTotal = intakes.filter((i) => i.status === "active").length;
   const inactiveTotal = intakes.filter((i) => i.status === "inactive").length;
+  const total = activeTotal + inactiveTotal;
+  const filtersActive = !!q || categoryFilter !== "all" || statusFilter !== "all" || focus !== null;
 
-  // No complaints backend exists yet — dummy seeded data (SEED_COMPLAINTS).
-  const complaintCount = SEED_COMPLAINTS.length;
+  function resetFilters() {
+    setSearch("");
+    setCategoryFilter("all");
+    setStatusFilter("all");
+    setFocus(null);
+  }
+
+  function handleSort(key: ParticipantSort) {
+    if (key === sortKey) setSortAsc((v) => !v);
+    else {
+      setSortKey(key);
+      setSortAsc(key !== "budget");
+    }
+  }
+
+  const pillStyle = (selected: boolean) =>
+    selected ? { background: TEXT, color: "var(--cc-bg)" } : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` };
+  const pillClass =
+    "inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum";
 
   return (
-    <div className="space-y-5 pb-10">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+    <div className="space-y-6 pb-10">
+      <header className="flex flex-wrap items-end justify-between gap-5">
+        <div className="max-w-2xl">
           <button
             onClick={onBack}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
-            style={{ color: MUTED, background: SOFT }}
+            className="-ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-full px-2 text-sm font-medium transition-colors hover:bg-cc-soft"
+            style={{ color: MUTED }}
           >
-            <ArrowLeft size={13} strokeWidth={2.5} /> Back to Participant Onboarding
+            <ArrowLeft size={15} /> Participant onboarding
           </button>
-          <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>
+          <h1
+            className="mt-1 flex items-center gap-2 text-3xl font-semibold tracking-tight"
+            style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
+          >
             Participants
             <SectionInfo text="Everyone onboarded with your organisation, active and inactive." />
           </h1>
-          <p className="mt-0.5 text-[12px] font-medium" style={{ color: MUTED }}>
-            {activeTotal} active · {inactiveTotal} inactive with this provider.
+          <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>
+            The people your organisation supports. Open anyone to see their plan,
+            care information and the support they've received.
           </p>
         </div>
 
         <button
           onClick={onOpenComplaints}
-          className="flex items-center gap-3 rounded-[1.25rem] border px-5 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
-          style={{ background: DANGER_BG, borderColor: DANGER }}
-          title="View participant complaints"
+          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-5 text-sm font-medium transition hover:bg-cc-soft"
+          style={{ color: TEXT }}
         >
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl shrink-0" style={{ background: "rgba(255,255,255,0.65)", color: DANGER }}>
-            <Mail size={18} />
-            {complaintCount > 0 && (
-              <span
-                className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
-                style={{ background: DANGER }}
-              >
-                {complaintCount}
-              </span>
-            )}
-          </div>
-          <div>
-            <p className="text-[22px] font-black leading-none" style={{ color: DANGER }}>{complaintCount}</p>
-            <p className="mt-1.5 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>Participant Complaints</p>
-          </div>
+          <Mail size={16} /> Participant complaints
         </button>
-      </div>
+      </header>
 
-      <div className="flex flex-col gap-3 rounded-[1.25rem] border bg-white p-3 sm:flex-row sm:items-center" style={{ borderColor: BORDER }}>
-        <div className="relative min-w-0 flex-1">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+      {!loadFailed && total > 0 && (
+        <div className="flex flex-wrap items-stretch gap-x-2 gap-y-3">
+          {([
+            { label: total === 1 ? "participant" : "participants", value: total, color: TEXT, focus: null },
+            { label: focusCounts.planDue === 1 ? "plan ending or ended" : "plans ending or ended", value: focusCounts.planDue, color: focusCounts.planDue ? "var(--cc-amber)" : "var(--cc-green)", focus: "planDue" },
+            { label: "without a support worker", value: focusCounts.noWorker, color: focusCounts.noWorker ? "var(--cc-amber)" : "var(--cc-green)", focus: "noWorker" },
+            { label: "spending ahead of plan", value: focusCounts.budget, color: focusCounts.budget ? "var(--cc-danger-text)" : "var(--cc-green)", focus: "budget" },
+          ] as const).map((item, index) => (
+            <div key={item.label} className="flex items-center gap-2">
+              {index > 0 && <span aria-hidden className="mr-2 hidden h-6 w-px sm:block" style={{ background: BORDER }} />}
+              <button
+                type="button"
+                disabled={detailsLoading && index > 0}
+                onClick={() => setFocus(item.focus && item.value > 0 ? item.focus : null)}
+                className="flex min-h-11 items-center rounded-full px-3 transition hover:bg-cc-soft disabled:cursor-default"
+              >
+                <span className="flex items-baseline gap-2">
+                  <span className="text-2xl font-semibold tabular-nums tracking-tight" style={{ color: item.color }}>
+                    {detailsLoading && index > 0 ? "…" : item.value}
+                  </span>
+                  <span className="text-sm" style={{ color: MUTED }}>{item.label}</span>
+                </span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1 sm:max-w-sm">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search for the Participant"
-            className="h-10 rounded-xl border-0 bg-[#F8F7F4] pl-9 text-[12px] shadow-none focus-visible:ring-1"
+            aria-label="Search participants" placeholder="Search by name or NDIS number"
+            className="h-11 rounded-full border-cc-border bg-cc-surface pl-11 pr-11 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-cc-plum"
           />
           {search && (
-            <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5">
-              <X size={13} style={{ color: MUTED }} />
+            <button aria-label="Clear participant search" onClick={() => setSearch("")} className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full hover:bg-cc-soft">
+              <X size={14} style={{ color: MUTED }} />
             </button>
           )}
         </div>
-        <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
-          <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-[#F8F7F4] text-[12px] shadow-none sm:w-[170px]">
-            <Users size={14} className="mr-1.5" /><SelectValue placeholder="All categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            <SelectItem value="disability">Disability</SelectItem>
-            <SelectItem value="aged_care">Aged Care</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "inactive")}>
-          <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-[#F8F7F4] text-[12px] shadow-none sm:w-[150px]">
-            <SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:ml-auto">
+          <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
+            <SelectTrigger aria-label="Service category" className="h-11 w-full rounded-full border-cc-border bg-cc-surface px-4 text-sm shadow-none sm:w-[180px]" style={{ color: TEXT }}>
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="disability">Disability</SelectItem>
+              <SelectItem value="aged_care">Aged Care</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex h-11 min-w-0 items-center rounded-full border bg-cc-surface pl-4 focus-within:ring-2 focus-within:ring-cc-plum lg:hidden" style={{ borderColor: BORDER }}>
+            <select
+              aria-label="Sort participants"
+              value={sortKey}
+              onChange={(e) => { const key = e.target.value as ParticipantSort; setSortKey(key); setSortAsc(key !== "budget"); }}
+              className="h-full min-w-0 flex-1 bg-transparent pr-1 text-sm outline-none"
+              style={{ color: TEXT }}
+            >
+              <option value="name">Sort by name</option>
+              <option value="worker">Sort by support worker</option>
+              <option value="planEnd">Sort by plan end</option>
+              <option value="budget">Sort by budget used</option>
+            </select>
+            <button type="button" onClick={() => setSortAsc((v) => !v)} aria-label={sortAsc ? "Sort descending" : "Sort ascending"} className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-cc-soft" style={{ color: TEXT }}>
+              {sortAsc ? <ArrowUp size={15} /> : <ArrowDown size={15} />}
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
-        <div className="grid grid-cols-[1fr_110px_100px_140px_120px_40px] gap-3 border-b px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.1em]" style={{ borderColor: BORDER, color: MUTED }}>
-          <span>Participant</span>
-          <span className="hidden sm:inline">Category</span>
-          <span>Status</span>
-          <span className="hidden md:inline">NDIS number</span>
-          <span>Activated</span>
-          <span />
-        </div>
-        {rows.length === 0 ? (
-          <p className="px-5 py-10 text-center text-[12px] font-medium" style={{ color: MUTED }}>No participants match the current filters.</p>
-        ) : (
-          <div className="divide-y" style={{ borderColor: BORDER }}>
-            {rows.map((i) => (
-              <div
-                key={i.id}
-                onClick={() => onOpen(i.id)}
-                className="grid cursor-pointer grid-cols-[1fr_110px_100px_140px_120px_40px] items-center gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <Avatar name={i.full_name} size={30} color={i.status === "inactive" ? WARNING : COLUMN_COLOR.active} />
-                  <p className="truncate text-[12px] font-black" style={{ color: TEXT }}>{i.full_name}</p>
-                </div>
-                <p className="hidden truncate text-[11px] font-medium sm:block" style={{ color: MUTED }}>
-                  {i.service_category === "aged_care" ? "Aged Care" : "Disability"}
-                </p>
-                <div><StatusBadge status={i.status} /></div>
-                <p className="hidden truncate text-[11px] font-medium md:block" style={{ color: MUTED }}>{i.ndis_number || "—"}</p>
-                <p className="truncate text-[11px] font-medium" style={{ color: MUTED }}>{formatDate(i.activated_at) ?? "—"}</p>
-                <div className="flex justify-end">
-                  <ArrowRight size={14} style={{ color: "#B8B4B0" }} />
-                </div>
-              </div>
-            ))}
-          </div>
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter participants">
+        {([["all", "Everyone", total], ["active", "Active", activeTotal], ["inactive", "Inactive", inactiveTotal]] as const).map(([value, label, count]) => (
+          <button key={value} type="button" aria-pressed={statusFilter === value} onClick={() => setStatusFilter(value)} className={pillClass} style={pillStyle(statusFilter === value)}>
+            {label}
+            <span className="tabular-nums" style={{ opacity: 0.7 }}>{count}</span>
+          </button>
+        ))}
+        {!detailsLoading && ([["planDue", "Plan review due", focusCounts.planDue], ["noWorker", "No support worker", focusCounts.noWorker], ["budget", "Budget ahead of plan", focusCounts.budget]] as const)
+          .filter(([, , count]) => count > 0)
+          .map(([value, label, count]) => (
+            <button key={value} type="button" aria-pressed={focus === value} onClick={() => setFocus(focus === value ? null : value)} className={pillClass} style={pillStyle(focus === value)}>
+              {label}
+              <span className="tabular-nums" style={{ opacity: 0.7 }}>{count}</span>
+            </button>
+          ))}
+        {filtersActive && (
+          <button type="button" onClick={resetFilters} className="min-h-10 px-3 text-sm font-medium underline-offset-4 hover:underline" style={{ color: PLUM }}>
+            Clear
+          </button>
         )}
       </div>
+
+      <p role="status" className={`text-sm ${loadFailed ? "hidden" : ""}`} style={{ color: MUTED }}>
+        {rows.length === total
+          ? `${total} ${total === 1 ? "person" : "people"} supported by your organisation`
+          : `Showing ${rows.length} of ${total} participants`}
+      </p>
+
+      {loadFailed ? (
+        <div role="alert" className="rounded-3xl bg-cc-surface px-6 py-14 text-center">
+          <AlertTriangle size={26} className="mx-auto mb-3" style={{ color: "var(--cc-amber)" }} />
+          <h2 className="text-base font-semibold text-cc-text">We couldn't load your participants</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-cc-muted">Check your connection and try again. Nothing has been changed.</p>
+          {onRetry && (
+            <button type="button" onClick={onRetry} className="mt-5 min-h-11 rounded-full border border-cc-border px-5 text-sm font-semibold text-cc-text">Try again</button>
+          )}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="rounded-3xl bg-cc-surface px-6 py-14 text-center">
+          <Users size={26} className="mx-auto mb-3 text-cc-muted" />
+          <h2 className="text-base font-semibold text-cc-text">{total === 0 ? "Your participant directory starts here" : "No one matches that"}</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-cc-muted">{total === 0 ? "Complete participant onboarding to bring their details, care records and service status into this directory." : "Try another name or NDIS number, or clear the filters to see everyone."}</p>
+          <button type="button" onClick={() => { if (total === 0) onBack(); else resetFilters(); }} className="mt-5 min-h-11 rounded-full border border-cc-border px-5 text-sm font-semibold text-cc-text">{total === 0 ? "Open participant onboarding" : "Clear filters"}</button>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-3xl bg-cc-surface">
+          <div className={`hidden items-center gap-4 border-b px-6 py-3 lg:grid ${PARTICIPANT_GRID}`} style={{ borderColor: BORDER }}>
+            {PARTICIPANT_COLUMNS.map((column) =>
+              column.key ? (
+                <button
+                  key={column.label}
+                  type="button"
+                  onClick={() => handleSort(column.key!)}
+                  aria-label={`Sort by ${column.label.toLowerCase()}`}
+                  className={`flex items-center gap-1 text-left text-xs font-medium transition hover:text-cc-text ${column.className ?? ""}`}
+                  style={{ color: sortKey === column.key ? TEXT : MUTED }}
+                >
+                  {column.label}
+                  {sortKey === column.key && (sortAsc ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                </button>
+              ) : (
+                <span key={column.label || "chevron"} className={`text-xs font-medium ${column.className ?? ""}`} style={{ color: MUTED }}>
+                  {column.label}
+                </span>
+              ),
+            )}
+          </div>
+
+          <ul>
+            {rows.map(({ intake: i, snapshot, plan, budget, funding }) => {
+              const inactive = i.status === "inactive";
+              const statusColor = inactive ? "var(--cc-amber)" : "var(--cc-green)";
+              const activated = formatDate(i.activated_at);
+              const workerKnown = snapshot && snapshot.workerName !== undefined;
+              const goalsText = snapshot?.activeGoals !== undefined
+                ? `${snapshot.activeGoals} active${snapshot.completedGoals ? ` · ${snapshot.completedGoals} done` : ""}`
+                : null;
+              const pending = <span className="block h-3 w-20 animate-pulse rounded-full" style={{ background: SOFT }} />;
+
+              return (
+                <li key={i.id} className="border-b last:border-b-0" style={{ borderColor: BORDER }}>
+                  <button
+                    type="button"
+                    onClick={() => onOpen(i.id)}
+                    className={`group flex w-full items-center gap-4 px-4 py-4 text-left transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum sm:px-6 lg:grid ${PARTICIPANT_GRID}`}
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold" style={{ background: SOFT, color: TEXT }}>
+                        {initials(i.full_name)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-[15px] font-semibold" style={{ color: TEXT }}>{i.full_name}</p>
+                        <p className="mt-0.5 truncate text-sm" style={{ color: MUTED }}>
+                          {i.service_category === "aged_care" ? "Aged Care" : "Disability"}
+                          {i.ndis_number ? ` · NDIS ${i.ndis_number}` : ""}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs lg:hidden" style={{ color: MUTED }}>
+                          <span className="flex items-center gap-1.5 font-medium" style={{ color: statusColor }}>
+                            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: statusColor }} />
+                            {inactive ? "Inactive" : "Active"}
+                          </span>
+                          {workerKnown && (
+                            <span style={{ color: snapshot!.workerName ? MUTED : "var(--cc-amber)" }} className={snapshot!.workerName ? "" : "font-medium"}>
+                              {snapshot!.workerName ? `Worker: ${snapshot!.workerName}` : "No support worker"}
+                            </span>
+                          )}
+                          {plan.days !== null && (
+                            <span className={plan.tone === "neutral" ? "" : "font-medium"} style={{ color: plan.tone === "neutral" ? MUTED : toneColor(plan.tone) }}>
+                              Plan: {plan.detail.toLowerCase()}
+                            </span>
+                          )}
+                          {budget.percent !== null && (
+                            <span className={budget.tone === "good" ? "" : "font-medium"} style={{ color: budget.tone === "good" ? MUTED : toneColor(budget.tone) }}>
+                              Budget {budget.label}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="hidden min-w-0 lg:block">
+                      {detailsLoading && !workerKnown ? pending : snapshot?.workerName ? (
+                        <p className="truncate text-sm" style={{ color: TEXT }}>{snapshot.workerName}</p>
+                      ) : snapshot?.workerName === null ? (
+                        <p className="text-sm font-medium" style={{ color: "var(--cc-amber)" }}>Not assigned</p>
+                      ) : (
+                        <p className="text-sm" style={{ color: MUTED }}>N/A</p>
+                      )}
+                    </div>
+
+                    <div className="hidden min-w-0 lg:block">
+                      {detailsLoading && !snapshot ? pending : (
+                        <>
+                          <p className="truncate text-sm" style={{ color: plan.days === null ? MUTED : TEXT }}>{plan.label}</p>
+                          {plan.days !== null && (
+                            <p className={`mt-0.5 truncate text-xs ${plan.tone === "neutral" ? "" : "font-medium"}`} style={{ color: toneColor(plan.tone) }}>
+                              {plan.detail}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    <div className="hidden min-w-0 lg:block">
+                      {detailsLoading && !snapshot ? pending : budget.percent === null ? (
+                        <p className="text-sm" style={{ color: MUTED }}>{budget.label}</p>
+                      ) : (
+                        <>
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="text-sm font-semibold tabular-nums" style={{ color: toneColor(budget.tone) }}>{budget.label}</p>
+                          </div>
+                          <div className="mt-1 h-1.5 overflow-hidden rounded-full" style={{ background: SOFT }}>
+                            <div className="h-full rounded-full" style={{ width: `${Math.min(budget.percent, 100)}%`, background: toneColor(budget.tone) }} />
+                          </div>
+                          <p className="mt-1 truncate text-xs" style={{ color: MUTED }}>{budget.detail}</p>
+                        </>
+                      )}
+                    </div>
+
+                    <p className="hidden truncate text-sm xl:block" style={{ color: funding ? TEXT : MUTED }}>
+                      {detailsLoading && !snapshot ? pending : funding ?? "Not set"}
+                    </p>
+
+                    <p className="hidden truncate text-sm xl:block" style={{ color: goalsText ? TEXT : MUTED }}>
+                      {detailsLoading && !snapshot ? pending : goalsText ?? "N/A"}
+                    </p>
+
+                    <div className="hidden min-w-0 lg:block">
+                      <p className="flex items-center gap-2 text-sm font-medium" style={{ color: statusColor }}>
+                        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: statusColor }} />
+                        {inactive ? "Inactive" : "Active"}
+                      </p>
+                      {activated && (
+                        <p className="mt-0.5 truncate pl-4 text-xs" style={{ color: MUTED }}>Since {activated}</p>
+                      )}
+                    </div>
+
+                    <ChevronRight size={18} className="shrink-0 justify-self-end transition group-hover:translate-x-0.5" style={{ color: MUTED }} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
 
-/**
- * Dedicated page listing complaints filed by/on behalf of participants —
- * reached by clicking the "Participant Complaints" widget on the roster
- * page. No backend for complaints yet — dummy seeded data (SEED_COMPLAINTS).
- */
-function ComplaintsPage({ onBack }: { onBack: () => void }) {
-  const { toast } = useToast();
-  const [allComplaints, setAllComplaints] = useState<ParticipantComplaint[]>(SEED_COMPLAINTS);
-  const [statusFilter, setStatusFilter] = useState<"all" | ComplaintStatus>("all");
+function ActiveParticipantsRoute(props: {
+  intakes: Intake[]; onBack: () => void; onOpen: (id: string) => void; onOpenComplaints: () => void;
+  loadFailed?: boolean; onRetry?: () => void;
+}) {
+  const participantsQuery = useGetParticipants();
+  const workerStatsQuery = useOrgQuery<WorkerStats[]>(WORKER_STATS_KEY, { queryFn: getCoordinatorWorkerStats });
+  const assignmentsQuery = useOrgQuery(["worker-assignments", "org"], { queryFn: getOrgAssignments });
 
-  // Which complaint is currently being addressed, plus its draft response.
-  const [respondingId, setRespondingId] = useState<string | null>(null);
-  const [draftStatus, setDraftStatus] = useState<ComplaintStatus>("in_review");
-  const [draftNotes, setDraftNotes] = useState("");
+  const details = useMemo(() => {
+    const participants = (participantsQuery.data ?? []) as Array<Record<string, any>>;
+    if (participants.length === 0) return undefined;
+    const byId = new Map(participants.map((p) => [String(p.id), p]));
+    const byNdis = new Map(participants.filter((p) => p.ndis_number).map((p) => [String(p.ndis_number), p]));
+    const workerNames = new Map((workerStatsQuery.data ?? []).map((w) => [w.id, w.full_name]));
+    const workersByParticipant = new Map<string, Set<string>>();
+    for (const assignment of assignmentsQuery.data ?? []) {
+      if (!SUPPORT_ALLOCATION_ROLES.has(assignment.allocated_role)) continue;
+      const set = workersByParticipant.get(assignment.patient_id) ?? new Set<string>();
+      set.add(assignment.user_id);
+      workersByParticipant.set(assignment.patient_id, set);
+    }
+    const namesLoading = workerStatsQuery.isLoading || assignmentsQuery.isLoading;
+
+    const out: Record<string, ParticipantSnapshot> = {};
+    for (const intake of props.intakes) {
+      const record = (intake.participant_id && byId.get(intake.participant_id)) || (intake.ndis_number && byNdis.get(intake.ndis_number));
+      if (!record) continue;
+      const workerIds = new Set(workersByParticipant.get(String(record.id)) ?? []);
+      if (record.assigned_worker_id) workerIds.add(String(record.assigned_worker_id));
+      const names = [...workerIds].map((id) => workerNames.get(id) ?? "Assigned").sort();
+      const workerName = names.length === 0
+        ? (namesLoading ? undefined : null)
+        : names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`;
+      const goals = Array.isArray(record.goals) ? (record.goals as Array<{ status?: string }>) : [];
+      out[intake.id] = {
+        workerName,
+        planStart: record.plan_start_date ?? null,
+        planEnd: record.plan_end_date ?? null,
+        totalBudget: record.total_budget ?? null,
+        usedBudget: record.total_used ?? null,
+        planManagement: record.plan_management_type ?? null,
+        activeGoals: goals.filter((g) => (g.status ?? "active") === "active").length,
+        completedGoals: goals.filter((g) => g.status === "completed").length,
+      };
+    }
+    return out;
+  }, [participantsQuery.data, workerStatsQuery.data, workerStatsQuery.isLoading, assignmentsQuery.data, assignmentsQuery.isLoading, props.intakes]);
+
+  return (
+    <ActiveParticipantsPage
+      {...props}
+      details={details}
+      detailsLoading={participantsQuery.isLoading || assignmentsQuery.isLoading}
+    />
+  );
+}
+
+const COMPLAINT_STATUS_META: Record<ComplaintStatus, { label: string }> = {
+  open: { label: "Open" },
+  in_review: { label: "In review" },
+  resolved: { label: "Resolved" },
+};
+
+const COMPLAINT_TONE: Record<ComplaintStatus, KitTone> = {
+  open: "danger",
+  in_review: "warning",
+  resolved: "good",
+};
+
+function ComplaintsPage({ onBack, participants }: { onBack: () => void; participants: { id: string; name: string }[] }) {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const complaintsQuery = useOrgQuery(PARTICIPANT_COMPLAINTS_KEY, { queryFn: listParticipantComplaints, retry: false });
+  const allComplaints = complaintsQuery.data ?? [];
+  const [statusFilter, setStatusFilter] = useState<"all" | ComplaintStatus>("all");
+  const [responding, setResponding] = useState<ParticipantComplaint | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [logging, setLogging] = useState(false);
+
+  function refresh() {
+    void queryClient.invalidateQueries({ queryKey: [user?.organizationId ?? "__no_org__", ...PARTICIPANT_COMPLAINTS_KEY] });
+  }
 
   const complaints = allComplaints
     .filter((c) => statusFilter === "all" || c.status === statusFilter)
     .sort((a, b) => b.filed_at.localeCompare(a.filed_at));
-  const openCount = allComplaints.filter((c) => c.status === "open").length;
+  const countOf = (s: ComplaintStatus) => allComplaints.filter((c) => c.status === s).length;
 
-  function startResponding(c: ParticipantComplaint) {
-    setRespondingId(c.id);
-    setDraftStatus(c.status === "open" ? "in_review" : c.status);
-    setDraftNotes(c.resolution_notes ?? "");
-  }
-
-  function cancelResponding() {
-    setRespondingId(null);
-    setDraftNotes("");
-  }
-
-  function saveResponse(id: string) {
-    // A comment is only required (and only shown) once the complaint is
-    // being marked Resolved — "In review" is just a status flag, nothing
-    // to explain yet.
-    if (draftStatus === "resolved" && !draftNotes.trim()) return;
-    setAllComplaints((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              status: draftStatus,
-              resolution_notes: draftStatus === "resolved" ? draftNotes.trim() : c.resolution_notes,
-              responded_at: new Date().toISOString(),
-            }
-          : c
-      )
-    );
-    setRespondingId(null);
-    setDraftNotes("");
-    toast({ title: "Complaint updated", description: `Marked as ${COMPLAINT_STATUS_META[draftStatus].label.toLowerCase()}.` });
+  async function saveResponse(id: string, status: Exclude<ComplaintStatus, "open">, notes: string) {
+    setSaving(true);
+    try {
+      await updateParticipantComplaint(id, status, status === "resolved" ? notes : undefined);
+      refresh();
+      setResponding(null);
+      toast({ title: "Complaint updated", description: `Marked as ${COMPLAINT_STATUS_META[status].label.toLowerCase()}.` });
+    } catch (err) {
+      toast({ title: "Couldn't update the complaint", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="space-y-5 pb-10">
-      <div>
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
-          style={{ color: MUTED, background: SOFT }}
-        >
-          <ArrowLeft size={13} strokeWidth={2.5} /> Back to Participants
-        </button>
-        <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>
-          Participant Complaints
-          <SectionInfo text="Complaints and feedback logged against a participant, with resolution status and notes." />
-        </h1>
-        <p className="mt-0.5 text-[12px] font-medium" style={{ color: MUTED }}>
-          {allComplaints.length} total · {openCount} open.
-        </p>
-      </div>
-
-      <div className="flex items-center gap-0.5 rounded-xl p-1 w-fit" style={{ background: "#F8F7F4" }}>
-        {(["all", "open", "in_review", "resolved"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className="h-8 rounded-lg px-3 text-[11px] font-black transition-all"
-            style={{
-              background: statusFilter === s ? "white" : "transparent",
-              color: statusFilter === s ? PLUM : MUTED,
-              boxShadow: statusFilter === s ? "var(--cc-shadow-sm)" : "none",
-            }}
-          >
-            {s === "all" ? "All" : COMPLAINT_STATUS_META[s].label}
+    <div className="space-y-8 pb-12">
+      <PageHeader
+        back={
+          <button type="button" onClick={onBack} className={kitGhostClass}>
+            <ArrowLeft size={15} /> Back to Participants
           </button>
-        ))}
-      </div>
+        }
+        eyebrow="Oversight & Risk"
+        title={
+          <span className="inline-flex items-center gap-2">
+            Participant Complaints
+            <SectionInfo text="Complaints and feedback logged against a participant, with resolution status and notes." />
+          </span>
+        }
+        description="Complaints raised by or for a participant, how each was handled, and what was done to resolve it."
+        actions={
+          <button type="button" className={kitCtaClass} onClick={() => setLogging(true)}>
+            <Plus size={16} /> Log a complaint
+          </button>
+        }
+      />
 
-      <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
-        {complaints.length === 0 ? (
-          <p className="px-5 py-10 text-center text-[12px] font-medium" style={{ color: MUTED }}>No complaints match the current filter.</p>
-        ) : (
-          <div className="divide-y" style={{ borderColor: BORDER }}>
+      <SummaryStrip
+        items={[
+          { value: allComplaints.length, label: "complaints", onClick: () => setStatusFilter("all"), active: statusFilter === "all" },
+          { value: countOf("open"), label: "open", tone: countOf("open") ? "danger" : "good", onClick: () => setStatusFilter("open"), active: statusFilter === "open" },
+          { value: countOf("in_review"), label: "in review", tone: countOf("in_review") ? "warning" : undefined, onClick: () => setStatusFilter("in_review"), active: statusFilter === "in_review" },
+          { value: countOf("resolved"), label: "resolved", tone: "good", onClick: () => setStatusFilter("resolved"), active: statusFilter === "resolved" },
+        ]}
+      />
+
+      {complaintsQuery.isLoading ? (
+        <SkeletonBlocks count={3} />
+      ) : complaintsQuery.isError ? (
+        <LoadError onRetry={() => void complaintsQuery.refetch()}>
+          {complaintsQuery.error instanceof Error ? complaintsQuery.error.message : "Couldn't load complaints."}
+        </LoadError>
+      ) : allComplaints.length === 0 ? (
+        <EmptyState
+          icon={Mail}
+          title="No complaints recorded"
+          body="When a participant, family member or advocate raises a complaint, log it here so it's tracked through to resolution and filed in the vault."
+          action={<button type="button" className={kitOutlineClass} onClick={() => setLogging(true)}><Plus size={14} /> Log a complaint</button>}
+        />
+      ) : complaints.length === 0 ? (
+        <EmptyState
+          icon={Mail}
+          title="No complaints match"
+          body="Try another status, or show every complaint."
+          action={<button type="button" className={kitOutlineClass} onClick={() => setStatusFilter("all")}>Show all complaints</button>}
+        />
+      ) : (
+        <Surface>
+          <RowList>
             {complaints.map((c) => {
               const meta = COMPLAINT_STATUS_META[c.status];
-              const responding = respondingId === c.id;
               return (
-                <div key={c.id} className="p-5">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={c.participant_name} size={32} color={DANGER} />
-                      <div>
-                        <p className="text-sm font-black" style={{ color: TEXT }}>{c.participant_name}</p>
-                        <p className="text-[11px] font-medium" style={{ color: MUTED }}>Filed {formatDate(c.filed_at)}</p>
-                      </div>
+                <li key={c.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:px-5">
+                  <Avatar name={c.participant_name} size={36} color={DANGER} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                      <p className="text-sm font-semibold" style={{ color: TEXT }}>{c.subject}</p>
+                      <StatusText tone={COMPLAINT_TONE[c.status]}>{meta.label}</StatusText>
                     </div>
-                    <span className="text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap" style={{ background: meta.bg, color: meta.color }}>
-                      {meta.label}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm font-bold" style={{ color: TEXT }}>{c.subject}</p>
-                  <p className="mt-1 text-xs leading-5" style={{ color: MUTED }}>{c.description}</p>
-
-                  {c.resolution_notes && !responding && (
-                    <div className="mt-3 rounded-lg p-3" style={{ background: c.status === "resolved" ? SUCCESS_BG : WARNING_BG }}>
-                      <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: c.status === "resolved" ? SUCCESS : WARNING }}>
-                        Response
+                    <p className="mt-0.5 text-xs" style={{ color: MUTED }}>
+                      {c.participant_name}{c.raised_by ? ` · Raised by ${c.raised_by}` : ""} · Filed {formatDate(c.filed_at)}
+                    </p>
+                    <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>{c.description}</p>
+                    {c.resolution_notes && (
+                      <p className="mt-2 rounded-xl bg-cc-soft px-3.5 py-2.5 text-sm leading-6" style={{ color: TEXT }}>
+                        <span className="font-semibold">Response: </span>
+                        {c.resolution_notes}
+                        {c.responded_at && <span className="block text-xs" style={{ color: MUTED }}>Updated {formatDate(c.responded_at)}</span>}
                       </p>
-                      <p className="mt-1 text-xs leading-5" style={{ color: TEXT }}>{c.resolution_notes}</p>
-                      {c.responded_at && <p className="mt-1.5 text-[10px] font-medium" style={{ color: MUTED }}>Updated {formatDate(c.responded_at)}</p>}
-                    </div>
-                  )}
-
-                  {!responding ? (
-                    <Button variant="outline" size="sm" className="mt-3 gap-1.5 rounded-lg" onClick={() => startResponding(c)}>
-                      <PenLine size={13} /> {c.status === "open" ? "Address complaint" : c.resolution_notes ? "Update response" : "Update status"}
-                    </Button>
-                  ) : (
-                    <div className="mt-3 space-y-2 rounded-lg border p-3" style={{ background: SOFT, borderColor: BORDER }}>
-                      <label className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Mark as</label>
-                      <Select value={draftStatus} onValueChange={(v) => setDraftStatus(v as ComplaintStatus)}>
-                        <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="in_review">In review</SelectItem>
-                          <SelectItem value="resolved">Resolved</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {draftStatus === "resolved" && (
-                        <>
-                          <label className="text-[10px] font-black uppercase tracking-wide block pt-1" style={{ color: MUTED }}>
-                            What did you do to solve it?
-                          </label>
-                          <Textarea
-                            value={draftNotes}
-                            onChange={(e) => setDraftNotes(e.target.value)}
-                            placeholder="e.g. Spoke with the participant's family, reassigned the support worker, and confirmed the schedule going forward."
-                            className="min-h-[80px] text-sm bg-white"
-                          />
-                        </>
-                      )}
-                      <div className="flex gap-2 pt-1">
-                        <Button variant="outline" size="sm" className="rounded-lg" onClick={cancelResponding}>Cancel</Button>
-                        <Button variant="navy" size="sm" className="gap-1.5 rounded-lg" onClick={() => saveResponse(c.id)} disabled={draftStatus === "resolved" && !draftNotes.trim()}>
-                          <CheckCircle2 size={13} /> Save
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                  <button type="button" className={`${kitOutlineClass} shrink-0 self-start`} onClick={() => setResponding(c)}>
+                    <PenLine size={14} />
+                    {c.status === "open" ? "Address complaint" : c.resolution_notes ? "Update response" : "Update status"}
+                  </button>
+                </li>
               );
             })}
-          </div>
-        )}
-      </div>
+          </RowList>
+        </Surface>
+      )}
+
+      <ResponseSheet
+        target={
+          responding && {
+            id: responding.id,
+            title: responding.subject,
+            context: `${responding.participant_name} · Filed ${formatDate(responding.filed_at)}`,
+            description: responding.description,
+            status: responding.status,
+            notes: responding.resolution_notes ?? undefined,
+          }
+        }
+        onClose={() => setResponding(null)}
+        noun="complaint"
+        notesLabel="What did you do to solve it?"
+        notesPlaceholder="e.g. Spoke with the participant's family, reassigned the support worker, and confirmed the schedule going forward."
+        onSave={(status, notes) => responding && void saveResponse(responding.id, status, notes)}
+        busy={saving}
+      />
+
+      <LogComplaintSheet
+        open={logging}
+        onOpenChange={setLogging}
+        participants={participants}
+        onLogged={() => {
+          refresh();
+          setStatusFilter("all");
+        }}
+      />
     </div>
   );
 }
 
-/**
- * Plain participant record — reached from the Active Participants list.
- * Deliberately has none of IntakeDetail's pipeline chrome (stepper,
- * decline/terminate actions, board-card note): these participants have
- * already been through the process, so this is just their profile now.
- */
+function LogComplaintSheet({
+  open,
+  onOpenChange,
+  participants,
+  onLogged,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  participants: { id: string; name: string }[];
+  onLogged: () => void;
+}) {
+  const { toast } = useToast();
+  const OTHER = "__other__";
+  const today = new Date().toISOString().slice(0, 10);
+  const [participantId, setParticipantId] = useState("");
+  const [otherName, setOtherName] = useState("");
+  const [raisedBy, setRaisedBy] = useState("");
+  const [filedOn, setFiledOn] = useState(today);
+  const [subject, setSubject] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setParticipantId("");
+    setOtherName("");
+    setRaisedBy("");
+    setFiledOn(new Date().toISOString().slice(0, 10));
+    setSubject("");
+    setDescription("");
+  }, [open]);
+
+  const who = participantId === OTHER ? otherName.trim() : participantId;
+  const ready = !!who && !!subject.trim() && !!description.trim();
+
+  async function submit() {
+    if (!ready) return;
+    setSaving(true);
+    try {
+      await createParticipantComplaint({
+        subject: subject.trim(),
+        description: description.trim(),
+        participant_id: participantId && participantId !== OTHER ? participantId : null,
+        participant_name: participantId === OTHER ? otherName.trim() : null,
+        raised_by: raisedBy.trim() || null,
+        filed_at: filedOn ? new Date(`${filedOn}T12:00:00`).toISOString() : null,
+      });
+      toast({ title: "Complaint logged", description: "It's on the register and filed in the vault." });
+      onOpenChange(false);
+      onLogged();
+    } catch (err) {
+      toast({ title: "Couldn't log the complaint", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const label = "block text-sm font-medium text-cc-text";
+  return (
+    <Sheet open={open} onOpenChange={(next) => { if (!saving) onOpenChange(next); }}>
+      <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Log a complaint</SheetTitle>
+        </SheetHeader>
+        <form id="log-complaint-form" onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-4 flex-1 space-y-4">
+          <div className="space-y-1.5">
+            <label className={label} htmlFor="complaint-participant">Who is it about?</label>
+            <Select value={participantId} onValueChange={setParticipantId}>
+              <SelectTrigger id="complaint-participant" className="h-11 rounded-xl">
+                <SelectValue placeholder="Choose a participant" />
+              </SelectTrigger>
+              <SelectContent>
+                {participants.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                <SelectItem value={OTHER}>Someone not in the list</SelectItem>
+              </SelectContent>
+            </Select>
+            {participantId === OTHER && (
+              <Input aria-label="Their name" placeholder="Their name" value={otherName} onChange={(e) => setOtherName(e.target.value)} className="mt-2 h-11 rounded-xl" />
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <label className={label} htmlFor="complaint-raised-by">Raised by <span className="font-normal text-cc-muted">Optional</span></label>
+            <Input id="complaint-raised-by" placeholder="e.g. Participant, or Mother (Jane Rivera)" value={raisedBy} onChange={(e) => setRaisedBy(e.target.value)} className="h-11 rounded-xl" />
+          </div>
+          <div className="space-y-1.5">
+            <label className={label} htmlFor="complaint-date">Date received</label>
+            <Input id="complaint-date" type="date" value={filedOn} max={today} onChange={(e) => setFiledOn(e.target.value)} className="h-11 rounded-xl" />
+          </div>
+          <div className="space-y-1.5">
+            <label className={label} htmlFor="complaint-subject">What is it about?</label>
+            <Input id="complaint-subject" placeholder="e.g. Support worker punctuality" value={subject} onChange={(e) => setSubject(e.target.value)} className="h-11 rounded-xl" />
+          </div>
+          <div className="space-y-1.5">
+            <label className={label} htmlFor="complaint-description">Details</label>
+            <Textarea id="complaint-description" rows={5} placeholder="What happened, in the words of the person who raised it." value={description} onChange={(e) => setDescription(e.target.value)} className="rounded-xl" />
+          </div>
+        </form>
+        <SheetFooter className="mt-4 gap-2">
+          <button type="button" className={kitOutlineClass} onClick={() => onOpenChange(false)} disabled={saving}>Cancel</button>
+          <button type="submit" form="log-complaint-form" className={kitCtaClass} disabled={!ready || saving}>
+            {saving && <Loader2 size={15} className="animate-spin" />} Log complaint
+          </button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function ParticipantProfilePage({
   intake, onBack, onUpdate,
 }: {
@@ -902,9 +1267,6 @@ function ParticipantProfilePage({
   const [intakeFormDraft, setIntakeFormDraft] = useState<Partial<WebIntakeForm>>(intake.web_intake ?? {});
   const [serviceCategoryDraft, setServiceCategoryDraft] = useState<ServiceCategory>(intake.service_category ?? "disability");
 
-  // Suspend / Activate — temporarily pauses service delivery without
-  // leaving the pipeline entirely (unlike Terminate). A reason is required
-  // to suspend; reactivating doesn't need one.
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [suspendReason, setSuspendReason] = useState("");
 
@@ -960,10 +1322,9 @@ function ParticipantProfilePage({
       </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5 items-start">
-        {/* Sidebar summary */}
         <div className="space-y-4">
           <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
-            <Avatar name={intake.full_name} size={48} color={intake.status === "inactive" ? WARNING : COLUMN_COLOR.active} />
+            <Avatar name={intake.full_name} size={48} color={intake.status === "inactive" ? WARNING : STAGE_COLOR.active} />
             <h2 className="text-lg font-black mt-3" style={{ color: TEXT }}>{intake.full_name}</h2>
             <div className="mt-1"><StatusBadge status={intake.status} /></div>
             <div className="mt-4 pt-4 border-t space-y-2" style={{ borderColor: BORDER }}>
@@ -983,8 +1344,6 @@ function ParticipantProfilePage({
             )}
           </div>
 
-          {/* Suspend / Activate — pauses or resumes service delivery without
-              leaving the pipeline (distinct from Terminate, which ends it). */}
           <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
             <label className="text-[10px] font-black uppercase tracking-wide mb-2 block" style={{ color: MUTED }}>Service status</label>
             {intake.status === "inactive" ? (
@@ -1026,7 +1385,6 @@ function ParticipantProfilePage({
           </div>
         </div>
 
-        {/* Profile details */}
         <div className="space-y-4">
           <IntakeFormBlock
             intake={intake}
@@ -1051,9 +1409,6 @@ function ParticipantProfilePage({
                 <Field label="Family signed by" value={intake.family_signed_name} editing={false} />
                 <Field label="Activated" value={formatDate(intake.activated_at)} editing={false} />
               </div>
-              {/* The signed agreement's schedule of supports (hours, rate,
-                  funding), terms and the signed PDF, once the participant
-                  record exists. */}
               {intake.participant_id && (
                 <div className="pt-3 border-t" style={{ borderColor: BORDER }}>
                   <ParticipantServiceAgreementSection participantId={intake.participant_id} />
@@ -1062,9 +1417,6 @@ function ParticipantProfilePage({
             </IntakeFormSection>
           )}
 
-          {/* Everything recorded since activation: care team, health and
-              medications, support preferences, worker briefing, goals and
-              funding — same card design as the intake sections above. */}
           {intake.participant_id && <ParticipantRecordCards participantId={intake.participant_id} />}
         </div>
       </div>
@@ -1078,30 +1430,29 @@ export default function ParticipantOnboardingBoard() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Selected intake lives in the URL (?intake=<id>), same convention as
-  // /team?workerId=...&tab=... elsewhere in the app. This also lets the
-  // shared OnboardingWorkspace shell hide the Staff/Participants toggle
-  // while a detail view is open, without the board needing to know
-  // anything about that shell.
   const urlSearch = useSearch();
   const selectedId = new URLSearchParams(urlSearch).get("intake");
   const profileId = new URLSearchParams(urlSearch).get("profile");
 
-  // Loaded from the backend on mount — see participantIntakeService.ts.
   const [intakes, setIntakes] = useState<Intake[]>([]);
   const [loadingIntakes, setLoadingIntakes] = useState(true);
+  const [intakesLoadFailed, setIntakesLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setLoadingIntakes(true);
     listParticipantIntakes()
-      .then((rows) => { if (!cancelled) setIntakes(rows); })
-      .catch((err: Error) => toast({ title: "Couldn't load participants", description: err.message, variant: "destructive" }))
+      .then((rows) => { if (!cancelled) { setIntakes(rows); setIntakesLoadFailed(false); } })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setIntakesLoadFailed(true);
+        toast({ title: "Couldn't load participants", description: err.message, variant: "destructive" });
+      })
       .finally(() => { if (!cancelled) setLoadingIntakes(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [loadAttempt]);
 
-  // The public referral form files straight onto this board; this is the
-  // link to share with families, support coordinators and referrers.
   const referralPath = `/participant-referral?org=${encodeURIComponent(user?.organizationId ?? "")}`;
   async function copyReferralLink() {
     const url = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}${referralPath}`;
@@ -1115,6 +1466,7 @@ export default function ParticipantOnboardingBoard() {
 
   const [search, setSearch] = useState("");
   const [newIntakeOpen, setNewIntakeOpen] = useState(false);
+  const [showClosed, setShowClosed] = useState(false);
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [activeKpi, setActiveKpi] = useState<"open" | "stuck" | "active" | "signature" | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<"all" | ServiceCategory>("all");
@@ -1134,12 +1486,27 @@ export default function ParticipantOnboardingBoard() {
   const [fundingType, setFundingType] = useState<FundingType | "">("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [source, setSource] = useState<EnquirySource>("online_form");
+  const [source, setSource] = useState<EnquirySource>("phone_call");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const touch = (field: string) => setTouched((t) => (t[field] ? t : { ...t, [field]: true }));
 
   const dobAge = calculateAge(dob);
+  // Aged Care clients usually have no NDIS number or NDIS funding type.
+  const isNdis = serviceCategory === "disability";
+  const emailInvalid = email.trim().length > 0 && !isValidEmail(email);
+  const phoneInvalid = phone.trim().length > 0 && !isValidPhone(phone);
+  const dobInFuture = dobAge !== null && dobAge < 0;
+  // What's still missing before an enquiry can be logged, in plain words.
+  const referralMissing = [
+    !fullName.trim() && "full name",
+    !dob.trim() && "date of birth",
+    isNdis && !ndisNumber.trim() && "NDIS number",
+    !isValidEmail(email) && (email.trim() ? "a valid email" : "email"),
+  ].filter(Boolean) as string[];
   const agedCareBlocked = serviceCategory === "aged_care" && dob.trim().length > 0 && !isAgedCareEligible(dob);
 
   const [creatingIntake, setCreatingIntake] = useState(false);
+  const referralBlocked = referralMissing.length > 0 || phoneInvalid || agedCareBlocked || dobInFuture;
 
   async function createIntake() {
     if (!dob.trim()) {
@@ -1151,20 +1518,20 @@ export default function ParticipantOnboardingBoard() {
       const intake = await createParticipantIntake({
         full_name: fullName.trim(),
         service_category: serviceCategory,
-        ndis_number: ndisNumber.trim(),
+        ndis_number: isNdis ? ndisNumber.trim() : "",
         email: email.trim(),
         phone: phone.trim(),
         source,
         web_intake: {
           date_of_birth: dob.trim(),
-          funding_type: fundingType || undefined,
+          funding_type: (isNdis && fundingType) || undefined,
           submitted_by: "Provider",
           submitted_at: new Date().toISOString(),
         },
       });
       setIntakes((prev) => [intake, ...prev]);
       setNewIntakeOpen(false);
-      setFullName(""); setServiceCategory("disability"); setDob(""); setNdisNumber(""); setFundingType(""); setEmail(""); setPhone(""); setSource("online_form");
+      setFullName(""); setServiceCategory("disability"); setDob(""); setNdisNumber(""); setFundingType(""); setEmail(""); setPhone(""); setSource("phone_call"); setTouched({});
       navigate(`/onboard-participant?intake=${intake.id}`);
       toast({ title: "Enquiry logged", description: `${intake.full_name} is in the Enquiry column.` });
     } catch (err) {
@@ -1186,26 +1553,17 @@ export default function ParticipantOnboardingBoard() {
       });
   }
 
-  // Signing the onboarding agreement moves the intake to "signed" on the
-  // server, so reload rather than guess.
   function reloadIntakes() {
     listParticipantIntakes()
       .then(setIntakes)
       .catch((err: Error) => toast({ title: "Couldn't refresh", description: err.message, variant: "destructive" }));
   }
 
-  // Merges into local state only — for results already persisted server-side
-  // through their own endpoint (the signed-document upload), so it doesn't
-  // also fire a redundant PATCH.
   function applyLocalPatch(id: string, patch: Partial<Intake>) {
     setIntakes((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
   }
 
   const selected = selectedId ? intakes.find((i) => i.id === selectedId) ?? null : null;
-
-  // Current active caseload vs. what the support worker headcount can carry
-  // — drives the capacity check shown at Screening. Suspended (inactive)
-  // participants aren't counted since their service delivery is paused.
   const currentCaseload = intakes.filter((i) => i.status === "active").length;
   const totalCapacity = TOTAL_SUPPORT_WORKERS * MAX_CASELOAD_PER_WORKER;
 
@@ -1231,9 +1589,6 @@ export default function ParticipantOnboardingBoard() {
     );
   }
 
-  // Reached from the Active Participants list — a plain profile, no
-  // pipeline/stepper chrome, since these participants already went
-  // through the process and this is just their record now.
   const profileIntake = profileId ? intakes.find((i) => i.id === profileId) ?? null : null;
 
   if (profileIntake) {
@@ -1246,22 +1601,27 @@ export default function ParticipantOnboardingBoard() {
     );
   }
 
-  // Dedicated complaints list, reached by clicking the "Participant
-  // Complaints" widget on the roster page.
   if (location === "/onboard-participant/complaints") {
-    return <ComplaintsPage onBack={() => navigate("/onboard-participant/active")} />;
+    return (
+      <ComplaintsPage
+        onBack={() => navigate("/onboard-participant/active")}
+        participants={intakes
+          .filter((i) => i.participant_id)
+          .map((i) => ({ id: i.participant_id!, name: i.full_name }))
+          .sort((a, b) => a.name.localeCompare(b.name))}
+      />
+    );
   }
 
-  // Dedicated full-page list, reached by clicking the "Active" column
-  // header on the board — a separate page rather than an in-place filter,
-  // since it's meant as a proper roster view, not a quick glance.
   if (location === "/onboard-participant/active") {
     return (
-      <ActiveParticipantsPage
+      <ActiveParticipantsRoute
         intakes={intakes}
         onBack={() => navigate("/onboard-participant")}
         onOpen={(id) => navigate(`/onboard-participant?profile=${id}`)}
         onOpenComplaints={() => navigate("/onboard-participant/complaints")}
+        loadFailed={intakesLoadFailed}
+        onRetry={() => setLoadAttempt((n) => n + 1)}
       />
     );
   }
@@ -1269,8 +1629,8 @@ export default function ParticipantOnboardingBoard() {
   const q = search.trim().toLowerCase();
   const matchesSearch = (i: Intake) => !q || i.full_name.toLowerCase().includes(q) || i.ndis_number.toLowerCase().includes(q);
   const matchesKpi = (i: Intake) => {
-    if (activeKpi === "open") return columnIdForStatus(i.status) !== "active" && i.status !== "declined";
-    if (activeKpi === "stuck") return columnIdForStatus(i.status) !== "active" && i.status !== "declined" && daysSince(i.created_at) >= 7;
+    if (activeKpi === "open") return inPipeline(i.status);
+    if (activeKpi === "stuck") return inPipeline(i.status) && daysSince(i.created_at) >= 7;
     if (activeKpi === "active") return columnIdForStatus(i.status) === "active";
     if (activeKpi === "signature") return i.status === "awaiting_signatures";
     return true;
@@ -1283,11 +1643,12 @@ export default function ParticipantOnboardingBoard() {
     setActiveKpi((prev) => (prev === filter ? null : filter));
   }
 
-  // KPI strip. "Active participants" and "Ready for signature" mean org-wide
-  // counts once a real backend exists — for now they're scoped to what this
-  // page knows about locally.
-  const openEnquiries = intakes.filter((i) => columnIdForStatus(i.status) !== "active" && i.status !== "declined").length;
-  const stuckCount = intakes.filter((i) => columnIdForStatus(i.status) !== "active" && i.status !== "declined" && daysSince(i.created_at) >= 7).length;
+  const openEnquiries = intakes.filter((i) => inPipeline(i.status)).length;
+  const stuckCount = intakes.filter((i) => inPipeline(i.status) && daysSince(i.created_at) >= 7).length;
+  // Declined and withdrawn referrals: off the board, but still findable.
+  const closedIntakes = intakes
+    .filter((i) => i.status === "declined" || i.status === "withdrawn")
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
   const activeCount = intakes.filter((i) => columnIdForStatus(i.status) === "active").length;
   const readyForSignatureCount = intakes.filter((i) => i.status === "awaiting_signatures").length;
 
@@ -1307,7 +1668,7 @@ export default function ParticipantOnboardingBoard() {
         categoryLabel: i.service_category === "aged_care" ? "Aged Care" : "Disability",
         columnId,
         stageLabel: col.label,
-        color: COLUMN_COLOR[columnId],
+        color: STAGE_COLOR[columnId],
         meta: subtitleForIntake(i),
         onOpen: () => navigate(`/onboard-participant?intake=${i.id}`),
       };
@@ -1320,60 +1681,65 @@ export default function ParticipantOnboardingBoard() {
 
   return (
     <>
-      <div className="space-y-5 pb-10">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <button
-              onClick={() => navigate("/hub")}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
-              style={{ color: MUTED, background: SOFT }}
-            >
-              <ArrowLeft size={13} strokeWidth={2.5} /> {translate("md.backToHub")}
+      <div className="space-y-6 pb-12">
+        <PageHeader
+          back={
+            <button type="button" onClick={() => navigate("/hub")} className={`${kitGhostClass} -ml-4`}>
+              <ArrowLeft size={15} /> Back to Hub
             </button>
-            <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight mt-2" style={{ color: TEXT }}>
+          }
+          eyebrow="Participants & Intake"
+          title={
+            <span className="inline-flex items-center gap-2">
               Participant Onboarding
-              <SectionInfo text="Move a new participant from referral through to an active plan: intake, consent, and setup." />
-            </h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => navigate(referralPath)}
-              className="text-[12px] font-black transition-colors hover:opacity-80 flex items-center gap-1"
-              style={{ color: PLUM }}
-            >
-              View public referral form <ChevronRight size={13} />
-            </button>
-            <button
-              onClick={copyReferralLink}
-              className="text-[12px] font-black transition-colors hover:opacity-80"
-              style={{ color: PLUM }}
-            >
-              Copy referral link
-            </button>
-            <Button variant="outline" className="rounded-lg" onClick={() => comingSoon("Referral portal settings")}>
-              Referral portal settings
-            </Button>
-            <Button variant="navy" className="gap-2 rounded-lg shrink-0" onClick={() => setNewIntakeOpen(true)}>
-              <HeartHandshake size={15} /> New referral
-            </Button>
-          </div>
-        </div>
+              <SectionInfo text="Manage participants from initial referral through to plan activation, service agreements, and care coordination." />
+            </span>
+          }
+          description="Move a new participant from referral through to an active plan: intake, consent, meet & greet, and setup."
+          actions={
+            <>
+              <button
+                onClick={copyReferralLink}
+                className="inline-flex min-h-11 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-5 text-sm font-medium transition hover:bg-cc-soft"
+                style={{ color: TEXT }}
+              >
+                Copy referral link
+              </button>
+              <button type="button" className={kitCtaClass} onClick={() => setNewIntakeOpen(true)}>
+                <HeartHandshake size={15} /> New referral
+              </button>
+            </>
+          }
+        />
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiTile label="Open enquiries" value={openEnquiries} color={CRITICAL} bg={CRITICAL_BG} icon={ClipboardCheck} active={activeKpi === "open"} onClick={() => setKpiFilter("open")} />
-          <KpiTile label="Stuck 7+ days" value={stuckCount} color={WARNING} bg={WARNING_BG} icon={Clock3} active={activeKpi === "stuck"} onClick={() => setKpiFilter("stuck")} />
-          <KpiTile label="Active participants" value={activeCount} color={SUCCESS} bg={SUCCESS_BG} icon={ShieldCheck} active={activeKpi === "active"} onClick={() => setKpiFilter("active")} />
-          <KpiTile label="Ready for signature" value={readyForSignatureCount} color={INFO} bg={INFO_BG} icon={PenLine} active={activeKpi === "signature"} onClick={() => setKpiFilter("signature")} />
-        </div>
+        <SummaryStrip
+          items={[
+            { value: openEnquiries, label: "open enquiries", tone: openEnquiries ? "warning" : "good", onClick: () => setKpiFilter("open"), active: activeKpi === "open" },
+            { value: stuckCount, label: "stuck 7+ days", tone: stuckCount ? "danger" : "good", onClick: () => setKpiFilter("stuck"), active: activeKpi === "stuck" },
+            { value: activeCount, label: "active participants", tone: "good", onClick: () => setKpiFilter("active"), active: activeKpi === "active" },
+            { value: readyForSignatureCount, label: "ready for signature", tone: "info", onClick: () => setKpiFilter("signature"), active: activeKpi === "signature" },
+            ...(closedIntakes.length
+              ? [{
+                  value: closedIntakes.length,
+                  label: "closed",
+                  onClick: () => {
+                    setShowClosed(true);
+                    window.setTimeout(() => document.getElementById("closed-referrals")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                  },
+                  active: showClosed,
+                }]
+              : []),
+          ]}
+        />
 
-        <div className="flex flex-col gap-3 rounded-[1.25rem] border bg-white p-3 sm:flex-row sm:items-center" style={{ borderColor: BORDER }}>
-          <div className="relative min-w-0 flex-1">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1 sm:max-w-sm">
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search for the Participant"
-              className="h-10 rounded-xl border-0 bg-[#F8F7F4] pl-9 text-[12px] shadow-none focus-visible:ring-1"
+              placeholder="Search participants"
+              className="h-11 rounded-full bg-cc-surface pl-11 pr-9 text-sm"
             />
             {search && (
               <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5">
@@ -1381,68 +1747,69 @@ export default function ParticipantOnboardingBoard() {
               </button>
             )}
           </div>
-          <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
-            <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-[#F8F7F4] text-[12px] shadow-none sm:w-[170px]">
-              <Users size={14} className="mr-1.5" /><SelectValue placeholder="All categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              <SelectItem value="disability">Disability</SelectItem>
-              <SelectItem value="aged_care">Aged Care</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={stageFilter} onValueChange={(v) => setStageFilter(v as "all" | BoardColumnId)}>
-            <SelectTrigger className="h-10 w-full rounded-xl border-0 bg-[#F8F7F4] text-[12px] shadow-none sm:w-[170px]">
-              <SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="All stages" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All stages</SelectItem>
-              {BOARD_COLUMNS.map((col) => (
-                <SelectItem key={col.id} value={col.id}>{col.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {(activeKpi || categoryFilter !== "all" || stageFilter !== "all" || search) && (
-            <button
-              onClick={() => { setActiveKpi(null); setCategoryFilter("all"); setStageFilter("all"); setSearch(""); }}
-              className="flex h-10 shrink-0 items-center justify-center gap-1 rounded-xl px-3 text-[11px] font-bold hover:bg-black/5"
-              style={{ color: MUTED }}
-            >
-              <X size={13} /> Clear
-            </button>
-          )}
-          <div className="flex h-10 shrink-0 items-center gap-0.5 rounded-xl p-1" style={{ background: "#F8F7F4" }}>
-            <button
-              onClick={() => setView("kanban")}
-              aria-pressed={view === "kanban"}
-              title="Board view"
-              className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-black transition-all"
-              style={{ background: view === "kanban" ? "white" : "transparent", color: view === "kanban" ? PLUM : MUTED, boxShadow: view === "kanban" ? "var(--cc-shadow-sm)" : "none" }}
-            >
-              <LayoutGrid size={13} /> Board
-            </button>
-            <button
-              onClick={() => setView("list")}
-              aria-pressed={view === "list"}
-              title="List view"
-              className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-black transition-all"
-              style={{ background: view === "list" ? "white" : "transparent", color: view === "list" ? PLUM : MUTED, boxShadow: view === "list" ? "var(--cc-shadow-sm)" : "none" }}
-            >
-              <Rows3 size={13} /> List
-            </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:ml-auto">
+            <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
+              <SelectTrigger className="h-10 w-full rounded-full bg-cc-surface px-4 text-sm sm:w-[170px]">
+                <Users size={14} className="mr-1.5" /><SelectValue placeholder="All categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                <SelectItem value="disability">Disability</SelectItem>
+                <SelectItem value="aged_care">Aged Care</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={stageFilter} onValueChange={(v) => setStageFilter(v as "all" | BoardColumnId)}>
+              <SelectTrigger className="h-10 w-full rounded-full bg-cc-surface px-4 text-sm sm:w-[170px]">
+                <SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="All stages" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All stages</SelectItem>
+                {BOARD_COLUMNS.map((col) => (
+                  <SelectItem key={col.id} value={col.id}>{col.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(activeKpi || categoryFilter !== "all" || stageFilter !== "all" || search) && (
+              <button onClick={() => { setActiveKpi(null); setCategoryFilter("all"); setStageFilter("all"); setSearch(""); }} className={`${kitGhostClass} min-h-10 shrink-0`}>
+                <X size={14} /> Clear
+              </button>
+            )}
+            <div className="flex shrink-0 items-center rounded-full border p-1" style={{ borderColor: BORDER }} role="group" aria-label="View">
+              <button
+                onClick={() => setView("kanban")}
+                aria-pressed={view === "kanban"}
+                title="Board view"
+                className="flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition"
+                style={view === "kanban" ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { color: MUTED }}
+              >
+                <LayoutGrid size={15} /> Board
+              </button>
+              <button
+                onClick={() => setView("list")}
+                aria-pressed={view === "list"}
+                title="List view"
+                className="flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition"
+                style={view === "list" ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { color: MUTED }}
+              >
+                <Rows3 size={15} /> List
+              </button>
+            </div>
           </div>
         </div>
 
+        {view === "kanban" && (
+          <p className="text-xs lg:hidden" style={{ color: MUTED }}>Swipe sideways to see every stage.</p>
+        )}
         {view === "kanban" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
+          <div className="flex items-start gap-3 overflow-x-auto pb-3 [scrollbar-width:thin] snap-x snap-mandatory lg:items-stretch">
             {BOARD_COLUMNS.map((col) => {
               const columnIntakes = intakes.filter((i) => columnIdForStatus(i.status) === col.id && matches(i));
-              const color = COLUMN_COLOR[col.id];
+              const color = STAGE_COLOR[col.id];
               return (
                 <div
                   key={col.id}
-                  className="rounded-[1.25rem] border-t-[3px] p-4 flex flex-col gap-3"
-                  style={{ background: SOFT, borderTopColor: color }}
+                  className="flex min-h-[220px] w-[300px] shrink-0 scale-100 flex-col gap-3 rounded-2xl p-4 transition-all duration-150 lg:min-h-[430px] lg:w-auto lg:min-w-[200px] lg:flex-1 lg:shrink"
+                  style={{ background: "var(--cc-bg)" }}
                 >
                   <div className="flex items-center justify-between px-0.5 pb-0.5">
                     {col.id === "active" ? (
@@ -1452,25 +1819,22 @@ export default function ParticipantOnboardingBoard() {
                         title="View full Participants list"
                       >
                         <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
-                        <p className="text-[13px] font-black underline decoration-dotted underline-offset-2" style={{ color: TEXT }}>{col.label}</p>
+                        <p className="text-sm font-semibold underline decoration-dotted underline-offset-2" style={{ color: TEXT }}>{col.label}</p>
                         <ChevronRight size={12} style={{ color }} />
                       </button>
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
-                        <p className="text-[13px] font-black" style={{ color: TEXT }}>{col.label}</p>
+                        <p className="text-sm font-semibold" style={{ color: TEXT }}>{col.label}</p>
                       </div>
                     )}
-                    <span
-                      className="flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-[10px] font-black"
-                      style={{ background: `${color}1F`, color }}
-                    >
+                    <span className="flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-[10px] font-black" style={{ background: `${color}1F`, color }}>
                       {columnIntakes.length}
                     </span>
                   </div>
-                  <div className="space-y-2 max-h-[65vh] overflow-y-auto">
+                  <div className="flex min-h-[120px] flex-1 flex-col gap-2.5">
                     {columnIntakes.length === 0 && (
-                      <p className="rounded-xl border border-dashed py-8 text-center text-[10px] font-medium" style={{ color: MUTED }}>Nobody here</p>
+                      <p className="rounded-xl border border-dashed py-8 text-center text-xs" style={{ color: MUTED, borderColor: BORDER }}>Nobody here</p>
                     )}
                     {columnIntakes.map((i) => (
                       <ParticipantCard key={i.id} intake={i} onClick={() => navigate(`/onboard-participant?intake=${i.id}`)} />
@@ -1484,121 +1848,245 @@ export default function ParticipantOnboardingBoard() {
           <ParticipantListView rows={listRows} sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
         )}
 
+        {closedIntakes.length > 0 && (
+          <section id="closed-referrals" className="scroll-mt-24 rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
+            <button
+              type="button"
+              onClick={() => setShowClosed((v) => !v)}
+              aria-expanded={showClosed}
+              className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
+            >
+              <span>
+                <span className="block text-sm font-semibold" style={{ color: TEXT }}>Closed referrals</span>
+                <span className="block text-xs" style={{ color: MUTED }}>
+                  {closedIntakes.length} declined or withdrawn. Kept for your records, off the board.
+                </span>
+              </span>
+              <ChevronDown size={18} className={`shrink-0 transition-transform ${showClosed ? "rotate-180" : ""}`} style={{ color: MUTED }} />
+            </button>
+            {showClosed && (
+              <ul className="border-t" style={{ borderColor: BORDER }}>
+                {closedIntakes.map((i) => (
+                  <li key={i.id} className="border-b last:border-b-0" style={{ borderColor: BORDER }}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/onboard-participant?intake=${i.id}`)}
+                      className="flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-cc-soft"
+                    >
+                      <Avatar name={i.full_name} size={32} color={MUTED} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium" style={{ color: TEXT }}>{i.full_name}</span>
+                        <span className="block truncate text-xs" style={{ color: MUTED }}>
+                          {STATUS_META[i.status].label} · {(i.status === "withdrawn" ? i.withdrawn_reason : i.decline_reason) || "No reason recorded"}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-xs" style={{ color: MUTED }}>Referred {formatDate(i.created_at)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </div>
 
-      <Sheet open={newIntakeOpen} onOpenChange={setNewIntakeOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
-              <HeartHandshake size={18} style={{ color: PLUM }} /> New Referral
-            </SheetTitle>
-          </SheetHeader>
-          <div className="space-y-3 py-1">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Full name</label>
-              <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Sam Rivera" autoFocus />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Service category</label>
-                <Select value={serviceCategory} onValueChange={(v) => setServiceCategory(v as ServiceCategory)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="disability">Disability</SelectItem>
-                    <SelectItem value="aged_care">Aged Care</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>
-                  Date of birth <span style={{ color: DANGER }}>*</span>
-                </label>
-                <Input
-                  type="date"
-                  value={dob}
-                  onChange={(e) => setDob(e.target.value)}
-                  aria-invalid={agedCareBlocked}
-                  className={agedCareBlocked ? "border-red-400 focus-visible:ring-red-400" : undefined}
+      <Sheet open={newIntakeOpen} onOpenChange={(next) => { if (!creatingIntake) setNewIntakeOpen(next); }}>
+        <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+          <SheetTitle className="sr-only">New referral</SheetTitle>
+          <SheetDescription className="sr-only">Log a new enquiry to start onboarding.</SheetDescription>
+          <PanelHeader
+            icon={HeartHandshake}
+            title="New referral"
+            description="Log someone who has asked about your services. They start in the Enquiry column and you take it from there."
+          />
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3" style={{ borderColor: BORDER, background: SOFT }}>
+            <p className="text-sm" style={{ color: MUTED }}>Would they rather fill it in themselves?</p>
+            <button
+              type="button"
+              onClick={copyReferralLink}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold underline-offset-4 hover:underline"
+              style={{ color: "var(--cc-brand-purple)" }}
+            >
+              <Link2 size={15} /> Copy referral link
+            </button>
+          </div>
+
+          <form
+            id="new-referral-form"
+            noValidate
+            className="mt-6 flex-1 space-y-7"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setTouched({ fullName: true, dob: true, ndisNumber: true, email: true, phone: true });
+              if (!referralBlocked) void createIntake();
+            }}
+          >
+            <ReferralSection title="What support are they after?">
+              <div role="radiogroup" aria-label="Service category" className="grid gap-2 sm:grid-cols-2">
+                <ChoiceCard
+                  selected={serviceCategory === "disability"}
+                  onSelect={() => setServiceCategory("disability")}
+                  icon={Accessibility}
+                  title="Disability"
+                  description="NDIS participant"
+                />
+                <ChoiceCard
+                  selected={serviceCategory === "aged_care"}
+                  onSelect={() => setServiceCategory("aged_care")}
+                  icon={HeartPulse}
+                  title="Aged Care"
+                  description="Aged 65 and over"
                 />
               </div>
-            </div>
-            {serviceCategory === "aged_care" && (
-              <p className="text-[11px] font-medium" style={{ color: agedCareBlocked ? DANGER : MUTED }}>
-                {agedCareBlocked
-                  ? `Aged Care is only available to participants aged 65 and over${dobAge !== null ? ` — this person is ${dobAge}.` : "."}`
-                  : "Aged Care is only available to participants aged 65 and over — date of birth is required to confirm eligibility."}
-              </p>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>NDIS number</label>
-                <Input value={ndisNumber} onChange={(e) => setNdisNumber(e.target.value)} placeholder="e.g. 430123456" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Funding type</label>
-                <Select value={fundingType} onValueChange={(v) => setFundingType(v as FundingType)}>
-                  <SelectTrigger><SelectValue placeholder="Select funding type" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ndia_managed">NDIA-managed</SelectItem>
-                    <SelectItem value="plan_managed">Plan-managed</SelectItem>
-                    <SelectItem value="self_managed">Self-managed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Email</label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="family@example.com"
-                aria-invalid={email.length > 0 && !isValidEmail(email)}
-                className={email.length > 0 && !isValidEmail(email) ? "border-red-400 focus-visible:ring-red-400" : undefined}
-              />
-              {email.length > 0 && !isValidEmail(email) && (
-                <p className="text-[11px] font-medium" style={{ color: DANGER }}>Enter a valid email address (e.g. name@example.com).</p>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Phone (optional)</label>
-                <Input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="0412 345 678"
-                  aria-invalid={phone.length > 0 && !isValidPhone(phone)}
-                  className={phone.length > 0 && !isValidPhone(phone) ? "border-red-400 focus-visible:ring-red-400" : undefined}
+            </ReferralSection>
+
+            <ReferralSection title="About them">
+              <PanelField label="Full name" htmlFor="referral-name" required hint={touched.fullName && !fullName.trim() ? <FieldError>Enter their name.</FieldError> : undefined}>
+                <input
+                  id="referral-name"
+                  autoFocus
+                  autoComplete="off"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  onBlur={() => touch("fullName")}
+                  placeholder="e.g. Sam Rivera"
+                  aria-invalid={touched.fullName && !fullName.trim()}
+                  className={inputClass}
+                  style={{ borderColor: touched.fullName && !fullName.trim() ? DANGER : BORDER, color: TEXT }}
                 />
-                {phone.length > 0 && !isValidPhone(phone) && (
-                  <p className="text-[11px] font-medium" style={{ color: DANGER }}>Enter a valid phone number.</p>
+              </PanelField>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <PanelField
+                  label="Date of birth"
+                  htmlFor="referral-dob"
+                  required
+                  hint={
+                    dobInFuture ? <FieldError>That date is in the future.</FieldError>
+                    : agedCareBlocked ? <FieldError>Aged Care starts at 65. They are {dobAge}.</FieldError>
+                    : dobAge !== null ? `Age ${dobAge}`
+                    : touched.dob ? <FieldError>Enter their date of birth.</FieldError>
+                    : serviceCategory === "aged_care" ? "Confirms they are 65 or over." : undefined
+                  }
+                >
+                  <input
+                    id="referral-dob"
+                    type="date"
+                    max={new Date().toISOString().slice(0, 10)}
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                    onBlur={() => touch("dob")}
+                    aria-invalid={agedCareBlocked || dobInFuture || (touched.dob && !dob)}
+                    className={inputClass}
+                    style={{ borderColor: agedCareBlocked || dobInFuture || (touched.dob && !dob) ? DANGER : BORDER, color: TEXT }}
+                  />
+                </PanelField>
+                {isNdis && (
+                  <PanelField
+                    label="NDIS number"
+                    htmlFor="referral-ndis"
+                    required
+                    hint={touched.ndisNumber && !ndisNumber.trim() ? <FieldError>Enter their NDIS number.</FieldError> : "On their NDIS plan."}
+                  >
+                    <input
+                      id="referral-ndis"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={ndisNumber}
+                      onChange={(e) => setNdisNumber(e.target.value)}
+                      onBlur={() => touch("ndisNumber")}
+                      placeholder="e.g. 430123456"
+                      aria-invalid={touched.ndisNumber && !ndisNumber.trim()}
+                      className={inputClass}
+                      style={{ borderColor: touched.ndisNumber && !ndisNumber.trim() ? DANGER : BORDER, color: TEXT }}
+                    />
+                  </PanelField>
                 )}
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Enquiry source</label>
-                <Select value={source} onValueChange={(v) => setSource(v as EnquirySource)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="online_form">Web referral</SelectItem>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="phone_call">Phone call</SelectItem>
-                    <SelectItem value="coordinator_referral">Support coordinator referral</SelectItem>
-                  </SelectContent>
-                </Select>
+              {isNdis && (
+                <div className="space-y-1.5">
+                  <p className="flex items-baseline gap-2 text-sm font-medium" style={{ color: TEXT }}>
+                    How is their plan managed?
+                    <span className="text-xs font-normal" style={{ color: MUTED }}>Optional</span>
+                  </p>
+                  <div role="radiogroup" aria-label="Funding type" className="flex flex-wrap gap-2">
+                    {(Object.keys(FUNDING_TYPE_LABEL) as FundingType[]).map((type) => (
+                      <PillChoice key={type} selected={fundingType === type} onSelect={() => setFundingType(fundingType === type ? "" : type)}>
+                        {FUNDING_TYPE_LABEL[type]}
+                      </PillChoice>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </ReferralSection>
+
+            <ReferralSection title="How to reach them">
+              <PanelField
+                label="Email"
+                htmlFor="referral-email"
+                required
+                hint={
+                  touched.email && emailInvalid ? <FieldError>Check the email, e.g. name@example.com.</FieldError>
+                  : touched.email && !email.trim() ? <FieldError>Enter an email so you can send forms to sign.</FieldError>
+                  : "Where intake forms and the service agreement go."
+                }
+              >
+                <input
+                  id="referral-email"
+                  type="email"
+                  autoComplete="off"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => touch("email")}
+                  placeholder="family@example.com"
+                  aria-invalid={touched.email && !isValidEmail(email)}
+                  className={inputClass}
+                  style={{ borderColor: touched.email && !isValidEmail(email) ? DANGER : BORDER, color: TEXT }}
+                />
+              </PanelField>
+              <PanelField label="Phone" htmlFor="referral-phone" optional hint={touched.phone && phoneInvalid ? <FieldError>Check the phone number.</FieldError> : undefined}>
+                <input
+                  id="referral-phone"
+                  type="tel"
+                  autoComplete="off"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  onBlur={() => touch("phone")}
+                  placeholder="0412 345 678"
+                  aria-invalid={touched.phone && phoneInvalid}
+                  className={inputClass}
+                  style={{ borderColor: touched.phone && phoneInvalid ? DANGER : BORDER, color: TEXT }}
+                />
+              </PanelField>
+            </ReferralSection>
+
+            <ReferralSection title="How did they get in touch?">
+              <div role="radiogroup" aria-label="Enquiry source" className="flex flex-wrap gap-2">
+                {(["phone_call", "email", "coordinator_referral", "online_form"] as EnquirySource[]).map((value) => {
+                  const meta = sourceMeta(value);
+                  const Icon = meta.icon;
+                  return (
+                    <PillChoice key={value} selected={source === value} onSelect={() => setSource(value)}>
+                      <Icon size={14} /> {meta.label}
+                    </PillChoice>
+                  );
+                })}
               </div>
-            </div>
-          </div>
-          <SheetFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setNewIntakeOpen(false)}>Cancel</Button>
-            <Button
-              variant="navy"
-              onClick={createIntake}
-              disabled={creatingIntake || !fullName.trim() || !ndisNumber.trim() || !dob.trim() || !isValidEmail(email) || (phone.trim().length > 0 && !isValidPhone(phone)) || agedCareBlocked}
-            >
-              {creatingIntake ? <Loader2 size={14} className="animate-spin" /> : "Log enquiry"}
-            </Button>
-          </SheetFooter>
+            </ReferralSection>
+          </form>
+
+          <PanelFooter>
+            <p className="min-w-0 flex-1 basis-full text-xs leading-5 sm:basis-40" style={{ color: referralBlocked ? MUTED : "var(--cc-green)" }} aria-live="polite">
+              {referralMissing.length ? `Still needed: ${referralMissing.join(", ")}`
+                : agedCareBlocked ? "Aged Care is for people 65 and over."
+                : dobInFuture ? "Check the date of birth."
+                : phoneInvalid ? "Check the phone number."
+                : "Ready to log"}
+            </p>
+            <SecondaryButton onClick={() => setNewIntakeOpen(false)} disabled={creatingIntake}>Cancel</SecondaryButton>
+            <PrimaryButton type="submit" form="new-referral-form" busy={creatingIntake} disabled={referralBlocked}>
+              Log enquiry
+            </PrimaryButton>
+          </PanelFooter>
         </SheetContent>
       </Sheet>
     </>
@@ -1607,7 +2095,6 @@ export default function ParticipantOnboardingBoard() {
 
 type CheckState = "pass" | "fail" | "unknown";
 
-/** One category card in the Screening checklist. */
 function CheckCategory({ icon: Icon, title, children }: { icon: typeof Mail; title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border p-4" style={{ background: SURFACE, borderColor: BORDER }}>
@@ -1620,7 +2107,6 @@ function CheckCategory({ icon: Icon, title, children }: { icon: typeof Mail; tit
   );
 }
 
-/** One automatically-computed screening check — pass/fail/unknown derived from data already on file. */
 function CheckItem({ label, state, detail }: { label: string; state: CheckState; detail: string }) {
   const Icon = state === "pass" ? CheckCircle2 : state === "fail" ? XCircle : AlertTriangle;
   const color = state === "pass" ? SUCCESS : state === "fail" ? DANGER : WARNING;
@@ -1636,7 +2122,6 @@ function CheckItem({ label, state, detail }: { label: string; state: CheckState;
   );
 }
 
-/** One judgment-call screening check the MD answers by hand — no data model exists for these yet. */
 function ManualCheckItem({
   label, detail, value, onChange, trueLabel = "Yes", falseLabel = "No",
 }: {
@@ -1678,13 +2163,6 @@ function ManualCheckItem({
   );
 }
 
-/**
- * The four screening categories a provider checks before deciding whether
- * to proceed: eligibility/demographics, operational capacity, funding, and
- * safety/risk. Items with underlying intake data are computed automatically;
- * the rest (staff rosters, waitlists, on-the-ground risk) need a manual
- * answer since there's no system of record for them elsewhere in the app.
- */
 function ScreeningChecklist({
   intake, currentCaseload, totalCapacity, onUpdateChecks,
 }: {
@@ -1696,30 +2174,23 @@ function ScreeningChecklist({
   const wi = intake.web_intake;
   const checks = intake.screening_checks ?? {};
 
-  // Service area = the states the org actually has an office in (Settings →
-  // Provider/Branches) — no more hardcoded state list.
   const { branches } = useBranches();
   const providerServiceStates = [...new Set(branches.map((b) => b.state))];
 
-  // ── 1. Essential Eligibility & Demographics ──────────────────────────
   const ageOk = intake.service_category !== "aged_care" || isAgedCareEligible(wi?.date_of_birth);
   const locationKnown = !!wi?.state;
   const locationOk = locationKnown ? providerServiceStates.includes(wi!.state!.trim().toUpperCase()) : null;
   const language = wi?.preferred_language?.trim();
   const languageAutoOk = !language || PROVIDER_LANGUAGES.some((l) => l.toLowerCase() === language.toLowerCase());
 
-  // ── 2. Operational Capacity & Availability ───────────────────────────
   const capacityRemaining = totalCapacity - currentCaseload;
   const hasCapacity = capacityRemaining > 0;
 
-  // ── 3. Financial & Funding Viability ─────────────────────────────────
   const fundingType = wi?.funding_type;
   const fundingTypeOk = fundingType === "ndia_managed" ? PROVIDER_ACCEPTS_NDIA_MANAGED : true;
   const planStatus = wi?.plan_status?.trim();
   const fundingAvailable = planStatus ? planStatus.toLowerCase().includes("active") : null;
 
-  // Flat list purely for the overall readiness summary at the top — one
-  // source of truth so the banner can never drift from the cards below.
   const results: CheckState[] = [
     ageOk ? "pass" : "fail",
     locationKnown ? (locationOk ? "pass" : "fail") : "unknown",
@@ -1864,13 +2335,8 @@ function IntakeDetail({
   intake: Intake;
   onBack: () => void;
   onUpdate: (patch: Partial<Intake>) => Promise<Intake>;
-  /** Merges into local state only — for results of a call that already
-   *  persisted server-side through its own endpoint (the document upload),
-   *  so it doesn't also fire a redundant PATCH. */
   onLocalUpdate: (patch: Partial<Intake>) => void;
-  /** Reload the board after something changed server-side. */
   onReload: () => void;
-  /** Active caseload vs. total capacity across current support workers — drives the Screening capacity check. */
   currentCaseload: number;
   totalCapacity: number;
 }) {
@@ -1884,8 +2350,6 @@ function IntakeDetail({
   const [reviewingLine, setReviewingLine] = useState<string | null>(null);
   const openSummaryLines = (intake.meet_greet_summary?.uncovered ?? []).filter((u) => u.status === "open").length;
 
-  // The conversation by topic, only from what was said; the supports asked
-  // for draft the service agreement.
   async function summarise() {
     setSummarising(true);
     try {
@@ -1907,17 +2371,11 @@ function IntakeDetail({
       setReviewingLine(null);
     }
   }
-  // Portal invite sent straight after activation — the participant's own
-  // login only. Representatives need recorded authority, so they're invited
-  // from the Portal access card on the Active step instead.
   const [invitePortal, setInvitePortal] = useState(Boolean(intake.email));
   const [portalIdentityMethod, setPortalIdentityMethod] = useState<PortalIdentityMethod>("participant_dob");
   const [portalGrant, setPortalGrant] = useState<GrantResult | null>(null);
   const [boardSubtitle, setBoardSubtitle] = useState(intake.board_subtitle ?? "");
 
-  // Intake form: read-only by default (showing whatever's saved), only
-  // switches to editable fields once "Edit" is clicked. Cancelling drops
-  // the draft and reverts to what was saved before.
   const [intakeFormEditing, setIntakeFormEditing] = useState(false);
   const [intakeFormDraft, setIntakeFormDraft] = useState<Partial<WebIntakeForm>>(intake.web_intake ?? {});
   const [serviceCategoryDraft, setServiceCategoryDraft] = useState<ServiceCategory>(intake.service_category ?? "disability");
@@ -1949,9 +2407,6 @@ function IntakeDetail({
     toast({ title: "Intake form saved" });
   }
 
-  // Which step's page is currently shown. Auto-advances to the new current
-  // step whenever an action moves the intake forward; clicking a past step
-  // in the horizontal stepper can still look back without losing this sync.
   const [viewedStep, setViewedStep] = useState(() => stepIndexForStatus(intake.status));
   useEffect(() => {
     setViewedStep(stepIndexForStatus(intake.status));
@@ -1959,15 +2414,11 @@ function IntakeDetail({
 
   const { user } = useAuth();
 
-
   function saveEnquiryDraft() {
     onUpdate({ decline_reason: declineReason.trim() || undefined });
     toast({ title: "Draft saved" });
   }
 
-  // Moves the pipeline pointer back one step. Non-destructive — whatever
-  // was entered on the step being left (notes, signatory names, etc.)
-  // stays intact, so moving forward again doesn't lose anything.
   function goBack() {
     const prevStatus: IntakeStatus =
       intake.status === "screening" ? "enquiry"
@@ -1999,14 +2450,11 @@ function IntakeDetail({
     toast({ title: "Enquiry declined" });
   }
 
-  // Terminate — the participant decided not to continue with this provider.
-  // Distinct from Decline (the provider saying no): available from any
-  // in-progress step, not just Enquiry/Screening.
   function terminate() {
     if (!terminateReason.trim()) return;
     onUpdate({ status: "withdrawn", withdrawn_reason: terminateReason.trim() });
     setTerminateOpen(false);
-    toast({ title: "Application terminated", description: `${intake.full_name} chose not to continue with this provider.` });
+    toast({ title: "Referral closed", description: `${intake.full_name} chose not to continue. You'll find them under Closed referrals.` });
   }
 
   function saveMeetGreetDraft() {
@@ -2026,7 +2474,6 @@ function IntakeDetail({
       updated = await onUpdate({ status: "active" });
       toast({ title: "Participant activated", description: `${intake.full_name} now appears on the Coordinator's dashboard.` });
     } catch {
-      // error already toasted by onUpdate
       setActivating(false);
       return;
     }
@@ -2053,42 +2500,60 @@ function IntakeDetail({
 
   return (
     <div className="space-y-5 pb-10">
-      <button onClick={onBack} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-bold -ml-2.5" style={{ color: PLUM }}>
-        <ArrowLeft size={15} /> Back to enquiries
+      <button type="button" onClick={onBack} className={`${kitGhostClass} -ml-3`}>
+        <ArrowLeft size={15} /> Participant onboarding
       </button>
 
-      <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
-        <HorizontalStepper status={intake.status} viewedStep={viewedStep} onSelect={setViewedStep} />
-      </div>
+      <header className="flex flex-wrap items-center gap-4">
+        <Avatar name={intake.full_name} size={52} color={STATUS_META[intake.status].color} />
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
+            {intake.full_name}
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: MUTED }}>
+            <span className="font-medium" style={{ color: STATUS_META[intake.status].color }}>{STATUS_META[intake.status].label}</span>
+            {" · "}Referred {formatDate(intake.created_at)} via {sourceMeta(intake.source).label.toLowerCase()}
+            {inPipeline(intake.status) && (() => {
+              const days = daysSince(intake.created_at);
+              return <span style={{ color: days >= 7 ? DANGER : MUTED }}>{" · "}{days === 0 ? "Started today" : `${days} ${days === 1 ? "day" : "days"} in onboarding`}</span>;
+            })()}
+          </p>
+        </div>
+      </header>
+
+      {intake.status !== "declined" && intake.status !== "withdrawn" && (
+        <div className="rounded-2xl border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
+          <HorizontalStepper status={intake.status} viewedStep={viewedStep} onSelect={setViewedStep} />
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_300px] items-start">
-        {/* Main column — one step's page at a time */}
         <div className="space-y-5 min-w-0">
           {intake.status === "declined" || intake.status === "withdrawn" ? (
-            <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+            <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
               <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                 <XCircle size={16} style={{ color: STATUS_META[intake.status].color }} />
-                <p className="text-sm font-black" style={{ color: TEXT }}>{STATUS_META[intake.status].label}</p>
+                <p className="text-base font-semibold" style={{ color: TEXT }}>
+                  {intake.status === "withdrawn" ? "They chose not to continue" : "Referral declined"}
+                </p>
               </div>
-              <div className="p-5">
-                <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: STATUS_META[intake.status].bg }}>
-                  <XCircle size={16} style={{ color: STATUS_META[intake.status].color }} className="shrink-0" />
-                  <p className="text-xs" style={{ color: TEXT }}>
-                    {intake.status === "withdrawn"
-                      ? intake.withdrawn_reason || "The participant chose not to continue with this provider."
-                      : intake.decline_reason || "Declined."}
-                  </p>
-                </div>
+              <div className="space-y-1 p-5">
+                <p className="text-sm font-medium" style={{ color: MUTED }}>Reason recorded</p>
+                <p className="text-sm" style={{ color: TEXT }}>
+                  {(intake.status === "withdrawn" ? intake.withdrawn_reason : intake.decline_reason) || "No reason was recorded."}
+                </p>
+                <p className="pt-3 text-xs" style={{ color: MUTED }}>
+                  This referral is closed and kept for your records. Start a new referral if they get back in touch.
+                </p>
               </div>
             </div>
           ) : (
             <>
-              {/* Enquiry */}
               {viewedStep === 0 && (
-                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+                <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
                   <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                     <Mail size={16} style={{ color: PLUM }} />
-                    <p className="text-sm font-black" style={{ color: TEXT }}>Enquiry</p>
+                    <p className="text-base font-semibold" style={{ color: TEXT }}>Enquiry</p>
                   </div>
 
                   <div className="p-5 space-y-3">
@@ -2110,23 +2575,23 @@ function IntakeDetail({
                           Logged via {sourceMeta(intake.source).label.toLowerCase()}. Start screening when you're ready to review this enquiry.
                         </p>
                         <div className="pt-2 space-y-1.5">
-                          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Decline reason</label>
+                          <label className="text-sm font-medium" style={{ color: TEXT }}>Not a fit? Say why, then decline</label>
                           <div className="flex gap-2">
                             <Input value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} placeholder="e.g. Outside our service area" />
-                            <Button variant="outline" className="shrink-0 gap-2 rounded-lg" style={{ color: DANGER }} onClick={decline} disabled={!declineReason.trim()}>
+                            <Button variant="outline" className="shrink-0 gap-2 rounded-full" style={{ color: DANGER }} onClick={decline} disabled={!declineReason.trim()}>
                               <XCircle size={14} /> Decline
                             </Button>
                           </div>
                         </div>
                         <div className="flex justify-between gap-2 pt-1">
-                          <Button variant="outline" className="gap-2 rounded-lg" onClick={onBack}>
+                          <Button variant="outline" className="gap-2 rounded-full" onClick={onBack}>
                             <ArrowLeft size={14} /> Back
                           </Button>
                           <div className="flex gap-2">
-                            <Button variant="outline" className="rounded-lg" onClick={saveEnquiryDraft}>
-                              Save Draft
+                            <Button variant="outline" className="rounded-full" onClick={saveEnquiryDraft}>
+                              Save draft
                             </Button>
-                            <Button variant="navy" className="gap-2 rounded-lg" onClick={startScreening}>
+                            <Button variant="navy" className="gap-2 rounded-full" onClick={startScreening}>
                               Next <ClipboardCheck size={14} />
                             </Button>
                           </div>
@@ -2144,12 +2609,11 @@ function IntakeDetail({
                 </div>
               )}
 
-              {/* Screening */}
               {viewedStep === 1 && (
-                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+                <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
                   <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                     <ClipboardCheck size={16} style={{ color: PLUM }} />
-                    <p className="text-sm font-black" style={{ color: TEXT }}>Screening</p>
+                    <p className="text-base font-semibold" style={{ color: TEXT }}>Screening</p>
                   </div>
                   <div className="p-5 space-y-3">
                     {intake.status === "screening" ? (
@@ -2164,23 +2628,23 @@ function IntakeDetail({
                         />
 
                         <div className="pt-2 space-y-1.5">
-                          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Decline reason</label>
+                          <label className="text-sm font-medium" style={{ color: TEXT }}>Not a fit? Say why, then decline</label>
                           <div className="flex gap-2">
                             <Input value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} placeholder="e.g. Outside our service area" />
-                            <Button variant="outline" className="shrink-0 gap-2 rounded-lg" style={{ color: DANGER }} onClick={decline} disabled={!declineReason.trim()}>
+                            <Button variant="outline" className="shrink-0 gap-2 rounded-full" style={{ color: DANGER }} onClick={decline} disabled={!declineReason.trim()}>
                               <XCircle size={14} /> Decline
                             </Button>
                           </div>
                         </div>
                         <div className="flex justify-between gap-2 pt-1">
-                          <Button variant="outline" className="gap-2 rounded-lg" onClick={goBack}>
+                          <Button variant="outline" className="gap-2 rounded-full" onClick={goBack}>
                             <ArrowLeft size={14} /> Back
                           </Button>
                           <div className="flex gap-2">
-                            <Button variant="outline" className="rounded-lg" onClick={saveScreeningDraft}>
-                              Save Draft
+                            <Button variant="outline" className="rounded-full" onClick={saveScreeningDraft}>
+                              Save draft
                             </Button>
-                            <Button variant="navy" className="gap-2 rounded-lg" onClick={accept}>
+                            <Button variant="navy" className="gap-2 rounded-full" onClick={accept}>
                               Next <CheckCircle2 size={14} />
                             </Button>
                           </div>
@@ -2196,12 +2660,11 @@ function IntakeDetail({
                 </div>
               )}
 
-              {/* Meet & Greet */}
               {viewedStep === 2 && (
-                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER}}>
+                <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER}}>
                   <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                     <Mic size={16} style={{ color: PLUM }} />
-                    <p className="text-sm font-black" style={{ color: TEXT }}>Meet &amp; Greet</p>
+                    <p className="text-base font-semibold" style={{ color: TEXT }}>Meet &amp; Greet</p>
                   </div>
                   <div className="p-5 space-y-3">
                     <MeetGreetCapture
@@ -2223,16 +2686,16 @@ function IntakeDetail({
                     />
                     {intake.status === "meet_greet" && (
                       <div className="flex justify-between gap-2">
-                        <Button variant="outline" className="gap-2 rounded-lg" onClick={goBack}>
+                        <Button variant="outline" className="gap-2 rounded-full" onClick={goBack}>
                           <ArrowLeft size={14} /> Back
                         </Button>
                         <div className="flex gap-2">
-                          <Button variant="outline" className="rounded-lg" onClick={saveMeetGreetDraft}>
-                            Save Draft
+                          <Button variant="outline" className="rounded-full" onClick={saveMeetGreetDraft}>
+                            Save draft
                           </Button>
                           <Button
                             variant="navy"
-                            className="gap-2 rounded-lg"
+                            className="gap-2 rounded-full"
                             onClick={saveMeetGreetAndContinue}
                             disabled={openSummaryLines > 0}
                             title={openSummaryLines > 0 ? "Include or dismiss everything said that isn't in the summary first" : undefined}
@@ -2246,18 +2709,13 @@ function IntakeDetail({
                 </div>
               )}
 
-              {/* Service Agreement / Signatures */}
               {viewedStep === 3 && (
-                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+                <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
                   <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                     <FileSignature size={16} style={{ color: PLUM }} />
-                    <p className="text-sm font-black" style={{ color: TEXT }}>Service Agreement</p>
+                    <p className="text-base font-semibold" style={{ color: TEXT }}>Service Agreement</p>
                   </div>
                   <div className="p-5 space-y-3">
-                    {/* The participant's real service agreement, with the
-                        supports they'll receive. It has to be signed (in
-                        person or by email) before they can be made active;
-                        signing moves this step on by itself. */}
                     {(intake.meet_greet_summary?.supports.length ?? 0) > 0 && (
                       <p className="text-xs" style={{ color: MUTED }}>
                         The {intake.meet_greet_summary!.supports.length} support
@@ -2274,7 +2732,7 @@ function IntakeDetail({
                     />
                     {intake.status === "awaiting_signatures" && (
                       <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3" style={{ borderColor: BORDER }}>
-                        <Button variant="outline" className="gap-2 rounded-lg" onClick={goBack}>
+                        <Button variant="outline" className="gap-2 rounded-full" onClick={goBack}>
                           <ArrowLeft size={14} /> Back
                         </Button>
                         <p className="text-xs" style={{ color: MUTED }}>
@@ -2313,7 +2771,7 @@ function IntakeDetail({
                     )}
 
                     {intake.status === "signed" && (
-                      <Button variant="navy" className="w-full gap-2 rounded-lg" onClick={activate} disabled={activating}>
+                      <Button variant="navy" className="w-full gap-2 rounded-full" onClick={activate} disabled={activating}>
                         {activating ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />} Activate participant
                       </Button>
                     )}
@@ -2321,12 +2779,11 @@ function IntakeDetail({
                 </div>
               )}
 
-              {/* Active */}
               {viewedStep === 4 && (
-                <div className="rounded-lg border" style={{ background: SURFACE, borderColor: BORDER }}>
+                <div className="rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
                   <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: BORDER }}>
                     <ShieldCheck size={16} style={{ color: PLUM }} />
-                    <p className="text-sm font-black" style={{ color: TEXT }}>Profile</p>
+                    <p className="text-base font-semibold" style={{ color: TEXT }}>Profile</p>
                   </div>
                   <div className="p-5 space-y-4">
                     <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
@@ -2339,10 +2796,6 @@ function IntakeDetail({
                     {portalGrant && <GrantResultNotice result={portalGrant} onClose={() => setPortalGrant(null)} />}
                     {intake.participant_id && <PortalAccessCard key={portalGrant?.access.id ?? "portal"} participantId={intake.participant_id} />}
 
-                    {/* Full intake profile — everything captured across the pipeline
-                        (patient details, address, NDIS, plan manager, next of kin,
-                        referral) so the MD doesn't have to click back to Enquiry
-                        to see what was entered. */}
                     <IntakeFormBlock
                       intake={intake}
                       draft={intakeFormDraft}
@@ -2372,33 +2825,33 @@ function IntakeDetail({
                 </div>
               )}
 
-              {/* Terminate application — available from any in-progress step, not just
-                  Enquiry/Screening. Distinct from Decline: this is the participant's own
-                  choice not to continue, not the provider turning them away. */}
               {intake.status !== "active" && intake.status !== "inactive" && (
-                <div className="rounded-lg border p-4" style={{ background: SOFT, borderColor: BORDER }}>
+                <div className="rounded-2xl border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
                   {!terminateOpen ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setTerminateOpen(true)}
-                      className="gap-1.5 rounded-lg hover:bg-transparent hover:opacity-80"
-                      style={{ color: "#DC2626" }}
-                    >
-                      <XCircle size={13} /> Terminate application
-                    </Button>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: TEXT }}>Not going ahead?</p>
+                        <p className="text-xs" style={{ color: MUTED }}>
+                          If {intake.full_name.split(" ")[0]} has decided not to continue, close the referral. It stays in your records.
+                        </p>
+                      </div>
+                      <Button type="button" variant="outline" onClick={() => setTerminateOpen(true)} className="gap-1.5 rounded-full" style={{ color: DANGER }}>
+                        <XCircle size={14} /> Close referral
+                      </Button>
+                    </div>
                   ) : (
-                    <div className="space-y-2">
-                      <p className="text-[11px]" style={{ color: MUTED }}>
-                        Use this if the participant has decided not to continue with this provider. Ends the pipeline immediately from any stage.
-                      </p>
-                      <Input value={terminateReason} onChange={(e) => setTerminateReason(e.target.value)} placeholder="e.g. Chose a different provider" />
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="rounded-lg" onClick={() => { setTerminateOpen(false); setTerminateReason(""); }}>
-                          Cancel
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium" style={{ color: TEXT }} htmlFor="close-referral-reason">
+                        Why isn't {intake.full_name.split(" ")[0]} continuing?
+                      </label>
+                      <Input id="close-referral-reason" autoFocus value={terminateReason} onChange={(e) => setTerminateReason(e.target.value)} placeholder="e.g. Chose a different provider" />
+                      <p className="text-xs" style={{ color: MUTED }}>This ends onboarding from any stage and moves the referral to Closed.</p>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button variant="outline" className="rounded-full" onClick={() => { setTerminateOpen(false); setTerminateReason(""); }}>
+                          Keep going
                         </Button>
-                        <Button variant="outline" size="sm" className="rounded-lg" style={{ color: DANGER }} onClick={terminate} disabled={!terminateReason.trim()}>
-                          <XCircle size={13} className="mr-1.5" /> Confirm termination
+                        <Button className="gap-1.5 rounded-full text-white" style={{ background: DANGER }} onClick={terminate} disabled={!terminateReason.trim()}>
+                          <XCircle size={14} /> Close referral
                         </Button>
                       </div>
                     </div>
@@ -2409,26 +2862,28 @@ function IntakeDetail({
           )}
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-5">
-          <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
-            <Avatar name={intake.full_name} size={44} />
-            <h2 className="text-base font-black mt-3" style={{ color: TEXT }}>{intake.full_name}</h2>
-            <div className="mt-1"><StatusBadge status={intake.status} /></div>
-            <div className="mt-4 pt-4 border-t space-y-2" style={{ borderColor: BORDER }}>
-              <p className="text-xs" style={{ color: MUTED }}>NDIS {intake.ndis_number || "—"}</p>
-              {intake.email && <p className="text-xs" style={{ color: MUTED }}>{intake.email}</p>}
-              {intake.phone && <p className="text-xs" style={{ color: MUTED }}>{intake.phone}</p>}
-              <p className="text-xs flex items-center gap-1.5" style={{ color: MUTED }}>
-                {(() => { const Icon = sourceMeta(intake.source).icon; return <Icon size={12} />; })()}
-                {sourceMeta(intake.source).label}
-              </p>
-            </div>
+          <div className="rounded-2xl border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
+            <h2 className="text-sm font-semibold" style={{ color: TEXT }}>Details</h2>
+            <dl className="mt-3 space-y-2.5 text-sm">
+              {([
+                ["NDIS number", intake.ndis_number || "Not recorded"],
+                ["Category", intake.service_category === "aged_care" ? "Aged Care" : "Disability"],
+                ["Email", intake.email ? <a href={`mailto:${intake.email}`} className="break-all underline-offset-4 hover:underline" style={{ color: TEXT }}>{intake.email}</a> : "Not recorded"],
+                ["Phone", intake.phone ? <a href={`tel:${intake.phone.replace(/\s+/g, "")}`} className="underline-offset-4 hover:underline" style={{ color: TEXT }}>{intake.phone}</a> : "Not recorded"],
+                ["Came in by", sourceMeta(intake.source).label],
+              ] as [string, React.ReactNode][]).map(([term, value]) => (
+                <div key={term} className="flex justify-between gap-3">
+                  <dt style={{ color: MUTED }}>{term}</dt>
+                  <dd className="min-w-0 text-right font-medium" style={{ color: TEXT }}>{value}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
 
           {intake.status !== "enquiry" && intake.status !== "declined" && intake.status !== "withdrawn" && intake.status !== "active" && (
-            <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
-              <label className="text-[10px] font-black uppercase tracking-wide mb-2 block" style={{ color: MUTED }}>Board card note</label>
+            <div className="rounded-2xl border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
+              <label className="mb-2 block text-sm font-semibold" style={{ color: TEXT }}>Note on the board card</label>
               <Input
                 value={boardSubtitle}
                 onChange={(e) => setBoardSubtitle(e.target.value)}
@@ -2436,10 +2891,9 @@ function IntakeDetail({
                 placeholder={subtitleForIntake(intake)}
                 className="text-sm"
               />
-              <p className="text-[10px] mt-1.5" style={{ color: MUTED }}>Shown as the second line on the board card.</p>
+              <p className="mt-1.5 text-xs" style={{ color: MUTED }}>Shown under their name on the board, e.g. "Waiting on plan details".</p>
             </div>
           )}
-
         </div>
       </div>
     </div>
@@ -2457,7 +2911,6 @@ function IntakeFormSection({
   icon: typeof Mail;
   title: string;
   children: React.ReactNode;
-  /** Per-section Edit trigger (profile views) — omit to render a plain, non-editable section header. */
   onEdit?: () => void;
   editing?: boolean;
 }) {
@@ -2479,11 +2932,6 @@ function IntakeFormSection({
   );
 }
 
-
-/**
- * Dual-mode field: read-only text when `editing` is false (hides itself if
- * empty, same as the old display-only view), an input when true.
- */
 function Field({
   label, value, onChange, editing, placeholder, type, icon: Icon,
 }: {
@@ -2497,7 +2945,6 @@ function Field({
 }) {
   if (!editing) {
     if (!value) return null;
-    // Date inputs store ISO ("1979-09-02"); read-only view shows "2 Sep 1979".
     const display =
       type === "date" && /^\d{4}-\d{2}-\d{2}$/.test(value)
         ? (formatDate(`${value}T00:00:00`) ?? value)
@@ -2520,12 +2967,6 @@ function Field({
   );
 }
 
-/**
- * Participant intake form — read-only by default (whatever's saved on
- * intake.web_intake), switches to editable fields only once "Edit" is
- * clicked. Same field set whether it arrived via the web referral form or
- * the provider fills it in themselves.
- */
 function IntakeFormBlock({
   intake, draft, onChange, editing, onEdit, onCancel, onSave, serviceCategory, onServiceCategoryChange,
   showSubmissionStatus = true,
@@ -2536,22 +2977,15 @@ function IntakeFormBlock({
   editing: boolean;
   onEdit: () => void;
   onCancel: () => void;
-  /** Passes back the current contact fields, since they're not part of `draft`
-   *  (they're top-level Intake fields, editable here so contact details can be
-   *  kept current after intake, not just captured once). */
   onSave: (contact: { email: string; phone: string }) => void;
   serviceCategory: ServiceCategory;
   onServiceCategoryChange: (v: ServiceCategory) => void;
-  /** Hide the "Digital intake form submitted ..." banner + "Submitted by" pill — used on the plain participant profile, where it should read as a person's record, not a pipeline/workflow status. Edit controls still show. */
   showSubmissionStatus?: boolean;
 }) {
   const kin = draft.next_of_kin ?? [];
   const hasAnyData = Object.keys(intake.web_intake ?? {}).length > 0;
   const agedCareBlocked = serviceCategory === "aged_care" && !isAgedCareEligible(draft.date_of_birth);
 
-  // Contact details live on the Intake record itself (not `web_intake`), but
-  // are edited right alongside the rest of this form so they can be kept
-  // current when someone's email or phone changes.
   const [emailDraft, setEmailDraft] = useState(intake.email);
   const [phoneDraft, setPhoneDraft] = useState(intake.phone);
   useEffect(() => {
@@ -2579,10 +3013,6 @@ function IntakeFormBlock({
     onChange({ next_of_kin: kin.filter((_, i) => i !== index) });
   }
 
-  // Profile views (showSubmissionStatus=false) put an Edit trigger in every
-  // section header instead of one shared bar at the top, so it reads as a
-  // person's record, not a form with a workflow-status banner. The pipeline
-  // Enquiry step keeps the original single banner+button.
   const sectionEditProps = showSubmissionStatus ? {} : { onEdit, editing };
 
   return (
@@ -2890,7 +3320,6 @@ const FUNDING_TO_PLAN_MANAGEMENT: Record<string, string> = {
   self_managed: "self-managed",
 };
 
-/** Prefills the onboarding agreement from what the intake already holds. */
 function agreementDefaults(intake: Intake): BuilderDefaults {
   const web: Partial<WebIntakeForm> = intake.web_intake ?? {};
   return {
@@ -2910,11 +3339,8 @@ function agreementDefaults(intake: Intake): BuilderDefaults {
   };
 }
 
-/** Hours over the agreement from hours a week, when both dates are known;
- *  otherwise left for the managing director. */
 function totalHours(perWeek: number | null, start?: string, end?: string): number | null {
   if (perWeek == null || !start || !end) return null;
   const weeks = (new Date(`${end.slice(0, 10)}T00:00:00`).getTime() - new Date(`${start.slice(0, 10)}T00:00:00`).getTime()) / (7 * 86_400_000);
   return weeks > 0 ? Math.round(perWeek * weeks) : null;
 }
-

@@ -1,3 +1,4 @@
+import { ManagementNavigationDrawer } from "./ManagementNavigationDrawer";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
 import { PageErrorBoundary } from "@/components/ErrorBoundary";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -23,6 +24,7 @@ import {
   Mail,
   DollarSign,
   BarChart3,
+  Files,
   ClipboardCheck,
   GraduationCap,
   MessageSquareWarning,
@@ -45,20 +47,14 @@ import {
   getOrganizationBranding,
   type OrganizationBranding,
 } from "@/services/organizationBrandingService";
-import { SEED_COMPLAINTS } from "@/pages/onboard-participant";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { PARTICIPANT_COMPLAINTS_KEY } from "@/lib/query-keys";
+import { listParticipantComplaints } from "@/services/participantComplaintsService";
 
 // MD pages use the same CareCliQ tokens (--cc-plum pink / --cc-coral purple)
 // as the rest of the app, defined once at :root and swapped automatically by
 // the .dark class — no separate MD-only palette.
 
-// Nav badge counts, keyed by href. Still just the static seed (no backend
-// yet), so this won't move as complaints get addressed within a session —
-// same local-state limitation as the rest of the onboarding build.
-const NAV_BADGE_COUNTS: Record<string, number> = {
-  "/onboard-participant/complaints": SEED_COMPLAINTS.filter(
-    (c) => c.status === "open",
-  ).length,
-};
 
 /** Small count pill shown after a nav item's label, when it has an open count. */
 function NavCountBadge({ count }: { count: number }) {
@@ -90,7 +86,7 @@ const MD_NAV_GROUPS = [
     items: [
       { href: "/hub", label: "Executive Hub", icon: LayoutDashboard },
       { href: "/md/executive", label: "Performance review", icon: BarChart3 },
-      { href: "/reports", label: "Report library", icon: BarChart3 },
+      { href: "/reports", label: "Report library", icon: Files },
     ],
   },
   {
@@ -131,7 +127,6 @@ const MD_NAV_GROUPS = [
         label: "Audit & Compliance",
         icon: ShieldCheck,
       },
-      { href: "/md/audit-readiness", label: "Audit readiness", icon: ClipboardCheck },
       { href: "/md/vault", label: "Documents & Audit Vault", icon: FolderLock },
       { href: "/incidents", label: "Incident reporting", icon: AlertTriangle },
       {
@@ -191,6 +186,18 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   const isMD = user?.role === "managing_director";
+
+  // Nav badge counts, keyed by href: open participant complaints, from the
+  // same cached query as the complaints page, so addressing one updates it.
+  const complaintsQuery = useOrgQuery(PARTICIPANT_COMPLAINTS_KEY, {
+    queryFn: listParticipantComplaints,
+    enabled: isMD || user?.role === "support_coordinator",
+    retry: false,
+    staleTime: 60_000,
+  });
+  const NAV_BADGE_COUNTS: Record<string, number> = {
+    "/onboard-participant/complaints": (complaintsQuery.data ?? []).filter((c) => c.status === "open").length,
+  };
   const sidebarMode = isMD && prefs?.nav_layout === "sidebar";
   const bottombarMode = isMD && prefs?.nav_layout === "bottombar";
   // User-adjustable nav background (Settings > Layout) — an exact hex code,
@@ -224,7 +231,6 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   const [orgName, setOrgName] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [activeGroupHover, setActiveGroupHover] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // Remembers the last width the sidebar was dragged to, so collapsing (by
@@ -361,8 +367,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
     }
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        navRef.current?.querySelector<HTMLButtonElement>('button[aria-expanded="true"]')?.focus();
         setProfileOpen(false);
-        setMobileNavOpen(false);
         setActiveGroupHover(null);
       }
     }
@@ -412,15 +418,16 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
         color: "var(--cc-text)",
       }}
     >
+      <a href="#management-main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-cc-surface focus:p-3">Skip to page content</a>
       {/* Header / Governance Bar */}
       <header className="sticky top-0 z-40 border-b border-[var(--cc-border)] bg-[var(--cc-surface)]">
         {/* Purple accent line - carries the CareCliQ Purple identity from the
             login/signup pages (their background wash) into the MD portal, so
             arriving here after signing in doesn't feel like a different app. */}
         <div className="h-[3px] w-full" style={{ background: "#7C3AED" }} />
-        <div className="mx-auto flex h-[72px] max-w-[1600px] items-center justify-between px-4 sm:px-6">
+        <div className={`mx-auto flex h-[72px] items-center justify-between px-3 sm:px-4 ${isMD ? "w-full" : "max-w-[1600px]"}`}>
           {/* Brand & Organization Badge */}
-          <div className="flex items-center gap-4">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="flex items-center gap-3">
               {!brandingLoaded ? (
                 // Reserve the exact footprint so nothing shifts once the
@@ -435,15 +442,15 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                   src={branding.logo_url}
                   alt={organisationDisplay}
                   onError={() => setErroredLogoUrl(branding.logo_url ?? null)}
-                  className="h-9 max-w-[120px] object-contain"
+                  className="h-9 max-w-[80px] object-contain sm:max-w-[120px]"
                 />
               ) : (
                 <CareCliQLogo size={36} />
               )}
               <span className="hidden h-5 w-px bg-[var(--cc-border)] sm:block" />
-              <div className="hidden sm:block">
+              <div className="hidden min-w-0 lg:block">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-black tracking-tight">
+                  <span className="max-w-[240px] truncate text-sm font-semibold tracking-tight" title={organisationDisplay}>
                     {organisationDisplay}
                   </span>
                   {isMD && (
@@ -463,10 +470,10 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {isMD && <div className="max-w-md md:flex-1 md:px-6"><ManagementPageSearch groups={MD_NAV_GROUPS} /></div>}
+          {isMD && <div className="mx-2 min-w-0 max-w-md shrink-0 md:flex-1 md:px-2"><ManagementPageSearch groups={MD_NAV_GROUPS} /></div>}
 
           {/* Executive Control Group */}
-          <div className="flex items-center gap-2" ref={profileRef}>
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2" ref={profileRef}>
             <NotificationBell onClick={() => setNotificationsOpen(true)} />
               <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}><SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg [&>button]:hidden"><SheetHeader className="sr-only"><SheetTitle>Notifications</SheetTitle><SheetDescription>Organisation alerts and updates</SheetDescription></SheetHeader>{notificationsOpen && <NotificationPanel embedded onClose={() => setNotificationsOpen(false)} />}</SheetContent></Sheet>
 
@@ -476,7 +483,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             {isMD && (
               <Link
                 href="/md/calendar"
-                className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)] transition-colors"
+                className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)] transition-colors"
                 aria-label="Calendar"
               >
                 <CalendarDays size={17} />
@@ -485,7 +492,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
             {/* Day / Night pill — both options always visible, active one highlighted. */}
             <div
-              className="hidden sm:inline-flex items-center gap-0.5 rounded-full border p-0.5"
+              className="hidden xl:inline-flex items-center gap-0.5 rounded-full border p-0.5"
               style={{ borderColor: "var(--cc-border)", background: "var(--cc-surface)" }}
               role="group"
               aria-label="Theme"
@@ -516,7 +523,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
             <Link
               href="/settings"
-              className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)] transition-colors"
+              className="hidden xl:flex h-11 w-11 items-center justify-center rounded-full text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)] transition-colors"
               aria-label="Settings"
             >
               <Settings size={17} />
@@ -528,7 +535,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => setProfileOpen((prev) => !prev)}
-              className="flex items-center gap-2 rounded-full p-1 border border-transparent hover:border-[var(--cc-border)] hover:bg-[var(--cc-soft)]/60 transition-all"
+              aria-label="Account menu"
+              aria-expanded={profileOpen}
+              className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full p-1 border border-transparent hover:border-[var(--cc-border)] hover:bg-[var(--cc-soft)]/60 transition-all"
             >
               <div
                 className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold text-white shadow-sm"
@@ -544,7 +553,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                   initials
                 )}
               </div>
-              <span className="hidden md:block text-xs font-semibold pr-1">
+              <span className="hidden max-w-32 truncate text-xs font-semibold pr-1 xl:block">
                 {displayName}
               </span>
               <ChevronDown size={14} className="text-[var(--cc-muted)]" />
@@ -584,16 +593,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               </div>
             )}
 
-            {/* Mobile Nav Button */}
-            {isMD && !bottombarMode && (
-              <button
-                type="button"
-                onClick={() => setMobileNavOpen((prev) => !prev)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg lg:hidden text-[var(--cc-muted)]"
-              >
-                {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
-              </button>
-            )}
+            {isMD && <ManagementNavigationDrawer groups={MD_NAV_GROUPS} location={location} isActive={href => isRouteActive(location, href)} />}
+
           </div>
         </div>
       </header>
@@ -601,7 +602,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       {/* Command Deck Executive Navigation (Floating Dock) */}
       {isMD && !sidebarMode && !bottombarMode && (
         <div
-          className={`sticky top-[75px] z-30 hidden lg:block py-3 px-6 pointer-events-none transition-transform duration-300 ease-out ${
+          className={`sticky top-[75px] z-30 hidden xl:block py-2 px-3 pointer-events-none transition-transform duration-300 ease-out ${
             navAutoHidden ? "-translate-y-[calc(100%+2rem)]" : "translate-y-0"
           }`}
         >
@@ -611,8 +612,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             style={{
               borderColor: "rgba(124,58,237,0.15)",
               background: navBackground,
-              boxShadow:
-                "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)",
+              boxShadow: "var(--cc-shadow-sm)",
             }}
           >
             <nav className="flex items-center gap-1.5 relative">
@@ -625,10 +625,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                   <div
                     key={group.label}
                     className="relative"
-                    onMouseEnter={() => setActiveGroupHover(group.label)}
                   >
                     <button
                       type="button"
+                      aria-expanded={activeGroupHover === group.label}
+                      aria-controls={"management-group-" + group.label.replaceAll(" ", "-")}
                       onClick={() =>
                         setActiveGroupHover(
                           activeGroupHover === group.label ? null : group.label,
@@ -640,7 +641,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         ["--nav-hover-bg" as string]: navHoverBg,
                         ["--nav-text-hover" as string]: navTextHover,
                       }}
-                      className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
+                      className={`flex min-h-11 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
                         hasActiveRoute
                           ? "shadow-md"
                           : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"
@@ -658,8 +659,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                     {/* Dropdown Flyout Panel */}
                     {activeGroupHover === group.label && (
                       <div
-                        className="absolute left-0 top-full mt-2 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
-                        onMouseLeave={() => setActiveGroupHover(null)}
+                        id={"management-group-" + group.label.replaceAll(" ", "-")}
+                        className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                       >
                         <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--cc-muted)]">
                           {group.label}
@@ -673,7 +674,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                                 key={item.href}
                                 href={item.href}
                                 onClick={() => setActiveGroupHover(null)}
-                                className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
+                                className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                                   active
                                     ? "bg-[var(--cc-plum-soft)] text-[var(--cc-plum)]"
                                     : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
@@ -698,49 +699,10 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* Mobile Drawer (MD Navigation) */}
-      {isMD && !bottombarMode && mobileNavOpen && (
-        <div className="fixed inset-0 top-[75px] z-50 bg-[var(--cc-surface)] p-6 overflow-y-auto lg:hidden animate-in fade-in duration-200">
-          <div className="space-y-6">
-            {MD_NAV_GROUPS.map((group) => (
-              <div key={group.label} className="space-y-2">
-                <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--cc-muted)]">
-                  {group.label}
-                </h3>
-                <div className="grid grid-cols-1 gap-1">
-                  {group.items.map((item) => {
-                    const active = isRouteActive(location, item.href);
-                    const Icon = item.icon;
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMobileNavOpen(false)}
-                        className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-xs font-semibold ${
-                          active
-                            ? "bg-[var(--cc-plum)] text-white"
-                            : "bg-[var(--cc-soft)] text-[var(--cc-text)]"
-                        }`}
-                      >
-                        <Icon size={18} />
-                        <span>{item.label}</span>
-                        <NavCountBadge
-                          count={NAV_BADGE_COUNTS[item.href] ?? 0}
-                        />
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Bottom Bar Executive Navigation (Floating Dock — mirrors the top Command Deck) */}
       {isMD && bottombarMode && (
         <div
-          className={`fixed inset-x-0 bottom-0 z-30 py-4 px-6 pointer-events-none transition-transform duration-300 ease-out ${
+          className={`fixed inset-x-0 bottom-0 z-30 hidden xl:block py-4 px-6 pointer-events-none transition-transform duration-300 ease-out ${
             navAutoHidden ? "translate-y-[calc(100%+2rem)]" : "translate-y-0"
           }`}
         >
@@ -750,8 +712,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             style={{
               borderColor: "rgba(124,58,237,0.15)",
               background: navBackground,
-              boxShadow:
-                "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)",
+              boxShadow: "var(--cc-shadow-sm)",
             }}
           >
             <nav className="flex items-center gap-1.5 relative">
@@ -764,10 +725,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                   <div
                     key={group.label}
                     className="relative"
-                    onMouseEnter={() => setActiveGroupHover(group.label)}
                   >
                     <button
                       type="button"
+                      aria-expanded={activeGroupHover === group.label}
+                      aria-controls={"management-group-" + group.label.replaceAll(" ", "-")}
                       onClick={() =>
                         setActiveGroupHover(
                           activeGroupHover === group.label ? null : group.label,
@@ -779,7 +741,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         ["--nav-hover-bg" as string]: navHoverBg,
                         ["--nav-text-hover" as string]: navTextHover,
                       }}
-                      className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
+                      className={`flex min-h-11 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
                         hasActiveRoute
                           ? "shadow-md"
                           : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"
@@ -797,8 +759,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                     {/* Upward Dropdown Flyout Panel */}
                     {activeGroupHover === group.label && (
                       <div
-                        className="absolute left-0 bottom-full mb-2 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-150"
-                        onMouseLeave={() => setActiveGroupHover(null)}
+                        id={"management-group-" + group.label.replaceAll(" ", "-")}
+                        className="absolute right-0 bottom-full mb-2 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-150"
                       >
                         <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--cc-muted)]">
                           {group.label}
@@ -812,7 +774,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                                 key={item.href}
                                 href={item.href}
                                 onClick={() => setActiveGroupHover(null)}
-                                className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
+                                className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                                   active
                                     ? "bg-[var(--cc-plum-soft)] text-[var(--cc-plum)]"
                                     : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
@@ -840,18 +802,17 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       {/* Main Canvas Area */}
       {isMD && sidebarMode ? (
         <div
-          className={`mx-auto flex items-start gap-0 py-4 ${location === "/billing" ? "w-full px-3 sm:px-4" : "max-w-[1600px] px-4 sm:px-6"}`}
+          className={`mx-auto flex items-start gap-0 py-2 ${isMD || location === "/billing" ? "w-full px-3 sm:px-4" : "max-w-[1600px] px-4 sm:px-6"}`}
         >
           <aside
-            className={`sticky top-[75px] hidden shrink-0 self-start rounded-2xl border lg:block ${
+            className={`sticky top-[75px] hidden shrink-0 self-start rounded-2xl border xl:block ${
               sidebarDragging ? "" : "transition-[width] duration-200"
             }`}
             style={{
               width: sidebarCollapsed ? 72 : sidebarWidth,
               background: navBackground,
               borderColor: "rgba(124,58,237,0.15)",
-              boxShadow:
-                "0 20px 60px rgba(26,26,46,0.12), 0 8px 24px rgba(26,26,46,0.06)",
+              boxShadow: "var(--cc-shadow-sm)",
             }}
           >
             {/* Drag handle — grab and pull to resize, or drag past the snap
@@ -861,7 +822,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               role="separator"
               aria-orientation="vertical"
               aria-label="Resize sidebar"
-              className="group absolute inset-y-0 -right-2 z-10 hidden w-4 cursor-col-resize items-center justify-center lg:flex"
+              className="group absolute inset-y-0 -right-2 z-10 hidden w-4 cursor-col-resize items-center justify-center xl:flex"
               style={{ touchAction: "none" }}
             >
               <div
@@ -878,8 +839,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             <div
               className={
                 sidebarCollapsed
-                  ? "flex flex-col items-center px-2 py-4"
-                  : "flex flex-col p-4"
+                  ? "flex max-h-[calc(100dvh-6rem)] flex-col items-center overflow-y-auto px-2 py-4"
+                  : "flex max-h-[calc(100dvh-6rem)] flex-col overflow-y-auto p-4"
               }
             >
               <button
@@ -904,7 +865,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                 )}
               </button>
 
-              <nav className={sidebarCollapsed ? "space-y-3" : "space-y-5"}>
+              <nav aria-label="Managing Director workspaces" className={sidebarCollapsed ? "space-y-3" : "space-y-5"}>
                 {MD_NAV_GROUPS.map((group) => {
                   const isGroupCollapsed = !!collapsedGroups[group.label];
 
@@ -914,7 +875,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         <button
                           type="button"
                           onClick={() => toggleGroup(group.label)}
-                          className="flex w-full items-center justify-between px-2.5 text-[11px] font-black uppercase tracking-wider transition-colors hover:opacity-80"
+                          aria-expanded={!isGroupCollapsed}
+                          className="flex min-h-9 w-full items-center justify-between gap-2 px-2.5 text-[11px] font-semibold uppercase tracking-wider transition-colors hover:opacity-80"
                           style={{ color: navText }}
                         >
                           <span>{group.label}</span>
@@ -925,7 +887,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         </button>
                       )}
 
-                      {!isGroupCollapsed && (
+                      {(sidebarCollapsed || !isGroupCollapsed) && (
                         <div
                           className={
                             sidebarCollapsed ? "space-y-2" : "space-y-1"
@@ -942,6 +904,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                                 title={
                                   sidebarCollapsed ? item.label : undefined
                                 }
+                                aria-label={sidebarCollapsed ? item.label : undefined}
+                                aria-current={active ? "page" : undefined}
                                 style={{
                                   background: active ? navActiveBg : undefined,
                                   color: active ? "#FFFFFF" : navText,
@@ -979,15 +943,15 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             </div>
           </aside>
 
-          <main
-            className={`min-w-0 flex-1 px-0 py-2 ${location === "/billing" ? "lg:px-3" : "lg:px-6"}`}
+          <main id="management-main" tabIndex={-1}
+            className={`min-w-0 flex-1 px-0 py-2 ${isMD || location === "/billing" ? "xl:pl-3" : "lg:px-6"}`}
           >
             <PageErrorBoundary>{children}</PageErrorBoundary>
           </main>
         </div>
       ) : (
-        <main
-          className={`mx-auto ${location === "/billing" ? "w-full px-3 py-4 sm:px-4" : "max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8"} ${bottombarMode ? "pb-32" : ""}`}
+        <main id="management-main" tabIndex={-1}
+          className={`mx-auto ${isMD ? "w-full px-3 py-2 sm:px-4" : location === "/billing" ? "w-full px-3 py-4 sm:px-4" : "max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8"} ${bottombarMode ? "xl:pb-32" : ""}`}
         >
           <PageErrorBoundary>{children}</PageErrorBoundary>
         </main>

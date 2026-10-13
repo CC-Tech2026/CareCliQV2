@@ -40,9 +40,9 @@ export function ParticipantRestrictedTab({
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <Lock className="h-3.5 w-3.5 text-orange-600" />
-          <p className="text-[12px] font-black uppercase tracking-[0.13em] text-orange-700">{translate("patients.restricted.title")}</p>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.13em] text-orange-700">{translate("patients.restricted.title")}</p>
         </div>
-        <span className="text-[10px] px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 font-semibold uppercase tracking-wide bg-orange-100">{translate("patients.restricted.coordinatorOnly")}</span>
+        <span className="text-[11px] px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 font-semibold uppercase tracking-wide bg-orange-100">{translate("patients.restricted.coordinatorOnly")}</span>
       </div>
       <p className="text-[12px] text-orange-700/80 leading-relaxed">
         This section contains restricted information visible only to support coordinators and the managing director. Handle in accordance with the participant's privacy consent and NDIS guidelines.
@@ -57,7 +57,7 @@ export function ParticipantRestrictedTab({
             <div key={key} className="space-y-1.5">
               <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">{label}</p>
               <textarea
-                className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 min-h-[80px]"
+                className="w-full rounded-xl border border-orange-200 bg-cc-surface px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 min-h-[80px]"
                 placeholder={placeholder}
                 value={draft?.[key] ?? ""}
                 onChange={(e) => draft && onDraftChange({ ...draft, [key]: e.target.value })}

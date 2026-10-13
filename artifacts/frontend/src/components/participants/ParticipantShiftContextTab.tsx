@@ -27,9 +27,9 @@ export function ParticipantShiftContextTab({ participantId }: ParticipantShiftCo
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Users className="h-3.5 w-3.5 text-violet-700" />
-            <p className="text-[12px] font-black uppercase tracking-[0.13em] text-violet-800">{translate("patients.shiftContext.title")}</p>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.13em] text-violet-800">{translate("patients.shiftContext.title")}</p>
           </div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full border border-violet-300 text-violet-700 font-semibold uppercase tracking-wide bg-violet-100">
+          <span className="text-[11px] px-2 py-0.5 rounded-full border border-violet-300 text-violet-700 font-semibold uppercase tracking-wide bg-violet-100">
             Coordinator Authoring
           </span>
         </div>
@@ -89,8 +89,8 @@ function ParticipantTagsSection({ participantId }: { participantId: string }) {
   if (isLoading) return null;
 
   return (
-    <div className="rounded-2xl border border-[var(--cc-border)] bg-white p-4">
-      <p className="text-[12px] font-black uppercase tracking-[0.13em]" style={{ color: "var(--cc-muted)" }}>Interests & preferences</p>
+    <div className="rounded-2xl border border-[var(--cc-border)] bg-cc-surface p-4">
+      <p className="text-[12px] font-semibold uppercase tracking-[0.13em]" style={{ color: "var(--cc-muted)" }}>Interests & preferences</p>
       <p className="mt-1 text-[11px]" style={{ color: "var(--cc-muted)" }}>
         Structured tags used to suggest a better-fitting support worker for this participant's shifts.
       </p>

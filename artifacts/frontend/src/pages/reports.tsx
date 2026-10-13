@@ -1,5 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { DirectorReportsHome, DIRECTOR_REPORTS } from "@/components/reports/DirectorReportsHome";
+import { PageHeader, ghostClass } from "@/components/layout/PageKit";
 import { useState, useMemo, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -1200,8 +1201,13 @@ export default function Reports() {
 
   if (isDirector) {
     const current = DIRECTOR_REPORTS.find(report => report.id === activeTab);
-    return <div className="min-w-0 space-y-5 pb-8">
-      <header className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wider text-cc-muted">Management reporting</p><h1 className="mt-2 text-2xl font-semibold tracking-tight text-cc-text sm:text-3xl">{activeTab === "hub" ? "Report library" : current?.title || "Reports"}</h1><p className="mt-2 max-w-2xl text-sm text-cc-muted">{activeTab === "hub" ? "Find, filter and export reports for a selected period. For current priorities and performance trends, use the Executive Hub and Performance review." : current?.description}</p></div>{activeTab !== "hub" && <Button variant="outline" className="min-h-11" onClick={() => setActiveTab("hub")}>Back to report library</Button>}</header>
+    return <div className="min-w-0 space-y-8 pb-12">
+      <PageHeader
+        eyebrow={activeTab === "hub" ? "Governance & Strategy" : "Report library"}
+        title={activeTab === "hub" ? "Report library" : current?.title || "Reports"}
+        description={activeTab === "hub" ? "Find, filter and export reports for a selected period. For current priorities and performance trends, use the Executive Hub and Performance review." : current?.description}
+        actions={activeTab !== "hub" ? <button type="button" className={ghostClass} onClick={() => setActiveTab("hub")}>Back to report library</button> : undefined}
+      />
       {activeTab === "hub" ? <DirectorReportsHome onOpen={id => setActiveTab(id as TabId)} /> : <section className="min-w-0" aria-label={current?.title}>{SECTION_MAP[activeTab]}</section>}
     </div>;
   }
