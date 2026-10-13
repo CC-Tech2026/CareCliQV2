@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from ..core.errors import internal_error_detail
-from ..services import ai_service, participant_service, session_service
+from ..services import ai_service, participant_service, session_service, vault_service
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
 from ..services.supabase_client import get_supabase_admin
 from ..core.access import get_user_id, get_user_organization_id
@@ -308,4 +308,6 @@ async def generate_participant_report(
         "file_url": file_url,
     }
     result = get_supabase_admin().table("report_history").insert(payload).execute()
+    # The report is filed in the participant's Clinical Docs; show it there now.
+    vault_service.forget_category_docs(get_user_organization_id(current_user), "participant_reports")
     return result.data[0] if result.data else payload

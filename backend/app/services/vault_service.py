@@ -233,6 +233,13 @@ def _cached(key: str, compute: Callable[[], Any]) -> Any:
     return value
 
 
+
+def forget_category_docs(org_id: str, category: str) -> None:
+    """Drop a category's cached listing, so a record created elsewhere (a
+    generated participant report) shows the next time its folder opens
+    instead of up to _TTL_SECONDS later."""
+    _ttl_cache.pop(f"docs:{org_id}:{category}", None)
+
 # ── Name-lookup helpers (batched per org, not per-row, to avoid N+1) ──────────
 
 def _patient_name_map(org_id: str) -> dict[str, str]:
