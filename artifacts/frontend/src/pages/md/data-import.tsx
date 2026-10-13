@@ -109,7 +109,7 @@ function StatusChip({ status }: { status: RowStatus }) {
   const meta = {
     ready: { label: "Ready", bg: "var(--cc-status-success-bg)", fg: "var(--cc-status-success)" },
     error: { label: "Needs fixing", bg: "color-mix(in srgb, #B3261E 10%, transparent)", fg: RED },
-    duplicate: { label: "Already in CareCliQ", bg: "var(--cc-soft)", fg: "var(--cc-muted)" },
+    duplicate: { label: "Duplicate", bg: "var(--cc-soft)", fg: "var(--cc-muted)" },
   }[status];
   return (
     <span className="inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: meta.bg, color: meta.fg }}>
@@ -414,7 +414,7 @@ export default function DataImportPage() {
                 ["all", `${results.length} rows`],
                 ["ready", `${counts.ready} ready`],
                 ["error", `${counts.error} need fixing`],
-                ["duplicate", `${counts.duplicate} already in CareCliQ`],
+                ["duplicate", `${counts.duplicate} ${counts.duplicate === 1 ? "duplicate" : "duplicates"}`],
               ] as const).map(([value, label]) => (
                 <button
                   key={value}

@@ -149,3 +149,27 @@ def test_staff_preview_flags_team_members_and_pending_invites():
     assert sam["status"] == "duplicate" and pat["status"] == "duplicate"
     assert missing["status"] == "error"
     assert chef["status"] == "ready" and chef["record"]["role"] == "support_worker" and chef["warnings"]
+
+
+def test_import_falls_back_until_migration_244_is_applied():
+    attempts = []
+    db = _db()
+    real_side_effect = db.table.side_effect
+
+    def table(name):
+        t = real_side_effect(name)
+        if name == "participant_intakes":
+            def insert(rows):
+                attempts.append([r["source"] for r in rows])
+                q = MagicMock()
+                if len(attempts) == 1:
+                    q.execute.side_effect = Exception('violates check constraint "participant_intakes_source_check"')
+                return q
+            t.insert.side_effect = insert
+        return t
+
+    db.table.side_effect = table
+    with patch.object(svc, "get_supabase_admin", return_value=db):
+        result = svc.import_participants("org-1", "user-1", [ROW], "spreadsheet")
+    assert attempts == [["import"], ["coordinator_referral"]]
+    assert result["imported"] == 1

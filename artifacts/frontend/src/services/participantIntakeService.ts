@@ -43,6 +43,8 @@ export function intakeOptionLabel(options: { value: string; label: string }[], v
 
 export type WebIntakeForm = {
   submitted_at: string;
+  /** Set when the participant was brought across from another system (data_import_service.py). */
+  imported?: { source_system?: string; imported_at?: string };
   submitted_by?: string;
   given_name?: string;
   surname?: string;

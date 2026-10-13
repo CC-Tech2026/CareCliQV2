@@ -360,7 +360,18 @@ def import_participants(
             },
         })
     if rows:
-        get_supabase_admin().table("participant_intakes").insert(rows).execute()
+        table = get_supabase_admin().table("participant_intakes")
+        try:
+            table.insert(rows).execute()
+        except Exception as exc:
+            # Migration 244 adds the "import" source. Until it's applied, file
+            # them as coordinator referrals; web_intake.imported still marks
+            # them as imported for the onboarding board.
+            if "participant_intakes_source_check" not in str(exc):
+                raise
+            for row in rows:
+                row["source"] = "coordinator_referral"
+            table.insert(rows).execute()
     return {
         "imported": len(rows),
         "skipped": len(results) - len(rows),
