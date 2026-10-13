@@ -1113,6 +1113,11 @@ async def complete_onboarding(
             logger.warning(f"Could not create organisation for {user_id}: {e}")
     elif existing_org_id:
         update_payload["organization_id"] = existing_org_id
+        # A paid signup's org is created by the Stripe webhook before anyone
+        # can say where it is, so its head office starts on the default zone.
+        # The founding MD picks the state while setting up their account.
+        if current_user.get("role") == "managing_director":
+            _set_head_office_state(supabase, existing_org_id, body.state)
         if body.organization_name or body.provider_type or body.team_size or body.address or body.org_address:
             update_payload["onboarding_data"] = {
                 **(body.onboarding_data or {}),

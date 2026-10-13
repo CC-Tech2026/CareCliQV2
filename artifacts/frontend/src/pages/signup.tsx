@@ -22,6 +22,7 @@ import {
 import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
 import { OtpInput } from "@/components/auth/OtpInput";
 import { uploadProfilePhoto } from "@/services/userService";
+import { abnIsValid, formatAbn, registrationValid } from "@/components/settings/OrganisationDetailsCard";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const PLUM = "var(--cc-plum)";
@@ -99,6 +100,9 @@ interface FormData {
   sp_address: string;
   /** Head-office state — sets the organisation's timezone. */
   sp_state: string;
+  /** Founding director only: printed on invoices and sent with NDIA claims. */
+  sp_abn: string;
+  sp_ndis_reg: string;
 }
 
 const AU_STATES = [
@@ -128,6 +132,8 @@ const EMPTY: FormData = {
   sp_contact_number: "",
   sp_address: "",
   sp_state: "",
+  sp_abn: "",
+  sp_ndis_reg: "",
 };
 
 // ── Input ─────────────────────────────────────────────────────────────────────
@@ -303,6 +309,10 @@ export default function Signup() {
 
   const orgNameLocked = mode === "create" && Boolean(invite?.organization_name);
   const isJoin = mode === "join";
+  // A managing_director invite only ever comes from a paid /get-started
+  // signup: this person is setting up a brand-new organisation, not joining
+  // an existing team, so step 3 asks for the organisation's details.
+  const isFoundingDirector = isJoin && invite?.role === "managing_director";
 
   useEffect(() => {
     if (!urlInviteToken) return;
@@ -407,7 +417,7 @@ export default function Signup() {
   const JOIN_STEP_LABELS = [
     t("auth.signup.step.inviteCode"),
     t("auth.signup.step.account"),
-    t("auth.signup.step.profile"),
+    isFoundingDirector ? t("auth.signup.step.organisation") : t("auth.signup.step.profile"),
     t("auth.signup.step.review"),
   ];
   const CREATE_STEP_LABELS = [t("auth.signup.step.details"), t("auth.signup.step.organisation")];
@@ -427,7 +437,41 @@ export default function Signup() {
   }
 
   function profileValid() {
-    return form.sp_address.trim() !== "";
+    if (form.sp_address.trim() === "") return false;
+    if (!isFoundingDirector) return true;
+    const abn = form.sp_abn.replace(/\s/g, "");
+    const reg = form.sp_ndis_reg.replace(/\s/g, "");
+    return (
+      form.sp_state !== "" &&
+      (abn === "" || abnIsValid(abn)) &&
+      (reg === "" || registrationValid(reg))
+    );
+  }
+
+  /** Writes the founding director's answers onto the organisation itself,
+   * the record invoices, service agreements and NDIA claims read. Never
+   * blocks finishing signup: the account already exists at this point. */
+  async function saveFoundingOrgDetails(accessToken: string) {
+    const details: Record<string, string> = { address: form.sp_address.trim() };
+    const phone = form.sp_contact_number.trim();
+    const abn = form.sp_abn.replace(/\s/g, "");
+    const reg = form.sp_ndis_reg.replace(/\s/g, "");
+    if (phone) details.phone = phone;
+    if (abn) details.abn = abn;
+    if (reg) details.ndis_registration_number = reg;
+    try {
+      const res = await apiFetch("/api/settings/organisation", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify(details),
+      });
+      if (!res.ok) throw new Error("Organisation details not saved");
+    } catch {
+      toast({
+        title: "Your account is ready",
+        description: "We couldn't save your business details. Add them under Settings, Provider.",
+      });
+    }
   }
 
   function step2Valid() {
@@ -550,6 +594,10 @@ export default function Signup() {
           } catch {
             /* optional */
           }
+        }
+
+        if (isFoundingDirector) {
+          await saveFoundingOrgDetails(data.access_token);
         }
 
         try {
@@ -963,11 +1011,14 @@ export default function Signup() {
       </div>
 
       {/* RIGHT */}
-      <div className="auth-scroll-hide relative w-full md:w-[600px] md:shrink-0 flex items-center justify-center overflow-y-auto p-4 sm:p-8 md:p-12 lg:px-16 md:rounded-[28px] md:border md:bg-[var(--auth-form-bg)] md:[border-color:var(--auth-card-border)] md:shadow-[var(--cc-shadow-lg)]">
+      <div className="auth-scroll-hide relative w-full md:w-[600px] md:shrink-0 flex items-start justify-center overflow-y-auto p-4 sm:p-8 md:p-12 lg:px-16 md:rounded-[28px] md:border md:bg-[var(--auth-form-bg)] md:[border-color:var(--auth-card-border)] md:shadow-[var(--cc-shadow-lg)]">
         <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
           <AuthThemeToggle />
         </div>
-        <div className="w-full max-w-md">
+        {/* my-auto rather than the parent's items-center: a step taller than
+            the panel then scrolls from its top instead of sliding under the
+            theme toggle; pt-12 keeps the progress strip clear of it. */}
+        <div className="w-full max-w-md my-auto pt-12">
           <div className="flex items-center gap-2 justify-center mb-5 px-4 py-2.5 rounded-2xl border bg-[var(--auth-form-bg)]" style={{ borderColor: "var(--auth-card-border)" }}>
             {STEP_LABELS.map((l, i) => (
               <div key={`${l}-${i}`} className="flex-1 flex flex-col items-center gap-1">
@@ -1044,6 +1095,18 @@ export default function Signup() {
                     style={{ color: PLUM }}
                   >
                     {t("auth.signup.join.askCoordinator")}
+                  </button>
+                </p>
+
+                <p className="text-center text-[13px]" style={{ color: "var(--cc-muted)" }}>
+                  {t("auth.signup.join.newProvider")}{" "}
+                  <button
+                    type="button"
+                    onClick={() => navigate("/get-started")}
+                    className="font-bold transition-opacity hover:opacity-80"
+                    style={{ color: PLUM }}
+                  >
+                    {t("auth.signup.join.startTrial")}
                   </button>
                 </p>
               </form>
@@ -1157,14 +1220,18 @@ export default function Signup() {
               >
                 <div>
                   <h2 className="text-[22px] font-black" style={{ color: PLUM }}>
-                    {t("auth.signup.join.profileTitle")}
+                    {isFoundingDirector ? "Your organisation" : t("auth.signup.join.profileTitle")}
                   </h2>
                   <p className="text-sm" style={{ color: "var(--cc-muted)" }}>
-                    {translateParams("auth.signup.join.profileSubtitle", { step: "3" })}
+                    {isFoundingDirector
+                      ? "Step 3 of 4 · Where you're based, and the details printed on your invoices and service agreements."
+                      : translateParams("auth.signup.join.profileSubtitle", { step: "3" })}
                   </p>
                 </div>
 
-                <div>
+                {/* A founding director's step is about the organisation; their
+                    own photo can be added from their profile later. */}
+                <div hidden={isFoundingDirector}>
                   <Label>{t("auth.signup.join.profilePhoto")}</Label>
                   <div className="flex items-center gap-4">
                     <div
@@ -1230,29 +1297,35 @@ export default function Signup() {
                   </div>
                 </div>
 
-                <div>
-                  <Label>{t("auth.signup.field.contactNumber")}</Label>
-                  <StyledInput
-                    name="sp_contact_number"
-                    value={form.sp_contact_number}
-                    onChange={(v) => updateField("sp_contact_number", v)}
-                    placeholder={t("auth.signup.placeholder.contact")}
-                    required={false}
-                  />
-                  <p className="mt-1.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
-                    {t("auth.signup.join.optionalHint")}
-                  </p>
-                </div>
+                {isFoundingDirector ? (
+                  <FoundingOrgFields form={form} updateField={updateField} t={t} />
+                ) : (
+                  <>
+                    <div>
+                      <Label>{t("auth.signup.field.contactNumber")}</Label>
+                      <StyledInput
+                        name="sp_contact_number"
+                        value={form.sp_contact_number}
+                        onChange={(v) => updateField("sp_contact_number", v)}
+                        placeholder={t("auth.signup.placeholder.contact")}
+                        required={false}
+                      />
+                      <p className="mt-1.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                        {t("auth.signup.join.optionalHint")}
+                      </p>
+                    </div>
 
-                <div>
-                  <Label required>{t("auth.signup.field.address")}</Label>
-                  <StyledInput
-                    name="sp_address"
-                    value={form.sp_address}
-                    onChange={(v) => updateField("sp_address", v)}
-                    placeholder={t("auth.signup.placeholder.address")}
-                  />
-                </div>
+                    <div>
+                      <Label required>{t("auth.signup.field.address")}</Label>
+                      <StyledInput
+                        name="sp_address"
+                        value={form.sp_address}
+                        onChange={(v) => updateField("sp_address", v)}
+                        placeholder={t("auth.signup.placeholder.address")}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="flex gap-3 pt-3">
                   <button
@@ -1290,7 +1363,7 @@ export default function Signup() {
                   className="rounded-2xl border p-4 space-y-3"
                   style={{ borderColor: "var(--auth-card-border)", background: "color-mix(in srgb, var(--cc-plum) 8%, transparent)" }}
                 >
-                  <div className="flex justify-center">
+                  <div className="flex justify-center" hidden={isFoundingDirector}>
                     <div
                       className="w-[72px] h-[72px] rounded-full border flex items-center justify-center overflow-hidden"
                       style={{ borderColor: BORDER, background: "color-mix(in srgb, var(--cc-plum) 12%, transparent)" }}
@@ -1302,13 +1375,25 @@ export default function Signup() {
                       )}
                     </div>
                   </div>
-                  {[
-                    [t("auth.signup.join.reviewOrg"), invite.organization_name || t("auth.signup.join.reviewOrg")],
-                    [t("auth.signup.fullName"), form.full_name.trim()],
-                    [t("auth.signup.email"), invite.email],
-                    [t("auth.signup.field.contactNumber"), form.sp_contact_number.trim() || t("auth.signup.join.notProvided")],
-                    [t("auth.signup.field.address"), form.sp_address.trim()],
-                  ].map(([label, value]) => (
+                  {(isFoundingDirector
+                    ? [
+                        [t("auth.signup.join.reviewOrg"), invite.organization_name || t("auth.signup.join.reviewOrg")],
+                        [t("auth.signup.fullName"), form.full_name.trim()],
+                        [t("auth.signup.email"), invite.email],
+                        ["Head office state", AU_STATES.find((s) => s.value === form.sp_state)?.label ?? ""],
+                        ["Business address", form.sp_address.trim()],
+                        ["Business phone", form.sp_contact_number.trim() || t("auth.signup.join.notProvided")],
+                        ["ABN", form.sp_abn.trim() || "Add later in Settings"],
+                        ["NDIS registration number", form.sp_ndis_reg.trim() || "Not registered yet"],
+                      ]
+                    : [
+                        [t("auth.signup.join.reviewOrg"), invite.organization_name || t("auth.signup.join.reviewOrg")],
+                        [t("auth.signup.fullName"), form.full_name.trim()],
+                        [t("auth.signup.email"), invite.email],
+                        [t("auth.signup.field.contactNumber"), form.sp_contact_number.trim() || t("auth.signup.join.notProvided")],
+                        [t("auth.signup.field.address"), form.sp_address.trim()],
+                      ]
+                  ).map(([label, value]) => (
                     <div key={label}>
                       <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--cc-muted)" }}>
                         {label}
@@ -1650,6 +1735,108 @@ function buildPayload(form: FormData) {
       address: form.sp_address,
     },
   };
+}
+
+// ── Founding director: the new organisation's details ─────────────────────────
+function FieldHint({ children, error }: { children: React.ReactNode; error?: boolean }) {
+  return (
+    <p className="mt-1.5 text-[12px] leading-snug" style={{ color: error ? "#EF4444" : "var(--cc-muted)" }}>
+      {children}
+    </p>
+  );
+}
+
+function FoundingOrgFields({
+  form,
+  updateField,
+  t,
+}: {
+  form: FormData;
+  updateField: (f: keyof FormData, v: string) => void;
+  t: (key: string) => string;
+}) {
+  const abnDigits = form.sp_abn.replace(/\s/g, "");
+  const abnError = abnDigits.length === 11 && !abnIsValid(abnDigits);
+  const abnIncomplete = abnDigits.length > 0 && abnDigits.length < 11;
+  const regDigits = form.sp_ndis_reg.replace(/\s/g, "");
+  const regError = regDigits.length > 10;
+  const regIncomplete = regDigits.length > 0 && regDigits.length < 9;
+
+  return (
+    <>
+      <div>
+        <Label required>Head office state</Label>
+        <StyledSelect
+          name="sp_state"
+          value={form.sp_state}
+          onChange={(v) => updateField("sp_state", v)}
+          placeholder="Select your state"
+          options={AU_STATES}
+        />
+        <FieldHint>Sets your timezone for rosters, pay and billing. Add other offices later in Settings.</FieldHint>
+      </div>
+
+      <div>
+        <Label required>Business address</Label>
+        <StyledInput
+          name="sp_address"
+          value={form.sp_address}
+          onChange={(v) => updateField("sp_address", v)}
+          placeholder={t("auth.signup.placeholder.address")}
+          autoComplete="street-address"
+        />
+      </div>
+
+      <div>
+        <Label>Business phone</Label>
+        <StyledInput
+          name="sp_contact_number"
+          type="tel"
+          value={form.sp_contact_number}
+          onChange={(v) => updateField("sp_contact_number", v)}
+          placeholder={t("auth.signup.placeholder.contact")}
+          autoComplete="tel"
+          required={false}
+        />
+      </div>
+
+      <div>
+        <Label>ABN</Label>
+        <StyledInput
+          name="sp_abn"
+          value={form.sp_abn}
+          onChange={(v) => updateField("sp_abn", formatAbn(v))}
+          placeholder="11 digits"
+          error={abnError}
+          required={false}
+        />
+        <FieldHint error={abnError}>
+          {abnError
+            ? "This ABN doesn't pass the ATO check. Check the digits."
+            : abnIncomplete
+              ? "Enter all 11 digits, or leave it blank for now."
+              : "Printed on invoices and needed for NDIA claims. You can add it later."}
+        </FieldHint>
+      </div>
+
+      <div>
+        <Label>NDIS registration number</Label>
+        <StyledInput
+          name="sp_ndis_reg"
+          value={form.sp_ndis_reg}
+          onChange={(v) => updateField("sp_ndis_reg", v.replace(/[^\d\s]/g, "").slice(0, 12))}
+          placeholder="e.g. 4050123456"
+          error={regError}
+          required={false}
+        />
+        <FieldHint error={regError}>
+          {regError || regIncomplete
+            ? "9 or 10 digits, usually starting with 405."
+            : "Leave blank if you're not registered with the NDIS Commission yet."}
+        </FieldHint>
+      </div>
+    </>
+  );
 }
 
 // ── Small Provider ────────────────────────────────────────────────────────────

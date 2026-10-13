@@ -6,6 +6,7 @@ const { query, retry } = vi.hoisted(() => ({ query: vi.fn(), retry: vi.fn() }));
 vi.mock("@/hooks/useOrgQuery", () => ({ useOrgQuery: query }));
 vi.mock("@/contexts/AccessibilityContext", () => ({ useAccessibility: () => ({ translate: (key: string) => key }) }));
 vi.mock("@/components/hub/GovernanceTriage", () => ({ GovernanceTriage: () => <div>Action items</div> }));
+vi.mock("@/components/hub/OrgSetupChecklist", () => ({ OrgSetupChecklist: () => null }));
 
 const overview = {
   active_participants: 12, active_staff: 8, support_workers: 6, coordinators: 2,

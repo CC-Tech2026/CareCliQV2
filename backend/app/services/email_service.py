@@ -205,6 +205,88 @@ def send_invitation_email(
     )
 
 
+def queue_founding_welcome_email(
+    *,
+    to_email: str,
+    setup_url: str,
+    organization_name: str | None,
+    trial_days: int,
+) -> dict[str, str]:
+    return queue_email_job(
+        label=f"founding-welcome:{to_email}",
+        send=lambda: _send_founding_welcome_email_safe(
+            to_email=to_email,
+            setup_url=setup_url,
+            organization_name=organization_name,
+            trial_days=trial_days,
+        ),
+    )
+
+
+def _send_founding_welcome_email_safe(**kwargs: Any) -> None:
+    try:
+        send_founding_welcome_email(**kwargs)
+    except Exception as exc:
+        logger.error("Founding welcome email failed for %s: %s", kwargs.get("to_email"), exc)
+
+
+def send_founding_welcome_email(
+    *,
+    to_email: str,
+    setup_url: str,
+    organization_name: str | None,
+    trial_days: int,
+) -> None:
+    """Sent to the person who just bought a plan on /get-started. They were
+    not invited by anyone, so this reads as a welcome from CareCliQ rather
+    than the staff invitation's "you're invited to join"."""
+    org_label = organization_name or "your organisation"
+    subject = f"Welcome to CareCliQ: set up {org_label}"
+    text_body = (
+        f"Thanks for choosing CareCliQ for {org_label}. Your {trial_days}-day free trial has started.\n\n"
+        "Set your password and finish setting up your organisation here:\n"
+        f"{setup_url}\n\n"
+        "It takes about two minutes: your head office state, business address, ABN and "
+        "NDIS registration number (if you're registered).\n\n"
+        "This secure link expires in 7 days."
+    )
+    safe_org = escape(org_label)
+    safe_url = escape(setup_url, quote=True)
+    html_body = f"""\
+<!doctype html>
+<html>
+  <body style="margin:0;background:#FDF6EE;font-family:Arial,sans-serif;color:#1A1A2E;">
+    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
+      <div style="background:#ffffff;border:1px solid #E8E8EA;border-radius:16px;padding:28px;">
+        <h1 style="margin:0 0 12px;color:#1A1A2E;font-size:22px;">Welcome to CareCliQ</h1>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
+          Thanks for choosing CareCliQ for <strong>{safe_org}</strong>.
+          Your {trial_days}-day free trial has started.
+        </p>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 24px;">
+          Set your password and finish setting up your organisation. It takes about two minutes:
+          your head office state, business address, ABN and NDIS registration number (if you're registered).
+        </p>
+        <a href="{safe_url}" style="display:inline-block;background:#E8457A;color:#ffffff;text-decoration:none;font-weight:700;border-radius:999px;padding:12px 20px;">
+          Set up my account
+        </a>
+        <p style="font-size:12px;line-height:1.6;color:#6A6A77;margin:24px 0 0;">
+          This link expires in 7 days. If the button does not work, copy this URL into your browser:<br>
+          <span style="word-break:break-all;">{safe_url}</span>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
+"""
+    send_email(
+        to_email=to_email,
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
+    )
+
+
 def queue_signing_verification_email(
     *,
     to_email: str,

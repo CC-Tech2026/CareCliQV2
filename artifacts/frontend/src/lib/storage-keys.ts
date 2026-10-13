@@ -13,6 +13,10 @@ export function ccqOnboardingKey(userId: string): string {
   return `ccq_onboarding_${userId}`;
 }
 
+export function ccqOrgSetupHiddenKey(orgId: string): string {
+  return `ccq_org_setup_hidden_${orgId}`;
+}
+
 const LEGACY_KEY_PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["carescribe_token", CCQ_TOKEN_KEY],
   ["carescribe_user", CCQ_USER_KEY],

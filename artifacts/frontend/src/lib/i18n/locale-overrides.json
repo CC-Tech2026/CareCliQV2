@@ -4659,7 +4659,11 @@
     "worker.notification.groupTapToView": "Nhấn để xem tất cả cập nhật.",
     "auth.login.participantPrompt": "Người tham gia hoặc thành viên gia đình?",
     "auth.login.participantLink": "Đăng nhập Cổng thông tin Người tham gia",
-    "protected.role.participant": "Người tham gia"
+    "protected.role.participant": "Người tham gia",
+    "auth.login.providerPrompt": "Bạn điều hành một doanh nghiệp NDIS?",
+    "auth.login.providerLink": "Bắt đầu dùng thử miễn phí",
+    "auth.signup.join.newProvider": "Thiết lập CareCliQ cho doanh nghiệp NDIS của bạn?",
+    "auth.signup.join.startTrial": "Dùng thử miễn phí"
   },
   "ar": {
     "nav.dashboard": "لوحة التحكم",
@@ -9323,7 +9327,11 @@
     "worker.notification.groupTapToView": "اضغط لعرض جميع التحديثات.",
     "auth.login.participantPrompt": "هل أنت مشارك أو أحد أفراد العائلة؟",
     "auth.login.participantLink": "تسجيل الدخول إلى بوابة المشاركين",
-    "protected.role.participant": "مشارك"
+    "protected.role.participant": "مشارك",
+    "auth.login.providerPrompt": "هل تدير نشاطًا تجاريًا في NDIS؟",
+    "auth.login.providerLink": "ابدأ تجربتك المجانية",
+    "auth.signup.join.newProvider": "هل تقوم بإعداد CareCliQ لنشاطك التجاري في NDIS؟",
+    "auth.signup.join.startTrial": "ابدأ تجربة مجانية"
   },
   "zh-Hans": {
     "nav.dashboard": "仪表板",
@@ -13987,6 +13995,10 @@
     "worker.notification.groupTapToView": "点击查看所有更新。",
     "auth.login.participantPrompt": "参与者或家庭成员？",
     "auth.login.participantLink": "登录参与者门户",
-    "protected.role.participant": "参与者"
+    "protected.role.participant": "参与者",
+    "auth.login.providerPrompt": "您在经营 NDIS 业务吗？",
+    "auth.login.providerLink": "开始免费试用",
+    "auth.signup.join.newProvider": "要为您的 NDIS 业务设置 CareCliQ？",
+    "auth.signup.join.startTrial": "免费试用"
   }
 }

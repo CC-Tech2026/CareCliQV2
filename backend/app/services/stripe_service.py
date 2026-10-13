@@ -366,7 +366,7 @@ def _send_founding_md_invite(*, org_id: str, email: str, organization_name: str)
     import secrets as _secrets
 
     from ..api.invitations import _generate_short_code
-    from .email_service import queue_invitation_email
+    from .email_service import queue_founding_welcome_email
 
     supabase = get_supabase_admin()
     token = _secrets.token_hex(32)
@@ -384,13 +384,11 @@ def _send_founding_md_invite(*, org_id: str, email: str, organization_name: str)
     }).execute()
 
     invite_url = f"{settings.frontend_base_url.rstrip('/')}/accept-invite?token={token}"
-    queue_invitation_email(
-        None,
+    queue_founding_welcome_email(
         to_email=email,
-        invite_url=invite_url,
+        setup_url=invite_url,
         organization_name=organization_name,
-        role="managing_director",
-        short_code=short_code,
+        trial_days=SIGNUP_TRIAL_DAYS,
     )
     logger.info("Founding managing_director invite sent for new org %s to %s", org_id, email)
 
@@ -513,7 +511,7 @@ def resend_signup_invite(email: str) -> None:
     invite or a resend was already sent recently - the caller (the API
     endpoint) always returns the same generic response either way, so this
     can't be used to probe which emails have a pending signup."""
-    from .email_service import queue_invitation_email
+    from .email_service import queue_founding_welcome_email
 
     supabase = get_supabase_admin()
     normalized = email.strip().lower()
@@ -552,13 +550,11 @@ def resend_signup_invite(email: str) -> None:
     organization_name = (org_resp.data or [{}])[0].get("organization_name") or "your organisation"
 
     invite_url = f"{settings.frontend_base_url.rstrip('/')}/accept-invite?token={invite['token']}"
-    queue_invitation_email(
-        None,
+    queue_founding_welcome_email(
         to_email=normalized,
-        invite_url=invite_url,
+        setup_url=invite_url,
         organization_name=organization_name,
-        role="managing_director",
-        short_code=invite.get("short_code"),
+        trial_days=SIGNUP_TRIAL_DAYS,
     )
 
 
