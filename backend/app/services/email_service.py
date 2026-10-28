@@ -235,15 +235,21 @@ def send_founding_welcome_email(
     to_email: str,
     setup_url: str,
     organization_name: str | None,
-    trial_days: int,
+    trial_days: int | None,
 ) -> None:
     """Sent to the person who just bought a plan on /get-started. They were
     not invited by anyone, so this reads as a welcome from CareCliQ rather
-    than the staff invitation's "you're invited to join"."""
+    than the staff invitation's "you're invited to join". trial_days=None
+    is a pilot organisation set up by the CareCliQ team, with no trial."""
     org_label = organization_name or "your organisation"
     subject = f"Welcome to CareCliQ: set up {org_label}"
+    status_line = (
+        f"Your {trial_days}-day free trial has started."
+        if trial_days
+        else "Your pilot account is ready, with sample staff and participants to explore."
+    )
     text_body = (
-        f"Thanks for choosing CareCliQ for {org_label}. Your {trial_days}-day free trial has started.\n\n"
+        f"Thanks for choosing CareCliQ for {org_label}. {status_line}\n\n"
         "Set your password and finish setting up your organisation here:\n"
         f"{setup_url}\n\n"
         "It takes about two minutes: your head office state, business address, ABN and "
@@ -261,7 +267,7 @@ def send_founding_welcome_email(
         <h1 style="margin:0 0 12px;color:#1A1A2E;font-size:22px;">Welcome to CareCliQ</h1>
         <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
           Thanks for choosing CareCliQ for <strong>{safe_org}</strong>.
-          Your {trial_days}-day free trial has started.
+          {escape(status_line)}
         </p>
         <p style="font-size:15px;line-height:1.6;margin:0 0 24px;">
           Set your password and finish setting up your organisation. It takes about two minutes:
