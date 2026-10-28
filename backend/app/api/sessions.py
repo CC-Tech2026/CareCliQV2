@@ -606,20 +606,28 @@ async def save_session_with_ai(
                     on_conflict="session_id,phrase",
                 ).execute()
 
-            # Upsert per-rule rows into compliance_rule_results (idempotent via UNIQUE(session_id, rule_id))
-            for rule in rules_result.get("rules", []):
-                supabase.table("compliance_rule_results").upsert(
-                    {
-                        "session_id": session_id,
-                        "rule_id": rule.get("rule"),
-                        "status": rule.get("status"),
-                        "message": rule.get("message"),
-                        "severity": rule.get("severity"),
-                        "enforcement_tier": rule.get("enforcement_tier"),
-                        "checked_at": compliance_checked_at,
-                    },
-                    on_conflict="session_id,rule_id",
-                ).execute()
+            # Per-rule rows for the compliance centre's "Most common issues".
+            # The table's columns are rule_code/rule_name/created_at (no
+            # rule_id or checked_at), so the old upsert never wrote a row.
+            # Replace this session's rows on each re-check.
+            rule_rows = [
+                {
+                    "session_id": session_id,
+                    "organization_id": session.get("organization_id") or get_user_organization_id(current_user),
+                    "rule_code": rule.get("rule"),
+                    "rule_name": rule.get("label") or rule.get("rule"),
+                    "status": rule.get("status"),
+                    "message": rule.get("message"),
+                    "suggestion": rule.get("suggestion"),
+                    "enforcement_tier": rule.get("enforcement_tier"),
+                    "created_at": compliance_checked_at,
+                }
+                for rule in rules_result.get("rules", [])
+                if rule.get("rule")
+            ]
+            supabase.table("compliance_rule_results").delete().eq("session_id", session_id).execute()
+            if rule_rows:
+                supabase.table("compliance_rule_results").insert(rule_rows).execute()
         except Exception as rp_persist_err:
             logger.warning(f"Compliance rule/RP flag persistence failed (non-critical): {rp_persist_err}")
 

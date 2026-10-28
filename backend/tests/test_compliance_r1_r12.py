@@ -132,6 +132,28 @@ class TestR3(unittest.TestCase):
         r = _get_rule(run_compliance_check(_base_session(compliance_input_text=text)), "R3")
         self.assertIn(r["status"], ["warning", "fail"])
 
+    def test_too_short_note_names_length_and_filler_and_caps_score(self):
+        result = run_compliance_check(_base_session(
+            compliance_input_text="Shift was fine. Did the usual. No issues."
+        ))
+        r = _get_rule(result, "R3")
+        self.assertEqual(r["status"], "fail")
+        self.assertTrue(r.get("too_short"))
+        self.assertIn("too short (8 words)", r["message"])
+        self.assertIn("no issues", r["message"].lower())
+        self.assertLess(result["score"], 60)
+
+    def test_brief_note_over_minimum_is_not_capped(self):
+        text = (
+            "Supported the participant to prepare lunch. She chopped vegetables independently and "
+            "reported feeling confident. We walked to the park and she engaged with two neighbours. "
+            "Goal progress: meal preparation completed with one prompt."
+        )
+        result = run_compliance_check(_base_session(compliance_input_text=text))
+        r = _get_rule(result, "R3")
+        self.assertEqual(r["status"], "warning")
+        self.assertFalse(r.get("too_short"))
+
 
 # ---------------------------------------------------------------------------
 # R4 — Support type documented

@@ -276,10 +276,19 @@ CREDENTIALS = {
     ],
 }
 
+# Two visits each for Liam and Harold. Harold's second note is a copy of the
+# first on purpose: copy-pasted notes are a real audit finding (rule R11).
 GOOD_NOTES = {
-    "Liam Carter": "Arrived 9:00. Liam chose to cook spaghetti bolognese for tonight. He read the recipe card, chopped the onion with hand-over-hand support for the first few cuts then independently, and browned the mince himself. He said he felt more confident than last week. We practised reading the bus timetable for Thursday's TAFE trip and he identified the right route without prompting. No concerns. Goal progress: cooking (3 of 4 steps independent), bus travel (route planning independent).",
-    "Zoe Mitchell": "Picked Zoe up from home at 9:30 with her mother present. Checked EpiPen was in her bag before leaving. Attended the Saturday art class at the community centre for 90 minutes. Zoe used her noise-cancelling headphones for the first 20 minutes, then took them off and joined the group painting activity. She told the instructor her name and asked for more blue paint. Returned home 12:15, handed over to her mother and told her about the class. Goal progress: participated with one prompt, stayed for the full class.",
-    "Harold Nguyen": "Arrived 8:00. Prompted Harold to take his 8:00 sodium valproate. He took it with water and recorded it on his chart himself. Supported a 15 minute walk to the corner shop using his walking stick; he stopped twice to rest and said his left knee was sore. Reported the knee pain to the coordinator. Prepared breakfast together. Harold was in good spirits. Goal progress: medication taken and recorded independently; walk completed with two rests.",
+    "Liam Carter": [
+        "Arrived 9:00. Liam chose to cook spaghetti bolognese for tonight's dinner. He read the recipe card aloud, chopped the onion with hand-over-hand support for the first few cuts and then independently, and browned the mince himself. Liam reported he felt more confident than last week and engaged well throughout. We practised reading the bus timetable for Thursday's TAFE trip and he identified the correct route without prompting. Goal progress: cooking, 3 of 4 steps completed independently; bus travel, route planning completed independently.",
+        "Arrived 9:00. Liam planned a chicken stir-fry and wrote his own shopping list of six items. At the supermarket he found five items independently and asked a staff member where the soy sauce was. Back home he demonstrated safe knife use and cooked the meal with verbal prompts only for timing. Liam stated he wants to try the bus to TAFE on his own next week. We walked to the bus stop together and he checked the next departure on the timetable app. Goal progress: cooking, all 4 steps with verbal prompts only; bus travel, checked departures independently.",
+    ],
+    "Zoe Mitchell": [
+        "Picked Zoe up from home at 9:30 with her mother present. Checked her EpiPen was in her bag before leaving. Attended the Saturday art class at the community centre for 90 minutes. Zoe used her noise-cancelling headphones for the first 20 minutes, then took them off and engaged in the group painting activity. She told the instructor her name and asked for more blue paint. Returned home 12:15, handed over to her mother, and Zoe described the class to her. Goal progress: participated with one prompt and stayed for the full class.",
+    ],
+    "Harold Nguyen": [
+        "Arrived 8:00. Prompted Harold to take his 8:00 sodium valproate. He took it with water and recorded it on his chart himself. Supported a 15 minute walk to the corner shop using his walking stick; he stopped twice to rest and reported that his left knee was sore. Passed the knee pain on to the coordinator. Prepared breakfast together and Harold engaged in conversation about his weekend plans. Goal progress: medication taken and recorded independently; walk completed with two rests.",
+    ],
 }
 THIN_NOTE = "Shift was fine. Did the usual. No issues."
 
@@ -390,14 +399,17 @@ async def seed_records(db, org_id: str, staff: dict[str, str]) -> dict[str, str]
             "compliance_review_required": status != "compliant", "goals_addressed": goals,
             "support_category": "Core Supports", "activities_performed": "Support work",
             "start_time": row["scheduled_start"], "end_time": row["scheduled_end"],
+            "note_completed_at": row["scheduled_end"],
         }).execute().data[0]
         db.table("shifts").update({"session_id": session["id"]}).eq("id", row["id"]).execute()
 
     goal_names = {p["full_name"]: [g[0] for g in p["goals"]] for p in PARTICIPANTS}
-    for day in (-13, -6):
-        note(shift("Liam Carter", "aisha", day, 9, 3, "completed"), "aisha", "Liam Carter", GOOD_NOTES["Liam Carter"], 93.5, "compliant", goal_names["Liam Carter"])
-        note(shift("Harold Nguyen", "aisha", day + 1, 8, 2, "completed"), "aisha", "Harold Nguyen", GOOD_NOTES["Harold Nguyen"], 91.0, "compliant", goal_names["Harold Nguyen"])
-    note(shift("Zoe Mitchell", "tom", -9, 9, 3, "completed"), "tom", "Zoe Mitchell", GOOD_NOTES["Zoe Mitchell"], 88.0, "compliant", goal_names["Zoe Mitchell"])
+    # Scores here are placeholders; backfill_compliance_rule_results.py
+    # --recheck-org replaces them with the real compliance engine's result.
+    for visit, day in enumerate((-13, -6)):
+        note(shift("Liam Carter", "aisha", day, 9, 3, "completed"), "aisha", "Liam Carter", GOOD_NOTES["Liam Carter"][visit], 93.5, "compliant", goal_names["Liam Carter"])
+        note(shift("Harold Nguyen", "aisha", day + 1, 8, 2, "completed"), "aisha", "Harold Nguyen", GOOD_NOTES["Harold Nguyen"][0], 91.0, "compliant", goal_names["Harold Nguyen"])
+    note(shift("Zoe Mitchell", "tom", -9, 9, 3, "completed"), "tom", "Zoe Mitchell", GOOD_NOTES["Zoe Mitchell"][0], 88.0, "compliant", goal_names["Zoe Mitchell"])
     note(shift("Zoe Mitchell", "tom", -2, 9, 3, "completed"), "tom", "Zoe Mitchell", THIN_NOTE, 35.0, "non_compliant", [])
     shift("Priya Singh", "grace", -3, 13, 2, "completed", documentation_pending=True, documentation_due_at=local(-3, 23, 59).isoformat())
     for day, participant, worker, start_h, hours in ((1, "Liam Carter", "aisha", 9, 3), (2, "Harold Nguyen", "aisha", 8, 2), (4, "Zoe Mitchell", "tom", 9, 3), (5, "Priya Singh", "grace", 13, 2)):
