@@ -12,7 +12,8 @@ the table can be rebuilt from that.
 --recheck-org <organization_id> also runs the compliance engine on that
 organisation's notes that were never checked (e.g. seeded pilot notes), and
 stores the result on the note the same way a real save does. Only use it on
-seeded or test organisations: it overwrites those notes' scores.
+seeded or test organisations: it overwrites those notes' scores. Add --force
+to re-check notes that were already checked (e.g. after an engine fix).
 """
 
 from __future__ import annotations
@@ -64,12 +65,16 @@ def _rule_rows(session: dict[str, Any], rules: list[dict[str, Any]]) -> list[dic
     ]
 
 
-def recheck(db, org_id: str, apply: bool) -> None:
+def recheck(db, org_id: str, apply: bool, force: bool = False) -> None:
+    # Dates are compared on the office's calendar, as in a real request.
+    from backend.app.core.timezone import head_office_timezone, set_request_timezone
+
+    set_request_timezone(head_office_timezone(org_id, supabase=db))
     sessions = (
         db.table("sessions").select("*").eq("organization_id", org_id).eq("status", "completed").execute().data or []
     )
     for session in sessions:
-        if _insights(session).get("rules_result"):
+        if _insights(session).get("rules_result") and not force:
             continue
         participant = (
             db.table("participants").select("*").eq("id", session.get("patient_id")).limit(1).execute().data or [None]
@@ -116,7 +121,7 @@ def main() -> None:
     apply = "--apply" in sys.argv
     db = get_supabase_admin()
     if "--recheck-org" in sys.argv:
-        recheck(db, sys.argv[sys.argv.index("--recheck-org") + 1], apply)
+        recheck(db, sys.argv[sys.argv.index("--recheck-org") + 1], apply, force="--force" in sys.argv)
     backfill(db, apply)
     if not apply:
         print("Dry run. Re-run with --apply to write.")

@@ -98,6 +98,22 @@ class TestR2(unittest.TestCase):
         self.assertEqual(r["status"], "fail")
         self.assertIn("48-hour", r["message"])
 
+    def test_morning_shift_note_is_dated_on_the_local_day(self):
+        # 10:00 in Adelaide on 22 Oct is 23:30 UTC on 21 Oct. Reading the UTC
+        # wall time flagged this as "Note date precedes session date".
+        from zoneinfo import ZoneInfo
+        from backend.app.core.timezone import reset_request_timezone, set_request_timezone
+
+        token = set_request_timezone(ZoneInfo("Australia/Adelaide"))
+        try:
+            r = _get_rule(run_compliance_check(_base_session(
+                session_date="2026-10-22",
+                note_completed_at="2026-10-21T23:30:00+00:00",
+            )), "R2")
+        finally:
+            reset_request_timezone(token)
+        self.assertEqual(r["status"], "pass")
+
 
 # ---------------------------------------------------------------------------
 # R3 — Note quality (80-word minimum + filler phrases)
