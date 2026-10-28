@@ -445,6 +445,30 @@ def _sync_from_customer(customer_id: Optional[str], *, organization_id: Optional
         query.eq("organization_id", organization_id).execute()
     else:
         query.eq("stripe_customer_id", customer_id).execute()
+    _record_lapse(subscription.get("status"), customer_id=customer_id, organization_id=organization_id)
+
+
+def _record_lapse(
+    status: Optional[str], *, customer_id: Optional[str] = None, organization_id: Optional[str] = None,
+) -> None:
+    """Keep organizations.subscription_lapsed_at (migration 246) in step with
+    the subscription status: read-only access starts GRACE_DAYS after it
+    (subscription_access.py). Best-effort; without 246 the trial end date is
+    used instead."""
+    from . import subscription_access
+
+    supabase = get_supabase_admin()
+    try:
+        query = supabase.table("organizations").select("organization_id, subscription_lapsed_at")
+        query = query.eq("organization_id", organization_id) if organization_id else query.eq("stripe_customer_id", customer_id)
+        for org in query.execute().data or []:
+            change = subscription_access.lapse_update(org, status)
+            if change:
+                supabase.table("organizations").update(change).eq("organization_id", org["organization_id"]).execute()
+            subscription_access.forget(org["organization_id"])
+    except Exception as exc:
+        logger.warning("Couldn't record subscription lapse for %s: %s", organization_id or customer_id, exc)
+        subscription_access.forget()
 
 
 def find_orphaned_signup_sessions(hours: int = 48) -> list[dict[str, Any]]:
@@ -578,3 +602,4 @@ def _set_status_by_customer(
     get_supabase_admin().table("organizations").update(update).eq(
         "stripe_customer_id", customer_id
     ).execute()
+    _record_lapse(status, customer_id=customer_id)

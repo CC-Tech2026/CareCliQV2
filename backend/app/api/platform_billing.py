@@ -103,6 +103,21 @@ async def get_signup_session_email(session_id: str):
     return {"email": email}
 
 
+@router.get("/access")
+async def get_access(current_user: dict = Depends(get_current_user)):
+    """Any member: whether the organisation can still add records (full,
+    grace or read_only), for the subscription banner. Read fresh, not from
+    the middleware's short cache, so paying shows up straight away."""
+    from ..services import subscription_access
+
+    access = subscription_access.get_access(current_user.get("organization_id"), use_cache=False)
+    return {
+        **access.as_dict(),
+        "can_manage_billing": current_user.get("role") == "managing_director"
+        or has_active_grant(current_user, "platform_billing", get_supabase_admin()),
+    }
+
+
 @router.get("/status")
 async def get_status(current_user: dict = Depends(get_current_user)):
     org_id = _require_md(current_user)

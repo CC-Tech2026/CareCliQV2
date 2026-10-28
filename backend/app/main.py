@@ -7,6 +7,7 @@ from .api import auth_mfa
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
 from .middleware.security_headers import SecurityHeadersMiddleware
+from .middleware.subscription_access import SubscriptionAccessMiddleware
 from .services import migration_state
 from .services.email_queue import start_email_queue, stop_email_queue
 from .services.notification_scheduler import start_notification_scheduler, stop_notification_scheduler
@@ -188,6 +189,9 @@ def _cors_origin_regex() -> str | None:
     """Matches Cloudflare Pages preview subdomains, e.g. abc123.carecliq-dev.pages.dev"""
     return os.getenv("CORS_ORIGIN_REGEX", r"https://[a-z0-9-]+\.carecliq-dev\.pages\.dev").strip() or None
 
+# Added before CORS so it runs inside it (its 402 gets CORS headers) and
+# after OrgContextMiddleware has set request.state.organisation_id.
+app.add_middleware(SubscriptionAccessMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),

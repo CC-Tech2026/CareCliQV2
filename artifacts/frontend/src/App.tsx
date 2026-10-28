@@ -26,6 +26,7 @@ import { defaultHomePathForRole } from "@/lib/auth-session";
 import { AuthSessionGuards } from "@/components/auth/AuthSessionGuards";
 import { WelcomeScreenGate } from "@/components/onboarding/WelcomeScreenGate";
 import { OnboardingCompleteGate } from "@/components/onboarding/OnboardingCompleteGate";
+import { SubscriptionBanner } from "@/components/billing/SubscriptionBanner";
 import Dashboard from "@/pages/dashboard";
 import Patients from "@/pages/patients";
 import ParticipantNew from "@/pages/participant-new";
@@ -863,6 +864,7 @@ function App() {
                 <AuthSessionGuards />
                 <WelcomeScreenGate />
                 <OnboardingCompleteGate />
+                <SubscriptionBanner />
                 <Router />
               </WouterRouter>
             </OfflineSyncProvider>
