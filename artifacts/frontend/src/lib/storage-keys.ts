@@ -7,6 +7,8 @@ export const CCQ_REAUTH_TOKEN_KEY = "ccq_reauth_token";
 export const CCQ_REAUTH_UNTIL_KEY = "ccq_reauth_until";
 export const CCQ_REMEMBER_DEVICE_KEY = "ccq_remember_device";
 export const CCQ_DESKTOP_NOTIFICATIONS_KEY = "ccq_desktop_notifications";
+/** User id that turned on browser push here; only that user is re-subscribed after sign-in. */
+export const CCQ_WEB_PUSH_USER_KEY = "ccq_web_push_user";
 export const CCQ_UNAUTHORIZED_EVENT = "carecliq:unauthorized";
 
 export function ccqOnboardingKey(userId: string): string {

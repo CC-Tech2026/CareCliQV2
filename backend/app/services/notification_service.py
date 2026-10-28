@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from ..core.timezone import parse_shift_datetime, participant_timezone
+from ..core.timezone import APP_TIMEZONE, coerce_timezone, parse_shift_datetime, participant_timezone
 
 from ..core.config import settings
 from ..schemas.alert import AlertCreate
@@ -48,9 +48,37 @@ NOTIFICATION_EVENTS = (
     "account_reactivated",
     "incident_pending_reminder",
     "incident_pending_overdue",
+    # Sent by services that were raising "Unsupported notification event"
+    # before these were listed, so none of them ever reached anyone.
+    "medication_dose_reminder",
+    "long_shift_checkin",
+    "shift_feedback_received",
+    "buddy_assigned",
+    "availability_update_requested",
+    "training_request",
+    "training_request_update",
+    "ndis_screening_recheck_due",
+    "applicant_stage_stuck",
+    "onboarding_stage_reminder",
+    "onboarding_stage_auto_inactive",
+    "offer_letter_expired",
+    "hire_invite_expired",
+    "hire_invite_pending",
 )
 NOTIFICATION_CHANNELS = ("push", "email", "sms")
 SAFETY_EVENTS = frozenset({"safety_alert"})
+# In-shift prompts are useless by email (one per medication dose, say), so
+# email starts off for them; anyone can still turn it on.
+_CHANNELS_OFF_BY_DEFAULT = frozenset({
+    ("medication_dose_reminder", "email"),
+    ("long_shift_checkin", "email"),
+})
+# Severities that still pop up during someone's quiet hours.
+_QUIET_HOURS_EXEMPT_SEVERITIES = frozenset({"critical", "emergency"})
+
+
+def channel_default(event: str, channel: str) -> bool:
+    return (event, channel) not in _CHANNELS_OFF_BY_DEFAULT
 
 EVENT_ALERT_TYPES = {
     "shift_reminder": "shift_reminder",
@@ -81,7 +109,7 @@ EVENT_ALERT_TYPES = {
 
 def default_notification_preferences() -> dict[str, dict[str, bool]]:
     return {
-        event: {channel: True for channel in NOTIFICATION_CHANNELS}
+        event: {channel: channel_default(event, channel) for channel in NOTIFICATION_CHANNELS}
         for event in NOTIFICATION_EVENTS
     }
 
@@ -123,9 +151,60 @@ def get_effective_preferences(user_id: str) -> dict[str, dict[str, bool]]:
         for event in NOTIFICATION_EVENTS:
             event_prefs = stored.get(event) or {}
             for channel in NOTIFICATION_CHANNELS:
-                if bool(event_prefs.get(channel, True)):
+                if bool(event_prefs.get(channel, channel_default(event, channel))):
                     merged[event][channel] = True
     return merged
+
+
+def clean_quiet_hours(raw: Any) -> dict[str, Any]:
+    """Normalise a stored/submitted quiet-hours block; disabled if unusable."""
+    raw = raw if isinstance(raw, dict) else {}
+    start = str(raw.get("from") or "22:00")[:5]
+    end = str(raw.get("to") or "07:00")[:5]
+    tz_name = str(raw.get("timezone") or "")[:64]
+    valid = True
+    try:
+        datetime.strptime(start, "%H:%M")
+        datetime.strptime(end, "%H:%M")
+    except ValueError:
+        valid = False
+    return {
+        "enabled": bool(raw.get("enabled")) and valid,
+        "from": start if valid else "22:00",
+        "to": end if valid else "07:00",
+        "timezone": tz_name,
+    }
+
+
+def is_within_quiet_hours(quiet: dict[str, Any], now: Optional[datetime] = None) -> bool:
+    if not quiet.get("enabled"):
+        return False
+    tz = coerce_timezone(quiet.get("timezone")) or APP_TIMEZONE
+    local =(now or datetime.now(timezone.utc)).astimezone(tz).strftime("%H:%M")
+    start, end = quiet["from"], quiet["to"]
+    if start == end:
+        return False
+    # 22:00 to 07:00 wraps past midnight.
+    return start <= local < end if start < end else local >= start or local < end
+
+
+def quiet_hours_active(user_id: str, now: Optional[datetime] = None) -> bool:
+    """True if any of the user's saved preference rows has quiet hours covering now."""
+    try:
+        result = (
+            get_supabase_admin()
+            .table("user_notification_preferences")
+            .select("preferences")
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception:
+        return False
+    for row in result.data or []:
+        quiet = clean_quiet_hours((row.get("preferences") or {}).get("quiet_hours"))
+        if is_within_quiet_hours(quiet, now):
+            return True
+    return False
 
 
 def get_reminder_offsets_minutes(user_id: str) -> tuple[int, int]:
@@ -151,10 +230,17 @@ def get_reminder_offsets_minutes(user_id: str) -> tuple[int, int]:
     return max(1, first), max(1, second)
 
 
+def _held_for_quiet_hours(user_id: str, event: str, severity: str) -> bool:
+    """Quiet hours hold back the pop-up only; the inbox item and email still land."""
+    if event in SAFETY_EVENTS or severity in _QUIET_HOURS_EXEMPT_SEVERITIES:
+        return False
+    return quiet_hours_active(user_id)
+
+
 def _channel_enabled(prefs: dict, event: str, channel: str) -> bool:
     if event in SAFETY_EVENTS and channel == "push":
         return True
-    return bool((prefs.get(event) or {}).get(channel, True))
+    return bool((prefs.get(event) or {}).get(channel, channel_default(event, channel)))
 
 
 def _lookup_user_email(user_id: str) -> Optional[str]:
@@ -243,8 +329,12 @@ async def notify_worker(
     requires_ack: bool = False,
     payload: Optional[dict[str, Any]] = None,
     push_priority: str = "default",
+    send_push: bool = True,
 ) -> dict[str, Any]:
-    """Deliver via in-app inbox, push, and/or email based on saved prefs."""
+    """Deliver via in-app inbox, push, and/or email based on saved prefs.
+
+    send_push=False is for callers that already sent their own device push
+    (e.g. the long-shift welfare check), so the user isn't alerted twice."""
     if event not in NOTIFICATION_EVENTS:
         raise ValueError(f"Unsupported notification event: {event}")
 
@@ -262,8 +352,9 @@ async def notify_worker(
     }
 
     in_app_key = f"{reference_key}:in_app"
+    in_app_row: Optional[dict[str, Any]] = None
     if not _was_delivered(user_id, event, in_app_key, "in_app"):
-        notification_store.create_user_notification(
+        in_app_row = notification_store.create_user_notification(
             user_id=user_id,
             organization_id=org_id,
             event_type=event,
@@ -294,7 +385,12 @@ async def notify_worker(
         _record_delivery(user_id, event, in_app_key, "in_app")
         results["in_app"] = True
 
-    if _channel_enabled(prefs, event, "push") and not _was_delivered(user_id, event, reference_key, "push"):
+    if (
+        send_push
+        and _channel_enabled(prefs, event, "push")
+        and not _was_delivered(user_id, event, reference_key, "push")
+        and not _held_for_quiet_hours(user_id, event, severity)
+    ):
         pushed = await send_push_to_user(
             user_id,
             title=title,
@@ -304,6 +400,9 @@ async def notify_worker(
                 "action_url": action_url,
                 "shift_id": shift_id,
                 "conversation_id": conversation_id,
+                # Browsers tag the OS notification with this so the copy the
+                # open tab shows and the pushed copy replace each other.
+                "notification_id": (in_app_row or {}).get("id"),
             },
             priority=push_priority if event in SAFETY_EVENTS else "default",
         )

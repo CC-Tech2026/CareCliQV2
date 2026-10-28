@@ -940,7 +940,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
           </header>
           )}
 
-          {isWorker && <NotificationRealtimeBridge />}
+          <NotificationRealtimeBridge />
           {isWorker && <NotificationBannerStack />}
 
         {/* Page content */}

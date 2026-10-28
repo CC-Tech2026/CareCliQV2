@@ -12,7 +12,6 @@ from fastapi import HTTPException
 from ..core.config import settings
 from ..core.timezone import participant_timezone, shift_local_date
 from .notification_service import notify_worker
-from .push_service import send_push_to_user
 from .shift_service import get_shift_by_id
 from .supabase_client import get_supabase_admin
 from .worker_shift_history_service import _coordinator_display_name
@@ -150,12 +149,6 @@ async def submit_shift_feedback(
         shift_id=shift_id,
         action_url=action_url,
         email_subject="New feedback from your coordinator",
-    )
-    await send_push_to_user(
-        worker_id,
-        title="New shift feedback",
-        body=message,
-        data={"type": "shift_feedback", "feedback_id": feedback_id, "shift_id": shift_id},
     )
 
     get_supabase_admin().table("shift_feedback").update({

@@ -30,13 +30,7 @@ vi.mock("@/hooks/useReAuth", () => ({
   useReAuth: () => ({ requireReAuth: (fn: () => unknown) => fn(), modal: null }),
 }));
 vi.mock("@/lib/device-id", () => ({ getDeviceId: () => "device-1" }));
-vi.mock("@/lib/desktop-notifications", () => ({
-  getDesktopNotificationPermission: () => "default",
-  getDesktopNotificationSupport: () => false,
-  isDesktopNotificationsEnabled: () => false,
-  requestDesktopNotificationPermission: vi.fn(),
-  setDesktopNotificationsEnabled: vi.fn(),
-}));
+vi.mock("@/components/notifications/DeviceNotifications", () => ({ DeviceNotifications: () => null }));
 vi.mock("@/components/ProfilePhotoUpload", () => ({ ProfilePhotoUpload: () => null }));
 vi.mock("@/components/onboarding/MyInterestsCard", () => ({ MyInterestsCard: () => null }));
 const EVENTS = ["shift_reminder", "shift_change", "coordinator_message", "feedback_received", "certification_expiry"];

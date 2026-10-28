@@ -51,7 +51,27 @@ export function parseRealtimeNotificationRow(
   };
 }
 
-export function resolveNotificationPath(notification: UserNotification): string | null {
+/** Workers open their own shift/messages views; office staff follow action_url
+ *  (e.g. the rostering panel for "Shift needs reassigning"). */
+export type NotificationAudience = "worker" | "office";
+
+function pathFromActionUrl(actionUrl: string | null | undefined): string | null {
+  if (!actionUrl) return null;
+  try {
+    const url = new URL(actionUrl, window.location.origin);
+    const path = url.pathname + url.search;
+    if (path.startsWith("/")) return path;
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+export function resolveNotificationPath(
+  notification: UserNotification,
+  audience: NotificationAudience = "worker",
+): string | null {
+  if (audience === "office") return pathFromActionUrl(notification.action_url);
   if (notification.shift_id) {
     if (notification.event_type === "compliance_checkin") {
       return `/my-shifts/${notification.shift_id}?checkin=pending`;
@@ -61,16 +81,7 @@ export function resolveNotificationPath(notification: UserNotification): string 
   if (notification.conversation_id) {
     return `/worker/messages?conversation=${notification.conversation_id}`;
   }
-  if (notification.action_url) {
-    try {
-      const url = new URL(notification.action_url, window.location.origin);
-      const path = url.pathname + url.search;
-      if (path.startsWith("/")) return path;
-    } catch {
-      /* fall through */
-    }
-  }
-  return null;
+  return pathFromActionUrl(notification.action_url);
 }
 
 function toastVariant(
@@ -118,22 +129,27 @@ function presentMobileBannerNotificationToast(notification: UserNotification): v
 export function presentWorkerNotification(
   notification: UserNotification,
   navigate: (path: string) => void,
+  audience: NotificationAudience = "worker",
 ): void {
   if (presentedIds.has(notification.id)) return;
   if (notification.dismissed_at) return;
   presentedIds.add(notification.id);
 
-  const path = resolveNotificationPath(notification);
+  const path = resolveNotificationPath(notification, audience);
   const open = () => {
     if (path) navigate(path);
   };
 
-  if (!document.hidden && isBannerNotification(notification) && isMobileViewport()) {
+  // Sticky banners (and their mobile toast form) are a worker-only surface;
+  // office staff get every notification as a regular toast.
+  const isWorkerBanner = audience === "worker" && isBannerNotification(notification);
+
+  if (!document.hidden && isWorkerBanner && isMobileViewport()) {
     presentMobileBannerNotificationToast(notification);
     return;
   }
 
-  if (!document.hidden && shouldShowToast(notification)) {
+  if (!document.hidden && (audience === "office" || shouldShowToast(notification))) {
     toast({
       title: notification.title,
       description: notification.body,
@@ -151,7 +167,31 @@ export function presentWorkerNotification(
     showDesktopNotification(notification.title, notification.body, {
       tag: notification.id,
       requireInteraction: Boolean(notification.requires_ack),
+      url: path ?? undefined,
       onClick: open,
     });
   }
+}
+
+/** sw.js hands a push to the visible tab instead of the OS; show it in-app.
+ *  Realtime usually got there first, in which case the shared id dedupes it. */
+export function presentPushedNotification(
+  payload: { tag?: string; title?: string; body?: string; url?: string; urgent?: boolean; event?: string },
+  navigate: (path: string) => void,
+): void {
+  if (!payload.tag || !payload.title) return;
+  presentWorkerNotification(
+    {
+      id: payload.tag,
+      event_type: payload.event ?? "",
+      title: payload.title,
+      body: payload.body ?? "",
+      severity: payload.urgent ? "high" : "medium",
+      action_url: payload.url ?? null,
+      created_at: new Date().toISOString(),
+    },
+    navigate,
+    // No shift/conversation ids in a push, so both audiences follow the URL.
+    "office",
+  );
 }

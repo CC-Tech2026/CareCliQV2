@@ -16,6 +16,7 @@ import {
   signInPathFor,
 } from "@/lib/auth-session";
 import { clearPresentedNotifications } from "@/lib/worker-notification-presenter";
+import { releaseDeviceNotificationsOnSignOut } from "@/lib/web-push";
 import { clearAppliedSupabaseSession, storeAndApplySupabaseSession } from "@/lib/supabase";
 import { CCQ_REAUTH_TOKEN_KEY, CCQ_UNAUTHORIZED_EVENT } from "@/lib/storage-keys";
 import { clearCachedSettings } from "@/lib/use-settings";
@@ -347,6 +348,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     beginVoluntaryLogout();
+    void releaseDeviceNotificationsOnSignOut();
     customFetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     clearSession();
   }, [clearSession]);

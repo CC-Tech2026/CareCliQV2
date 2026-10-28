@@ -1,5 +1,6 @@
 import { ManagementNavigationDrawer } from "./ManagementNavigationDrawer";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
+import { NotificationRealtimeBridge } from "@/components/worker/NotificationRealtimeBridge";
 import { PageErrorBoundary } from "@/components/ErrorBoundary";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ManagementPageSearch } from "./ManagementPageSearch";
@@ -473,6 +474,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           {/* Executive Control Group */}
           <div className="flex shrink-0 items-center gap-1 sm:gap-2" ref={profileRef}>
             <NotificationBell onClick={() => setNotificationsOpen(true)} />
+            <NotificationRealtimeBridge />
               <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}><SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg [&>button]:hidden"><SheetHeader className="sr-only"><SheetTitle>Notifications</SheetTitle><SheetDescription>Organisation alerts and updates</SheetDescription></SheetHeader>{notificationsOpen && <NotificationPanel embedded onClose={() => setNotificationsOpen(false)} />}</SheetContent></Sheet>
 
             {/* HubLayout is also shared with coordinators (e.g. /hub, /md/staff-onboarding)

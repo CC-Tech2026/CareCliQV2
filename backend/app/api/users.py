@@ -16,6 +16,8 @@ from ..services.password_policy import validate_password_policy
 from ..services.notification_service import (
     NOTIFICATION_CHANNELS,
     NOTIFICATION_EVENTS,
+    channel_default,
+    clean_quiet_hours,
     default_notification_preferences,
 )
 from ..services.supabase_client import get_supabase, get_supabase_admin, signed_storage_url
@@ -111,6 +113,8 @@ class ChangePasswordRequest(BaseModel):
 class NotificationPreferencesRequest(BaseModel):
     device_id: str = Field(min_length=8, max_length=128)
     preferences: dict
+    # {enabled, from "HH:MM", to "HH:MM", timezone IANA}; omitted keeps what's saved.
+    quiet_hours: dict | None = None
 
 
 @router.get("/me")
@@ -288,10 +292,14 @@ async def get_notification_preferences(
         merged = defaults
         for event in NOTIFICATION_EVENTS:
             merged[event] = {**defaults[event], **(stored.get(event) or {})}
-        return {"device_id": device_id, "preferences": merged}
+        return {
+            "device_id": device_id,
+            "preferences": merged,
+            "quiet_hours": clean_quiet_hours(stored.get("quiet_hours")),
+        }
     except Exception as exc:
         logger.debug("Notification prefs read failed for %s: %s", user_id, exc)
-        return {"device_id": device_id, "preferences": defaults}
+        return {"device_id": device_id, "preferences": defaults, "quiet_hours": clean_quiet_hours(None)}
 
 
 @router.put("/me/notification-preferences")
@@ -304,11 +312,28 @@ async def save_notification_preferences(
     for event in NOTIFICATION_EVENTS:
         event_prefs = body.preferences.get(event) or {}
         cleaned[event] = {
-            channel: bool(event_prefs.get(channel, True))
+            channel: bool(event_prefs.get(channel, channel_default(event, channel)))
             for channel in NOTIFICATION_CHANNELS
         }
 
     admin = get_supabase_admin()
+    if body.quiet_hours is not None:
+        cleaned["quiet_hours"] = clean_quiet_hours(body.quiet_hours)
+    else:
+        try:
+            existing = (
+                admin.table("user_notification_preferences")
+                .select("preferences")
+                .eq("user_id", user_id)
+                .eq("device_id", body.device_id)
+                .maybe_single()
+                .execute()
+            )
+            saved = ((existing.data if existing else None) or {}).get("preferences") or {}
+            if saved.get("quiet_hours"):
+                cleaned["quiet_hours"] = clean_quiet_hours(saved["quiet_hours"])
+        except Exception:
+            pass
     try:
         admin.table("user_notification_preferences").upsert(
             {
@@ -322,7 +347,8 @@ async def save_notification_preferences(
         logger.warning("Notification prefs save failed for %s: %s", user_id, exc)
         raise HTTPException(status_code=502, detail="Could not save notification preferences.")
 
-    return {"device_id": body.device_id, "preferences": cleaned}
+    quiet_hours = cleaned.pop("quiet_hours", None)
+    return {"device_id": body.device_id, "preferences": cleaned, "quiet_hours": clean_quiet_hours(quiet_hours)}
 
 
 @router.post("/me/photo")

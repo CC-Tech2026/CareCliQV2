@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { isSupabaseRealtimeConfigured, restoreSupabaseSession } from "@/lib/supabase";
 import { useWorkerNotificationPresenter } from "@/hooks/useWorkerNotificationPresenter";
 
-/** Mounts Supabase Realtime + toast/desktop notification presenter for workers. */
+/** Mounts Supabase Realtime + toast/desktop notification presenter for every role. */
 export function NotificationRealtimeBridge() {
   const { user, isAuthenticated } = useAuth();
 

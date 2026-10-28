@@ -12,10 +12,13 @@ export function getDesktopNotificationPermission(): DesktopNotificationPermissio
 }
 
 export function isDesktopNotificationsEnabled(): boolean {
+  if (getDesktopNotificationPermission() !== "granted") return false;
   try {
-    return localStorage.getItem(CCQ_DESKTOP_NOTIFICATIONS_KEY) === "true";
+    // Granted before this setting existed counts as on; only an explicit
+    // "Turn off" stops them.
+    return localStorage.getItem(CCQ_DESKTOP_NOTIFICATIONS_KEY) !== "false";
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -27,41 +30,54 @@ export function setDesktopNotificationsEnabled(enabled: boolean): void {
   }
 }
 
-export async function requestDesktopNotificationPermission(): Promise<DesktopNotificationPermission> {
-  if (!getDesktopNotificationSupport()) return "unsupported";
-  const result = await Notification.requestPermission();
-  setDesktopNotificationsEnabled(result === "granted");
-  return result;
-}
-
 export function showDesktopNotification(
   title: string,
   body: string,
   opts?: {
     tag?: string;
     requireInteraction?: boolean;
+    url?: string;
     onClick?: () => void;
   },
 ): void {
   if (!getDesktopNotificationSupport()) return;
-  if (Notification.permission !== "granted") return;
-  if (!isDesktopNotificationsEnabled() && Notification.permission === "granted") {
-    setDesktopNotificationsEnabled(true);
-  }
+  if (!isDesktopNotificationsEnabled()) return;
 
+  const options: NotificationOptions = {
+    body,
+    // The pushed copy (public/sw.js) uses the same tag, so whichever arrives
+    // second silently replaces the first instead of alerting twice.
+    tag: opts?.tag,
+    requireInteraction: opts?.requireInteraction ?? false,
+    icon: "/favicon.png",
+    data: { url: opts?.url ?? window.location.pathname },
+  };
+
+  if (!("serviceWorker" in navigator)) {
+    showPageNotification(title, options, opts?.onClick);
+    return;
+  }
+  // Android Chrome only allows notifications through a service worker; taps
+  // on those are routed by sw.js (carecliq:navigate) instead of onClick.
+  navigator.serviceWorker
+    .getRegistration("/sw.js")
+    .then((registration) => {
+      if (registration) return registration.showNotification(title, options);
+      showPageNotification(title, options, opts?.onClick);
+      return undefined;
+    })
+    .catch(() => showPageNotification(title, options, opts?.onClick));
+}
+
+function showPageNotification(title: string, options: NotificationOptions, onClick?: () => void): void {
   try {
-    const notification = new Notification(title, {
-      body,
-      tag: opts?.tag,
-      requireInteraction: opts?.requireInteraction ?? false,
-      icon: "/favicon.ico",
-    });
+    const notification = new Notification(title, options);
     notification.onclick = () => {
       window.focus();
-      opts?.onClick?.();
+      onClick?.();
       notification.close();
     };
   } catch {
-    /* noop — Safari / blocked contexts */
+    /* blocked context */
   }
 }

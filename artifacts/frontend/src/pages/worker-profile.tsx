@@ -9,13 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
 import { MyInterestsCard } from "@/components/onboarding/MyInterestsCard";
 import { useToast } from "@/hooks/use-toast";
-import {
-  getDesktopNotificationPermission,
-  getDesktopNotificationSupport,
-  isDesktopNotificationsEnabled,
-  requestDesktopNotificationPermission,
-  setDesktopNotificationsEnabled,
-} from "@/lib/desktop-notifications";
+import { DeviceNotifications } from "@/components/notifications/DeviceNotifications";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useReAuth } from "@/hooks/useReAuth";
@@ -112,8 +106,6 @@ export default function WorkerProfile() {
 
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences | null>(null);
   const [savingPrefs, setSavingPrefs] = useState(false);
-  const [desktopPermission, setDesktopPermission] = useState(() => getDesktopNotificationPermission());
-  const [desktopEnabled, setDesktopEnabled] = useState(() => isDesktopNotificationsEnabled());
 
   function roleLabel(role?: string | null) {
     if (!role) return "";
@@ -138,27 +130,6 @@ export default function WorkerProfile() {
     if (score === 2) return translate("profile.strength.fair");
     if (score === 3) return translate("profile.strength.good");
     return translate("profile.strength.strong");
-  }
-
-  async function handleEnableDesktopNotifications() {
-    const result = await requestDesktopNotificationPermission();
-    setDesktopPermission(result);
-    setDesktopEnabled(result === "granted");
-    if (result === "granted") {
-      toast({ title: translate("profile.desktopEnabled") });
-    } else if (result === "denied") {
-      toast({
-        title: translate("profile.desktopBlocked"),
-        description: translate("profile.desktopBlockedHint"),
-        variant: "destructive",
-      });
-    }
-  }
-
-  function handleDisableDesktopNotifications() {
-    setDesktopNotificationsEnabled(false);
-    setDesktopEnabled(false);
-    toast({ title: translate("profile.desktopDisabled") });
   }
 
   useEffect(() => {
@@ -688,43 +659,12 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5">
-          <h2 className="text-lg font-bold text-[#1A1A2E]">{translate("profile.desktopNotifications")}</h2>
+          <h2 className="text-lg font-bold text-[#1A1A2E]">{translate("devices.title")}</h2>
           <p className="text-sm text-[#6A6A77]">
-            {translate("profile.desktopHint")}
+            {translate("devices.hint")}
           </p>
         </div>
-        {!getDesktopNotificationSupport() ? (
-          <p className="text-sm text-[#6A6A77]">{translate("profile.desktopNotSupported")}</p>
-        ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="text-sm font-semibold text-[#1A1A2E]">
-              {desktopPermission === "granted" && desktopEnabled
-                ? translate("profile.desktopStatusEnabled")
-                : desktopPermission === "denied"
-                  ? translate("profile.desktopStatusBlocked")
-                  : translate("profile.desktopStatusNotEnabled")}
-            </p>
-            {desktopPermission !== "granted" || !desktopEnabled ? (
-              <Button
-                type="button"
-                className="rounded-xl"
-                style={{ background: "var(--cc-cta)" }}
-                onClick={() => void handleEnableDesktopNotifications()}
-              >
-                {translate("profile.enableDesktop")}
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-xl"
-                onClick={handleDisableDesktopNotifications}
-              >
-                {translate("profile.disableDesktop")}
-              </Button>
-            )}
-          </div>
-        )}
+        <DeviceNotifications />
       </section>
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
