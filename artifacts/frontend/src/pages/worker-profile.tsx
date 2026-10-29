@@ -5,15 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PasswordInput } from "@/components/PasswordInput";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
 import { MyInterestsCard } from "@/components/onboarding/MyInterestsCard";
 import { useToast } from "@/hooks/use-toast";
 import { DeviceNotifications } from "@/components/notifications/DeviceNotifications";
+import { NotificationPreferencesEditor, type NotificationPrefGroup } from "@/components/notifications/NotificationPreferencesEditor";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useReAuth } from "@/hooks/useReAuth";
-import { getDeviceId } from "@/lib/device-id";
 import {
   passwordStrengthScore,
   validatePasswordPolicy,
@@ -21,14 +20,9 @@ import {
 import {
   changePassword,
   getMe,
-  getNotificationPreferences,
   requestPasswordReset,
-  saveNotificationPreferences,
   updateContact,
   updateMe,
-  type NotificationChannel,
-  type NotificationEvent,
-  type NotificationPreferences,
   type PreferredContactMethod,
   type UserProfile,
 } from "@/services/userService";
@@ -42,14 +36,19 @@ const ROLE_KEYS: Record<string, string> = {
   support_coordinator: "profile.role.coordinator",
 };
 
-const EVENTS: NotificationEvent[] = [
-  "shift_reminder",
-  "shift_change",
-  "coordinator_message",
-  "feedback_received",
-  "certification_expiry",
+// What reaches support workers, grouped. Keys are backend NOTIFICATION_EVENTS
+// (notification_service.py); a row toggles all its keys.
+const WORKER_NOTIF_GROUPS: { id: string; keys: string[] }[] = [
+  { id: "shiftReminders", keys: ["shift_reminder"] },
+  { id: "shiftChanges", keys: ["shift_change", "shift_cancel"] },
+  { id: "shiftOffers", keys: ["shift_offer"] },
+  { id: "messages", keys: ["coordinator_message"] },
+  { id: "duringShift", keys: ["task_reminder", "medication_dose_reminder", "long_shift_checkin"] },
+  { id: "feedback", keys: ["feedback_received", "shift_feedback_received"] },
+  { id: "credentials", keys: ["certification_expiry"] },
+  { id: "training", keys: ["training_recommended", "training_request_update"] },
+  { id: "team", keys: ["buddy_assigned", "availability_update_requested"] },
 ];
-const CHANNELS: NotificationChannel[] = ["push", "email", "sms"];
 const CONTACT_METHODS: PreferredContactMethod[] = ["phone_call", "sms", "in_app_message"];
 
 const PASSWORD_POLICY_KEYS: Record<string, string> = {
@@ -82,7 +81,6 @@ export default function WorkerProfile() {
   const { toast } = useToast();
   const { translate, translateParams } = useAccessibility();
   const { requireReAuth, modal } = useReAuth();
-  const deviceId = useMemo(() => getDeviceId(), []);
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,8 +102,6 @@ export default function WorkerProfile() {
   const [requestingReset, setRequestingReset] = useState(false);
   const [resetRequested, setResetRequested] = useState(false);
 
-  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences | null>(null);
-  const [savingPrefs, setSavingPrefs] = useState(false);
 
   function roleLabel(role?: string | null) {
     if (!role) return "";
@@ -117,13 +113,15 @@ export default function WorkerProfile() {
     return translate(`profile.contact.${method}`);
   }
 
-  function eventLabel(event: NotificationEvent) {
-    return translate(`profile.notification.event.${event}`);
-  }
-
-  function channelLabel(channel: NotificationChannel) {
-    return translate(`profile.notification.channel.${channel}`);
-  }
+  const notificationGroups = useMemo<NotificationPrefGroup[]>(
+    () =>
+      WORKER_NOTIF_GROUPS.map((group) => ({
+        ...group,
+        label: translate(`notifPrefs.worker.${group.id}`),
+        description: translate(`notifPrefs.worker.${group.id}.hint`),
+      })),
+    [translate],
+  );
 
   function strengthLabel(score: number) {
     if (score <= 1) return translate("profile.strength.weak");
@@ -134,8 +132,8 @@ export default function WorkerProfile() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([getMe(), getNotificationPreferences(deviceId)])
-      .then(([me, prefs]) => {
+    getMe()
+      .then((me) => {
         if (!active) return;
         setProfile(me);
         setDraftEmail(me.email || "");
@@ -145,7 +143,6 @@ export default function WorkerProfile() {
         setDraftExperienceYears(
           me.profile_experience_years != null ? String(me.profile_experience_years) : "",
         );
-        setNotificationPrefs(prefs.preferences);
       })
       .catch((error) => {
         if (!active) return;
@@ -161,7 +158,14 @@ export default function WorkerProfile() {
     return () => {
       active = false;
     };
-  }, [deviceId, toast, translate]);
+  }, [toast, translate]);
+
+  // Email footers and the notifications panel link to #notification-settings;
+  // the section only exists once the profile has loaded.
+  useEffect(() => {
+    if (loading || window.location.hash !== "#notification-settings") return;
+    document.getElementById("notification-settings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [loading]);
 
   const strength = passwordStrengthScore(newPassword);
 
@@ -279,34 +283,6 @@ export default function WorkerProfile() {
     } finally {
       setRequestingReset(false);
     }
-  }
-
-  async function persistNotificationPrefs(next: NotificationPreferences) {
-    setNotificationPrefs(next);
-    setSavingPrefs(true);
-    try {
-      await saveNotificationPreferences(deviceId, next);
-    } catch (error) {
-      toast({
-        title: translate("profile.notificationSaveFailed"),
-        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
-        variant: "destructive",
-      });
-    } finally {
-      setSavingPrefs(false);
-    }
-  }
-
-  function toggleNotification(event: NotificationEvent, channel: NotificationChannel, checked: boolean) {
-    if (!notificationPrefs) return;
-    const next = {
-      ...notificationPrefs,
-      [event]: {
-        ...notificationPrefs[event],
-        [channel]: checked,
-      },
-    };
-    void persistNotificationPrefs(next);
   }
 
   if (loading || !profile) {
@@ -667,43 +643,14 @@ export default function WorkerProfile() {
         <DeviceNotifications />
       </section>
 
-      <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section id="notification-settings" className="scroll-mt-24 rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5">
           <h2 className="text-lg font-bold text-[#1A1A2E]">{translate("profile.notificationPrefs")}</h2>
           <p className="text-sm text-[#6A6A77]">
             {translate("profile.notificationPrefsHint")}
           </p>
         </div>
-
-        {notificationPrefs ? (
-          <div className="space-y-4">
-            <div className="hidden md:grid md:grid-cols-[1.4fr_repeat(3,0.5fr)] gap-3 px-2 text-[11px] font-bold uppercase tracking-wider text-[#6A6A77]">
-              <span>{translate("profile.event")}</span>
-              {CHANNELS.map((channel) => (
-                <span key={channel} className="text-center">{channelLabel(channel)}</span>
-              ))}
-            </div>
-            {EVENTS.map((event) => (
-              <div
-                key={event}
-                className="grid gap-3 rounded-2xl border px-4 py-3 md:grid-cols-[1.4fr_repeat(3,0.5fr)] md:items-center"
-                style={{ borderColor: BORDER }}
-              >
-                <p className="text-sm font-semibold text-[#1A1A2E]">{eventLabel(event)}</p>
-                {CHANNELS.map((channel) => (
-                  <div key={channel} className="flex items-center justify-between md:justify-center gap-3">
-                    <span className="text-xs text-[#6A6A77] md:hidden">{channelLabel(channel)}</span>
-                    <Switch
-                      checked={notificationPrefs[event][channel]}
-                      disabled={savingPrefs}
-                      onCheckedChange={(checked) => toggleNotification(event, channel, checked)}
-                    />
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        ) : null}
+        <NotificationPreferencesEditor groups={notificationGroups} />
       </section>
     </div>
   );

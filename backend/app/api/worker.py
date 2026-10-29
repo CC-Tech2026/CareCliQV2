@@ -2357,27 +2357,37 @@ async def reply_to_message(
             .maybe_single()
             .execute()
         )
-        if not original_msg.data:
-            raise HTTPException(status_code=404, detail="Original message not found")
+        original = original_msg.data if original_msg else None
+        related_alert_id = message_id if original else None
+        if not original:
+            # The notifications panel replies by inbox id (user_notifications);
+            # it's still the worker's own message from the office.
+            from ..services import user_notification_store
+            inbox_row = user_notification_store.get_user_notification(message_id, worker_id)
+            if not inbox_row or inbox_row.get("event_type") != "coordinator_message":
+                raise HTTPException(status_code=404, detail="Original message not found")
+            original = {"patient_id": None, "session_id": None}
         
-        # Get coordinator who sent the original message
-        # For now, we'll create the reply as a new alert for all coordinators in the org
-        # In a real scenario, you'd track who sent the original message
+        sender = (
+            supabase.table("users").select("full_name").eq("id", worker_id).limit(1).execute()
+        )
+        sender_name = ((sender.data or [{}])[0].get("full_name") or "").strip() or "a worker"
         
-        # Create reply alert
+        # The reply goes to the organisation's shared alert feed, where any
+        # coordinator can pick it up.
         reply_id = str(uuid4())
         reply_alert = {
             "id": reply_id,
             "organization_id": org_id,
             "alert_type": "worker_reply",
-            "title": f"Reply from Worker",
+            "title": f"Reply from {sender_name}",
             "message": reply_text,
             "severity": "medium",
             "is_read": False,
-            "patient_id": original_msg.data.get("patient_id"),
-            "session_id": original_msg.data.get("session_id"),
+            "patient_id": original.get("patient_id"),
+            "session_id": original.get("session_id"),
             "sender_user_id": worker_id,  # Track who replied
-            "related_message_id": message_id,  # Link to original message
+            "related_message_id": related_alert_id,  # Link to original message
         }
         
         supabase.table("alerts").insert(reply_alert).execute()

@@ -340,7 +340,9 @@ async def notify_worker(
 
     prefs = get_effective_preferences(user_id)
     resolved_alert_type = alert_type or EVENT_ALERT_TYPES.get(event, event)
-    action_url = action_url or f"{settings.frontend_base_url.rstrip('/')}/worker/profile"
+    base_url = settings.frontend_base_url.rstrip('/')
+    # /notifications works for every role; /worker/profile 403'd office staff.
+    action_url = action_url or f"{base_url}/notifications"
     results: dict[str, Any] = {
         "user_id": user_id,
         "event": event,
@@ -419,6 +421,8 @@ async def notify_worker(
                 title=title,
                 message=message,
                 action_url=action_url,
+                severity=severity,
+                settings_url=f"{base_url}/notifications/settings",
             )
             _record_delivery(user_id, event, reference_key, "email")
             results["email"] = True
@@ -823,6 +827,8 @@ async def _notify_office_staff(
     session_id: Optional[str] = None,
     event: str = "coordinator_message",
     push_priority: str = "default",
+    action_url: Optional[str] = None,
+    shift_id: Optional[str] = None,
 ) -> None:
     for coordinator_id in _org_coordinator_user_ids(org_id):
         await notify_worker(
@@ -835,7 +841,8 @@ async def _notify_office_staff(
             severity=severity,
             participant_id=participant_id,
             session_id=session_id,
-            action_url=f"{settings.frontend_base_url.rstrip('/')}/incidents",
+            action_url=action_url or f"{settings.frontend_base_url.rstrip('/')}/incidents",
+            shift_id=shift_id,
             email_subject=title,
             push_priority=push_priority,
         )
@@ -870,6 +877,7 @@ async def notify_incident_reported(
         session_id=session_id,
         event=event,
         push_priority=push_priority,
+        action_url=f"{settings.frontend_base_url.rstrip('/')}/incidents/{incident_id}",
     )
 
     if is_emergency and participant_id:
@@ -916,13 +924,34 @@ async def notify_office_worker_message(
 ) -> None:
     severity = "critical" if priority == "emergency" else ("high" if priority == "urgent" else "medium")
     preview = message[:280] + ("…" if len(message) > 280 else "")
+    sender = _user_display_name(worker_id) or "A worker"
     await _notify_office_staff(
         org_id=org_id,
-        title="Worker message during shift",
+        title=f"Message from {sender} on shift",
         message=preview,
         reference_key=f"shift-message:{shift_id}:{worker_id}:{int(datetime.now(timezone.utc).timestamp())}",
         severity=severity,
+        # The shift is where the conversation is, not the incident register.
+        action_url=f"{settings.frontend_base_url.rstrip('/')}/coordinator/rostering?openShift={shift_id}",
+        shift_id=shift_id,
     )
+
+
+def _user_display_name(user_id: str) -> Optional[str]:
+    try:
+        result = (
+            get_supabase_admin()
+            .table("users")
+            .select("full_name")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+        )
+        rows = result.data or []
+        name = (rows[0].get("full_name") or "").strip() if rows else ""
+        return name or None
+    except Exception:
+        return None
 
 
 def _format_shift_time(value: Any, shift: Optional[dict[str, Any]] = None) -> str:

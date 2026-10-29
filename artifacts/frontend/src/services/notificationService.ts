@@ -58,6 +58,22 @@ export async function fetchNotifications(params?: {
   );
 }
 
+export async function markInboxNotificationRead(id: string) {
+  return jsonFetch<{ ok: boolean }>(`/api/worker/notifications/${id}/read`, { method: "POST" });
+}
+
+export async function markAllInboxNotificationsRead() {
+  return jsonFetch<{ ok: boolean }>("/api/worker/notifications/read-all", { method: "POST" });
+}
+
+/** Worker replies to a message from the office; lands in the team alert feed. */
+export async function replyToOfficeMessage(notificationId: string, message: string) {
+  return jsonFetch<{ success: boolean }>(`/api/worker/messages/${notificationId}/reply`, {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
+}
+
 export async function dismissNotification(id: string) {
   return jsonFetch<{ ok: boolean }>(`/api/worker/notifications/${id}/dismiss`, { method: "POST" });
 }

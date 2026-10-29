@@ -16,8 +16,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
-import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/worker/WorkerNotificationPanel";
+import { NotificationBell, NotificationInbox } from "@/components/notifications/NotificationInbox";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NotificationBannerStack } from "@/components/worker/NotificationBannerStack";
 import { NotificationRealtimeBridge } from "@/components/worker/NotificationRealtimeBridge";
 import { PaymentIssueBanner } from "@/components/layout/PaymentIssueBanner";
@@ -645,7 +645,6 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
   const [location] = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [workerNotifOpen, setWorkerNotifOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem("sidebar-collapsed") === "true"; }
     catch { return false; }
@@ -857,10 +856,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {!isWorker
-            ? <NotificationBell onClick={() => setNotifOpen(true)} />
-            : <WorkerNotificationBell onClick={() => setWorkerNotifOpen(true)} />
-          }
+          <NotificationBell onClick={() => setNotifOpen(true)} />
 
           {/* Profile */}
           <ProfileDropdown
@@ -927,6 +923,8 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
                   </button>
                 </Link>
               )}
+              {/* The desktop header (and its bell) is hidden on phones. */}
+              <NotificationBell onClick={() => setNotifOpen(true)} />
               <button
                 type="button"
                 onClick={() => setDrawerOpen(true)}
@@ -959,19 +957,15 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
             <PageErrorBoundary>{children}</PageErrorBoundary>
           </main>
 
-          {/* Notification panels */}
-          {notifOpen && (
-            <>
-              <div className="fixed inset-0 z-40 bg-black/20" onClick={() => setNotifOpen(false)} />
-              <NotificationPanel onClose={() => setNotifOpen(false)} />
-            </>
-          )}
-          {workerNotifOpen && (
-            <>
-              <div className="fixed inset-0 z-40 bg-black/20" onClick={() => setWorkerNotifOpen(false)} />
-              <WorkerNotificationPanel onClose={() => setWorkerNotifOpen(false)} />
-            </>
-          )}
+          <Sheet open={notifOpen} onOpenChange={setNotifOpen}>
+            <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md [&>button]:hidden">
+              <SheetHeader className="sr-only">
+                <SheetTitle>{translate("inbox.title")}</SheetTitle>
+                <SheetDescription>{translate("inbox.description")}</SheetDescription>
+              </SheetHeader>
+              {notifOpen && <NotificationInbox onClose={() => setNotifOpen(false)} />}
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
 

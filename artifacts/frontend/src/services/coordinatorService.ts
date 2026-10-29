@@ -1429,6 +1429,7 @@ export type LiveShift = {
 export type CoordinatorAlert = {
   id: string;
   alert_type?: string;
+  title?: string | null;
   message?: string;
   severity?: string;
   is_read: boolean;

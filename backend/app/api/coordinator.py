@@ -5032,14 +5032,17 @@ async def get_coordinator_notifications(
     unread_only: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get alerts/notifications for the coordinator's current organisation only."""
+    """The organisation's shared alert feed (no-shows, missing notes, flags,
+    worker replies). Alerts addressed to one person are left out: those are
+    copies of that person's own notifications, which live in their inbox."""
     org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         q = (
             supabase.table("alerts")
-            .select("id, alert_type, message, severity, is_read, session_id, patient_id, created_at, organization_id, recipient_user_id")
+            .select("id, alert_type, title, message, severity, is_read, session_id, shift_id, patient_id, created_at, organization_id")
             .eq("organization_id", org_id)
+            .is_("recipient_user_id", "null")
             .order("created_at", desc=True)
             .limit(limit)
         )
@@ -5060,7 +5063,7 @@ async def mark_coordinator_notification_read(
     org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
-        supabase.table("alerts").update({"is_read": True}).eq("id", alert_id).eq("organization_id", org_id).execute()
+        supabase.table("alerts").update({"is_read": True}).eq("id", alert_id).eq("organization_id", org_id).is_("recipient_user_id", "null").execute()
         return {"ok": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=internal_error_detail("Mark read failed", exc))
@@ -5070,11 +5073,12 @@ async def mark_coordinator_notification_read(
 async def mark_all_coordinator_notifications_read(
     current_user: dict = Depends(get_current_user),
 ):
-    """Mark all alerts as read for this organization."""
+    """Mark the organisation's shared alerts as read. Alerts addressed to one
+    person (a worker's messages, say) are theirs to read, so they're untouched."""
     org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
-        supabase.table("alerts").update({"is_read": True}).eq("organization_id", org_id).eq("is_read", False).execute()
+        supabase.table("alerts").update({"is_read": True}).eq("organization_id", org_id).eq("is_read", False).is_("recipient_user_id", "null").execute()
         return {"ok": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=internal_error_detail("Mark all read failed", exc))

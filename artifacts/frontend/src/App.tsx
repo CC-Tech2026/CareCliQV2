@@ -103,7 +103,7 @@ import WorkerScheduleCalendar from "@/pages/worker-schedule-calendar";
 import WorkerScheduleRequests from "@/pages/worker-schedule-requests";
 import WorkerAvailabilityPage from "@/pages/worker-availability";
 import WorkerMessages from "@/pages/worker-messages";
-import WorkerNotificationsPage from "@/pages/worker-notifications";
+import NotificationsPage, { NotificationSettingsRedirect } from "@/pages/worker-notifications";
 import Tasks from "@/pages/tasks";
 import WorkerProfile from "@/pages/worker-profile";
 import WorkerSecurity from "@/pages/worker-security";
@@ -632,10 +632,20 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      <Route path="/worker/notifications">
-        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
-          <AppLayout><WorkerNotificationsPage /></AppLayout>
+      <Route path="/notifications/settings">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <NotificationSettingsRedirect />
         </ProtectedRoute>
+      </Route>
+
+      <Route path="/notifications">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <RoleAwareShell><NotificationsPage /></RoleAwareShell>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/notifications">
+        <Redirect to="/notifications" />
       </Route>
 
       <Route path="/worker-ndis-plan">

@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { TimePicker } from "@/components/ui/time-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -23,13 +22,9 @@ import {
   changePassword,
   requestPasswordReset,
   getMe,
-  getNotificationPreferences,
-  saveNotificationPreferences,
-  type NotificationChannel,
-  type QuietHours,
 } from "@/services/userService";
 import { DeviceNotifications } from "@/components/notifications/DeviceNotifications";
-import { getDeviceId } from "@/lib/device-id";
+import { NotificationPreferencesEditor, type NotificationPrefGroup } from "@/components/notifications/NotificationPreferencesEditor";
 import { NavLayoutCard } from "@/components/settings/NavLayoutSettings";
 import {
   PenLine,
@@ -347,122 +342,27 @@ interface PendingInvite {
 
 // What reaches coordinators and directors, grouped. Keys are backend
 // NOTIFICATION_EVENTS (notification_service.py); a row toggles all its keys.
-const OFFICE_NOTIF_GROUPS: { keys: string[]; label: string; description: string; popupLocked?: boolean }[] = [
-  { keys: ["safety_alert"], label: "Emergency incidents", description: "Always pops up, even during quiet hours.", popupLocked: true },
-  { keys: ["worker_cannot_attend"], label: "A worker can't make their shift", description: "The shift needs reassigning." },
-  { keys: ["shift_offer_exhausted"], label: "No one accepted a shift offer", description: "Every suggested worker declined or didn't respond." },
-  { keys: ["shift_auto_cancelled_unassigned"], label: "Unfilled shift cancelled", description: "A shift reached its start time with no one assigned." },
-  { keys: ["shift_auto_ended_overdue", "shift_documentation_overdue"], label: "Overdue shifts and notes", description: "Shifts ended automatically, or shift notes not finished in time." },
-  { keys: ["coordinator_message"], label: "Messages and incident reports", description: "Messages from staff on shift, new incident reports and staff requests." },
-  { keys: ["incident_pending_overdue", "incident_notification_alert"], label: "Incident follow-ups", description: "Reports still missing details, and NDIS notification deadlines." },
-  { keys: ["medication_alert"], label: "Medication alerts", description: "Overdue doses and PRN limits reached." },
-  { keys: ["training_request", "training_completion_review"], label: "Training", description: "Training requests and completions to review." },
-  { keys: ["ndis_screening_recheck_due"], label: "Worker screening rechecks", description: "NDIS Worker Screening coming up for renewal." },
+const OFFICE_NOTIF_GROUPS: NotificationPrefGroup[] = [
+  { id: "safety", keys: ["safety_alert"], label: "Emergency incidents", description: "Always pops up, even during quiet hours.", popupLocked: true },
+  { id: "cannot_attend", keys: ["worker_cannot_attend"], label: "A worker can't make their shift", description: "The shift needs reassigning." },
+  { id: "offer_exhausted", keys: ["shift_offer_exhausted"], label: "No one accepted a shift offer", description: "Every suggested worker declined or didn't respond." },
+  { id: "auto_cancelled", keys: ["shift_auto_cancelled_unassigned"], label: "Unfilled shift cancelled", description: "A shift reached its start time with no one assigned." },
+  { id: "overdue", keys: ["shift_auto_ended_overdue", "shift_documentation_overdue"], label: "Overdue shifts and notes", description: "Shifts ended automatically, or shift notes not finished in time." },
+  { id: "messages", keys: ["coordinator_message"], label: "Messages and incident reports", description: "Messages from staff on shift, new incident reports and staff requests." },
+  { id: "incident_followups", keys: ["incident_pending_overdue", "incident_notification_alert"], label: "Incident follow-ups", description: "Reports still missing details, and NDIS notification deadlines." },
+  { id: "medication", keys: ["medication_alert"], label: "Medication alerts", description: "Overdue doses and PRN limits reached." },
+  { id: "training", keys: ["training_request", "training_completion_review"], label: "Training", description: "Training requests and completions to review." },
+  { id: "screening", keys: ["ndis_screening_recheck_due"], label: "Worker screening rechecks", description: "NDIS Worker Screening coming up for renewal." },
   {
+    id: "hiring",
     keys: ["invite_request", "applicant_stage_stuck", "onboarding_stage_reminder", "onboarding_stage_auto_inactive", "offer_letter_expired", "hire_invite_expired", "hire_invite_pending"],
     label: "Hiring and onboarding",
     description: "Requests to join, applicants waiting on you, and offers or invites that need attention.",
   },
 ];
 
-const OFFICE_CHANNELS = [
-  { key: "push", label: "Pop-up" },
-  { key: "email", label: "Email" },
-] as const;
-type OfficeChannel = (typeof OFFICE_CHANNELS)[number]["key"];
-
-type OfficePrefs = Record<string, Record<NotificationChannel, boolean>>;
-
-function browserTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-  } catch {
-    return "";
-  }
-}
-
 function NotificationsSection() {
-  const { toast } = useToast();
   const { translate } = useAccessibility();
-  const deviceId = getDeviceId();
-  const [prefs, setPrefs] = useState<OfficePrefs | null>(null);
-  const [quiet, setQuiet] = useState<QuietHours>({ enabled: false, from: "22:00", to: "07:00", timezone: browserTimezone() });
-  const [pristine, setPristine] = useState("");
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    getNotificationPreferences<string>(deviceId)
-      .then((data) => {
-        const loadedQuiet = {
-          enabled: data.quiet_hours?.enabled ?? false,
-          from: data.quiet_hours?.from || "22:00",
-          to: data.quiet_hours?.to || "07:00",
-          timezone: data.quiet_hours?.timezone || browserTimezone(),
-        };
-        setPrefs(data.preferences);
-        setQuiet(loadedQuiet);
-        setPristine(JSON.stringify({ p: data.preferences, q: loadedQuiet }));
-      })
-      .catch(() => setLoadFailed(true));
-  }, [deviceId]);
-
-  const dirty = prefs !== null && JSON.stringify({ p: prefs, q: quiet }) !== pristine;
-
-  function cancel() {
-    if (!pristine) return;
-    const saved = JSON.parse(pristine) as { p: OfficePrefs; q: QuietHours };
-    setPrefs(saved.p);
-    setQuiet(saved.q);
-  }
-
-  async function save() {
-    if (!prefs) return;
-    setSaving(true);
-    try {
-      // Save in the zone of the browser doing the editing, so 22:00 means 22:00 here.
-      const quietToSave = { ...quiet, timezone: browserTimezone() || quiet.timezone };
-      const saved = await saveNotificationPreferences<string>(deviceId, prefs, quietToSave);
-      const savedQuiet = saved.quiet_hours ?? quietToSave;
-      setPrefs(saved.preferences);
-      setQuiet(savedQuiet);
-      setPristine(JSON.stringify({ p: saved.preferences, q: savedQuiet }));
-      toast({ title: translate("settings.toast.notificationsSaved") });
-    } catch {
-      toast({ variant: "destructive", title: translate("settings.toast.saveFailed") });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function groupChecked(keys: string[], channel: OfficeChannel): boolean {
-    return keys.some((key) => prefs?.[key]?.[channel] ?? true);
-  }
-
-  function toggleGroup(keys: string[], channel: OfficeChannel) {
-    const next = !groupChecked(keys, channel);
-    setPrefs((current) => {
-      if (!current) return current;
-      const updated = { ...current };
-      for (const key of keys) {
-        updated[key] = { ...(updated[key] ?? { push: true, email: true, sms: false }), [channel]: next };
-      }
-      return updated;
-    });
-  }
-
-  function channelControl(group: (typeof OFFICE_NOTIF_GROUPS)[number], channel: OfficeChannel) {
-    const locked = channel === "push" && group.popupLocked;
-    return (
-      <Switch
-        aria-label={`${OFFICE_CHANNELS.find((c) => c.key === channel)?.label} for ${group.label}`}
-        checked={locked ? true : groupChecked(group.keys, channel)}
-        disabled={locked}
-        onCheckedChange={() => toggleGroup(group.keys, channel)}
-      />
-    );
-  }
-
   return (
     <Section
       title={translate("settings.notifications.title")}
@@ -474,81 +374,9 @@ function NotificationsSection() {
         <p className="mb-3 text-[12px]" style={{ color: "var(--cc-muted)" }}>{translate("devices.hint")}</p>
         <DeviceNotifications />
       </div>
-
       <div className="mt-4">
-        <p className="font-bold text-[14px]" style={{ color: "var(--cc-text)" }}>What you're told about</p>
-        <p className="mb-3 text-[12px]" style={{ color: "var(--cc-muted)" }}>
-          Everything always lands in your notifications panel. Choose what also pops up on your devices or arrives by email.
-        </p>
-
-        {loadFailed ? (
-          <p role="alert" className="text-sm" style={{ color: "var(--cc-muted)" }}>Your notification settings couldn't be loaded. Refresh the page to try again.</p>
-        ) : !prefs ? (
-          <div className="flex items-center gap-2 py-6 text-sm" style={{ color: "var(--cc-muted)" }}>
-            <Loader2 size={14} className="animate-spin" /> {translate("settings.loadingPreferences")}
-          </div>
-        ) : (
-          <div className="rounded-xl border bg-white" style={{ borderColor: "var(--cc-border)" }}>
-            <div className="hidden grid-cols-[1fr_5rem_5rem] gap-3 border-b px-4 py-2.5 text-[11px] font-semibold uppercase tracking-widest md:grid" style={{ color: "var(--cc-muted)", borderColor: "var(--cc-border)" }}>
-              <span>Event</span>
-              {OFFICE_CHANNELS.map((c) => <span key={c.key} className="text-center">{c.label}</span>)}
-            </div>
-            <ul className="divide-y" style={{ borderColor: "var(--cc-border)" }}>
-              {OFFICE_NOTIF_GROUPS.map((group) => (
-                <li key={group.label} className="grid grid-cols-1 gap-3 px-4 py-3 md:grid-cols-[1fr_5rem_5rem] md:items-center" style={{ borderColor: "var(--cc-border)" }}>
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>{group.label}</p>
-                    <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>{group.description}</p>
-                  </div>
-                  {OFFICE_CHANNELS.map((c) => (
-                    <label key={c.key} className="flex items-center justify-between gap-2 md:justify-center">
-                      <span className="text-[12px] font-semibold md:hidden" style={{ color: "var(--cc-text)" }}>{c.label}</span>
-                      {channelControl(group, c.key)}
-                    </label>
-                  ))}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <NotificationPreferencesEditor groups={OFFICE_NOTIF_GROUPS} />
       </div>
-
-      {/* Quiet hours */}
-      <div className="mt-4 rounded-2xl p-4 space-y-3" style={{ background: "var(--cc-soft)", border: "1px solid var(--cc-border)" }}>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="font-bold text-[14px]" style={{ color: "var(--cc-text)" }}>Quiet hours</p>
-            <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
-              No pop-ups during these hours. Emergencies still come through, and everything else waits in your notifications panel and email.
-            </p>
-          </div>
-          <Switch aria-label="Quiet hours" checked={quiet.enabled} disabled={!prefs} onCheckedChange={(v) => setQuiet((q) => ({ ...q, enabled: v }))} />
-        </div>
-        {quiet.enabled && (
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>From</label>
-              <TimePicker
-                value={quiet.from}
-                onChange={(v) => setQuiet((q) => ({ ...q, from: v }))}
-                className="rounded-xl px-3 text-[13px]"
-                style={{ border: "1px solid var(--cc-border)" }}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>To</label>
-              <TimePicker
-                value={quiet.to}
-                onChange={(v) => setQuiet((q) => ({ ...q, to: v }))}
-                className="rounded-xl px-3 text-[13px]"
-                style={{ border: "1px solid var(--cc-border)" }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <StickyActionBar visible={dirty} saving={saving} onSave={save} onCancel={cancel} saveLabel="Update settings" />
     </Section>
   );
 }

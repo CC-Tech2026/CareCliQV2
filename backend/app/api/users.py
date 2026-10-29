@@ -347,6 +347,17 @@ async def save_notification_preferences(
         logger.warning("Notification prefs save failed for %s: %s", user_id, exc)
         raise HTTPException(status_code=502, detail="Could not save notification preferences.")
 
+    # Delivery ORs the rows across devices (get_effective_preferences), so a
+    # stale row on another phone or browser would quietly undo "email off"
+    # here. Email and pop-ups both reach the person, not one device, so the
+    # choice applies everywhere.
+    try:
+        admin.table("user_notification_preferences").update({"preferences": cleaned}).eq(
+            "user_id", user_id
+        ).neq("device_id", body.device_id).execute()
+    except Exception as exc:
+        logger.warning("Notification prefs sync to other devices failed for %s: %s", user_id, exc)
+
     quiet_hours = cleaned.pop("quiet_hours", None)
     return {"device_id": body.device_id, "preferences": cleaned, "quiet_hours": clean_quiet_hours(quiet_hours)}
 

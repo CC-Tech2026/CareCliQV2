@@ -84,7 +84,8 @@ async def list_notifications(
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
 ):
-    _require_worker(current_user)
+    # Every role has a personal inbox (coordinators get reassign requests,
+    # incident reports and so on), so the inbox endpoints aren't worker-only.
     user_id = get_user_id(current_user)
     items = notification_store.list_user_notifications(
         user_id,
@@ -97,12 +98,18 @@ async def list_notifications(
     return {"notifications": items, "count": len(items)}
 
 
+@router.post("/read-all")
+async def read_all_notifications(current_user: dict = Depends(get_current_user)):
+    if not notification_store.mark_all_read(get_user_id(current_user)):
+        raise HTTPException(status_code=500, detail="Could not mark notifications as read")
+    return {"ok": True}
+
+
 @router.post("/{notification_id}/read")
 async def read_notification(
     notification_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    _require_worker(current_user)
     ok = notification_store.mark_notification_read(notification_id, get_user_id(current_user))
     if not ok:
         raise HTTPException(status_code=404, detail="Notification not found")
@@ -114,7 +121,6 @@ async def dismiss_notification(
     notification_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    _require_worker(current_user)
     ok = notification_store.dismiss_notification(notification_id, get_user_id(current_user))
     if not ok:
         raise HTTPException(status_code=404, detail="Notification not found")

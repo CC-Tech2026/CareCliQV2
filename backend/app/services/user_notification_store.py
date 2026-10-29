@@ -117,6 +117,33 @@ def mark_notification_read(notification_id: str, user_id: str) -> bool:
         return False
 
 
+def mark_all_read(user_id: str) -> bool:
+    try:
+        get_supabase_admin().table("user_notifications").update(
+            {"read_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("user_id", user_id).is_("read_at", "null").execute()
+        return True
+    except Exception:
+        return False
+
+
+def get_user_notification(notification_id: str, user_id: str) -> Optional[dict[str, Any]]:
+    try:
+        result = (
+            get_supabase_admin()
+            .table("user_notifications")
+            .select("*")
+            .eq("id", notification_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        rows = result.data or []
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
 def dismiss_notification(notification_id: str, user_id: str) -> bool:
     now = datetime.now(timezone.utc).isoformat()
     try:

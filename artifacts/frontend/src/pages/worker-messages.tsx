@@ -263,7 +263,7 @@ export default function WorkerMessages() {
       </section>
 
       <div className="lg:col-span-2 flex justify-center gap-4 pt-2">
-        <Link href="/worker/notifications">
+        <Link href="/notifications">
           <a className="text-sm font-semibold" style={{ color: PLUM }}>
             {translate("messages.notificationHistory")}
           </a>

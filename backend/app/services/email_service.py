@@ -745,6 +745,8 @@ def queue_worker_notification_email(
     message: str,
     action_url: str,
     cta_label: str = "View in CareCliQ",
+    severity: str | None = None,
+    settings_url: str | None = None,
 ) -> dict[str, str]:
     return queue_email_job(
         label=f"worker-notification:{to_email}:{subject[:40]}",
@@ -755,6 +757,8 @@ def queue_worker_notification_email(
             message=message,
             action_url=action_url,
             cta_label=cta_label,
+            severity=severity,
+            settings_url=settings_url,
         ),
     )
 
@@ -767,6 +771,8 @@ def _send_worker_notification_email_safe(
     message: str,
     action_url: str,
     cta_label: str = "View in CareCliQ",
+    severity: str | None = None,
+    settings_url: str | None = None,
 ) -> None:
     try:
         send_worker_notification_email(
@@ -776,10 +782,17 @@ def _send_worker_notification_email_safe(
             message=message,
             action_url=action_url,
             cta_label=cta_label,
+            severity=severity,
+            settings_url=settings_url,
         )
     except Exception as exc:
         logger.error("Worker notification email failed for %s: %s", to_email, exc)
         raise
+
+
+# Severities that get a coloured "needs attention" line above the title, so an
+# urgent email doesn't look like every other one in the inbox.
+_URGENT_EMAIL_SEVERITIES = {"critical", "emergency", "urgent", "high"}
 
 
 def send_worker_notification_email(
@@ -790,15 +803,46 @@ def send_worker_notification_email(
     message: str,
     action_url: str,
     cta_label: str = "View in CareCliQ",
+    severity: str | None = None,
+    settings_url: str | None = None,
 ) -> None:
-    text_body = f"{title}\n\n{message}\n\n{cta_label}:\n{action_url}\n"
-    html_body = f"""\
-<!doctype html>
+    """Branded single-message email. settings_url adds a footer saying why it
+    was sent and where to change it, for emails driven by notification settings."""
+    urgent = (severity or "").lower() in _URGENT_EMAIL_SEVERITIES
+    footer_text = (
+        "\n\nYou're getting this email because of your CareCliQ notification settings."
+        f" Choose which emails you get: {settings_url}\n"
+        if settings_url
+        else ""
+    )
+    attention = "Needs your attention. " if urgent else ""
+    text_body = f"{attention}{title}\n\n{message}\n\n{cta_label}:\n{action_url}\n{footer_text}"
+    preheader = message.replace("\n", " ")[:140]
+    urgent_html = (
+        '<p style="margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.04em;'
+        'text-transform:uppercase;color:#B91C1C;">Needs your attention</p>'
+        if urgent
+        else ""
+    )
+    card_border = "#FCA5A5" if urgent else "#E2DEF2"
+    footer_html = (
+        f"""
+      <p style="font-size:12px;line-height:1.6;color:#8A82A6;margin:16px 4px 0;">
+        You're getting this email because of your CareCliQ notification settings.
+        <a href="{escape(settings_url, quote=True)}" style="color:#5533CC;">Choose which emails you get</a>.
+      </p>"""
+        if settings_url
+        else ""
+    )
+    html_body = f"""<!doctype html>
 <html>
   <body style="margin:0;background:#f7f4ff;font-family:Arial,sans-serif;color:#1E1640;">
+    <span style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">{escape(preheader)}</span>
     <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
-      <div style="background:#ffffff;border:1px solid #E2DEF2;border-radius:16px;padding:28px;">
-        <h1 style="margin:0 0 12px;color:#5533CC;font-size:22px;">{escape(title)}</h1>
+      <p style="margin:0 0 14px 4px;font-size:15px;font-weight:700;color:#5533CC;">CareCliQ</p>
+      <div style="background:#ffffff;border:1px solid {card_border};border-radius:16px;padding:28px;">
+        {urgent_html}
+        <h1 style="margin:0 0 12px;color:#1E1640;font-size:21px;line-height:1.3;">{escape(title)}</h1>
         <p style="font-size:15px;line-height:1.6;margin:0 0 24px;white-space:pre-wrap;">{escape(message)}</p>
         <a href="{escape(action_url, quote=True)}" style="display:inline-block;background:#5533CC;color:#ffffff;text-decoration:none;font-weight:700;border-radius:999px;padding:12px 20px;">
           {escape(cta_label)}
@@ -807,7 +851,7 @@ def send_worker_notification_email(
           If the button doesn't work, copy this link into your browser:<br>
           <span style="word-break:break-all;">{escape(action_url)}</span>
         </p>
-      </div>
+      </div>{footer_html}
     </div>
   </body>
 </html>

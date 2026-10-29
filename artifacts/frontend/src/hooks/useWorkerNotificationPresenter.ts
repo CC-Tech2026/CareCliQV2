@@ -6,6 +6,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { fetchNotifications } from "@/services/notificationService";
 import { getSupabaseClient, isSupabaseRealtimeConfigured } from "@/lib/supabase";
 import { syncDeviceNotifications } from "@/lib/web-push";
+import { invalidateInbox } from "@/components/notifications/NotificationInbox";
 import {
   parseRealtimeNotificationRow,
   presentPushedNotification,
@@ -63,6 +64,7 @@ export function useWorkerNotificationPresenter() {
         navigate(message.url);
       } else if (message?.type === "carecliq:push" && message.payload) {
         presentPushedNotification(message.payload, navigate);
+        invalidateInbox(qc, orgId);
         void qc.invalidateQueries({ queryKey: [orgId, "coordinator-notifications"] });
       }
     };
@@ -79,10 +81,7 @@ export function useWorkerNotificationPresenter() {
     if (!sb) return;
 
     const invalidate = () => {
-      void qc.invalidateQueries({ queryKey: [orgId, "notification-banners"] });
-      void qc.invalidateQueries({ queryKey: [orgId, "worker-notifications-unread"] });
-      void qc.invalidateQueries({ queryKey: [orgId, "notification-history"] });
-      void qc.invalidateQueries({ queryKey: [orgId, "worker-messages"] });
+      invalidateInbox(qc, orgId);
       void qc.invalidateQueries({ queryKey: [orgId, "coordinator-notifications"] });
     };
 
