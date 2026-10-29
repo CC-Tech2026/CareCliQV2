@@ -15,7 +15,7 @@ import {
   fetchNotifications,
   markAllInboxNotificationsRead,
   markInboxNotificationRead,
-  replyToOfficeMessage,
+  replyToNotification,
   type UserNotification,
 } from "@/services/notificationService";
 import {
@@ -155,8 +155,17 @@ function EmptyState({ title, hint }: { title: string; hint?: string }) {
   );
 }
 
-/** Accept/decline an offer, acknowledge a change, reply to the office. Shared
- *  by the list row and the full view. */
+/** Messages someone can answer from the notification. Workers answer the
+ *  office; office staff answer a worker (on-shift messages, shift
+ *  conversations, replies). The server decides which thread it goes in. */
+export function canReplyTo(item: UserNotification, audience: NotificationAudience): boolean {
+  if (item.event_type !== "coordinator_message") return false;
+  if (audience === "worker") return true;
+  return Boolean(item.conversation_id || item.payload?.worker_id);
+}
+
+/** Accept/decline an offer, acknowledge a change, reply. Shared by the list
+ *  row and the full view. */
 function NotificationActions({ item, audience, className }: { item: UserNotification; audience: NotificationAudience; className?: string }) {
   const { translate } = useAccessibility();
   const { toast } = useToast();
@@ -196,7 +205,7 @@ function NotificationActions({ item, audience, className }: { item: UserNotifica
     onError: failed,
   });
   const sendReply = useMutation({
-    mutationFn: () => replyToOfficeMessage(item.id, reply.trim()),
+    mutationFn: () => replyToNotification(item.id, reply.trim()),
     onSuccess: () => {
       setReply("");
       setReplying(false);
@@ -211,7 +220,7 @@ function NotificationActions({ item, audience, className }: { item: UserNotifica
   // buttons; the API refuses an offer that's been answered or has expired.
   const canRespondToOffer = isWorker && item.event_type === "shift_offer" && Boolean(item.shift_id);
   const needsAck = Boolean(item.requires_ack) && !item.acknowledged_at;
-  const canReply = isWorker && item.event_type === "coordinator_message";
+  const canReply = canReplyTo(item, audience);
   const busy = accept.isPending || decline.isPending || acknowledge.isPending;
   if (!canRespondToOffer && !needsAck && !canReply) return null;
 
@@ -253,7 +262,7 @@ function NotificationActions({ item, audience, className }: { item: UserNotifica
             value={reply}
             onChange={(event) => setReply(event.target.value)}
             maxLength={1000}
-            aria-label={translate("notifications.panel.replyTitle")}
+            aria-label={translate("inbox.replyLabel")}
             placeholder={translate("notifications.panel.replyPlaceholder")}
             className="w-full resize-none rounded-xl border bg-white p-2.5 text-[13px] focus:outline-none focus:ring-2"
             style={{ borderColor: "var(--cc-border)" }}

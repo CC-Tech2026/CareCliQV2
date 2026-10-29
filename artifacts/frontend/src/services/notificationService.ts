@@ -66,9 +66,11 @@ export async function markAllInboxNotificationsRead() {
   return jsonFetch<{ ok: boolean }>("/api/worker/notifications/read-all", { method: "POST" });
 }
 
-/** Worker replies to a message from the office; lands in the team alert feed. */
-export async function replyToOfficeMessage(notificationId: string, message: string) {
-  return jsonFetch<{ success: boolean }>(`/api/worker/messages/${notificationId}/reply`, {
+/** Reply to a message from its notification, for any role. The server puts
+ *  it in the thread it came from: the shift's conversation, or back to the
+ *  person who sent it. */
+export async function replyToNotification(notificationId: string, message: string) {
+  return jsonFetch<{ sent_to: string }>(`/api/worker/notifications/${notificationId}/reply`, {
     method: "POST",
     body: JSON.stringify({ message }),
   });

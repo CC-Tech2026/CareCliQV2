@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 
 from fastapi import HTTPException
 
-from .notification_service import _notify_office_staff, notify_worker
+from .notification_service import _notify_office_staff, _user_display_name, notify_worker
 from .supabase_client import get_supabase_admin
 from .training_cover_service import validate_cover, with_cover_url
 from .training_material_service import validate_material_path, with_material_url
@@ -241,12 +241,14 @@ def mark_training_complete(
     import asyncio
 
     async def _notify():
+        name = _user_display_name(str(record.get("worker_id") or "")) or "A worker"
         await _notify_office_staff(
             org_id=organization_id,
             title="Training completion to review",
-            message=f"A worker marked a training module complete on {completed_at.isoformat()}.",
+            message=f"{name} marked a training module complete. Check their evidence and confirm or decline it.",
             reference_key=f"training_completion:{record['id']}",
             event="training_completion_review",
+            payload={"worker_id": str(record.get("worker_id") or "")},
         )
 
     try:
@@ -284,13 +286,15 @@ def create_training_request(
     import asyncio
 
     async def _notify():
+        name = _user_display_name(worker_id) or "A worker"
         await _notify_office_staff(
             org_id=organization_id,
             title="Training request" + (" (urgent)" if urgent else ""),
-            message=request_text.strip(),
+            message=f"{name} asked for: {request_text.strip()}. Reason: {reason.strip()}",
             reference_key=f"training_request:{record['id']}",
             severity="high" if urgent else "medium",
             event="training_request",
+            payload={"worker_id": worker_id},
         )
 
     try:

@@ -36,6 +36,7 @@ from ..services.notification_service import (
     notify_certification_expiry,
     notify_coordinator_message,
     notify_conversation_message,
+    _user_display_name,
     notify_feedback_received,
     notify_shift_cancelled,
     notify_shift_change,
@@ -1431,11 +1432,14 @@ async def send_worker_message(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=internal_error_detail("Worker lookup failed", exc))
 
+    sender_id = get_user_id(current_user)
+    sender_name = _user_display_name(sender_id)
     result = await notify_coordinator_message(
         user_id=worker_id,
         org_id=org_id,
-        title=(body.title or "Message from your coordinator").strip(),
+        title=(body.title or (f"Message from {sender_name}" if sender_name else "Message from your coordinator")).strip(),
         message=message,
+        sender_id=sender_id,
     )
     return {"worker_id": worker_id, "delivered": result}
 
@@ -4859,6 +4863,8 @@ async def send_shift_message(
         conversation_id=str(conv["id"]),
         shift_id=shift_id,
         message_preview=body.message,
+        sender_name=_user_display_name(sender_id) or "the office",
+        sender_id=sender_id,
     )
     return msg
 

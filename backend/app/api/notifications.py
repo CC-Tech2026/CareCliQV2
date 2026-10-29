@@ -16,7 +16,8 @@ from ..core.errors import internal_error_detail
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
 from ..services import conversation_service, push_service, web_push_service
-from ..services.notification_service import notify_conversation_message
+from ..services.notification_service import _user_display_name, notify_conversation_message
+from ..services import notification_reply_service
 from ..services.push_service import register_push_token
 from ..services import user_notification_store as notification_store
 from ..services.supabase_client import get_supabase_admin
@@ -103,6 +104,32 @@ async def read_all_notifications(current_user: dict = Depends(get_current_user))
     if not notification_store.mark_all_read(get_user_id(current_user)):
         raise HTTPException(status_code=500, detail="Could not mark notifications as read")
     return {"ok": True}
+
+
+class ReplyBody(BaseModel):
+    message: str = Field(min_length=1, max_length=1000)
+
+
+@router.post("/{notification_id}/reply")
+async def reply_to_notification(
+    notification_id: str,
+    body: ReplyBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reply to a message from its notification, for every role. The reply
+    goes into the thread it came from (see notification_reply_service)."""
+    try:
+        return await notification_reply_service.reply_to_notification(
+            user_id=get_user_id(current_user),
+            role=str(current_user.get("role") or ""),
+            org_id=get_user_organization_id(current_user) or "",
+            notification_id=notification_id,
+            text=body.message,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Message not found")
+    except notification_reply_service.ReplyNotPossible as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 @router.post("/{notification_id}/read")
@@ -299,7 +326,10 @@ async def send_conversation_message(
             conversation_id=conversation_id,
             shift_id=str(conv.data.get("shift_id") or "") or None,
             message_preview=body.body or "Sent an image",
-            sender_name="Worker",
+            sender_name=_user_display_name(user_id) or "A worker",
+            sender_id=user_id,
+            worker_id=user_id,
+            recipient_is_office=True,
         )
     return msg
 

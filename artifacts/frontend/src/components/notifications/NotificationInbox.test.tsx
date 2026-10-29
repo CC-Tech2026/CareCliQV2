@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   refetch: vi.fn(),
   navigate: vi.fn(),
   markRead: vi.fn(),
+  reply: vi.fn(),
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
@@ -49,7 +50,7 @@ vi.mock("@/services/notificationService", () => ({
   markAllInboxNotificationsRead: vi.fn(),
   dismissNotification: vi.fn(),
   acknowledgeNotification: vi.fn(),
-  replyToOfficeMessage: vi.fn(),
+  replyToNotification: (id: string, message: string) => state.reply(id, message),
 }));
 vi.mock("@/services/coordinatorService", () => ({
   getCoordinatorNotifications: vi.fn(),
@@ -149,4 +150,25 @@ it("lets a worker accept a shift offer from the panel; office staff don't get th
   render(<NotificationInbox />);
   expect(screen.queryByRole("button", { name: "notifications.panel.acceptShift" })).toBeNull();
   expect(screen.getByRole("button", { name: /inbox.tab.team/ })).toBeTruthy();
+});
+
+it("lets office staff answer a worker's on-shift message from the notification", () => {
+  state.role = "support_coordinator";
+  state.inbox = [{
+    id: "n1", event_type: "coordinator_message", title: "Message from Tom Reid on shift", body: "Can you call me?",
+    severity: "medium", shift_id: "s2", payload: { worker_id: "w9" }, created_at: now,
+  }];
+  render(<NotificationInbox onClose={vi.fn()} />);
+  fireEvent.click(screen.getByText("Message from Tom Reid on shift"));
+  fireEvent.click(screen.getAllByRole("button", { name: "inbox.reply" })[0]);
+  fireEvent.change(screen.getByLabelText("inbox.replyLabel"), { target: { value: "Calling now" } });
+  fireEvent.click(screen.getByRole("button", { name: "notifications.panel.sendReply" }));
+  expect(state.reply).toHaveBeenCalledWith("n1", "Calling now");
+});
+
+it("doesn't offer office staff a reply on notifications that aren't from a worker", () => {
+  state.role = "support_coordinator";
+  state.inbox = [{ id: "n1", event_type: "coordinator_message", title: "New incident report", body: "", severity: "high", action_url: "/incidents/i1", created_at: now }];
+  render(<NotificationInbox />);
+  expect(screen.queryByRole("button", { name: "inbox.reply" })).toBeNull();
 });

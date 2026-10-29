@@ -109,7 +109,10 @@ class WorkerReplyTests(unittest.TestCase):
         insert = next(args for calls in fake.queries for name, args in calls if name == "insert")
         self.assertEqual(insert[0]["alert_type"], "worker_reply")
         self.assertEqual(insert[0]["message"], "On my way")
-        self.assertIsNone(insert[0]["related_message_id"])
+        # alerts has no sender_user_id / related_message_id columns; writing
+        # them made every one of these replies fail.
+        self.assertNotIn("related_message_id", insert[0])
+        self.assertNotIn("sender_user_id", insert[0])
 
     def test_cannot_reply_to_someone_elses_notification(self):
         from backend.app.api import worker as worker_api

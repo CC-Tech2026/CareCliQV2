@@ -382,6 +382,12 @@ async def notify_worker(
         "push": False,
     }
 
+    payload = dict(payload or {})
+    if participant_id:
+        payload.setdefault("participant_id", participant_id)
+    if alert_type:
+        payload.setdefault("alert_type", alert_type)
+
     in_app_key = f"{reference_key}:in_app"
     in_app_row: Optional[dict[str, Any]] = None
     if not _was_delivered(user_id, event, in_app_key, "in_app"):
@@ -678,19 +684,32 @@ async def notify_conversation_message(
     shift_id: Optional[str],
     message_preview: str,
     sender_name: str = "Coordinator",
+    sender_id: Optional[str] = None,
+    worker_id: Optional[str] = None,
+    recipient_is_office: bool = False,
 ) -> dict[str, Any]:
-    preview = message_preview[:60]
+    """The whole message goes in, so it can be read (and answered) from the
+    notification; it used to be cut at 60 characters."""
+    text = message_preview if len(message_preview) <= 500 else message_preview[:499] + "…"
+    base_url = settings.frontend_base_url.rstrip("/")
+    if recipient_is_office:
+        # The worker messages page is worker-only; office staff open the shift.
+        action_url = f"{base_url}/coordinator/rostering?openShift={shift_id}" if shift_id else None
+    else:
+        action_url = f"{base_url}/worker/messages?conversation={conversation_id}"
+    payload = {key: value for key, value in (("sender_id", sender_id), ("worker_id", worker_id)) if value}
     return await notify_worker(
         user_id=recipient_id,
         org_id=org_id,
         event="coordinator_message",
         title=f"Message from {sender_name}",
-        message=preview,
+        message=text,
         reference_key=f"conversation:{conversation_id}:{int(datetime.now(timezone.utc).timestamp())}",
         severity="medium",
-        action_url=f"{settings.frontend_base_url.rstrip('/')}/worker/messages?conversation={conversation_id}",
+        action_url=action_url,
         conversation_id=conversation_id,
         shift_id=shift_id,
+        payload=payload,
     )
 
 
@@ -793,7 +812,9 @@ async def notify_coordinator_message(
     title: str,
     message: str,
     reference_key: Optional[str] = None,
+    sender_id: Optional[str] = None,
 ) -> dict[str, Any]:
+    """A direct message to one person. sender_id lets them reply to the sender."""
     key = reference_key or f"message:{user_id}:{int(datetime.now(timezone.utc).timestamp())}"
     return await notify_worker(
         user_id=user_id,
@@ -804,6 +825,7 @@ async def notify_coordinator_message(
         reference_key=key,
         severity="medium",
         email_subject=title,
+        payload={"sender_id": sender_id} if sender_id else None,
     )
 
 
@@ -864,6 +886,7 @@ async def _notify_office_staff(
     push_priority: str = "default",
     action_url: Optional[str] = None,
     shift_id: Optional[str] = None,
+    payload: Optional[dict[str, Any]] = None,
 ) -> None:
     for coordinator_id in _org_coordinator_user_ids(org_id):
         await notify_worker(
@@ -876,10 +899,13 @@ async def _notify_office_staff(
             severity=severity,
             participant_id=participant_id,
             session_id=session_id,
-            action_url=action_url or f"{settings.frontend_base_url.rstrip('/')}/incidents",
+            # No default page: training requests and the like were linking to
+            # Incidents. Callers with a page pass it; the app works out the rest.
+            action_url=action_url,
             shift_id=shift_id,
             email_subject=title,
             push_priority=push_priority,
+            payload=payload,
         )
 
 
@@ -969,6 +995,7 @@ async def notify_office_worker_message(
         # The shift is where the conversation is, not the incident register.
         action_url=f"{settings.frontend_base_url.rstrip('/')}/coordinator/rostering?openShift={shift_id}",
         shift_id=shift_id,
+        payload={"worker_id": worker_id},
     )
 
 

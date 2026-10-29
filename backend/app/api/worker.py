@@ -2358,7 +2358,6 @@ async def reply_to_message(
             .execute()
         )
         original = original_msg.data if original_msg else None
-        related_alert_id = message_id if original else None
         if not original:
             # The notifications panel replies by inbox id (user_notifications);
             # it's still the worker's own message from the office.
@@ -2386,8 +2385,6 @@ async def reply_to_message(
             "is_read": False,
             "patient_id": original.get("patient_id"),
             "session_id": original.get("session_id"),
-            "sender_user_id": worker_id,  # Track who replied
-            "related_message_id": related_alert_id,  # Link to original message
         }
         
         supabase.table("alerts").insert(reply_alert).execute()

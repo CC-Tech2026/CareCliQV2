@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { notificationDestination } from "@/lib/notification-destination";
 
-const n = (event_type: string, extra: Partial<{ action_url: string | null; shift_id: string | null; conversation_id: string | null }> = {}) => ({
+const n = (event_type: string, extra: Partial<{ action_url: string | null; shift_id: string | null; conversation_id: string | null; payload: Record<string, unknown> }> = {}) => ({
   event_type,
   action_url: null,
   shift_id: null,
@@ -44,5 +44,18 @@ describe("where a notification opens", () => {
 
   it("returns nothing when there's genuinely nowhere to go", () => {
     expect(notificationDestination(n("coordinator_message", { action_url: "/notifications" }), "office")).toBeNull();
+  });
+
+  it("opens the exact record to act on when the notification names it", () => {
+    const recheck = n("ndis_screening_recheck_due", { payload: { worker_id: "w1" } });
+    expect(notificationDestination(recheck, "office")).toEqual({ path: "/team?workerId=w1&tab=credentials", labelKey: "inbox.go.workerCredentials" });
+    expect(notificationDestination(recheck, "director")?.path).toBe("/md/staff?workerId=w1&tab=credentials");
+    expect(notificationDestination(n("training_request", { payload: { worker_id: "w1" } }), "office")?.path).toBe("/team?workerId=w1&tab=training");
+    // PRN limit: the participant's medication plan, not the shift it happened on.
+    const prn = n("medication_alert", { shift_id: "s1", payload: { participant_id: "p1", alert_type: "medication_prn_max_exceeded" } });
+    expect(notificationDestination(prn, "office")).toEqual({ path: "/patients?id=p1&tab=care_profile", labelKey: "inbox.go.participant" });
+    // An overdue dose is about the shift happening now.
+    const overdue = n("medication_alert", { shift_id: "s1", payload: { participant_id: "p1", alert_type: "medication_overdue" } });
+    expect(notificationDestination(overdue, "office")?.path).toBe("/coordinator/rostering?openShift=s1");
   });
 });

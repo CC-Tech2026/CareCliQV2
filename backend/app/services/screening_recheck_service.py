@@ -18,7 +18,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from .notification_service import _org_coordinator_user_ids, notify_worker
+from .notification_service import _org_coordinator_user_ids, _user_display_name, notify_worker
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -100,6 +100,8 @@ async def send_pending_screening_recheck_reminders() -> int:
         title = credential.get("title") or "NDIS Worker Screening Check"
         if not org_id:
             continue
+        worker_id = str(credential.get("user_id") or "")
+        worker_name = (_user_display_name(worker_id) if worker_id else None) or "A worker"
 
         for coord_id in _org_coordinator_user_ids(org_id):
             try:
@@ -109,12 +111,13 @@ async def send_pending_screening_recheck_reminders() -> int:
                     event="ndis_screening_recheck_due",
                     title="NDIS Worker Screening recheck due",
                     message=(
-                        f"\"{title}\" is nearing expiry. Please confirm this worker's status "
+                        f"{worker_name}'s \"{title}\" is nearing expiry. Please confirm their status "
                         "directly on the NDIS Commission portal and record the check."
                     ),
                     reference_key=f"screening_recheck:{row['id']}:{coord_id}",
                     severity="medium",
                     alert_type="ndis_screening_recheck",
+                    payload={"worker_id": worker_id} if worker_id else None,
                 )
                 if outcome.get("in_app") or outcome.get("email") or outcome.get("push"):
                     sent += 1

@@ -38,6 +38,9 @@ const HIRING_EVENTS = new Set([
 ]);
 
 function labelFor(path: string): string {
+  if (/[?&]tab=credentials/.test(path)) return "inbox.go.workerCredentials";
+  if (/^\/(team|md\/staff)\?.*tab=training/.test(path)) return "inbox.go.workerTraining";
+  if (/^\/patients\?id=/.test(path)) return "inbox.go.participant";
   if (/^\/(my-shifts|coordinator\/rostering|md\/schedule)/.test(path)) return "inbox.go.shift";
   if (path.startsWith("/incidents")) return "inbox.go.incident";
   if (path.startsWith("/worker/messages")) return "inbox.go.messages";
@@ -74,6 +77,28 @@ function fitToAudience(path: string, audience: NotificationAudience): string | n
   return path;
 }
 
+const WORKER_TABS: Record<string, string> = {
+  ndis_screening_recheck_due: "credentials",
+  training_request: "training",
+  training_completion_review: "training",
+};
+
+/** The exact record to act on, when the notification says which one: a
+ *  worker's credentials or training, a participant's medications. */
+function byRecord(event: string, payload: Record<string, unknown>, audience: NotificationAudience): string | null {
+  if (audience === "worker") return null;
+  const workerId = typeof payload.worker_id === "string" ? payload.worker_id : null;
+  if (workerId && WORKER_TABS[event]) {
+    return `${audience === "director" ? "/md/staff" : "/team"}?workerId=${workerId}&tab=${WORKER_TABS[event]}`;
+  }
+  const participantId = typeof payload.participant_id === "string" ? payload.participant_id : null;
+  // A PRN limit is about the participant's medication plan, not the shift.
+  if (participantId && event === "medication_alert" && payload.alert_type === "medication_prn_max_exceeded") {
+    return `/patients?id=${participantId}&tab=care_profile`;
+  }
+  return null;
+}
+
 function byEvent(event: string, audience: NotificationAudience): string | null {
   if (audience === "worker") {
     if (event === "certification_expiry") return "/my-compliance";
@@ -99,18 +124,18 @@ function byEvent(event: string, audience: NotificationAudience): string | null {
  * stored link (adjusted for role), then its type. null: nothing to open.
  */
 export function notificationDestination(
-  notification: Pick<UserNotification, "event_type" | "action_url" | "shift_id" | "conversation_id">,
+  notification: Pick<UserNotification, "event_type" | "action_url" | "shift_id" | "conversation_id"> & { payload?: Record<string, unknown> },
   audience: NotificationAudience,
 ): NotificationDestination | null {
   const event = notification.event_type ?? "";
   const stored = pathFromActionUrl(notification.action_url);
-  let path: string | null = null;
+  let path = byRecord(event, notification.payload ?? {}, audience);
 
   // An incident link beats the shift: the report is what needs reading.
-  if (stored?.startsWith("/incidents/")) path = stored;
-  else if (notification.shift_id) path = shiftPath(notification.shift_id, audience, event);
-  else if (notification.conversation_id && audience === "worker") path = `/worker/messages?conversation=${notification.conversation_id}`;
-  else if (stored && !GENERIC_PATHS.has(stored.split("?")[0])) path = fitToAudience(stored, audience);
+  if (!path && stored?.startsWith("/incidents/")) path = stored;
+  if (!path && notification.shift_id) path = shiftPath(notification.shift_id, audience, event);
+  if (!path && notification.conversation_id && audience === "worker") path = `/worker/messages?conversation=${notification.conversation_id}`;
+  if (!path && stored && !GENERIC_PATHS.has(stored.split("?")[0])) path = fitToAudience(stored, audience);
 
   path = path ?? byEvent(event, audience);
   return path ? { path, labelKey: labelFor(path) } : null;
