@@ -72,7 +72,7 @@ async def run_applicant_stage_reminder_pass() -> int:
                     title="Applicant stuck in pipeline",
                     message=(
                         f"{row.get('full_name') or 'A candidate'} has been in {stage_label} for "
-                        f"{REMINDER_AFTER_DAYS}+ days — worth a follow-up."
+                        f"{REMINDER_AFTER_DAYS}+ days. Worth a follow-up."
                     ),
                     reference_key=f"applicant_stage_reminder:{applicant_id}",
                     severity="low",

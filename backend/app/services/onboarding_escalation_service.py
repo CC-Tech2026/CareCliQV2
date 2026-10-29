@@ -328,7 +328,7 @@ async def _process_due_reminders() -> tuple[int, int]:
                         user_id=coord_id,
                         org_id=org_id,
                         event="onboarding_stage_auto_inactive",
-                        title="New hire set inactive — onboarding stalled",
+                        title="New hire set inactive: onboarding stalled",
                         message=(
                             f"A new hire was automatically set inactive after "
                             f"{ESCALATE_AFTER_DAYS} days without action on {stage}. "

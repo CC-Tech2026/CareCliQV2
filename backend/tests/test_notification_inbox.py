@@ -192,6 +192,40 @@ class NotifyWorkerLinkTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(email.call_args.kwargs["settings_url"].endswith("/notifications/settings"))
         self.assertEqual(email.call_args.kwargs["severity"], "high")
 
+    async def test_no_link_of_its_own_opens_the_notification_itself(self, *mocks):
+        # Overdue notes, auto-ended shifts, medication alerts: no action_url,
+        # so the email button used to land on the bare inbox.
+        with patch.object(ns, "queue_worker_notification_email") as email:
+            await ns.notify_worker(
+                user_id="c1", org_id="o1", event="shift_auto_ended_overdue",
+                title="A worker's shift was auto-ended", message="m", reference_key="k-open", shift_id="s1",
+            )
+        self.assertTrue(email.call_args.kwargs["action_url"].endswith("/notifications?open=n1"))
+
+    async def test_own_link_is_kept_and_made_absolute(self, *_):
+        with patch.object(ns, "queue_worker_notification_email") as email, patch.object(
+            ns, "_lookup_user_role", return_value="support_coordinator"
+        ):
+            await ns.notify_worker(
+                user_id="c1", org_id="o1", event="invite_request",
+                title="Request to join", message="m", reference_key="k-team", action_url="/team",
+            )
+        link = email.call_args.kwargs["action_url"]
+        self.assertTrue(link.startswith("http"), link)
+        self.assertTrue(link.endswith("/team"))
+
+    async def test_directors_get_their_own_pages_not_the_coordinator_roster(self, *_):
+        base = ns.settings.frontend_base_url.rstrip("/")
+        with patch.object(ns, "queue_worker_notification_email") as email, patch.object(
+            ns, "_lookup_user_role", return_value="managing_director"
+        ):
+            await ns.notify_worker(
+                user_id="d1", org_id="o1", event="worker_cannot_attend",
+                title="Shift needs reassigning", message="m", reference_key="k-md",
+                action_url=f"{base}/coordinator/rostering?openShift=s1", shift_id="s1",
+            )
+        self.assertEqual(email.call_args.kwargs["action_url"], f"{base}/md/schedule?shiftId=s1")
+
     async def test_message_from_a_worker_on_shift_opens_the_shift(self, *_):
         with patch.object(ns, "_org_coordinator_user_ids", return_value=["c1"]), patch.object(
             ns, "_user_display_name", return_value="Sam Lee"

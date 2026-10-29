@@ -1,4 +1,4 @@
-﻿import { Link, Redirect } from "wouter";
+﻿import { Link, Redirect, useSearch } from "wouter";
 import { Settings2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -8,6 +8,9 @@ import { NotificationInbox } from "@/components/notifications/NotificationInbox"
  *  same inbox; this is where "See all" and email links land. */
 export default function NotificationsPage() {
   const { translate } = useAccessibility();
+  // ?open=<id>: email buttons and pop-ups for notifications with no page of
+  // their own land on that notification's full view.
+  const openId = new URLSearchParams(useSearch()).get("open");
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4 pb-10">
       <header className="flex items-end justify-between gap-3">
@@ -25,7 +28,7 @@ export default function NotificationsPage() {
           </a>
         </Link>
       </header>
-      <NotificationInbox variant="page" />
+      <NotificationInbox key={openId ?? "list"} variant="page" initialOpenId={openId} />
     </div>
   );
 }

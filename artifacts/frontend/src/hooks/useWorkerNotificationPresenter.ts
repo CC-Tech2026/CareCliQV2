@@ -12,8 +12,8 @@ import {
   presentPushedNotification,
   presentWorkerNotification,
   seedPresentedNotificationIds,
-  type NotificationAudience,
 } from "@/lib/worker-notification-presenter";
+import { audienceForRole } from "@/lib/notification-destination";
 
 /**
  * Toast + desktop alerts for new notifications (Slack-style), for every role.
@@ -27,7 +27,7 @@ export function useWorkerNotificationPresenter() {
   const orgId = user?.organizationId ?? "__no_org__";
   const seededRef = useRef(false);
   const isWorker = user?.role === "support_worker";
-  const audience: NotificationAudience = isWorker ? "worker" : "office";
+  const audience = audienceForRole(user?.role);
 
   // Banner polling fallback is worker-only (the endpoint is too).
   const { data } = useOrgQuery(["notification-banners"], {
@@ -63,14 +63,14 @@ export function useWorkerNotificationPresenter() {
       if (message?.type === "carecliq:navigate" && message.url?.startsWith("/")) {
         navigate(message.url);
       } else if (message?.type === "carecliq:push" && message.payload) {
-        presentPushedNotification(message.payload, navigate);
+        presentPushedNotification(message.payload, navigate, audience);
         invalidateInbox(qc, orgId);
         void qc.invalidateQueries({ queryKey: [orgId, "coordinator-notifications"] });
       }
     };
     navigator.serviceWorker.addEventListener("message", onMessage);
     return () => navigator.serviceWorker.removeEventListener("message", onMessage);
-  }, [user?.id, orgId, qc, navigate]);
+  }, [user?.id, orgId, qc, navigate, audience]);
 
   useEffect(() => {
     if (!user || !isSupabaseRealtimeConfigured()) {

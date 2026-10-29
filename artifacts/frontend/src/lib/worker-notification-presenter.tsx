@@ -8,6 +8,7 @@ import {
 } from "@/services/notificationService";
 import { showDesktopNotification } from "@/lib/desktop-notifications";
 import { notificationAccentColor } from "@/lib/notification-copy";
+import { notificationDestination, type NotificationAudience } from "@/lib/notification-destination";
 import {
   isBannerNotification,
   isMobileViewport,
@@ -51,37 +52,15 @@ export function parseRealtimeNotificationRow(
   };
 }
 
-/** Workers open their own shift/messages views; office staff follow action_url
- *  (e.g. the rostering panel for "Shift needs reassigning"). */
-export type NotificationAudience = "worker" | "office";
+export type { NotificationAudience } from "@/lib/notification-destination";
 
-function pathFromActionUrl(actionUrl: string | null | undefined): string | null {
-  if (!actionUrl) return null;
-  try {
-    const url = new URL(actionUrl, window.location.origin);
-    const path = url.pathname + url.search;
-    if (path.startsWith("/")) return path;
-  } catch {
-    /* fall through */
-  }
-  return null;
-}
-
+/** Where a toast, desktop pop-up or the panel sends someone. Notifications
+ *  with nothing specific to open land on their own full view in the inbox. */
 export function resolveNotificationPath(
   notification: UserNotification,
   audience: NotificationAudience = "worker",
-): string | null {
-  if (audience === "office") return pathFromActionUrl(notification.action_url);
-  if (notification.shift_id) {
-    if (notification.event_type === "compliance_checkin") {
-      return `/my-shifts/${notification.shift_id}?checkin=pending`;
-    }
-    return `/my-shifts/${notification.shift_id}`;
-  }
-  if (notification.conversation_id) {
-    return `/worker/messages?conversation=${notification.conversation_id}`;
-  }
-  return pathFromActionUrl(notification.action_url);
+): string {
+  return notificationDestination(notification, audience)?.path ?? `/notifications?open=${notification.id}`;
 }
 
 function toastVariant(
@@ -136,9 +115,7 @@ export function presentWorkerNotification(
   presentedIds.add(notification.id);
 
   const path = resolveNotificationPath(notification, audience);
-  const open = () => {
-    if (path) navigate(path);
-  };
+  const open = () => navigate(path);
 
   // Sticky banners (and their mobile toast form) are a worker-only surface;
   // office staff get every notification as a regular toast.
@@ -149,17 +126,17 @@ export function presentWorkerNotification(
     return;
   }
 
-  if (!document.hidden && (audience === "office" || shouldShowToast(notification))) {
+  if (!document.hidden && (audience !== "worker" || shouldShowToast(notification))) {
     toast({
       title: notification.title,
       description: notification.body,
       duration: 8_000,
       variant: toastVariant(notification),
-      action: path ? (
+      action: (
         <ToastAction altText="Open notification" onClick={open}>
           Open
         </ToastAction>
-      ) : undefined,
+      ),
     });
   }
 
@@ -167,7 +144,7 @@ export function presentWorkerNotification(
     showDesktopNotification(notification.title, notification.body, {
       tag: notification.id,
       requireInteraction: Boolean(notification.requires_ack),
-      url: path ?? undefined,
+      url: path,
       onClick: open,
     });
   }
@@ -178,6 +155,7 @@ export function presentWorkerNotification(
 export function presentPushedNotification(
   payload: { tag?: string; title?: string; body?: string; url?: string; urgent?: boolean; event?: string },
   navigate: (path: string) => void,
+  audience: NotificationAudience,
 ): void {
   if (!payload.tag || !payload.title) return;
   presentWorkerNotification(
@@ -191,7 +169,6 @@ export function presentPushedNotification(
       created_at: new Date().toISOString(),
     },
     navigate,
-    // No shift/conversation ids in a push, so both audiences follow the URL.
-    "office",
+    audience,
   );
 }

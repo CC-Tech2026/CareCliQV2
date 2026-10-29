@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import {
-  AlertTriangle, Bell, CalendarDays, CheckCheck, ClipboardCheck, GraduationCap,
+  AlertTriangle, ArrowLeft, ArrowRight, Bell, CalendarDays, CheckCheck, ClipboardCheck, GraduationCap,
   MessageSquare, Settings2, Star, UserPlus, UserRound, X,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -25,7 +25,8 @@ import {
   type CoordinatorAlert,
 } from "@/services/coordinatorService";
 import { acceptShiftOffer, declineShiftOffer } from "@/services/shiftService";
-import { resolveNotificationPath, type NotificationAudience } from "@/lib/worker-notification-presenter";
+import { audienceForRole, notificationDestination, type NotificationAudience } from "@/lib/notification-destination";
+import { formatNotificationShiftTime } from "@/lib/notification-copy";
 
 const INBOX_KEY = ["notification-inbox"] as const;
 const TEAM_KEY = ["coordinator-notifications", "team-feed"] as const;
@@ -67,6 +68,12 @@ const TEAM_LABELS: Record<string, string> = {
   coordinator_message: "inbox.team.message",
 };
 
+function teamLabel(alert: CoordinatorAlert, translate: (k: string) => string): string {
+  const labelKey = alert.alert_type ? TEAM_LABELS[alert.alert_type] : undefined;
+  const raw = (alert.alert_type ?? "").replace(/_/g, " ");
+  return labelKey ? translate(labelKey) : raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
 function dayLabel(iso: string, translate: (k: string) => string): string {
   const date = new Date(iso);
   const today = new Date();
@@ -101,6 +108,11 @@ function useWhen() {
     if (mins < 60) return translateParams("messages.minutesAgo", { count: String(mins) });
     return translateParams("messages.hoursAgo", { count: String(Math.floor(mins / 60)) });
   };
+}
+
+function fullTime(iso?: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 }
 
 function RowIcon({ urgent, children }: { urgent: boolean; children: ReactNode }) {
@@ -143,27 +155,16 @@ function EmptyState({ title, hint }: { title: string; hint?: string }) {
   );
 }
 
-function InboxRow({
-  item,
-  audience,
-  onOpen,
-  onDismiss,
-}: {
-  item: UserNotification;
-  audience: NotificationAudience;
-  onOpen: (item: UserNotification) => void;
-  onDismiss: (item: UserNotification) => void;
-}) {
+/** Accept/decline an offer, acknowledge a change, reply to the office. Shared
+ *  by the list row and the full view. */
+function NotificationActions({ item, audience, className }: { item: UserNotification; audience: NotificationAudience; className?: string }) {
   const { translate } = useAccessibility();
   const { toast } = useToast();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const qc = useQueryClient();
-  const when = useWhen();
   const [replying, setReplying] = useState(false);
   const [reply, setReply] = useState("");
-  const unread = !item.read_at;
-  const urgent = URGENT.has(item.severity) || item.banner_style === "red";
 
   const done = (title: string) => {
     toast({ title });
@@ -206,10 +207,86 @@ function InboxRow({
   });
 
   const isWorker = audience === "worker";
-  const canRespondToOffer = isWorker && item.event_type === "shift_offer" && Boolean(item.shift_id) && unread;
+  // Opening a notification marks it read, so read state can't gate the offer
+  // buttons; the API refuses an offer that's been answered or has expired.
+  const canRespondToOffer = isWorker && item.event_type === "shift_offer" && Boolean(item.shift_id);
   const needsAck = Boolean(item.requires_ack) && !item.acknowledged_at;
   const canReply = isWorker && item.event_type === "coordinator_message";
   const busy = accept.isPending || decline.isPending || acknowledge.isPending;
+  if (!canRespondToOffer && !needsAck && !canReply) return null;
+
+  return (
+    <div className={className}>
+      <div className="flex flex-wrap gap-2">
+        {canRespondToOffer && (
+          <>
+            <button type="button" disabled={busy} onClick={() => accept.mutate()} className="min-h-9 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50" style={{ background: "var(--cc-plum)" }}>
+              {translate("notifications.panel.acceptShift")}
+            </button>
+            <button type="button" disabled={busy} onClick={() => decline.mutate()} className="min-h-9 rounded-full border px-4 text-[12px] font-semibold disabled:opacity-50" style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}>
+              {translate("notifications.panel.declineShift")}
+            </button>
+          </>
+        )}
+        {needsAck && (
+          <button type="button" disabled={busy} onClick={() => acknowledge.mutate()} className="min-h-9 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50" style={{ background: "var(--cc-plum)" }}>
+            {translate("inbox.acknowledge")}
+          </button>
+        )}
+        {canReply && !replying && (
+          <button type="button" onClick={() => setReplying(true)} className="min-h-9 rounded-full border px-4 text-[12px] font-semibold" style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}>
+            {translate("inbox.reply")}
+          </button>
+        )}
+      </div>
+      {replying && (
+        <form
+          className="mt-2 space-y-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (reply.trim()) sendReply.mutate();
+          }}
+        >
+          <textarea
+            autoFocus
+            rows={3}
+            value={reply}
+            onChange={(event) => setReply(event.target.value)}
+            maxLength={1000}
+            aria-label={translate("notifications.panel.replyTitle")}
+            placeholder={translate("notifications.panel.replyPlaceholder")}
+            className="w-full resize-none rounded-xl border bg-white p-2.5 text-[13px] focus:outline-none focus:ring-2"
+            style={{ borderColor: "var(--cc-border)" }}
+          />
+          <div className="flex gap-2">
+            <button type="submit" disabled={!reply.trim() || sendReply.isPending} className="min-h-9 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50" style={{ background: "var(--cc-plum)" }}>
+              {translate("notifications.panel.sendReply")}
+            </button>
+            <button type="button" onClick={() => { setReplying(false); setReply(""); }} className="min-h-9 rounded-full px-3 text-[12px] font-semibold" style={{ color: "var(--cc-muted)" }}>
+              {translate("common.cancel")}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function InboxRow({
+  item,
+  audience,
+  onOpen,
+  onDismiss,
+}: {
+  item: UserNotification;
+  audience: NotificationAudience;
+  onOpen: (item: UserNotification) => void;
+  onDismiss: (item: UserNotification) => void;
+}) {
+  const { translate } = useAccessibility();
+  const when = useWhen();
+  const unread = !item.read_at;
+  const urgent = URGENT.has(item.severity) || item.banner_style === "red";
 
   return (
     <li className="group relative px-4 py-3 transition-colors hover:bg-black/[0.03]" style={unread ? { background: "var(--cc-soft)" } : undefined}>
@@ -237,61 +314,7 @@ function InboxRow({
           <X size={14} style={{ color: "var(--cc-muted)" }} />
         </button>
       </div>
-
-      {(canRespondToOffer || needsAck || canReply) && (
-        <div className="ml-11 mt-2 flex flex-wrap gap-2">
-          {canRespondToOffer && (
-            <>
-              <button type="button" disabled={busy} onClick={() => accept.mutate()} className="min-h-9 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50" style={{ background: "var(--cc-plum)" }}>
-                {translate("notifications.panel.acceptShift")}
-              </button>
-              <button type="button" disabled={busy} onClick={() => decline.mutate()} className="min-h-9 rounded-full border px-4 text-[12px] font-semibold disabled:opacity-50" style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}>
-                {translate("notifications.panel.declineShift")}
-              </button>
-            </>
-          )}
-          {needsAck && (
-            <button type="button" disabled={busy} onClick={() => acknowledge.mutate()} className="min-h-9 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50" style={{ background: "var(--cc-plum)" }}>
-              {translate("inbox.acknowledge")}
-            </button>
-          )}
-          {canReply && !replying && (
-            <button type="button" onClick={() => setReplying(true)} className="min-h-9 rounded-full border px-4 text-[12px] font-semibold" style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}>
-              {translate("inbox.reply")}
-            </button>
-          )}
-        </div>
-      )}
-
-      {replying && (
-        <form
-          className="ml-11 mt-2 space-y-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (reply.trim()) sendReply.mutate();
-          }}
-        >
-          <textarea
-            autoFocus
-            rows={3}
-            value={reply}
-            onChange={(event) => setReply(event.target.value)}
-            maxLength={1000}
-            aria-label={translate("notifications.panel.replyTitle")}
-            placeholder={translate("notifications.panel.replyPlaceholder")}
-            className="w-full resize-none rounded-xl border bg-white p-2.5 text-[13px] focus:outline-none focus:ring-2"
-            style={{ borderColor: "var(--cc-border)" }}
-          />
-          <div className="flex gap-2">
-            <button type="submit" disabled={!reply.trim() || sendReply.isPending} className="min-h-9 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50" style={{ background: "var(--cc-plum)" }}>
-              {translate("notifications.panel.sendReply")}
-            </button>
-            <button type="button" onClick={() => { setReplying(false); setReply(""); }} className="min-h-9 rounded-full px-3 text-[12px] font-semibold" style={{ color: "var(--cc-muted)" }}>
-              {translate("common.cancel")}
-            </button>
-          </div>
-        </form>
-      )}
+      <NotificationActions item={item} audience={audience} className="ml-11 mt-2" />
     </li>
   );
 }
@@ -299,9 +322,7 @@ function InboxRow({
 function TeamRow({ alert, onOpen }: { alert: CoordinatorAlert; onOpen: (alert: CoordinatorAlert) => void }) {
   const { translate } = useAccessibility();
   const when = useWhen();
-  const labelKey = alert.alert_type ? TEAM_LABELS[alert.alert_type] : undefined;
-  const raw = (alert.alert_type ?? "").replace(/_/g, " ");
-  const label = labelKey ? translate(labelKey) : raw.charAt(0).toUpperCase() + raw.slice(1);
+  const label = teamLabel(alert, translate);
   const urgent = URGENT.has(alert.severity ?? "") || alert.alert_type === "emergency";
   const unread = !alert.is_read;
   return (
@@ -327,21 +348,172 @@ function TeamRow({ alert, onOpen }: { alert: CoordinatorAlert; onOpen: (alert: C
   );
 }
 
+/** "Was / Now" for a shift change, from the values the backend stored. */
+function ShiftChangeDetails({ payload }: { payload?: Record<string, unknown> }) {
+  const { translate } = useAccessibility();
+  const before = (payload?.old ?? {}) as Record<string, unknown>;
+  const after = (payload?.new ?? {}) as Record<string, unknown>;
+  const rows = ([
+    ["scheduled_start", "inbox.change.start"],
+    ["scheduled_end", "inbox.change.end"],
+    ["location", "inbox.change.location"],
+  ] as const).filter(([key]) => before[key] !== undefined || after[key] !== undefined);
+  if (!rows.length) return null;
+  const show = (key: string, value: unknown) =>
+    typeof value === "string" && value ? (key === "location" ? value : formatNotificationShiftTime(value)) : "N/A";
+  return (
+    <dl className="mt-4 overflow-hidden rounded-xl border text-[13px]" style={{ borderColor: "var(--cc-border)" }}>
+      {rows.map(([key, labelKey]) => (
+        <div key={key} className="grid grid-cols-[5.5rem_1fr] gap-x-3 border-b px-3 py-2.5 last:border-b-0" style={{ borderColor: "var(--cc-border)" }}>
+          <dt className="row-span-2 font-semibold" style={{ color: "var(--cc-muted)" }}>{translate(labelKey)}</dt>
+          <dd style={{ color: "var(--cc-muted)" }}>
+            <span className="sr-only">{translate("inbox.change.was")} </span>
+            <span className="line-through">{show(key, before[key])}</span>
+          </dd>
+          <dd className="font-semibold" style={{ color: "var(--cc-text)" }}>
+            <span className="sr-only">{translate("inbox.change.now")} </span>
+            {show(key, after[key])}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function DetailShell({ onBack, children }: { onBack: () => void; children: ReactNode }) {
+  const { translate } = useAccessibility();
+  return (
+    <div className="px-4 py-3">
+      <button type="button" onClick={onBack} className="-ml-2 mb-3 flex min-h-9 items-center gap-1.5 rounded-full px-2 text-[12px] font-semibold transition hover:bg-black/5" style={{ color: "var(--cc-muted)" }}>
+        <ArrowLeft size={14} /> {translate("inbox.back")}
+      </button>
+      {children}
+    </div>
+  );
+}
+
+function GoButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-5 text-[14px] font-semibold text-white" style={{ background: "var(--cc-plum)" }}>
+      {label} <ArrowRight size={15} aria-hidden />
+    </button>
+  );
+}
+
+/** Everything about one notification: the full message, what changed, and
+ *  the way to act on it. Opens when a row is tapped. */
+function NotificationDetail({
+  item,
+  audience,
+  onBack,
+  onGo,
+  onDismiss,
+}: {
+  item: UserNotification;
+  audience: NotificationAudience;
+  onBack: () => void;
+  onGo: (path: string) => void;
+  onDismiss: (item: UserNotification) => void;
+}) {
+  const { translate, translateParams } = useAccessibility();
+  const when = useWhen();
+  const urgent = URGENT.has(item.severity) || item.banner_style === "red";
+  const destination = notificationDestination(item, audience);
+  return (
+    <DetailShell onBack={onBack}>
+      <article aria-labelledby="notification-detail-title">
+        <div className="flex items-start gap-3">
+          <RowIcon urgent={urgent}>{eventIcon(item.event_type)}</RowIcon>
+          <div className="min-w-0 flex-1">
+            <h3 id="notification-detail-title" className="text-[17px] font-bold leading-snug" style={{ color: "var(--cc-text)" }}>{item.title}</h3>
+            <p className="mt-1 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+              {fullTime(item.created_at)} · {when(item.created_at)}
+            </p>
+          </div>
+        </div>
+        {item.body && (
+          <p className="mt-4 whitespace-pre-wrap text-[14px] leading-relaxed" style={{ color: "var(--cc-text)" }}>{item.body}</p>
+        )}
+        {item.event_type === "shift_change" && <ShiftChangeDetails payload={item.payload} />}
+        {item.requires_ack && item.acknowledged_at && (
+          <p className="mt-4 text-[12px] font-semibold" style={{ color: "var(--cc-muted)" }}>
+            {translateParams("inbox.acknowledgedAt", { time: fullTime(item.acknowledged_at) })}
+          </p>
+        )}
+        <NotificationActions item={item} audience={audience} className="mt-5" />
+        {destination && <GoButton label={translate(destination.labelKey)} onClick={() => onGo(destination.path)} />}
+        <button
+          type="button"
+          onClick={() => onDismiss(item)}
+          className="mt-3 flex min-h-10 w-full items-center justify-center rounded-full text-[13px] font-semibold transition hover:bg-black/5"
+          style={{ color: "var(--cc-muted)" }}
+        >
+          {translate("inbox.dismiss")}
+        </button>
+      </article>
+    </DetailShell>
+  );
+}
+
+function TeamAlertDetail({ alert, audience, onBack, onGo }: { alert: CoordinatorAlert; audience: NotificationAudience; onBack: () => void; onGo: (path: string) => void }) {
+  const { translate } = useAccessibility();
+  const when = useWhen();
+  const urgent = URGENT.has(alert.severity ?? "") || alert.alert_type === "emergency";
+  const destination = notificationDestination(
+    { event_type: alert.alert_type ?? "", action_url: null, shift_id: alert.shift_id ?? null, conversation_id: null },
+    audience,
+  );
+  return (
+    <DetailShell onBack={onBack}>
+      <article aria-labelledby="team-alert-detail-title">
+        <div className="flex items-start gap-3">
+          <RowIcon urgent={urgent}>{urgent ? <AlertTriangle size={15} /> : <Bell size={15} />}</RowIcon>
+          <div className="min-w-0 flex-1">
+            <h3 id="team-alert-detail-title" className="text-[17px] font-bold leading-snug" style={{ color: "var(--cc-text)" }}>
+              {alert.title || teamLabel(alert, translate)}
+            </h3>
+            <p className="mt-1 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+              {teamLabel(alert, translate)} · {fullTime(alert.created_at)} · {when(alert.created_at)}
+            </p>
+          </div>
+        </div>
+        {alert.message && (
+          <p className="mt-4 whitespace-pre-wrap text-[14px] leading-relaxed" style={{ color: "var(--cc-text)" }}>{alert.message}</p>
+        )}
+        <p className="mt-4 text-[12px]" style={{ color: "var(--cc-muted)" }}>{translate("inbox.team.hint")}</p>
+        {destination && <GoButton label={translate(destination.labelKey)} onClick={() => onGo(destination.path)} />}
+      </article>
+    </DetailShell>
+  );
+}
+
 /**
  * The notifications inbox for every role: the person's own notifications
  * (user_notifications), plus, for office staff, the organisation's shared
  * alert feed. Used in the bell's side panel and on /notifications.
  */
-export function NotificationInbox({ onClose, variant = "panel" }: { onClose?: () => void; variant?: "panel" | "page" }) {
+export function NotificationInbox({
+  onClose,
+  variant = "panel",
+  initialOpenId,
+}: {
+  onClose?: () => void;
+  variant?: "panel" | "page";
+  /** Open this notification's full view straight away (email and pop-up links). */
+  initialOpenId?: string | null;
+}) {
   const { translate } = useAccessibility();
   const { toast } = useToast();
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const orgId = user?.organizationId ?? "__no_org__";
-  const audience: NotificationAudience = user?.role === "support_worker" ? "worker" : "office";
-  const isOffice = audience === "office";
+  const audience = audienceForRole(user?.role);
+  const isOffice = audience !== "worker";
   const [tab, setTab] = useState<Tab>("all");
+  const [selected, setSelected] = useState<{ kind: "inbox" | "team"; id: string } | null>(
+    initialOpenId ? { kind: "inbox", id: initialOpenId } : null,
+  );
 
   const inbox = useOrgQuery([...INBOX_KEY], { queryFn: () => fetchNotifications({ days: 90 }), enabled: !!user });
   const team = useOrgQuery<CoordinatorAlert[]>([...TEAM_KEY], {
@@ -392,21 +564,29 @@ export function NotificationInbox({ onClose, variant = "panel" }: { onClose?: ()
     onSettled: () => qc.invalidateQueries({ queryKey: [orgId, "coordinator-notifications"] }),
   });
 
+  const selectedItem = selected?.kind === "inbox" ? items.find((n) => n.id === selected.id) : undefined;
+  const selectedAlert = selected?.kind === "team" ? team.data?.find((a) => a.id === selected.id) : undefined;
+  const inDetail = Boolean(selectedItem || selectedAlert);
+
+  // Opened from a link (email, pop-up): mark it read once it has loaded.
+  const selectedUnreadId = selectedItem && !selectedItem.read_at ? selectedItem.id : null;
+  useEffect(() => {
+    if (selectedUnreadId) readOne.mutate(selectedUnreadId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedUnreadId]);
+
   function openItem(item: UserNotification) {
-    if (!item.read_at) readOne.mutate(item.id);
-    const path = resolveNotificationPath(item, audience);
-    if (path && path !== "/notifications") {
-      navigate(path);
-      onClose?.();
-    }
+    setSelected({ kind: "inbox", id: item.id });
   }
 
   function openTeamAlert(alert: CoordinatorAlert) {
     if (!alert.is_read) readTeam.mutate(alert.id);
-    if (alert.shift_id) {
-      navigate(`/coordinator/rostering?openShift=${alert.shift_id}`);
-      onClose?.();
-    }
+    setSelected({ kind: "team", id: alert.id });
+  }
+
+  function go(path: string) {
+    navigate(path);
+    onClose?.();
   }
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
@@ -414,10 +594,25 @@ export function NotificationInbox({ onClose, variant = "panel" }: { onClose?: ()
     { id: "unread", label: translate("inbox.tab.unread"), count: unreadCount },
     ...(isOffice ? [{ id: "team" as Tab, label: translate("inbox.tab.team"), count: teamUnread }] : []),
   ];
-  const showReadAll = tab === "team" ? teamUnread > 0 : unreadCount > 0;
+  const showReadAll = !inDetail && (tab === "team" ? teamUnread > 0 : unreadCount > 0);
 
   let body: ReactNode;
-  if (tab === "team") {
+  if (selectedItem) {
+    body = (
+      <NotificationDetail
+        item={selectedItem}
+        audience={audience}
+        onBack={() => setSelected(null)}
+        onGo={go}
+        onDismiss={(n) => {
+          dismissOne.mutate(n.id);
+          setSelected(null);
+        }}
+      />
+    );
+  } else if (selectedAlert) {
+    body = <TeamAlertDetail alert={selectedAlert} audience={audience} onBack={() => setSelected(null)} onGo={go} />;
+  } else if (tab === "team") {
     if (team.isLoading) body = <SkeletonRows />;
     else if (team.isError) body = <LoadError onRetry={() => void team.refetch()} />;
     else if (!team.data?.length) body = <EmptyState title={translate("inbox.team.empty")} hint={translate("inbox.team.hint")} />;
@@ -472,51 +667,56 @@ export function NotificationInbox({ onClose, variant = "panel" }: { onClose?: ()
     </div>
   );
 
+  // The page has its own heading, so it only needs this bar for the tabs.
+  const showHeader = isPanel || !inDetail;
+
   return (
     <div className={isPanel ? "flex min-h-0 flex-1 flex-col" : "flex flex-col rounded-2xl border bg-white"} style={isPanel ? { background: "var(--cc-bg)" } : { borderColor: "var(--cc-border)" }}>
-      <div className="px-4 pb-3 pt-4" style={{ borderBottom: "1px solid var(--cc-border)" }}>
-        <div className={isPanel ? "flex items-center justify-between gap-2" : "flex flex-wrap items-center justify-between gap-2"}>
-          {isPanel ? (
-            <h2 className="text-[16px] font-bold" style={{ color: "var(--cc-text)" }}>{translate("inbox.title")}</h2>
-          ) : (
-            tabBar
-          )}
-          <div className="flex items-center gap-1">
-            {showReadAll && (
-              <button
-                type="button"
-                className="flex min-h-9 items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold transition hover:bg-black/5"
-                style={{ color: "var(--cc-plum)" }}
-                onClick={() => (tab === "team" ? readAllTeam.mutate() : readAll.mutate())}
-              >
-                <CheckCheck size={14} /> {translate("inbox.markAllRead")}
-              </button>
+      {showHeader && (
+        <div className="px-4 pb-3 pt-4" style={{ borderBottom: "1px solid var(--cc-border)" }}>
+          <div className={isPanel ? "flex items-center justify-between gap-2" : "flex flex-wrap items-center justify-between gap-2"}>
+            {isPanel ? (
+              <h2 className="text-[16px] font-bold" style={{ color: "var(--cc-text)" }}>{translate("inbox.title")}</h2>
+            ) : (
+              tabBar
             )}
-            {isPanel && (
-              <Link href="/notifications/settings">
-                <a
-                  className="flex min-h-9 min-w-9 items-center justify-center rounded-full transition hover:bg-black/5"
-                  aria-label={translate("inbox.settings")}
-                  title={translate("inbox.settings")}
-                  onClick={() => onClose?.()}
+            <div className="flex items-center gap-1">
+              {showReadAll && (
+                <button
+                  type="button"
+                  className="flex min-h-9 items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold transition hover:bg-black/5"
+                  style={{ color: "var(--cc-plum)" }}
+                  onClick={() => (tab === "team" ? readAllTeam.mutate() : readAll.mutate())}
                 >
-                  <Settings2 size={16} style={{ color: "var(--cc-muted)" }} />
-                </a>
-              </Link>
-            )}
-            {onClose && (
-              <button type="button" className="flex min-h-9 min-w-9 items-center justify-center rounded-full transition hover:bg-black/5" aria-label={translate("inbox.close")} onClick={onClose}>
-                <X size={16} style={{ color: "var(--cc-muted)" }} />
-              </button>
-            )}
+                  <CheckCheck size={14} /> {translate("inbox.markAllRead")}
+                </button>
+              )}
+              {isPanel && (
+                <Link href="/notifications/settings">
+                  <a
+                    className="flex min-h-9 min-w-9 items-center justify-center rounded-full transition hover:bg-black/5"
+                    aria-label={translate("inbox.settings")}
+                    title={translate("inbox.settings")}
+                    onClick={() => onClose?.()}
+                  >
+                    <Settings2 size={16} style={{ color: "var(--cc-muted)" }} />
+                  </a>
+                </Link>
+              )}
+              {onClose && (
+                <button type="button" className="flex min-h-9 min-w-9 items-center justify-center rounded-full transition hover:bg-black/5" aria-label={translate("inbox.close")} onClick={onClose}>
+                  <X size={16} style={{ color: "var(--cc-muted)" }} />
+                </button>
+              )}
+            </div>
           </div>
+          {isPanel && !inDetail && <div className="mt-3">{tabBar}</div>}
         </div>
-        {isPanel && <div className="mt-3">{tabBar}</div>}
-      </div>
+      )}
 
       <div className={isPanel ? "min-h-0 flex-1 overflow-y-auto pb-2" : "pb-2"}>{body}</div>
 
-      {isPanel && (
+      {isPanel && !inDetail && (
         // Left-aligned: the floating assistant button sits bottom-right.
         <div className="flex items-center gap-5 px-4 py-3 text-[12px] font-semibold" style={{ borderTop: "1px solid var(--cc-border)" }}>
           <Link href="/notifications">

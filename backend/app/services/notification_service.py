@@ -243,6 +243,31 @@ def _channel_enabled(prefs: dict, event: str, channel: str) -> bool:
     return bool((prefs.get(event) or {}).get(channel, channel_default(event, channel)))
 
 
+def _lookup_user_role(user_id: str) -> Optional[str]:
+    try:
+        result = get_supabase_admin().table("users").select("role").eq("id", user_id).limit(1).execute()
+        rows = result.data or []
+        return rows[0].get("role") if rows else None
+    except Exception as exc:
+        logger.debug("User role lookup failed for %s: %s", user_id, exc)
+        return None
+
+
+def _link_for_recipient(user_id: str, url: str, base_url: str) -> str:
+    """Directors can't open the coordinator roster or Team page; send them to
+    their own schedule and staff pages instead. Callers that notify every
+    office user build one coordinator link for all of them."""
+    roster = f"{base_url}/coordinator/rostering?openShift="
+    team = f"{base_url}/team"
+    if not (url.startswith(roster) or url == team or url.startswith(team + "?")):
+        return url
+    if _lookup_user_role(user_id) != "managing_director":
+        return url
+    if url.startswith(roster):
+        return f"{base_url}/md/schedule?shiftId={url[len(roster):]}"
+    return f"{base_url}/md/staff{url[len(team):]}"
+
+
 def _lookup_user_email(user_id: str) -> Optional[str]:
     try:
         result = (
@@ -341,8 +366,12 @@ async def notify_worker(
     prefs = get_effective_preferences(user_id)
     resolved_alert_type = alert_type or EVENT_ALERT_TYPES.get(event, event)
     base_url = settings.frontend_base_url.rstrip('/')
+    has_own_link = bool(action_url)
+    # Emails need absolute links; some callers pass "/team" and the like.
+    if action_url and action_url.startswith("/"):
+        action_url = f"{base_url}{action_url}"
     # /notifications works for every role; /worker/profile 403'd office staff.
-    action_url = action_url or f"{base_url}/notifications"
+    action_url = _link_for_recipient(user_id, action_url or f"{base_url}/notifications", base_url)
     results: dict[str, Any] = {
         "user_id": user_id,
         "event": event,
@@ -387,6 +416,12 @@ async def notify_worker(
         _record_delivery(user_id, event, in_app_key, "in_app")
         results["in_app"] = True
 
+    # With no page of its own, the email button and the pop-up open this
+    # notification's full view in the inbox, which links on from there.
+    delivery_url = action_url
+    if not has_own_link and in_app_row and in_app_row.get("id"):
+        delivery_url = f"{base_url}/notifications?open={in_app_row['id']}"
+
     if (
         send_push
         and _channel_enabled(prefs, event, "push")
@@ -399,7 +434,7 @@ async def notify_worker(
             body=message,
             data={
                 "event": event,
-                "action_url": action_url,
+                "action_url": delivery_url,
                 "shift_id": shift_id,
                 "conversation_id": conversation_id,
                 # Browsers tag the OS notification with this so the copy the
@@ -420,7 +455,7 @@ async def notify_worker(
                 subject=email_subject or title,
                 title=title,
                 message=message,
-                action_url=action_url,
+                action_url=delivery_url,
                 severity=severity,
                 settings_url=f"{base_url}/notifications/settings",
             )
@@ -631,7 +666,7 @@ async def notify_shift_reminder(
         action_url=f"{settings.frontend_base_url.rstrip('/')}/my-shifts/{shift_id}",
         participant_id=str(shift.get("participant_id") or "") or None,
         shift_id=shift_id,
-        email_subject=f"Shift reminder — {participant}",
+        email_subject=f"Shift reminder: {participant}",
     )
 
 
@@ -719,7 +754,7 @@ async def notify_feedback_received(
         session_id=session_id,
         participant_id=participant_id,
         action_url=f"{settings.frontend_base_url.rstrip('/')}/sessions/{session_id}",
-        email_subject="Session feedback — action required",
+        email_subject="Session feedback: action required",
     )
 
 
@@ -747,7 +782,7 @@ async def notify_certification_expiry(
         reference_key=f"credential:{credential_id}:{status}:{expiry_date}",
         severity="high" if status == "expired" else "medium",
         action_url=f"{settings.frontend_base_url.rstrip('/')}/my-compliance",
-        email_subject=f"Credential {status_label} — {credential_title}",
+        email_subject=f"Credential {status_label}: {credential_title}",
     )
 
 
@@ -905,12 +940,12 @@ async def notify_incident_status_changed(
         user_id=worker_id,
         org_id=org_id,
         event="coordinator_message",
-        title=f"Incident update — {ref}",
+        title=f"Incident update: {ref}",
         message=f"Your incident report is now: {status_label}.",
         reference_key=f"incident-status:{incident_id}:{status_label}",
         severity="medium",
         action_url=f"{settings.frontend_base_url.rstrip('/')}/incidents/{incident_id}",
-        email_subject=f"Incident {ref} — status update",
+        email_subject=f"Incident {ref}: status update",
     )
 
 

@@ -217,7 +217,7 @@ async def _process_invited_reminders() -> dict[str, int]:
                         event="hire_invite_expired",
                         title="Login invite expired",
                         message=(
-                            f"{name} never logged in — their invite from {INVITE_EXPIRE_AFTER_DAYS} days ago "
+                            f"{name} never logged in. Their invite from {INVITE_EXPIRE_AFTER_DAYS} days ago "
                             "has expired. Send a fresh one from their hire record."
                         ),
                         reference_key=f"hire_invite_expired:{hire_id}",

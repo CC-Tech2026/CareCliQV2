@@ -92,14 +92,38 @@ it("offers a retry instead of saying all caught up when loading fails", () => {
   expect(state.refetch).toHaveBeenCalledOnce();
 });
 
-it("opens a notification: marks it read, goes to the shift, closes the panel", () => {
-  state.inbox = [{ id: "n1", event_type: "shift_change", title: "Shift moved", body: "Now 9am", severity: "medium", shift_id: "s1", created_at: now }];
+it("opens a notification's full view, then its button goes to the shift", () => {
+  state.inbox = [{ id: "n1", event_type: "shift_change", title: "Shift moved", body: "Now 9am. Was 8am.", severity: "medium", shift_id: "s1", created_at: now }];
   const close = vi.fn();
   render(<NotificationInbox onClose={close} />);
   fireEvent.click(screen.getByText("Shift moved"));
+  // Full view: whole message, read on open, nothing navigated yet.
+  expect(screen.getByRole("heading", { name: "Shift moved" })).toBeTruthy();
   expect(state.markRead).toHaveBeenCalledWith("n1");
+  expect(state.navigate).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: /inbox.go.shift/ }));
   expect(state.navigate).toHaveBeenCalledWith("/my-shifts/s1");
   expect(close).toHaveBeenCalledOnce();
+});
+
+it("shows a notification with nowhere to go in full, with a way back", () => {
+  state.inbox = [{ id: "n1", event_type: "coordinator_message", title: "Team lunch", body: "Friday at noon, everyone welcome.", severity: "low", action_url: "/notifications", created_at: now }];
+  state.role = "support_coordinator";
+  render(<NotificationInbox onClose={vi.fn()} />);
+  fireEvent.click(screen.getByText("Team lunch"));
+  expect(screen.getByText("Friday at noon, everyone welcome.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /inbox.go/ })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /inbox.back/ }));
+  expect(screen.getByRole("button", { name: /inbox.tab.all/ })).toBeTruthy();
+});
+
+it("opens straight to a linked notification", () => {
+  state.inbox = [{ id: "n7", event_type: "training_recommended", title: "New training assigned", body: "Manual handling.", severity: "medium", created_at: now }];
+  render(<NotificationInbox variant="page" initialOpenId="n7" />);
+  expect(screen.getByRole("heading", { name: "New training assigned" })).toBeTruthy();
+  expect(state.markRead).toHaveBeenCalledWith("n7");
+  fireEvent.click(screen.getByRole("button", { name: /inbox.go.training/ }));
+  expect(state.navigate).toHaveBeenCalledWith("/worker/training");
 });
 
 it("hides dismissed notifications and filters to unread", () => {

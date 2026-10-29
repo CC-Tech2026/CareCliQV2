@@ -1204,7 +1204,7 @@ async def _prompt_worker_checkin(worker_id: str, shift_id: str, gap_mins: int) -
     from .notification_service import notify_worker
 
     title = "Shift check-in"
-    body = f"No activity for {gap_mins} minutes — tap to confirm you are OK."
+    body = f"No activity for {gap_mins} minutes. Tap to confirm you are OK."
     await send_push_to_user(
         worker_id,
         title=title,

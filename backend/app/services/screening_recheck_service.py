@@ -109,7 +109,7 @@ async def send_pending_screening_recheck_reminders() -> int:
                     event="ndis_screening_recheck_due",
                     title="NDIS Worker Screening recheck due",
                     message=(
-                        f"\"{title}\" is nearing expiry — please confirm this worker's status "
+                        f"\"{title}\" is nearing expiry. Please confirm this worker's status "
                         "directly on the NDIS Commission portal and record the check."
                     ),
                     reference_key=f"screening_recheck:{row['id']}:{coord_id}",
