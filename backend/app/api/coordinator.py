@@ -4488,20 +4488,22 @@ def _fetch_live_shifts_raw(
     org_id: str,
     window_start: str,
 ) -> list[dict[str, Any]]:
+    # tasks: the checklist the worker ticks off. Without it the task count
+    # fell back to the blank template, so every shift read "Tasks 0 of N".
     full_columns = (
         "id, organization_id, worker_id, participant_id, participant_name, "
         "shift_type, scheduled_start, scheduled_end, status, "
         "clocked_in_at, clocked_out_at, duration_minutes, clock_in_verified, clock_in_method, "
         "session_id, visit_notes, coordinator_notes, special_instructions, "
         "emergency_flagged, emergency_flagged_at, emergency_note, "
-        "created_at, updated_at"
+        "tasks, service_agreement_support_id, created_at, updated_at"
     )
     legacy_columns = (
         "id, organization_id, worker_id, participant_id, participant_name, "
         "scheduled_start, scheduled_end, status, "
         "clocked_in_at, clocked_out_at, duration_minutes, "
         "session_id, visit_notes, coordinator_notes, "
-        "created_at, updated_at"
+        "tasks, created_at, updated_at"
     )
 
     def _run(select_columns: str):
