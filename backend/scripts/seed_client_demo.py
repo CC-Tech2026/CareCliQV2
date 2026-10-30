@@ -46,7 +46,9 @@ Full seed, from the repo root:
     CLIENT_DEMO_PASSWORD=... .venv/Scripts/python -m backend.scripts.seed_client_demo
 
 Add --env-file <file> to seed a project other than the one in .env (it
-prints which database it's writing to first). --rewrite-notes regenerates
+prints which database it's writing to first). Add --removable on a shared
+database: it skips medication administration records, which are append-only
+and would stop the org from ever being fully removed. --rewrite-notes regenerates
 the completed shifts' notes, e.g. after changing the note generator.
 """
 
@@ -1236,8 +1238,16 @@ async def complete_shift(db, org_id: str, p: dict, pid: str, worker_id: str, row
     record_medications(db, org_id, p, pid, worker_id, row, start, end, rng)
 
 
+# --removable: no medication administration records. Those rows are
+# append-only (they can never be deleted, and they block deleting the
+# medications, shifts and participants they point at), so leave them out on
+# any database the demo may later need removing from. Medications themselves
+# are still listed.
+REMOVABLE = "--removable" in sys.argv
+
+
 def record_medications(db, org_id: str, p: dict, pid: str, worker_id: str, row: dict, start: datetime, end: datetime, rng: random.Random) -> None:
-    if not p["meds"] or find(db, "medication_administrations", {"shift_id": row["id"]}):
+    if REMOVABLE or not p["meds"] or find(db, "medication_administrations", {"shift_id": row["id"]}):
         return
     for m in p["meds"]:
         med = find(db, "medications", {"participant_id": pid, "name": m["name"]})
