@@ -51,9 +51,11 @@ export default function ParticipantSchedulePage() {
   }, [participantId]);
 
   const now = Date.now();
-  // Soonest first for what's coming up; most recent first for what's done.
-  const upcoming = (shifts ?? []).filter((s) => startOf(s) >= now).sort((a, b) => startOf(a) - startOf(b));
-  const past = (shifts ?? []).filter((s) => startOf(s) < now).sort((a, b) => startOf(b) - startOf(a));
+  // A visit stays "upcoming" until it ends, so one that's under way isn't
+  // filed as past. Soonest first for what's coming up; most recent first for what's done.
+  const isAhead = (s: ParticipantShift) => s.status === "in_progress" || new Date(s.scheduled_end).getTime() >= now;
+  const upcoming = (shifts ?? []).filter(isAhead).sort((a, b) => startOf(a) - startOf(b));
+  const past = (shifts ?? []).filter((s) => !isAhead(s)).sort((a, b) => startOf(b) - startOf(a));
 
   return (
     <ParticipantPortalShell>

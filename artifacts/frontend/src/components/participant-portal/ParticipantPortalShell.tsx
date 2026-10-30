@@ -17,6 +17,8 @@ import { ProfilePanel } from "@/components/participant-portal/ProfilePanel";
 import { isPortalDemoOn, setPortalDemo, turnPortalDemoOff } from "@/lib/portal-demo-data";
 
 const BG = "var(--cc-bg)";
+const SURFACE = "var(--cc-surface)";
+const BORDER = "var(--cc-border)";
 const PLUM = "var(--cc-plum)";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -92,7 +94,7 @@ export function ParticipantPortalShell({ children }: { children: React.ReactNode
 
   return (
     <div className="min-h-screen" style={{ background: BG }}>
-      <div className="flex min-h-screen w-full flex-col">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col">
         {/* ── Top bar ─────────────────────────────────────────────── */}
         <header className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-4 sm:px-8 sm:py-5">
           <Link href={PORTAL_HOME} aria-label="Home" className="shrink-0">
@@ -100,9 +102,10 @@ export function ParticipantPortalShell({ children }: { children: React.ReactNode
           </Link>
 
           {participantId && (
+            // Tablets and up: tabs in the top bar. Phones use the bottom bar below.
             <nav
               aria-label="Portal sections"
-              className="order-3 grid w-full grid-cols-4 gap-1 sm:flex sm:justify-center lg:order-2 lg:w-auto lg:flex-1"
+              className="order-3 hidden w-full justify-center gap-1 sm:flex lg:order-2 lg:w-auto lg:flex-1"
             >
               {TABS.map((tab) => {
                 const active = tab.match(location);
@@ -112,12 +115,10 @@ export function ParticipantPortalShell({ children }: { children: React.ReactNode
                     key={tab.href}
                     href={tab.href}
                     aria-current={active ? "page" : undefined}
-                    className="flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[12px] font-bold transition-colors hover:bg-black/5 sm:flex-row sm:gap-2 sm:px-3.5 sm:text-[14px]"
+                    className="flex min-h-11 items-center gap-2 rounded-xl px-3.5 py-2 text-[14px] font-bold transition-colors hover:bg-black/5"
                     style={{ background: active ? "var(--cc-plum-soft)" : undefined, color: active ? PLUM : MUTED }}
                   >
-                    <Icon size={18} className="shrink-0" />
-                    <span className="truncate sm:hidden">{tab.short}</span>
-                    <span className="hidden sm:inline">{tab.label}</span>
+                    <Icon size={18} className="shrink-0" /> {tab.label}
                   </Link>
                 );
               })}
@@ -194,7 +195,8 @@ export function ParticipantPortalShell({ children }: { children: React.ReactNode
         </header>
 
         {/* ── Body ────────────────────────────────────────────────── */}
-        <main className="flex-1 px-3 pb-6 sm:px-8 sm:pb-8">
+        {/* Phones: room at the bottom so the tab bar never covers content. */}
+        <main className={`flex-1 px-4 sm:px-8 sm:pb-8 ${participantId ? "pb-28" : "pb-6"}`}>
           {participantId && !isSettings ? (
             <div className="grid gap-6 lg:grid-cols-[minmax(340px,400px)_1fr] lg:gap-8">
               {/* Phones: the profile card only on Overview, and below the upcoming
@@ -209,6 +211,32 @@ export function ParticipantPortalShell({ children }: { children: React.ReactNode
           )}
         </main>
       </div>
+
+      {participantId && (
+        <nav
+          aria-label="Portal sections"
+          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t sm:hidden"
+          style={{ background: SURFACE, borderColor: BORDER, paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          {TABS.map((tab) => {
+            const active = tab.match(location);
+            const Icon = tab.icon;
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                aria-current={active ? "page" : undefined}
+                className="relative flex min-h-16 flex-col items-center justify-center gap-1 text-[12px] font-bold outline-none focus-visible:bg-black/5"
+                style={{ color: active ? PLUM : MUTED }}
+              >
+                {active && <span className="absolute inset-x-5 top-0 h-[3px] rounded-b-full" style={{ background: PLUM }} />}
+                <Icon size={22} strokeWidth={active ? 2.4 : 2} />
+                {tab.short}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import { useViewingParticipant } from "@/components/participant-portal/ParticipantPortalContext";
-import { ProfileAvatar, getInitials } from "@/components/participant-portal/ProfileAvatar";
+import { ProfileAvatar } from "@/components/participant-portal/ProfileAvatar";
 import { usePortalOverview } from "@/components/participant-portal/usePortalOverview";
 import { GENDER_OPTIONS, PRONOUN_OPTIONS, intakeOptionLabel } from "@/services/participantIntakeService";
 
@@ -43,7 +43,7 @@ function Section({ title, children, defaultOpen = true }: { title: string; child
 function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   if (value === undefined || value === null || value === "") return null;
   return (
-    <div className="grid grid-cols-[120px_1fr] gap-3 text-[14px] leading-relaxed">
+    <div className="grid grid-cols-[104px_1fr] gap-3 text-[14px] leading-relaxed sm:grid-cols-[120px_1fr]">
       <span style={{ color: MUTED }}>{label}</span>
       <span className="min-w-0 break-words font-semibold" style={{ color: TEXT }}>{value}</span>
     </div>
@@ -79,6 +79,12 @@ export function ProfilePanel() {
     intake.plan_start || intake.plan_end ? `${formatDate(intake.plan_start) ?? "N/A"} to ${formatDate(intake.plan_end) ?? "N/A"}` : undefined;
   const hasPlanManager = intake.plan_manager_name || intake.plan_manager_org || intake.plan_manager_phone || intake.plan_manager_email;
   const nextOfKin = intake.next_of_kin ?? [];
+  const activities = [
+    ...(Array.isArray(p.preferred_activities) ? p.preferred_activities : (p.preferred_activities ?? "").split(",")),
+    ...(p.favourite_activities ?? "").split(","),
+  ]
+    .map((a) => a.trim())
+    .filter((a, i, all) => a && all.indexOf(a) === i);
   const index = participants && current ? participants.indexOf(current) : 0;
 
   return (
@@ -156,31 +162,22 @@ export function ProfilePanel() {
         </Section>
       )}
 
-      <Section title="Your support team">
-        {data.support_team.length === 0 ? (
-          <p className="text-[14px] leading-relaxed" style={{ color: MUTED }}>Your provider will let you know who's supporting you.</p>
-        ) : (
-          <ul className="space-y-3">
-            {data.support_team.map((w) => (
-              <li key={w.id} className="flex items-center gap-3">
-                {w.profile_photo_url ? (
-                  <img src={w.profile_photo_url} alt="" className="h-10 w-10 rounded-full object-cover" />
-                ) : (
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-black" style={{ background: CHIP_BG, color: TEXT }}>
-                    {getInitials(w.full_name || "?")}
-                  </span>
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-bold" style={{ color: TEXT }}>{w.full_name}</span>
-                  <span className="block text-[12px]" style={{ color: MUTED }}>
-                    {w.role_label}{w.is_assigned ? " · Main support worker" : ""}
-                  </span>
+      {/* The support team lives on the Overview, beside who's coming next. */}
+      {(activities.length > 0 || p.interests || p.daily_routine) && (
+        <Section title="Interests & routine">
+          <Row label="Interests" value={p.interests} />
+          <Row label="Daily routine" value={p.daily_routine} />
+          {activities.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {activities.map((a) => (
+                <span key={a} className="rounded-lg px-3 py-1.5 text-[13px] font-bold" style={{ background: CHIP_BG, color: TEXT }}>
+                  {a}
                 </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+              ))}
+            </div>
+          )}
+        </Section>
+      )}
     </div>
   );
 }
