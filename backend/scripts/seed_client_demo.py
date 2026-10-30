@@ -48,7 +48,9 @@ Full seed, from the repo root:
 Add --env-file <file> to seed a project other than the one in .env (it
 prints which database it's writing to first). Add --removable on a shared
 database: it skips medication administration records, which are append-only
-and would stop the org from ever being fully removed. --rewrite-notes regenerates
+and would stop the org from ever being fully removed. --fix-safety-cards
+rewrites only the participants' safety cards (earlier runs stored them in a
+shape that crashed the worker app at clock-in). --rewrite-notes regenerates
 the completed shifts' notes, e.g. after changing the note generator.
 """
 
@@ -711,6 +713,21 @@ def seed_worker_compliance(db, org_id: str, worker_id: str, library: dict[str, l
 
 # ── Participants ──────────────────────────────────────────────────────────────
 
+def safety_protocol_lists(p: dict) -> dict[str, Any]:
+    """The participant's safety card, in the shapes SafetyProtocolUpdate writes
+    (schemas/safety_protocol.py). The worker app renders these at every
+    clock-in and crashed when they were plain strings."""
+    em_name, em_rel, em_phone = p["emergency"]
+    return {
+        "safety_card_body": f"{p['preferred_name']}: " + " ".join(p["alerts"]),
+        "scenarios": [{"trigger": "Feeling overwhelmed", "response": "Offer a quiet space and a drink of water; follow their lead.", "sort_order": 0}],
+        "deescalation_techniques": [{"title": "Calm things down", "steps": ["Lower your voice and slow down", "Offer two clear choices", "Give time and space"], "sort_order": 0}],
+        "physical_safety_notes": [{"note": p["sensory"], "sort_order": 0}],
+        "escalation_contacts": [{"role": "on_call", "label": "Harbourside on-call coordinator", "phone": "(08) 5550 1299", "sort_order": 0},
+                                {"role": "emergency", "label": f"{em_name} ({em_rel})", "phone": em_phone, "sort_order": 1}],
+    }
+
+
 async def ensure_participant(db, org_id: str, p: dict, staff: dict[str, str]) -> str:
     coordinator_id = staff[p["coordinator"]]
     as_coordinator = {"id": coordinator_id, "sub": coordinator_id, "organization_id": org_id, "role": "support_coordinator"}
@@ -808,13 +825,7 @@ async def ensure_participant(db, org_id: str, p: dict, staff: dict[str, str]) ->
             "is_high_risk": m["high_risk"], "updated_at": iso_now(),
         })
     ensure(db, "participant_safety_protocols", {"participant_id": pid, "organization_id": org_id}, {
-        "safety_card_body": f"{p['preferred_name']}: " + " ".join(p["alerts"]),
-        "scenarios": [{"title": "Feeling overwhelmed", "response": "Offer a quiet space and a drink of water; follow their lead."}],
-        "deescalation_techniques": ["Lower your voice and slow down", "Offer two clear choices", "Give time and space"],
-        "physical_safety_notes": [p["sensory"]],
-        "escalation_contacts": [{"name": em_name, "relationship": em_rel, "phone": em_phone},
-                                {"name": "Harbourside on-call", "relationship": "Coordinator on call", "phone": "(08) 5550 1299"}],
-        "content_version": 1, "updated_at": iso_now(), "updated_by": coordinator_id,
+        **safety_protocol_lists(p), "content_version": 1, "updated_at": iso_now(), "updated_by": coordinator_id,
     })
     for skill in {s for w in WORKERS if w["key"] == p["worker"] for s in w["skills"][:1]}:
         ensure(db, "participant_required_skills", {"participant_id": pid, "organization_id": org_id, "skill": skill}, {"is_mandatory": False})
@@ -2025,7 +2036,31 @@ def seed_conversation(db, org_id: str, staff: dict[str, str], participants: dict
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def fix_safety_cards(db) -> None:
+    """--fix-safety-cards: rewrite only this organisation's safety cards in the
+    shapes the apps render. Earlier runs stored plain strings, which crashed the
+    worker app at clock-in. Touches nothing else; content_version is kept, since
+    workers acknowledge the card afresh at every clock-in anyway."""
+    org = db.table("organizations").select("organization_id").eq("org_abbrev", ORG_ABBREV).eq("email", ORG_EMAIL).execute().data
+    if not org:
+        sys.exit(f"{ORG_NAME} isn't in this database.")
+    org_id = org[0]["organization_id"]
+    for p in PARTICIPANTS:
+        row = find(db, "participants", {"organization_id": org_id, "ndis_number": p["ndis_number"]})
+        if not row:
+            print(f"  {p['full_name']}: not found, skipped")
+            continue
+        updated = (
+            db.table("participant_safety_protocols").update(safety_protocol_lists(p))
+            .eq("participant_id", row["id"]).eq("organization_id", org_id).execute().data
+        )
+        print(f"  {p['full_name']}: {'safety card fixed' if updated else 'no safety card'}")
+
+
 async def main() -> None:
+    if "--fix-safety-cards" in sys.argv:
+        fix_safety_cards(get_supabase_admin())
+        return
     if len(PASSWORD) < 10:
         sys.exit("Set CLIENT_DEMO_PASSWORD (10+ characters, an uppercase letter and a number) for the demo logins.")
     db = get_supabase_admin()

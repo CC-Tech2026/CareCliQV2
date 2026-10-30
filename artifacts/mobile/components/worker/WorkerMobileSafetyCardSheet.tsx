@@ -250,7 +250,7 @@ export function WorkerMobileSafetyCardSheet({
                 <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
                   {tech.title}
                 </Text>
-                {tech.steps.map((step, si) => (
+                {(tech.steps ?? []).map((step, si) => (
                   <Text key={si} style={[styles.stepText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
                     {si + 1}. {step}
                   </Text>
@@ -292,7 +292,7 @@ export function WorkerMobileSafetyCardSheet({
                         {contact.label}
                       </Text>
                       <Text style={[styles.contactRole, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                        {contact.role.replace("_", " ")}
+                        {(contact.role ?? "").replace("_", " ")}
                       </Text>
                     </View>
                     <Pressable
