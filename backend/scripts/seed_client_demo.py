@@ -16,8 +16,14 @@ weeks are rostered; one shift is in progress right now. There are resolved
 incidents and complaints, invoices, plan meetings, a shift conversation,
 inbox notifications, and portal logins for a participant and a parent.
 
-Unlike seed_pilot_org.py, nothing here is deliberately wrong: it's for
-showing the product working, not for finding compliance gaps.
+So every feature has something to show, some things are part-way through:
+applicants and new hires at each hiring stage, two new workers still
+onboarding (not yet rosterable), participant enquiries at each onboarding
+step, an open shift and a pending offer, time off and swap requests, a
+mileage claim, a training request, an incident under investigation, a
+complaint in review, a credential due for renewal, and the last week of
+shifts waiting for billing verification. Nothing is deliberately
+non-compliant: it's for showing the product working.
 
 Everyone is fictional. Emails are @example.com (never delivered), phone
 numbers are from ACMA's ranges reserved for fiction, the ABN passes the
@@ -48,6 +54,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import itertools
 import os
 import random
 import sys
@@ -126,8 +133,8 @@ ORG = {
     "status": "active",
 }
 
-# ACMA-reserved fictional mobile numbers.
-PHONES = iter([
+# ACMA-reserved fictional mobile numbers (reused in turn once all are given out).
+PHONES = itertools.cycle([
     "0491 570 006", "0491 570 156", "0491 570 157", "0491 570 158", "0491 570 159", "0491 570 110",
     "0491 570 313", "0491 570 737", "0491 571 266", "0491 571 491", "0491 571 804", "0491 572 549",
     "0491 572 665", "0491 572 983", "0491 573 770", "0491 573 087", "0491 574 118", "0491 574 632",
@@ -1536,6 +1543,335 @@ def seed_matching(db, org_id: str, staff: dict[str, str], participants: dict[str
     print(f"  matching     interest and lived-experience tags, backup workers, weekly availability, {rated} new shift ratings")
 
 
+# ── Something at every stage, for demonstrating each feature ─────────────────
+# The core org above is complete and tidy. These are the people and requests
+# that are part-way through something: applicants and new hires at each
+# hiring stage, two new workers still onboarding, enquiries at each step of
+# participant onboarding, and the everyday things a coordinator acts on.
+
+APPLICANTS = [
+    ("Zara Ahmed", "zara.ahmed@example.com", "applied", 2, "Applied through the careers page. Cert III in Individual Support, two years in aged care.", None),
+    ("Mia Russo", "mia.russo@example.com", "applied", 9, "Referred by Sofia Rossi. Studying a Diploma of Community Services.", None),
+    ("Ben Carter", "ben.carter@example.com", "interview", 3, "Phone screen done; in-person interview booked for Thursday.", None),
+    ("Lucy Tran", "lucy.tran@example.com", "offer_extended", 2, "Strong interview; offer sent for a part-time role in the western suburbs.", None),
+    ("Oliver Grant", "oliver.grant@example.com", "rejected", 5, "Interviewed; not proceeding.", "Unable to work the weekday daytime hours the role needs."),
+]
+
+HIRES = [
+    # (name, email, stage) for new hires at each signing stage
+    ("Jack Peterson", "jack.peterson@example.com", "draft"),
+    ("Ava Collins", "ava.collins@example.com", "draft_with_documents"),
+    ("Lucy Tran", "lucy.tran@example.com", "awaiting_signatures"),
+    ("Leo Martin", "leo.martin@example.com", "signed"),
+]
+
+NEW_WORKERS = [
+    {"key": "chloe", "full_name": "Chloe Martin", "stage": "credentials", "dob": "2001-03-11", "suburb": "Hindmarsh",
+     "address": "6 Port Road, Hindmarsh SA 5007", "emergency": "Paul Martin (father)", "employment": "casual", "years": "1",
+     "summary": "New to Harbourside after a year in hospitality. Cert III in Individual Support completed this year.",
+     "skills": ["Community access"], "coordinator": "meilin"},
+    {"key": "samuel", "full_name": "Samuel Oduya", "stage": "training", "dob": "1993-08-20", "suburb": "Enfield",
+     "address": "18 Main North Road, Enfield SA 5085", "emergency": "Grace Oduya (sister)", "employment": "part_time", "years": "5",
+     "summary": "Five years in disability support in Melbourne before moving to Adelaide. Experienced with autism and positive behaviour support.",
+     "skills": ["Autism", "Community access"], "coordinator": "daniel"},
+]
+for w in NEW_WORKERS:
+    w.update({"email": f"{w['key']}@harbourside.example.com", "role": "support_worker", "account_type": "independent_worker"})
+
+ENQUIRIES = [
+    # (name, ndis, dob, sex, source, status, days_ago, hours, suburb, needs, note)
+    ("Leo Fraser", "431880201", "1999-04-02", "male", "online_form", "enquiry", 2, 6, "Woodville South SA 5011",
+     ["Community access", "Social participation"], "Looking for weekend support to get to the footy and catch up with friends."),
+    ("Grace Wilson", "431880202", "1972-12-15", "female", "phone_call", "enquiry", 5, 10, "Kilburn SA 5084",
+     ["Personal care", "Household tasks"], "Rang after her previous provider closed. Needs morning personal care from next month."),
+    ("Harper Singh", "431880203", "2011-06-27", "female", "coordinator_referral", "screening", 7, 8, "Seaton SA 5023",
+     ["Routine and behaviour support", "Community access"], "Referred by her support coordinator. Autistic, 15, wants after-school support."),
+    ("Oscar Bailey", "431880204", "1988-09-03", "male", "email", "meet_greet", 12, 12, "Klemzig SA 5087",
+     ["Daily living skills", "Employment support"], "Acquired brain injury; wants help preparing to return to part-time work."),
+    ("Isla Morgan", "431880205", "1965-02-18", "female", "online_form", "awaiting_signatures", 18, 9, "West Lakes SA 5021",
+     ["Personal care", "Medication prompting"], "Multiple sclerosis. Agreed supports at the meet and greet; agreement sent for signing."),
+    ("Jacob Lee", "431880206", "2003-10-09", "male", "coordinator_referral", "signed", 21, 15, "Mawson Lakes SA 5095",
+     ["Employment support", "Community access"], "Down syndrome. Agreement signed by Jacob and his dad; ready to make active."),
+    ("Emily Watson", "431880207", "1990-01-30", "female", "phone_call", "declined", 10, 20, "Murray Bridge SA 5253",
+     ["Personal care"], "Needs overnight support in Murray Bridge."),
+    ("Lucas Brown", "431880208", "1984-07-22", "male", "online_form", "withdrawn", 14, 6, "Unley SA 5061",
+     ["Community access"], "Enquired about weekend outings."),
+]
+
+
+def seed_hiring(db, org_id: str, staff: dict[str, str]) -> None:
+    coordinator = staff["meilin"]
+    now = datetime.now(timezone.utc)
+    hire_ids: dict[str, str] = {}
+    for name, email, stage in HIRES:
+        hire = ensure(db, "employee_onboarding", {"organization_id": org_id, "email": email}, {
+            "full_name": name, "phone": next(PHONES), "role": "support_worker", "created_by": coordinator, "status": "draft",
+        }, fill=False)
+        hire_ids[email] = hire["id"]
+        if stage == "draft":
+            continue
+        for doc_type, title in (("offer_letter", f"Offer of employment, {name}"), ("service_agreement", f"Employment agreement, {name}")):
+            ensure(db, "employee_onboarding_documents", {"onboarding_id": hire["id"], "document_type": doc_type},
+                   {"title": title, "notes": "Part-time support worker, SCHADS Level 2."}, fill=False)
+        if stage == "awaiting_signatures":
+            db.table("employee_onboarding").update({
+                "status": "awaiting_signatures", "sign_token": hire.get("sign_token") or uuid4().hex + uuid4().hex[:16],
+                "employer_signed_by": coordinator, "employer_signed_name": "Mei Lin Chen", "employer_signed_at": (now - timedelta(days=1)).isoformat(),
+            }).eq("id", hire["id"]).execute()
+        if stage == "signed":
+            db.table("employee_onboarding").update({
+                "status": "signed", "sign_token": hire.get("sign_token") or uuid4().hex + uuid4().hex[:16],
+                "employer_signed_by": coordinator, "employer_signed_name": "Mei Lin Chen", "employer_signed_at": (now - timedelta(days=3)).isoformat(),
+                "worker_signed_name": name, "worker_signed_at": (now - timedelta(days=2)).isoformat(),
+            }).eq("id", hire["id"]).execute()
+    for name, email, stage, days, notes, rejected in APPLICANTS:
+        ensure(db, "applicants", {"organization_id": org_id, "email": email}, {
+            "full_name": name, "phone": next(PHONES), "role": "support_worker", "stage": stage, "notes": notes,
+            "stage_entered_at": (now - timedelta(days=days)).isoformat(), "rejected_reason": rejected, "created_by": coordinator,
+            "employee_onboarding_id": hire_ids.get(email), "resume_summary": notes,
+            "resume_skills": ["Personal care", "Community access", "Manual handling"], "resume_experience_years": str(max(1, days // 3)),
+        }, fill=False)
+    print(f"  hiring       {len(APPLICANTS)} applicants (applied, interview, offer, rejected), {len(HIRES)} new hires at each signing stage")
+
+
+async def seed_new_workers(db, org_id: str, branch_id: str, staff: dict[str, str], library: dict[str, list[str]]) -> None:
+    """Two people who have accepted their invite but aren't ready to roster."""
+    for i, w in enumerate(NEW_WORKERS, start=20):
+        staff[w["key"]] = await ensure_staff(db, org_id, branch_id, w, i, staff)
+        worker_id = staff[w["key"]]
+        db.table("users").update({"onboarding_completed": False}).eq("id", worker_id).execute()
+        rng = random.Random(w["key"])
+        for ctype, title, issuer, issued_ago, valid_for in CREDENTIALS:
+            required = ctype in ("ndis_screening", "wwcc", "code_of_conduct", "first_aid", "cpr", "manual_handling", "infection_control", "medication_admin")
+            if w["stage"] == "credentials":
+                # Uploaded some, a couple waiting on the coordinator, the rest still to do.
+                if ctype in ("ndis_screening", "first_aid"):
+                    status, verified = "pending_review", False
+                elif ctype in ("wwcc", "code_of_conduct", "police_check", "drivers_licence"):
+                    status, verified = "valid", True
+                else:
+                    continue
+            else:
+                if not required and ctype not in ("police_check", "drivers_licence"):
+                    continue
+                status, verified = "valid", True
+            issued = TODAY - timedelta(days=min(issued_ago, 25) + rng.randint(0, 10))
+            expires = (issued + timedelta(days=valid_for)) if valid_for else None
+            number = f"{ctype[:3].upper()}-{rng.randint(1000000, 9999999)}"
+            row = ensure(db, "credentials", {"user_id": worker_id, "organization_id": org_id, "credential_type": ctype}, {
+                "title": title, "issuer": issuer, "issue_date": issued.isoformat(), "expiry_date": expires.isoformat() if expires else None,
+                "status": status, "credential_number": number,
+                "verified_by": staff[w["coordinator"]] if verified else None, "verified_at": iso_now() if verified else None,
+                "notes": "Uploaded during onboarding." if not verified else "Sighted original and verified.",
+                "screening_number": number if ctype == "ndis_screening" else None,
+            }, fill=False)
+            if not row.get("file_path"):
+                path = f"{org_id}/{worker_id}/{row['id']}-{uuid4().hex}.pdf"
+                upload(db, CREDENTIAL_FILES_BUCKET, path, certificate_pdf(w["full_name"], title, issuer, number, issued.isoformat(), expires.isoformat() if expires else None), "application/pdf")
+                db.table("credentials").update({"file_path": path}).eq("id", row["id"]).execute()
+        if w["stage"] == "training":
+            # Credentials all verified; mandatory training assigned and due, induction part-done.
+            for module_id, (title, _, req, _) in zip(library["modules"], TRAINING):
+                if req != "mandatory":
+                    continue
+                ensure(db, "worker_training_recommendations", {"worker_id": worker_id, "training_module_id": module_id, "organization_id": org_id}, {
+                    "coordinator_id": staff[w["coordinator"]], "title": title, "recommended_at": (NOW - timedelta(days=4)).isoformat(),
+                    "due_at": (NOW + timedelta(days=10)).isoformat(),
+                }, fill=False)
+            for item_id in library["induction"][:2]:
+                ensure(db, "worker_induction_completions", {"worker_id": worker_id, "item_id": item_id, "organization_id": org_id},
+                       {"completed_at": (NOW - timedelta(days=3)).isoformat()}, fill=False)
+        for skill in w["skills"]:
+            ensure(db, "worker_skills", {"user_id": worker_id, "organization_id": org_id, "skill": skill}, {"is_certified": False}, fill=False)
+    print("  onboarding   Chloe Martin waiting on credentials, Samuel Oduya on training (neither can be rostered yet)")
+
+
+async def seed_enquiries(db, org_id: str, staff: dict[str, str]) -> None:
+    from backend.app.services import participant_intake_service as intakes
+    from backend.scripts.seed_pilot_org import signature_png
+
+    coordinator = staff["meilin"]
+    count = 0
+    for name, ndis, dob, sex, source, status, days, hours, suburb, needs, note in ENQUIRIES:
+        existing = find(db, "participant_intakes", {"organization_id": org_id, "ndis_number": ndis})
+        given, *rest = name.split()
+        received = NOW - timedelta(days=days)
+        web_intake = {
+            "submitted_at": received.isoformat(), "submitted_by": name, "given_name": given, "surname": " ".join(rest),
+            "preferred_name": given, "gender": "Female" if sex == "female" else "Male", "pronouns": "she/her" if sex == "female" else "he/him",
+            "date_of_birth": dob, "preferred_language": "English", "street_address": f"{random.Random(ndis).randint(2, 90)} Example Street",
+            "suburb": suburb.rsplit(" SA ", 1)[0], "state": "SA", "postcode": suburb.rsplit(" ", 1)[1],
+            "funding_type": "plan_managed", "plan_status": "Active", "plan_start": d(-60), "plan_end": d(300),
+            "plan_manager_name": "Jess Moran", "plan_manager_org": "Plan Partners", "plan_manager_phone": "(08) 5550 3300",
+            "plan_manager_email": "accounts@planpartners.example.com",
+            "next_of_kin": [{"name": f"{['Sam', 'Alex', 'Jo', 'Chris'][count % 4]} {' '.join(rest)}", "relationship": "Parent" if int(dob[:4]) > 2005 else "Partner", "phone": next(PHONES)}],
+            "referral_source": source.replace("_", " ").capitalize(), "referral_date": received.date().isoformat(),
+            "presenting_needs": needs, "notes": note,
+        }
+        if not existing:
+            existing = intakes.create_intake(
+                organization_id=org_id, created_by=coordinator, full_name=name, ndis_number=ndis,
+                email=f"{given.lower()}.{rest[-1].lower()}@example.com", phone=next(PHONES), source=source,
+                service_category="disability", service_hours_required=hours, web_intake=web_intake,
+            )
+        intake_id = existing["id"]
+        update: dict[str, Any] = {"plan_start_date": d(-60), "plan_end_date": d(300), "total_budget": str(40000 + hours * 2500),
+                                  "board_subtitle": note.split(".")[0], "created_at": received.isoformat()}
+        if status in ("screening", "meet_greet", "awaiting_signatures", "signed"):
+            update["screening_checks"] = {"language_support_ok": True, "waitlist_open": True, "resource_match_ok": status != "screening",
+                                          "environment_safe": True, "no_red_flags": True, "red_flag_notes": "None identified."}
+        if status in ("meet_greet", "awaiting_signatures", "signed"):
+            update["meet_greet_notes"] = f"Met {given} at home. Talked through goals and routines; {hours} hours a week agreed in principle."
+        if status == "declined":
+            update["decline_reason"] = "Outside our service area: we don't currently cover Murray Bridge or provide overnight support."
+        if status == "withdrawn":
+            update["withdrawn_reason"] = "Chose a provider closer to home."
+        if status not in ("awaiting_signatures", "signed"):
+            update["status"] = status
+        else:
+            update["status"] = "meet_greet" if existing.get("status") in ("enquiry", "screening") else existing.get("status")
+        db.table("participant_intakes").update(update).eq("id", intake_id).execute()
+
+        if status in ("awaiting_signatures", "signed") and not db.table("service_agreements").select("id").eq("intake_id", intake_id).execute().data:
+            fy_start = date(TODAY.year if TODAY.month >= 7 else TODAY.year - 1, 7, 1).isoformat()
+            draft = await agreements.create_draft(None, org_id, coordinator, {
+                "plan_management_type": "plan-managed", "start_date": max(d(5), fy_start), "end_date": d(300),
+                "includes_price_adjustment_clause": True, "cancellation_notice_hours": 48,
+                "supports": [{"support_item_code": "01_011_0107_1_1", "quantity": hours * 40, "frequency": "weekly", "location": "home"}],
+            }, intake_id=intake_id)
+            if status == "awaiting_signatures":
+                await agreements.send_for_signature(org_id, draft["id"], coordinator)
+                db.table("participant_intakes").update({"status": "awaiting_signatures"}).eq("id", intake_id).execute()
+            else:
+                await agreements.sign(
+                    org_id, draft["id"], coordinator, provider_name="Mei Lin Chen", provider_signature_png=signature_png("Mei Lin Chen"),
+                    participant_name=name, participant_signature_png=signature_png(name),
+                )
+        count += 1
+    print(f"  enquiries    {count} participant enquiries: 2 new, screening, meet and greet, awaiting signatures, signed, declined, withdrawn")
+
+
+async def seed_open_work(db, org_id: str, staff: dict[str, str], participants: dict[str, str]) -> None:
+    """The everyday things waiting on someone."""
+    pmap = {p["key"]: p for p in PARTICIPANTS}
+
+    def next_weekday(weekday: int, weeks: int = 1) -> date:
+        days = (weekday - TODAY.weekday()) % 7 or 7
+        return TODAY + timedelta(days=days + 7 * (weeks - 1))
+
+    # An open shift nobody has, and one being offered to a worker.
+    for key, day, hour, hours, offer_to in (("amara", next_weekday(4), 10, 3, None), ("ruby", next_weekday(5, 2), 13, 3, "fatima")):
+        p = pmap[key]
+        start, end = local(day, hour), local(day, hour + hours)
+        row = find(db, "shifts", {"participant_id": participants[key], "scheduled_start": start.isoformat()})
+        if not row:
+            values = shift_values(org_id, p, participants[key], None, start, end, "unassigned", staff[p["coordinator"]])
+            values["notes"] = "Extra shift requested by the family." if offer_to else "Additional support for a medical appointment."
+            row = db.table("shifts").insert({"scheduled_start": start.isoformat(), **values}).execute().data[0]
+        if offer_to and not find(db, "shift_offers", {"shift_id": row["id"]}):
+            db.table("shift_offers").insert({
+                "shift_id": row["id"], "organization_id": org_id, "worker_id": staff[offer_to], "rank": 1, "status": "pending",
+                "candidate_queue": [staff[offer_to], staff["sofia"], staff["kwame"]], "offered_by": staff[p["coordinator"]],
+                "offered_at": (NOW - timedelta(hours=2)).isoformat(), "responds_by": (NOW + timedelta(days=2)).isoformat(),
+            }).execute()
+
+    # Worker requests: time off, and a swap for a rostered shift.
+    def request(user: str, rtype: str, notes: str) -> Optional[str]:
+        existing = db.table("worker_schedule_requests").select("id").eq("user_id", staff[user]).eq("request_type", rtype).eq("status", "pending").execute().data
+        if existing:
+            return None
+        return db.table("worker_schedule_requests").insert({
+            "user_id": staff[user], "organization_id": org_id, "request_type": rtype, "status": "pending", "worker_notes": notes,
+        }).execute().data[0]["id"]
+
+    rid = request("priya", "time_off", "Family wedding in Kerala.")
+    if rid:
+        db.table("worker_time_off_request_details").insert({"request_id": rid, "start_date": d(24), "end_date": d(31), "reason_code": "annual_leave"}).execute()
+    swap_shift = db.table("shifts").select("id").eq("worker_id", staff["james"]).eq("status", "scheduled").gte("scheduled_start", local(TODAY + timedelta(days=5), 0).isoformat()).order("scheduled_start").limit(1).execute().data
+    if swap_shift:
+        rid = request("james", "shift_swap", "GP appointment that morning; Kwame has offered to cover.")
+        if rid:
+            db.table("worker_shift_swap_request_details").insert({"request_id": rid, "shift_id": swap_shift[0]["id"]}).execute()
+
+    # Mileage to approve: Kwame's drives to Bella's art group.
+    if not db.table("travel_expense_submissions").select("id").eq("worker_id", staff["kwame"]).execute().data:
+        trips = db.table("shifts").select("id").eq("worker_id", staff["kwame"]).eq("status", "completed").order("scheduled_start", desc=True).limit(2).execute().data
+        km = [18.4, 21.2]
+        rate = 99  # cents per km
+        submission = db.table("travel_expense_submissions").insert({
+            "worker_id": staff["kwame"], "organization_id": org_id, "total_amount_cents": int(sum(km) * rate), "status": "pending",
+            "submitted_at": (NOW - timedelta(days=1)).isoformat(),
+        }).execute().data[0]
+        for trip, kms in zip(trips, km):
+            db.table("shift_travel_expenses").insert({
+                "shift_id": trip["id"], "worker_id": staff["kwame"], "organization_id": org_id, "expense_type": "mileage", "status": "submitted",
+                "submission_batch_id": submission["id"], "calculated_km": kms, "claimed_km": kms, "rate_cents_snapshot": rate,
+                "amount_cents": int(kms * rate), "submitted_at": (NOW - timedelta(days=1)).isoformat(),
+            }).execute()
+
+    # A training request waiting on the office.
+    if not db.table("worker_training_requests").select("id").eq("worker_id", staff["lachlan"]).execute().data:
+        db.table("worker_training_requests").insert({
+            "worker_id": staff["lachlan"], "organization_id": org_id, "request_text": "Epilepsy awareness and seizure first aid",
+            "reason": "A new participant referral mentions seizures; I'd like to be ready.", "urgent": False, "status": "pending",
+        }).execute()
+
+    # An incident still being investigated, and a complaint being looked into.
+    at = local(TODAY - timedelta(days=1), 10, 20)
+    ref = f"INC-{at:%Y%m%d}-HB03"
+    if not find(db, "incidents", {"organization_id": org_id, "reference_number": ref}):
+        db.table("incidents").insert({
+            "organization_id": org_id, "reference_number": ref, "participant_id": participants["amara"], "title": "Skin graze during hoist transfer",
+            "incident_type": "injury", "severity": "medium", "status": "under_investigation", "incident_date": at.isoformat(),
+            "reported_date": (at + timedelta(minutes=40)).isoformat(), "location": "Amara's bedroom", "location_type": "private_home",
+            "description": "During the morning transfer Amara's left forearm brushed the hoist spreader bar, leaving a small graze. She said it stung but was not painful afterwards.",
+            "ndis_reportable": False, "participant_present": True, "participant_harmed": "yes",
+            "participant_impact": "Small graze on the left forearm, cleaned and dressed.",
+            "worker_actions": "Stopped the transfer, lowered Amara safely, cleaned and dressed the graze, told Mei Lin.",
+            "injury_nature": "Minor skin graze, dressed on the spot", "injury_medical_attention": "none", "follow_up_required": True,
+            "follow_up_date": d(3), "created_by": staff["fatima"], "user_id": staff["fatima"], "assigned_investigator_id": staff["meilin"],
+            "assigned_investigator_at": (at + timedelta(hours=2)).isoformat(), "photo_urls": [], "photo_metadata": {}, "witnesses_structured": [],
+            "investigation_notes": "OT booked to check the spreader bar height and sling size on Monday.",
+        }).execute()
+    if not find(db, "participant_complaints", {"organization_id": org_id, "participant_id": participants["noah"]}):
+        db.table("participant_complaints").insert({
+            "organization_id": org_id, "participant_id": participants["noah"], "participant_name": "Noah Williams",
+            "raised_by": "Kate Williams (mother)", "subject": "Roster for next month not shared yet",
+            "description": "We plan Noah's footy and work around his shifts. Could we get next month's roster a week earlier?",
+            "status": "in_review", "filed_at": (NOW - timedelta(days=2)).isoformat(), "created_by": staff["daniel"],
+        }).execute()
+
+    # A credential coming up for renewal.
+    db.table("credentials").update({"expiry_date": d(21), "notes": "Renewal booked with St John for next month."}).eq("user_id", staff["priya"]).eq("credential_type", "first_aid").execute()
+    print("  open work    open shift, shift offer, time off and swap requests, mileage claim, training request,")
+    print("               incident under investigation, complaint in review, Priya's First Aid due in 21 days")
+
+
+async def verify_older_shifts(db, org_id: str, staff: dict[str, str], participants: dict[str, str]) -> None:
+    """Billing verification for shifts over a week old; the last week waits in the queue."""
+    from backend.app.services import shift_verification_service as verification
+
+    cutoff = local(TODAY - timedelta(days=7), 0)
+    done = failed = 0
+    for p in PARTICIPANTS:
+        rows = (
+            db.table("shifts").select("id").eq("participant_id", participants[p["key"]]).eq("status", "completed")
+            .lt("scheduled_start", cutoff.isoformat()).execute().data
+        )
+        for row in rows:
+            if find(db, "shift_verifications", {"shift_id": row["id"]}):
+                continue
+            try:
+                await verification.verify_shift(row["id"], staff[p["coordinator"]], p["supports"][0][0], org_id,
+                                                 agreement_reason="Delivered as agreed in the service agreement.")
+                done += 1
+            except Exception as exc:
+                failed += 1
+                if failed == 1:
+                    print(f"  (verification skipped for some shifts: {str(exc)[:120]})")
+    print(f"  billing      {done} older shifts verified for billing; the last week is waiting in the verification queue")
+
+
 # ── Everything else ───────────────────────────────────────────────────────────
 
 def seed_records(db, org_id: str, staff: dict[str, str], participants: dict[str, str]) -> None:
@@ -1710,6 +2046,11 @@ async def main() -> None:
         await seed_shifts(db, org_id, staff, participants)
         seed_intakes(db, org_id, staff, participants)
         seed_matching(db, org_id, staff, participants)
+        seed_hiring(db, org_id, staff)
+        await seed_new_workers(db, org_id, branch_id, staff, library)
+        await seed_enquiries(db, org_id, staff)
+        await seed_open_work(db, org_id, staff, participants)
+        await verify_older_shifts(db, org_id, staff, participants)
         seed_records(db, org_id, staff, participants)
         seed_invoices(db, org_id, staff, participants)
         seed_conversation(db, org_id, staff, participants)
