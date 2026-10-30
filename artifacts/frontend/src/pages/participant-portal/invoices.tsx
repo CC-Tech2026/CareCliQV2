@@ -14,6 +14,7 @@ const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
+const SURFACE = "var(--cc-surface)";
 const PLUM = "var(--cc-plum)";
 const AMBER = "#9A5B0A";
 const AMBER_SOFT = "#FBF2E6";
@@ -36,12 +37,12 @@ const BUCKETS: Record<Bucket, { label: string; accent: string; tint: string; ico
 };
 
 function formatDate(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "N/A";
   return new Date(value).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
 }
 
 function formatShortDate(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "N/A";
   return new Date(value).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
 }
 
@@ -135,8 +136,8 @@ export default function ParticipantInvoicesPage() {
     <ParticipantPortalShell>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-black" style={{ color: TEXT }}>Invoices</h1>
-          <p className="mt-1 text-[13px]" style={{ color: MUTED }}>Billing for the supports you've received.</p>
+          <h1 className="text-2xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Invoices</h1>
+          <p className="mt-1 text-[14px]" style={{ color: MUTED }}>Billing for the supports you've received.</p>
         </div>
 
         {loadError && (
@@ -146,24 +147,29 @@ export default function ParticipantInvoicesPage() {
           </div>
         )}
 
-        {/* ── Summary tiles ─────────────────────────────────────── */}
-        <div className="grid gap-3 sm:grid-cols-3">
+        {/* ── Summary strip ─────────────────────────────────────── */}
+        <div
+          className="grid divide-y divide-[var(--cc-border)] rounded-2xl border sm:grid-cols-3 sm:divide-x sm:divide-y-0"
+          style={{ borderColor: BORDER, background: SURFACE }}
+        >
           {(Object.keys(BUCKETS) as Bucket[]).map((key) => {
             const b = BUCKETS[key];
             const Icon = b.icon;
             return (
-              <div key={key} className="flex items-center gap-3 rounded-2xl p-4" style={{ background: b.tint }}>
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: b.accent }}>
-                  <Icon size={20} />
+              <div key={key} className="flex items-center gap-3 px-5 py-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: b.tint, color: b.accent }}>
+                  <Icon size={18} />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-[12px] font-bold" style={{ color: MUTED }}>{b.label}</p>
-                  <p className="text-[20px] font-black leading-tight" style={{ color: TEXT }}>
-                    {invoices === null ? "—" : totals[key].count}
+                  <p className="text-[13px] font-bold" style={{ color: MUTED }}>{b.label}</p>
+                  <p className="text-[15px] font-black leading-tight" style={{ color: TEXT }}>
+                    {invoices === null ? "..." : totals[key].count === 0 ? "None" : money.format(totals[key].amount)}
+                    {invoices !== null && totals[key].count > 0 && (
+                      <span className="ml-1.5 text-[13px] font-semibold" style={{ color: MUTED }}>
+                        {totals[key].count} {totals[key].count === 1 ? "invoice" : "invoices"}
+                      </span>
+                    )}
                   </p>
-                  {invoices !== null && totals[key].count > 0 && (
-                    <p className="text-[11px] font-semibold" style={{ color: MUTED }}>{money.format(totals[key].amount)}</p>
-                  )}
                 </div>
               </div>
             );
@@ -171,7 +177,7 @@ export default function ParticipantInvoicesPage() {
         </div>
 
         {/* ── Invoice list ──────────────────────────────────────── */}
-        <section className="rounded-2xl border p-4 sm:p-6" style={{ borderColor: BORDER }}>
+        <section className="rounded-2xl border p-4 sm:p-6" style={{ borderColor: BORDER, background: SURFACE }}>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-[16px] font-black" style={{ color: TEXT }}>All invoices</h2>
             {invoices && invoices.length > 0 && (
@@ -231,12 +237,12 @@ export default function ParticipantInvoicesPage() {
               </table>
 
               {/* Phones: stacked rows */}
-              <ul className="space-y-2 sm:hidden">
+              <ul className="divide-y divide-[var(--cc-border)] sm:hidden">
                 {invoices.map((inv) => (
-                  <li key={inv.id} className="flex items-center gap-3 rounded-xl p-3" style={{ background: SOFT }}>
+                  <li key={inv.id} className="flex items-center gap-3 py-3.5">
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold" style={{ color: TEXT }}>{inv.invoice_number}</p>
-                      <p className="text-[11px]" style={{ color: MUTED }}>{formatDate(inv.invoice_date)}</p>
+                      <p className="text-[14px] font-bold" style={{ color: TEXT }}>{inv.invoice_number}</p>
+                      <p className="text-[13px]" style={{ color: MUTED }}>{formatDate(inv.invoice_date)}</p>
                       <div className="mt-1.5"><StatusPill status={inv.status} /></div>
                     </div>
                     <p className="text-[14px] font-black" style={{ color: TEXT }}>{money.format(Number(inv.total_amount) || 0)}</p>

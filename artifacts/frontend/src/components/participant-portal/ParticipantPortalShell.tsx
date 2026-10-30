@@ -16,7 +16,7 @@ import { ProfileAvatar, displayName } from "@/components/participant-portal/Prof
 import { ProfilePanel } from "@/components/participant-portal/ProfilePanel";
 import { isPortalDemoOn, setPortalDemo, turnPortalDemoOff } from "@/lib/portal-demo-data";
 
-const SURFACE = "var(--cc-surface)";
+const BG = "var(--cc-bg)";
 const PLUM = "var(--cc-plum)";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -24,13 +24,15 @@ const MUTED = "var(--cc-muted)";
 export const PORTAL_HOME = "/participant-portal";
 export const PORTAL_SETTINGS = "/participant-portal/settings";
 
+// `short` is the phone label, where all four tabs share one row.
 const TABS = [
-  { href: PORTAL_HOME, label: "Overview", icon: LayoutGrid, match: (p: string) => p === PORTAL_HOME },
-  { href: "/participant-portal/schedule", label: "Support Schedule", icon: CalendarDays, match: (p: string) => p.startsWith("/participant-portal/schedule") },
-  { href: "/participant-portal/invoices", label: "Invoices", icon: Receipt, match: (p: string) => p.startsWith("/participant-portal/invoices") },
+  { href: PORTAL_HOME, label: "Overview", short: "Overview", icon: LayoutGrid, match: (p: string) => p === PORTAL_HOME },
+  { href: "/participant-portal/schedule", label: "Support Schedule", short: "Schedule", icon: CalendarDays, match: (p: string) => p.startsWith("/participant-portal/schedule") },
+  { href: "/participant-portal/invoices", label: "Invoices", short: "Invoices", icon: Receipt, match: (p: string) => p.startsWith("/participant-portal/invoices") },
   {
     href: "/participant-portal/documents",
     label: "Documents",
+    short: "Documents",
     icon: FileText,
     match: (p: string) => p.startsWith("/participant-portal/documents") || p.startsWith("/participant-portal/plan"),
   },
@@ -89,7 +91,7 @@ export function ParticipantPortalShell({ children }: { children: React.ReactNode
   const isSettings = location.startsWith(PORTAL_SETTINGS);
 
   return (
-    <div className="min-h-screen" style={{ background: SURFACE }}>
+    <div className="min-h-screen" style={{ background: BG }}>
       <div className="flex min-h-screen w-full flex-col">
         {/* ── Top bar ─────────────────────────────────────────────── */}
         <header className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-4 sm:px-8 sm:py-5">
@@ -100,7 +102,7 @@ export function ParticipantPortalShell({ children }: { children: React.ReactNode
           {participantId && (
             <nav
               aria-label="Portal sections"
-              className="order-3 flex w-full gap-1 overflow-x-auto lg:order-2 lg:w-auto lg:flex-1 lg:justify-center"
+              className="order-3 grid w-full grid-cols-4 gap-1 sm:flex sm:justify-center lg:order-2 lg:w-auto lg:flex-1"
             >
               {TABS.map((tab) => {
                 const active = tab.match(location);
@@ -110,10 +112,12 @@ export function ParticipantPortalShell({ children }: { children: React.ReactNode
                     key={tab.href}
                     href={tab.href}
                     aria-current={active ? "page" : undefined}
-                    className="flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-[13px] font-bold transition-colors"
-                    style={{ background: active ? "var(--cc-plum-soft)" : "transparent", color: active ? PLUM : MUTED }}
+                    className="flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[12px] font-bold transition-colors hover:bg-black/5 sm:flex-row sm:gap-2 sm:px-3.5 sm:text-[14px]"
+                    style={{ background: active ? "var(--cc-plum-soft)" : undefined, color: active ? PLUM : MUTED }}
                   >
-                    <Icon size={16} /> {tab.label}
+                    <Icon size={18} className="shrink-0" />
+                    <span className="truncate sm:hidden">{tab.short}</span>
+                    <span className="hidden sm:inline">{tab.label}</span>
                   </Link>
                 );
               })}
@@ -192,9 +196,10 @@ export function ParticipantPortalShell({ children }: { children: React.ReactNode
         {/* ── Body ────────────────────────────────────────────────── */}
         <main className="flex-1 px-3 pb-6 sm:px-8 sm:pb-8">
           {participantId && !isSettings ? (
-            <div className="grid gap-8 lg:grid-cols-[minmax(470px,530px)_1fr]">
-              {/* Phones: the profile card only on Overview, so other tabs aren't pushed down. */}
-              <aside className={isOverview ? "" : "hidden lg:block"} aria-label="Profile">
+            <div className="grid gap-6 lg:grid-cols-[minmax(340px,400px)_1fr] lg:gap-8">
+              {/* Phones: the profile card only on Overview, and below the upcoming
+                  support, so the first thing on screen is what's happening next. */}
+              <aside className={isOverview ? "order-last lg:order-none" : "hidden lg:block"} aria-label="Profile">
                 <ProfilePanel />
               </aside>
               <div className="min-w-0">{content}</div>

@@ -75,12 +75,12 @@ function PasswordForm() {
       </div>
       <div>
         <label htmlFor="new-password" className="text-[13px] font-bold" style={{ color: TEXT }}>New password</label>
-        <input id="new-password" autoComplete="new-password" minLength={10} required value={next} onChange={(e) => setNext(e.target.value)} className={field} style={fieldStyle} />
+        <PasswordInput id="new-password" autoComplete="new-password" minLength={10} required value={next} onChange={(e) => setNext(e.target.value)} className={field} style={fieldStyle} />
         <p className="mt-1 text-[12px]" style={{ color: MUTED }}>At least 10 characters, with a capital letter and a number.</p>
       </div>
       <div>
         <label htmlFor="confirm-password" className="text-[13px] font-bold" style={{ color: TEXT }}>Confirm new password</label>
-        <input id="confirm-password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} className={field} style={fieldStyle} />
+        <PasswordInput id="confirm-password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} className={field} style={fieldStyle} />
       </div>
       {error && <p role="alert" className="text-[13px] font-semibold" style={{ color: DANGER }}>{error}</p>}
       {done && (
@@ -107,7 +107,7 @@ export default function ParticipantSettingsPage() {
     <ParticipantPortalShell>
       <div className="mx-auto w-full min-w-0 max-w-3xl space-y-5 pb-8">
         <header>
-          <h1 className="text-2xl font-semibold tracking-tight" style={{ color: TEXT }}>Settings</h1>
+          <h1 className="text-2xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Settings</h1>
           <p className="mt-2 text-sm" style={{ color: MUTED }}>Choose how CareCliQ looks and keep your sign-in details secure.</p>
         </header>
         <nav aria-label="Settings sections" className="grid grid-cols-2 gap-2 rounded-xl border border-cc-border bg-cc-surface p-2">

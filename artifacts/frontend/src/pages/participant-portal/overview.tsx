@@ -8,8 +8,10 @@ import type { ParticipantShift } from "@/services/participantPortalService";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const SURFACE = "var(--cc-surface)";
+const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
 const PLUM = "var(--cc-plum)";
+const GREEN = "var(--cc-green)";
 const AMBER = "#9A5B0A";
 const AMBER_SOFT = "#FBF2E6";
 
@@ -18,8 +20,13 @@ function formatDate(value?: string | null) {
   return new Date(value).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
 }
 
+/** "Today" / "Tomorrow" for the next two days, else "Sat, 31 Oct". */
 function formatShiftDay(value: string) {
-  return new Date(value).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
+  const date = new Date(value);
+  const days = Math.round((new Date(date).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  return date.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
 }
 
 function formatTime(value: string) {
@@ -41,16 +48,25 @@ function Card({ title, action, children }: { title: string; action?: React.React
 function ShiftLine({ shift, done }: { shift: ParticipantShift; done?: boolean }) {
   const Icon = done ? CalendarCheck : CalendarDays;
   return (
-    <li className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ background: SURFACE }}>
-      <Icon size={16} style={{ color: done ? "#1F7A4D" : PLUM }} className="shrink-0" />
-      <span className="min-w-0 flex-1 text-[13px]" style={{ color: TEXT }}>
-        <span className="font-bold">{formatShiftDay(shift.scheduled_start)}</span>
-        <span style={{ color: MUTED }}> · {formatTime(shift.scheduled_start)}–{formatTime(shift.scheduled_end)}</span>
+    <li className="flex items-center gap-3 px-4 py-3.5">
+      <Icon size={18} style={{ color: done ? GREEN : PLUM }} className="shrink-0" />
+      <span className="min-w-0 flex-1 text-[14px]" style={{ color: TEXT }}>
+        <span className="block font-bold sm:inline">{formatShiftDay(shift.scheduled_start)}</span>
+        <span className="hidden sm:inline" style={{ color: MUTED }}> · </span>
+        <span style={{ color: MUTED }}>{formatTime(shift.scheduled_start)}–{formatTime(shift.scheduled_end)}</span>
       </span>
       {shift.worker_name && (
-        <span className="shrink-0 truncate text-[12px] font-semibold" style={{ color: MUTED }}>{shift.worker_name}</span>
+        <span className="max-w-[45%] shrink-0 truncate text-[13px] font-semibold" style={{ color: MUTED }}>{shift.worker_name}</span>
       )}
     </li>
+  );
+}
+
+function ShiftList({ children }: { children: React.ReactNode }) {
+  return (
+    <ul className="divide-y divide-[var(--cc-border)] rounded-2xl border" style={{ background: SURFACE, borderColor: BORDER }}>
+      {children}
+    </ul>
   );
 }
 
@@ -58,36 +74,40 @@ function PinnedCard({
   href,
   title,
   subtitle,
-  gradient,
   icon: Icon,
   available,
 }: {
   href: string;
   title: string;
   subtitle: string;
-  gradient: string;
   icon: typeof FileSignature;
   available: boolean;
 }) {
   const body = (
-    <div
-      className="flex h-36 flex-col justify-between rounded-2xl p-4"
-      style={{ background: available ? gradient : SOFT, opacity: available ? 1 : 0.7 }}
-    >
-      {/* Fixed dark ink: the gradients are light in both themes. */}
-      <Icon size={18} style={{ color: available ? "#1E1640" : MUTED }} />
-      <div>
-        <p className="text-[15px] font-black" style={{ color: available ? "#1E1640" : TEXT }}>{title}</p>
-        <p className="text-[12px]" style={{ color: available ? "#4B4560" : MUTED }}>{subtitle}</p>
-      </div>
-    </div>
+    <>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: available ? "var(--cc-plum-soft)" : SOFT }}>
+        <Icon size={20} style={{ color: available ? PLUM : MUTED }} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-black" style={{ color: TEXT }}>{title}</span>
+        <span className="block text-[13px]" style={{ color: MUTED }}>{subtitle}</span>
+      </span>
+      {available && <ArrowRight size={16} className="shrink-0" style={{ color: PLUM }} />}
+    </>
   );
+  const className = "flex items-center gap-3 rounded-2xl border p-4";
   return available ? (
-    <Link href={href} className="block rounded-2xl outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2">
+    <Link
+      href={href}
+      className={`${className} outline-none transition-colors hover:bg-[var(--cc-soft)] focus-visible:ring-2`}
+      style={{ background: SURFACE, borderColor: BORDER }}
+    >
       {body}
     </Link>
   ) : (
-    <div aria-disabled="true">{body}</div>
+    <div aria-disabled="true" className={className} style={{ background: SURFACE, borderColor: BORDER }}>
+      {body}
+    </div>
   );
 }
 
@@ -119,19 +139,19 @@ export default function ParticipantOverviewPage() {
               </Link>
             }
           >
-            <div className="rounded-2xl p-2" style={{ background: SOFT }}>
-              {data.upcoming_shifts.length === 0 ? (
-                <p className="px-4 py-5 text-center text-[13px]" style={{ color: MUTED }}>No upcoming support scheduled yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {data.upcoming_shifts.map((s) => <ShiftLine key={s.id} shift={s} />)}
-                </ul>
-              )}
-            </div>
+            {data.upcoming_shifts.length === 0 ? (
+              <p className="rounded-2xl border px-4 py-6 text-center text-[14px]" style={{ background: SURFACE, borderColor: BORDER, color: MUTED }}>
+                No upcoming support scheduled yet.
+              </p>
+            ) : (
+              <ShiftList>
+                {data.upcoming_shifts.map((s) => <ShiftLine key={s.id} shift={s} />)}
+              </ShiftList>
+            )}
           </Card>
 
           <Card title="Pinned documents">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <PinnedCard
                 href="/participant-portal/documents"
                 title="Service Agreement"
@@ -140,7 +160,6 @@ export default function ParticipantOverviewPage() {
                     ? `Signed ${formatDate(data.pinned.service_agreement.updated_at) ?? ""}`
                     : "Not available yet"
                 }
-                gradient="linear-gradient(135deg, #DCE8FF 0%, #F3E8FF 100%)"
                 icon={FileSignature}
                 available={data.pinned.service_agreement.available}
               />
@@ -149,10 +168,9 @@ export default function ParticipantOverviewPage() {
                 title="NDIS Plan"
                 subtitle={
                   data.pinned.ndis_plan.available
-                    ? `${formatDate(data.pinned.ndis_plan.plan_start) ?? "—"} – ${formatDate(data.pinned.ndis_plan.plan_end) ?? "—"}`
+                    ? `${formatDate(data.pinned.ndis_plan.plan_start) ?? "N/A"} to ${formatDate(data.pinned.ndis_plan.plan_end) ?? "N/A"}`
                     : "Not available yet"
                 }
-                gradient="linear-gradient(135deg, #FFF1D6 0%, #FFE0E6 100%)"
                 icon={NotebookTabs}
                 available={data.pinned.ndis_plan.available}
               />
@@ -161,11 +179,11 @@ export default function ParticipantOverviewPage() {
 
           <Card title="Recent support">
             {data.recent_shifts.length === 0 ? (
-              <p className="text-[13px]" style={{ color: MUTED }}>Completed support sessions will appear here.</p>
+              <p className="text-[14px]" style={{ color: MUTED }}>Completed support sessions will appear here.</p>
             ) : (
-              <ul className="space-y-2 rounded-2xl p-2" style={{ background: SOFT }}>
+              <ShiftList>
                 {data.recent_shifts.map((s) => <ShiftLine key={s.id} shift={s} done />)}
-              </ul>
+              </ShiftList>
             )}
           </Card>
         </div>
