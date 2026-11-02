@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { format, parseISO } from "date-fns";
 import { ChevronRight, FileText } from "lucide-react";
 import { useGetParticipants, useGetSessions } from "@workspace/api-client-react";
+import { shiftNoteSubtitle } from "@/lib/shift-note-title";
 import {
   EmptyState,
   LoadError,
@@ -31,6 +32,11 @@ interface SessionRow {
   session_type?: string | null;
   duration_minutes?: number | null;
   compliance_score?: number | null;
+  start_time?: string | null;
+  started_at?: string | null;
+  end_time?: string | null;
+  ended_at?: string | null;
+  worker_name?: string | null;
 }
 
 function bucket(score: number | null | undefined): Exclude<Filter, "all"> {
@@ -100,7 +106,7 @@ export default function ShiftNotesReport() {
   const filtered = inRange.filter(
     (s) =>
       (filter === "all" || s.bucket === filter) &&
-      (!q || s.name.toLowerCase().includes(q) || (s.session_type ?? "").toLowerCase().includes(q)),
+      (!q || s.name.toLowerCase().includes(q) || (s.worker_name ?? "").toLowerCase().includes(q)),
   );
   const badRange = dateFrom && dateTo && dateFrom > dateTo;
   const anyFilter = search || filter !== "all" || dateFrom || dateTo;
@@ -120,7 +126,7 @@ export default function ShiftNotesReport() {
       />
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <SearchField label="Search shift notes" placeholder="Search participant or support type" value={search} onChange={setSearch} />
+        <SearchField label="Search shift notes" placeholder="Search participant or support worker" value={search} onChange={setSearch} />
         <div className="flex flex-wrap items-center gap-2 text-sm text-cc-muted">
           <label className="flex items-center gap-2">
             From
@@ -159,10 +165,10 @@ export default function ShiftNotesReport() {
                     <span className="hidden w-24 shrink-0 text-xs text-cc-muted sm:block">{day(s.session_date)}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-cc-text">{s.name}</span>
+                      {/* When it was and who worked it: what tells one shift's note from the next. */}
                       <span className="block truncate text-xs text-cc-muted">
                         <span className="sm:hidden">{day(s.session_date)} · </span>
-                        {(s.session_type ?? "session").replace(/_/g, " ")}
-                        {s.duration_minutes != null ? ` · ${s.duration_minutes} min` : ""}
+                        {shiftNoteSubtitle(s) || "Times not recorded"}
                       </span>
                     </span>
                     <StatusText tone={meta.tone}>

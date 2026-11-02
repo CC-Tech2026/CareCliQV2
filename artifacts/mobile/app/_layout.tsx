@@ -124,6 +124,10 @@ function RootLayoutNav() {
           options={{ headerShown: false, animation: "slide_from_right" }}
         />
         <Stack.Screen
+          name="worker/notification-settings"
+          options={{ headerShown: false, animation: "slide_from_right" }}
+        />
+        <Stack.Screen
           name="worker/security"
           options={{ headerShown: false, animation: "slide_from_right" }}
         />

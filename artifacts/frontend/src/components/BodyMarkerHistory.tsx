@@ -6,6 +6,7 @@ import { BodyMap, BodyMarker, BodyType, MARKER_COLORS, getZoneLabel, getMarkerCo
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { shiftNoteTimes, shiftNoteTitle, type ShiftNoteLike } from "@/lib/shift-note-title";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 export interface SessionWithMarkers {
@@ -178,9 +179,9 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
-                          {s.session_type || translate("clinical.bodyMap.history.session")}
+                          {shiftNoteTitle(s as ShiftNoteLike, { participant: false })}
                         </span>
-                        <span className="text-[10px] text-slate-400 shrink-0">{safeFormat(s.session_date)}</span>
+                        <span className="text-[10px] text-slate-400 shrink-0">{shiftNoteTimes(s as ShiftNoteLike) ?? translate("clinical.bodyMap.history.session")}</span>
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                         {s.body_markers.map((m) => {

@@ -5,6 +5,10 @@ export type DashboardSession = {
   participant_id?: string;
   participant_name?: string;
   session_date?: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  started_at?: string | null;
+  ended_at?: string | null;
   session_type?: string;
   duration_minutes?: number;
   status?: string;

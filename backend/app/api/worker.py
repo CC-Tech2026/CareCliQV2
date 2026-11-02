@@ -574,6 +574,12 @@ def _session_payload(session: dict) -> dict:
     return {
         "id": session.get("id"),
         "participant_id": session.get("participant_id") or session.get("patient_id"),
+        # With the times, these give each note its own title in the app
+        # ("Isabella Garcia · Sat 31 Oct", "10:14 am to 1:17 pm") rather than
+        # every one reading "Support work".
+        "participant_name": session.get("participant_name"),
+        "start_time": session.get("started_at") or session.get("start_time"),
+        "end_time": session.get("ended_at") or session.get("end_time"),
         "session_date": _session_calendar_date(session) or session.get("session_date"),
         "session_type": session.get("session_type"),
         "duration_minutes": session.get("duration_minutes"),
@@ -727,6 +733,15 @@ async def my_compliance(
         ),
         reverse=True,
     )
+    # The history lists notes across participants, so each needs a name.
+    names = session_service._fetch_patient_name_map(
+        get_supabase_admin(),
+        list({str(s.get("patient_id") or s.get("participant_id")) for s in sessions if s.get("patient_id") or s.get("participant_id")}),
+    )
+    sessions = [
+        {**s, "participant_name": s.get("participant_name") or names.get(str(s.get("patient_id") or s.get("participant_id")), {}).get("full_name")}
+        for s in sessions
+    ]
     scored = [s for s in sessions if _session_compliance_score(s) is not None]
     scores = [_session_compliance_score(s) for s in scored]
     scores = [float(v) for v in scores if v is not None]

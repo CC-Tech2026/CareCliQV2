@@ -19,6 +19,7 @@ import {
   type FlaggedSession,
 } from "@/services/coordinatorService";
 import { jsonFetch } from "@/services/http";
+import { shiftNoteSubtitle, type ShiftNoteLike } from "@/lib/shift-note-title";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -225,7 +226,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
                 {session.participant_name || translate("common.participant")}
               </span>
               <span className="text-[11px] font-medium" style={{ color: T3 }}>
-                {safeDate(session.session_date)} · {(session.session_type || "session").replace(/_/g, " ")}
+                {[safeDate(session.session_date), shiftNoteSubtitle(session as ShiftNoteLike)].filter(Boolean).join(" · ")}
               </span>
               <span
                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"

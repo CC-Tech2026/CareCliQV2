@@ -466,6 +466,22 @@ export default function SettingsTabScreen() {
               />
             ),
           },
+          {
+            key: "notifications",
+            icon: "bell",
+            label: t("settings.row.notifications"),
+            keywords:
+              "notifications alerts push pop-up popup email reminders quiet hours do not disturb sound test permission",
+            render: (showDivider) => (
+              <SettingsRow
+                icon="bell"
+                label={t("settings.row.notifications")}
+                description={t("settings.row.notificationsHint")}
+                onPress={() => router.push("/worker/notification-settings" as never)}
+                showDivider={showDivider}
+              />
+            ),
+          },
         ],
       },
       {

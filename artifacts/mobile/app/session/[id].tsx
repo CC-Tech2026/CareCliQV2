@@ -13,6 +13,7 @@ import {
   useSaveSessionWithAI,
 } from "@workspace/api-client-react";
 import * as Haptics from "@/lib/haptics";
+import { shiftNoteTimes, shiftNoteTitle, type ShiftNoteLike } from "@/lib/shift-note-title";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -313,7 +314,11 @@ export default function LiveSessionScreen() {
           <View style={styles.chipRow}>
             <View style={[styles.supportChip, { backgroundColor: colors.muted, borderColor: colors.border }]}>
               <Text style={[styles.supportChipText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-                {session?.session_type ?? "Core Support"}
+                {session
+                  ? [shiftNoteTitle(session as ShiftNoteLike, { participant: false }), shiftNoteTimes(session as ShiftNoteLike)]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : "Shift note"}
               </Text>
             </View>
           </View>

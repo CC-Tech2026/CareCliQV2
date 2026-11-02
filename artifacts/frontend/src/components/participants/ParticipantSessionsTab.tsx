@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { safeFormat, statusBadge, complianceTone } from "@/lib/participant-format";
+import { shiftNoteSubtitle, shiftNoteTitle, type ShiftNoteLike } from "@/lib/shift-note-title";
 import type { SessionRecord } from "@/pages/patients";
 
 interface ParticipantSessionsTabProps {
@@ -94,12 +95,12 @@ export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessi
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold text-cc-text capitalize truncate">
-                        {(session.session_type || "session").replace(/_/g, " ")}
+                      {/* One participant's history: the day leads, then the times and who worked it. */}
+                      <p className="text-[13px] font-bold text-cc-text truncate">
+                        {shiftNoteTitle(session as ShiftNoteLike, { participant: false })}
                       </p>
                       <p className="text-[11px] text-cc-muted mt-0.5 truncate">
-                        {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
-                        {session.worker_name ? ` · ${session.worker_name}` : ""}
+                        {shiftNoteSubtitle(session as ShiftNoteLike) || `${session.duration_minutes || 0} min`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
