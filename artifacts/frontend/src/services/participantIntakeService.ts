@@ -2,7 +2,7 @@ import { jsonFetch } from "@/services/http";
 
 export type IntakeStatus =
   | "enquiry" | "screening" | "declined" | "withdrawn" | "meet_greet"
-  | "awaiting_signatures" | "signed" | "active" | "inactive";
+  | "awaiting_signatures" | "signed" | "active" | "inactive" | "exited";
 
 export type EnquirySource = "online_form" | "email" | "phone_call" | "coordinator_referral" | "import";
 
@@ -115,6 +115,10 @@ export type ParticipantIntake = {
   suspended_reason?: string;
   suspended_at?: string;
   reactivated_at?: string;
+  // Services ended (status "exited"), set from the director's participant profile.
+  exit_reason?: string;
+  exited_at?: string;
+  last_service_date?: string;
   participant_id?: string;
   created_at: string;
   web_intake?: WebIntakeForm;

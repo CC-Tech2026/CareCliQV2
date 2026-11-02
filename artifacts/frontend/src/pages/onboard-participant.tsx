@@ -60,7 +60,7 @@ import {
   GENDER_OPTIONS, PRONOUN_OPTIONS,
 } from "@/services/participantIntakeService";
 import { useBranches } from "@/hooks/useBranches";
-import { ParticipantRecordCards } from "@/components/participants/ParticipantRecordCards";
+import { DirectorParticipantProfile } from "@/components/md/participant/DirectorParticipantProfile";
 import { ParticipantServiceAgreementSection } from "@/components/participants/ParticipantServiceAgreementSection";
 import type { BuilderDefaults } from "@/components/participants/ServiceAgreementBuilder";
 import { GrantResultNotice, PortalAccessCard } from "@/components/participant-portal/PortalAccessCard";
@@ -204,6 +204,7 @@ const STATUS_META: Record<IntakeStatus, { label: string; bg: string; color: stri
   signed: { label: "Ready to activate", bg: INFO_BG, color: INFO },
   active: { label: "Active", bg: SUCCESS_BG, color: SUCCESS },
   inactive: { label: "Inactive", bg: WARNING_BG, color: WARNING },
+  exited: { label: "Services ended", bg: SOFT, color: MUTED },
 };
 
 const STEPS = [
@@ -349,15 +350,6 @@ function Avatar({ name, size = 40, color = PLUM }: { name: string; size?: number
     >
       {initials(name)}
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: IntakeStatus }) {
-  const meta = STATUS_META[status];
-  return (
-    <span className="text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap" style={{ background: meta.bg, color: meta.color }}>
-      {meta.label}
-    </span>
   );
 }
 
@@ -556,13 +548,15 @@ export function ActiveParticipantsPage({
 }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<"all" | ServiceCategory>("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "exited">("all");
   const [focus, setFocus] = useState<ParticipantFocus | null>(null);
   const [sortKey, setSortKey] = useState<ParticipantSort>("name");
   const [sortAsc, setSortAsc] = useState(true);
 
+  // Exited participants stay findable (their records are kept) under their
+  // own filter; "Everyone" means the people currently supported.
   const roster = intakes
-    .filter((i) => columnIdForStatus(i.status) === "active")
+    .filter((i) => columnIdForStatus(i.status) === "active" || i.status === "exited")
     .map((intake) => {
       const snapshot = details?.[intake.id];
       const planStart = snapshot?.planStart ?? intake.plan_start_date ?? null;
@@ -581,10 +575,11 @@ export function ActiveParticipantsPage({
     noWorker: (r: (typeof roster)[number]) => r.snapshot?.workerName === null,
     budget: (r: (typeof roster)[number]) => r.budget.tone === "danger" || r.budget.tone === "warning",
   };
+  const current = roster.filter((r) => r.intake.status !== "exited");
   const focusCounts = {
-    planDue: roster.filter(needs.planDue).length,
-    noWorker: roster.filter(needs.noWorker).length,
-    budget: roster.filter(needs.budget).length,
+    planDue: current.filter(needs.planDue).length,
+    noWorker: current.filter(needs.noWorker).length,
+    budget: current.filter(needs.budget).length,
   };
 
   const q = search.trim().toLowerCase();
@@ -592,7 +587,7 @@ export function ActiveParticipantsPage({
   const rows = roster
     .filter(({ intake: i }) => !q || i.full_name.toLowerCase().includes(q) || i.ndis_number.toLowerCase().includes(q))
     .filter(({ intake: i }) => categoryFilter === "all" || i.service_category === categoryFilter)
-    .filter(({ intake: i }) => statusFilter === "all" || i.status === statusFilter)
+    .filter(({ intake: i }) => (statusFilter === "all" ? i.status !== "exited" : i.status === statusFilter))
     .filter((r) => !focus || needs[focus](r))
     .sort((a, b) => {
       if (sortKey === "worker") {
@@ -609,6 +604,7 @@ export function ActiveParticipantsPage({
 
   const activeTotal = intakes.filter((i) => i.status === "active").length;
   const inactiveTotal = intakes.filter((i) => i.status === "inactive").length;
+  const exitedTotal = intakes.filter((i) => i.status === "exited").length;
   const total = activeTotal + inactiveTotal;
   const filtersActive = !!q || categoryFilter !== "all" || statusFilter !== "all" || focus !== null;
 
@@ -740,7 +736,9 @@ export function ActiveParticipantsPage({
       </div>
 
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter participants">
-        {([["all", "Everyone", total], ["active", "Active", activeTotal], ["inactive", "Inactive", inactiveTotal]] as const).map(([value, label, count]) => (
+        {([["all", "Everyone", total], ["active", "Active", activeTotal], ["inactive", "Inactive", inactiveTotal], ["exited", "Services ended", exitedTotal]] as const)
+          .filter(([value, , count]) => value !== "exited" || count > 0)
+          .map(([value, label, count]) => (
           <button key={value} type="button" aria-pressed={statusFilter === value} onClick={() => setStatusFilter(value)} className={pillClass} style={pillStyle(statusFilter === value)}>
             {label}
             <span className="tabular-nums" style={{ opacity: 0.7 }}>{count}</span>
@@ -762,7 +760,9 @@ export function ActiveParticipantsPage({
       </div>
 
       <p role="status" className={`text-sm ${loadFailed ? "hidden" : ""}`} style={{ color: MUTED }}>
-        {rows.length === total
+        {statusFilter === "exited"
+          ? `${rows.length} ${rows.length === 1 ? "person" : "people"} whose services have ended`
+          : rows.length === total
           ? `${total} ${total === 1 ? "person" : "people"} supported by your organisation`
           : `Showing ${rows.length} of ${total} participants`}
       </p>
@@ -810,7 +810,9 @@ export function ActiveParticipantsPage({
           <ul>
             {rows.map(({ intake: i, snapshot, plan, budget, funding }) => {
               const inactive = i.status === "inactive";
-              const statusColor = inactive ? "var(--cc-amber)" : "var(--cc-green)";
+              const exited = i.status === "exited";
+              const statusColor = exited ? MUTED : inactive ? "var(--cc-amber)" : "var(--cc-green)";
+              const statusLabel = exited ? "Services ended" : inactive ? "Inactive" : "Active";
               const activated = formatDate(i.activated_at);
               const workerKnown = snapshot && snapshot.workerName !== undefined;
               const goalsText = snapshot?.activeGoals !== undefined
@@ -838,7 +840,7 @@ export function ActiveParticipantsPage({
                         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs lg:hidden" style={{ color: MUTED }}>
                           <span className="flex items-center gap-1.5 font-medium" style={{ color: statusColor }}>
                             <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: statusColor }} />
-                            {inactive ? "Inactive" : "Active"}
+                            {statusLabel}
                           </span>
                           {workerKnown && (
                             <span style={{ color: snapshot!.workerName ? MUTED : "var(--cc-amber)" }} className={snapshot!.workerName ? "" : "font-medium"}>
@@ -909,9 +911,11 @@ export function ActiveParticipantsPage({
                     <div className="hidden min-w-0 lg:block">
                       <p className="flex items-center gap-2 text-sm font-medium" style={{ color: statusColor }}>
                         <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: statusColor }} />
-                        {inactive ? "Inactive" : "Active"}
+                        {statusLabel}
                       </p>
-                      {activated && (
+                      {exited ? (
+                        <p className="mt-0.5 truncate pl-4 text-xs" style={{ color: MUTED }}>On {formatDate(i.last_service_date ?? i.exited_at)}</p>
+                      ) : activated && (
                         <p className="mt-0.5 truncate pl-4 text-xs" style={{ color: MUTED }}>Since {activated}</p>
                       )}
                     </div>
@@ -1260,32 +1264,17 @@ function LogComplaintSheet({
 }
 
 function ParticipantProfilePage({
-  intake, onBack, onUpdate,
+  intake, onBack, onUpdate, onReload,
 }: {
   intake: Intake;
   onBack: () => void;
   onUpdate: (patch: Partial<Intake>) => void;
+  onReload: () => void;
 }) {
   const { toast } = useToast();
   const [intakeFormEditing, setIntakeFormEditing] = useState(false);
   const [intakeFormDraft, setIntakeFormDraft] = useState<Partial<WebIntakeForm>>(intake.web_intake ?? {});
   const [serviceCategoryDraft, setServiceCategoryDraft] = useState<ServiceCategory>(intake.service_category ?? "disability");
-
-  const [suspendOpen, setSuspendOpen] = useState(false);
-  const [suspendReason, setSuspendReason] = useState("");
-
-  function suspend() {
-    if (!suspendReason.trim()) return;
-    onUpdate({ status: "inactive", suspended_reason: suspendReason.trim(), suspended_at: new Date().toISOString() });
-    setSuspendOpen(false);
-    setSuspendReason("");
-    toast({ title: "Services suspended", description: `${intake.full_name.split(" ")[0]}'s status is now Inactive.` });
-  }
-
-  function activate() {
-    onUpdate({ status: "active", reactivated_at: new Date().toISOString() });
-    toast({ title: "Services resumed", description: `${intake.full_name.split(" ")[0]}'s status is now Active.` });
-  }
 
   function updateIntakeFormDraft(patch: Partial<WebIntakeForm>) {
     setIntakeFormDraft((prev) => ({ ...prev, ...patch }));
@@ -1315,115 +1304,44 @@ function ParticipantProfilePage({
     toast({ title: "Profile updated" });
   }
 
+  const intakeForm = (
+    <IntakeFormBlock
+      intake={intake}
+      draft={intakeFormDraft}
+      onChange={updateIntakeFormDraft}
+      editing={intakeFormEditing}
+      onEdit={startEditingIntakeForm}
+      onCancel={cancelEditingIntakeForm}
+      onSave={saveIntakeForm}
+      serviceCategory={serviceCategoryDraft}
+      onServiceCategoryChange={setServiceCategoryDraft}
+      showSubmissionStatus={false}
+    />
+  );
+
+  if (intake.participant_id) {
+    return (
+      <DirectorParticipantProfile
+        participantId={intake.participant_id}
+        onBack={onBack}
+        intakeForm={intakeForm}
+        onIntakeChanged={onReload}
+      />
+    );
+  }
+
+  // An active intake without a participant record yet: only the intake exists.
   return (
     <div className="space-y-5 pb-10">
       <button
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-black/5"
-        style={{ color: MUTED, background: SOFT }}
+        className="-ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-full px-2 text-sm font-medium transition-colors hover:bg-cc-soft"
+        style={{ color: MUTED }}
       >
-        <ArrowLeft size={13} strokeWidth={2.5} /> Back to Participants
+        <ArrowLeft size={15} /> Participants
       </button>
-
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5 items-start">
-        <div className="space-y-4">
-          <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
-            <Avatar name={intake.full_name} size={48} color={intake.status === "inactive" ? WARNING : STAGE_COLOR.active} />
-            <h2 className="text-lg font-black mt-3" style={{ color: TEXT }}>{intake.full_name}</h2>
-            <div className="mt-1"><StatusBadge status={intake.status} /></div>
-            <div className="mt-4 pt-4 border-t space-y-2" style={{ borderColor: BORDER }}>
-              <p className="text-xs" style={{ color: MUTED }}>{intake.service_category === "aged_care" ? "Aged Care" : "Disability"}</p>
-              <p className="text-xs" style={{ color: MUTED }}>NDIS {intake.ndis_number || "—"}</p>
-              {intake.email && <p className="text-xs" style={{ color: MUTED }}>{intake.email}</p>}
-              {intake.phone && <p className="text-xs" style={{ color: MUTED }}>{intake.phone}</p>}
-              {intake.activated_at && <p className="text-xs" style={{ color: MUTED }}>Active since {formatDate(intake.activated_at)}</p>}
-            </div>
-
-            {intake.status === "inactive" && intake.suspended_reason && (
-              <div className="mt-4 rounded-lg p-3" style={{ background: WARNING_BG }}>
-                <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: WARNING }}>Reason for Suspension</p>
-                <p className="mt-1 text-xs leading-5" style={{ color: TEXT }}>{intake.suspended_reason}</p>
-                {intake.suspended_at && <p className="mt-1.5 text-[10px] font-medium" style={{ color: MUTED }}>Suspended {formatDate(intake.suspended_at)}</p>}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-lg border p-5" style={{ background: SURFACE, borderColor: BORDER }}>
-            <label className="text-[10px] font-black uppercase tracking-wide mb-2 block" style={{ color: MUTED }}>Service status</label>
-            {intake.status === "inactive" ? (
-              <Button type="button" variant="ghost" className="w-full gap-1.5 rounded-lg border-transparent text-white hover:opacity-90 hover:bg-transparent" style={{ background: SUCCESS }} onClick={activate}>
-                <CheckCircle2 size={13} /> Activate Account
-              </Button>
-            ) : !suspendOpen ? (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setSuspendOpen(true)}
-                className="w-full gap-1.5 rounded-lg border-transparent text-white hover:opacity-90 hover:bg-transparent"
-                style={{ background: "#DC2626" }}
-              >
-                <XCircle size={13} /> Suspend Account
-              </Button>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-[11px]" style={{ color: MUTED }}>
-                  Temporarily pauses service delivery for {intake.full_name.split(" ")[0]}. Their status will show as Inactive until reactivated.
-                </p>
-                <Textarea
-                  value={suspendReason}
-                  onChange={(e) => setSuspendReason(e.target.value)}
-                  placeholder="Reason for suspension (required)"
-                  className="text-xs"
-                  rows={3}
-                />
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="rounded-lg" onClick={() => { setSuspendOpen(false); setSuspendReason(""); }}>
-                    Cancel
-                  </Button>
-                  <Button variant="outline" size="sm" className="rounded-lg" style={{ color: DANGER }} onClick={suspend} disabled={!suspendReason.trim()}>
-                    <XCircle size={13} className="mr-1.5" /> Confirm suspension
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <IntakeFormBlock
-            intake={intake}
-            draft={intakeFormDraft}
-            onChange={updateIntakeFormDraft}
-            editing={intakeFormEditing}
-            onEdit={startEditingIntakeForm}
-            onCancel={cancelEditingIntakeForm}
-            onSave={saveIntakeForm}
-            serviceCategory={serviceCategoryDraft}
-            onServiceCategoryChange={setServiceCategoryDraft}
-            showSubmissionStatus={false}
-          />
-
-          {(intake.plan_start_date || intake.plan_end_date || intake.total_budget || intake.provider_signed_name || intake.family_signed_name) && (
-            <IntakeFormSection icon={FileSignature} title="Service Agreement">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                <Field label="Plan start" value={formatDate(intake.plan_start_date)} editing={false} />
-                <Field label="Plan end" value={formatDate(intake.plan_end_date)} editing={false} />
-                <Field label="Total budget" value={intake.total_budget} editing={false} />
-                <Field label="Provider signed by" value={intake.provider_signed_name} editing={false} />
-                <Field label="Family signed by" value={intake.family_signed_name} editing={false} />
-                <Field label="Activated" value={formatDate(intake.activated_at)} editing={false} />
-              </div>
-              {intake.participant_id && (
-                <div className="pt-3 border-t" style={{ borderColor: BORDER }}>
-                  <ParticipantServiceAgreementSection participantId={intake.participant_id} />
-                </div>
-              )}
-            </IntakeFormSection>
-          )}
-
-          {intake.participant_id && <ParticipantRecordCards participantId={intake.participant_id} />}
-        </div>
-      </div>
+      <h1 className="text-3xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{intake.full_name}</h1>
+      {intakeForm}
     </div>
   );
 }
@@ -1601,6 +1519,7 @@ export default function ParticipantOnboardingBoard() {
         intake={profileIntake}
         onBack={() => navigate("/onboard-participant/active")}
         onUpdate={(patch) => updateIntake(profileIntake.id, patch)}
+        onReload={reloadIntakes}
       />
     );
   }

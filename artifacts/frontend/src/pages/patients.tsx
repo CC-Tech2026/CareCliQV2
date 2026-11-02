@@ -989,9 +989,11 @@ function SetupPlanPanel({
 // Participant Detail Wrapper Component
 // ---------------------------------------------------------------------------
 
-type ParticipantDetailTab = "overview" | "plan_goals" | "sessions" | "compliance" | "plan_meetings" | "care_profile" | "records";
+export type ParticipantDetailTab = "overview" | "plan_goals" | "sessions" | "compliance" | "plan_meetings" | "care_profile" | "records";
 
-function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggleFullScreen }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab; fullScreen?: boolean; onToggleFullScreen?: () => void }) {
+// Also the MD's participant profile (onboard-participant.tsx), so both roles
+// work from the same record with the same actions.
+export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggleFullScreen, syncUrl = true }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab; fullScreen?: boolean; onToggleFullScreen?: () => void; syncUrl?: boolean }) {
   const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const isCoordinator = user?.role === "support_coordinator" || user?.role === "managing_director";
@@ -1210,9 +1212,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggle
   // always landed on the participant list with nothing selected, since this
   // page's real state (which participant, which tab) never made it into the
   // URL despite the deep-link *read* side already existing below.
+  // Off when embedded in another page (the MD's profile), which owns its URL.
   useEffect(() => {
-    navigate(`/patients?id=${id}&tab=${activeTab}`, { replace: true });
-  }, [id, activeTab]);
+    if (syncUrl) navigate(`/patients?id=${id}&tab=${activeTab}`, { replace: true });
+  }, [id, activeTab, syncUrl]);
 
   // Form state for creating / editing goals & tasks
   const [createMode, setCreateMode] = useState<'goal' | 'edit_goal' | 'tasks' | null>(null);
