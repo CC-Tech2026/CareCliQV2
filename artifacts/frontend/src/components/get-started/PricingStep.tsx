@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { Building2, Check, Loader2, Star, User, Users, X } from "lucide-react";
+import { ArrowRight, Building2, Check, Loader2, User, Users } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
-import { ACCENTS, SIGNATURE, FLAG, INK, QUIET_INK, RULE, DISPLAY_FONT, Card, GetStartedShell, Pill } from "./shared";
+import { SIGNATURE, INK, QUIET_INK, RULE, PAPER, DISPLAY_FONT, GetStartedShell, Reveal } from "./shared";
 
 type AbbrevStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
-/** 4-letter org abbreviation, e.g. "HARV" for Harbour View — the suffix on
+/** 4-letter org abbreviation, e.g. "HARV" for Harbour View, the suffix on
  * every staff member's auto-generated employee ID (SW003HARV). Must be
  * globally unique; live-checked here rather than on Stripe's hosted page
  * since that page can't call our backend mid-fill. */
@@ -76,7 +76,7 @@ export const TIERS: Array<{
   },
 ];
 
-const SHARED_FEATURES = [
+export const SHARED_FEATURES = [
   "Unlimited participants and notes",
   "Shift-linked progress notes, written in the moment",
   "Compliance and audit exports, ready any time",
@@ -129,134 +129,162 @@ export function PricingStep({ recommendedTier }: Props) {
     }
   }
 
+  const abbrevReady = orgAbbrev.status === "available";
+  const abbrevBad = orgAbbrev.status === "taken" || (orgAbbrev.status === "invalid" && orgAbbrev.value.length > 0);
+
   return (
-    <GetStartedShell step={6} wide>
-      <Pill accent={ACCENTS[0]}>Plans</Pill>
-      <h1 className="mt-2 text-2xl font-black" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
-        Documentation that holds up when it's checked.
-      </h1>
-      <p className="mt-2 max-w-md text-[13px] leading-snug" style={{ color: QUIET_INK }}>
-        The first month is free. After that, pick the plan sized to your team. Prices exclude GST. Every plan runs
-        the same platform, so there's nothing to upgrade into later.
-      </p>
-
-      <div className="mt-5 max-w-xs">
-        <label className="text-[12.5px] font-bold" style={{ color: INK }}>
-          Organisation abbreviation
-        </label>
-        <p className="mt-0.5 text-[11.5px] leading-snug" style={{ color: QUIET_INK }}>
-          4 letters, unique to your organisation — used in every staff member's employee ID (e.g. SW003
-          <span style={{ color: SIGNATURE, fontWeight: 700 }}>HARV</span>).
-        </p>
-        <div className="relative mt-1.5">
-          <input
-            type="text"
-            value={orgAbbrev.value}
-            onChange={(e) => orgAbbrev.setValue(e.target.value.toUpperCase().slice(0, 4))}
-            placeholder="HARV"
-            maxLength={4}
-            className="w-full rounded-xl px-3.5 py-2.5 pr-9 text-[14px] font-bold tracking-wider outline-none uppercase"
-            style={{
-              color: INK,
-              border: `1px solid ${orgAbbrev.status === "taken" || orgAbbrev.status === "invalid" ? "#DC2626" : RULE}`,
-              background: "var(--cc-surface)",
-            }}
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2">
-            {orgAbbrev.status === "checking" && <Loader2 size={15} className="animate-spin" style={{ color: QUIET_INK }} />}
-            {orgAbbrev.status === "available" && <Check size={16} style={{ color: "#16A34A" }} />}
-            {orgAbbrev.status === "taken" && <X size={16} style={{ color: "#DC2626" }} />}
-          </span>
-        </div>
-        {orgAbbrev.status === "taken" && (
-          <p className="mt-1 text-[11.5px] font-semibold" style={{ color: "#DC2626" }}>
-            That abbreviation is already taken — try another.
+    <GetStartedShell step={6}>
+      {/* Heading on the left, organisation code on the right, so the plans
+          table fits a laptop window without scrolling. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_minmax(0,430px)] gap-8 lg:gap-14 items-end">
+        <Reveal>
+          <h1
+            className="text-[40px] sm:text-[52px] [@media(max-height:820px)]:sm:text-[42px] font-bold tracking-tight leading-[1.02]"
+            style={{ color: INK, fontFamily: DISPLAY_FONT }}
+          >
+            Your first month is on us.
+          </h1>
+          <p className="mt-3 max-w-xl text-[16px] leading-relaxed" style={{ color: QUIET_INK }}>
+            Pick the plan sized to your team. Every plan runs the same platform, so there's nothing
+            to upgrade into later. Prices exclude GST.
           </p>
-        )}
-        {orgAbbrev.status === "invalid" && orgAbbrev.value.length > 0 && (
-          <p className="mt-1 text-[11.5px] font-semibold" style={{ color: "#DC2626" }}>
-            Must be exactly 4 letters.
-          </p>
-        )}
-      </div>
+        </Reveal>
 
-      <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {TIERS.map(({ tier, name, icon: Icon, range, price, perPerson }, i) => {
-          const isRecommended = recommendedTier === tier;
-          const accent = ACCENTS[i];
-          return (
-            <Card key={tier} selected={isRecommended} className="relative flex flex-col !p-4">
-              {isRecommended && (
-                <span
-                  className="absolute -top-3 left-4 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
-                  style={{ background: SIGNATURE }}
-                >
-                  <Star size={10} fill="white" /> Recommended
-                </span>
-              )}
-              <div className="flex items-center gap-2.5">
-                <span
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                  style={{ background: accent.bg, color: accent.fg }}
-                >
-                  <Icon size={16} />
-                </span>
-                <div>
-                  <h2 className="text-[15px] font-black leading-tight" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
-                    {name}
-                  </h2>
-                  <p className="text-[11px] font-semibold" style={{ color: QUIET_INK }}>{range}</p>
-                </div>
-              </div>
-
-              <ul className="mt-3 flex flex-col gap-1.5" style={{ borderTop: "1px solid var(--auth-card-border)" }}>
-                {SHARED_FEATURES.map((f) => (
-                  <li key={f} className="flex items-start gap-1.5 pt-1.5 text-[11.5px] leading-snug" style={{ color: INK }}>
-                    <span className="mt-0.5 shrink-0" style={{ color: SIGNATURE }}>&#10003;</span>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <div className="mt-3 flex items-baseline gap-1">
-                <span
-                  className="text-3xl font-black"
-                  style={{ color: FLAG, fontFamily: DISPLAY_FONT, fontVariantNumeric: "tabular-nums" }}
-                >
-                  ${price}
-                </span>
-                <span className="text-[13px] font-semibold" style={{ color: QUIET_INK }}>/ month + GST</span>
-                {perPerson && (
-                  <span className="text-[10.5px] font-semibold" style={{ color: QUIET_INK }}>&nbsp;· {perPerson}</span>
+        <Reveal delay={150}>
+          <div>
+            <label htmlFor="org-abbrev" className="text-[15px] font-semibold" style={{ color: INK }}>
+              First, a 4-letter code for your organisation
+            </label>
+            <p className="mt-1 text-[13.5px]" style={{ color: QUIET_INK }}>
+              It ends every staff member's employee ID, so pick something you'll recognise.
+            </p>
+            <div className="mt-3 flex items-center gap-4">
+              <input
+                id="org-abbrev"
+                type="text"
+                value={orgAbbrev.value}
+                onChange={(e) => orgAbbrev.setValue(e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 4))}
+                placeholder="HARV"
+                maxLength={4}
+                autoComplete="off"
+                aria-invalid={abbrevBad}
+                aria-describedby="org-abbrev-status"
+                className="w-[150px] bg-transparent py-0.5 text-[34px] font-bold tracking-[0.18em] uppercase outline-none placeholder:opacity-25"
+                style={{
+                  color: INK,
+                  fontFamily: DISPLAY_FONT,
+                  borderBottom: `2px solid ${abbrevBad ? "#DC2626" : abbrevReady ? "var(--cc-green)" : INK}`,
+                }}
+              />
+              <p id="org-abbrev-status" className="text-[14px] font-semibold flex items-center gap-1.5" aria-live="polite">
+                {orgAbbrev.status === "checking" && (
+                  <span className="flex items-center gap-1.5" style={{ color: QUIET_INK }}>
+                    <Loader2 size={14} className="animate-spin" /> Checking
+                  </span>
                 )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => void handleChoose(tier)}
-                disabled={busyTier !== null || orgAbbrev.status !== "available"}
-                className="mt-3 w-full h-9 rounded-full text-white font-bold text-[13px] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
-                style={{ background: SIGNATURE, boxShadow: "var(--cc-shadow-sm)" }}
-              >
-                {busyTier === tier ? <Loader2 size={13} className="animate-spin" /> : null}
-                Start free trial
-              </button>
-            </Card>
-          );
-        })}
+                {abbrevReady && (
+                  <span className="flex items-center gap-1.5" style={{ color: "var(--cc-green)" }}>
+                    <Check size={16} strokeWidth={3} /> It's yours
+                  </span>
+                )}
+                {orgAbbrev.status === "taken" && <span style={{ color: "#DC2626" }}>Already taken. Try another.</span>}
+                {orgAbbrev.status === "invalid" && orgAbbrev.value.length > 0 && (
+                  <span style={{ color: QUIET_INK }}>
+                    {4 - orgAbbrev.value.length} more letter{4 - orgAbbrev.value.length === 1 ? "" : "s"}
+                  </span>
+                )}
+              </p>
+            </div>
+            <p aria-hidden className="mt-3 text-[13px] font-semibold" style={{ color: QUIET_INK }}>
+              Staff IDs will look like{" "}
+              <span className="tracking-wide tabular-nums" style={{ fontFamily: DISPLAY_FONT, color: INK }}>
+                SW003
+                <span style={{ color: orgAbbrev.normalized ? SIGNATURE : QUIET_INK }}>{orgAbbrev.normalized.padEnd(4, "_")}</span>
+              </span>
+            </p>
+          </div>
+        </Reveal>
       </div>
 
-      <p className="text-[12.5px] font-medium mt-5" style={{ color: QUIET_INK }}>
-        Already have an account?{" "}
-        <button
-          type="button"
-          onClick={() => navigate("/login")}
-          className="font-bold underline underline-offset-2"
-          style={{ color: INK }}
+      <Reveal delay={300} className="mt-9 [@media(max-height:820px)]:mt-6">
+        <div
+          className="grid grid-cols-1 md:grid-cols-3 rounded-[24px] overflow-hidden transition-opacity duration-500"
+          style={{ border: `1px solid ${RULE}`, opacity: abbrevReady ? 1 : 0.55 }}
         >
-          Sign in
-        </button>
-      </p>
+          {TIERS.map(({ tier, name, range, price, perPerson, note }, i) => {
+            const isRecommended = recommendedTier === tier;
+            return (
+              <div
+                key={tier}
+                className={`relative flex flex-col px-7 py-6 [@media(max-height:820px)]:py-5 ${i > 0 ? "border-t md:border-t-0 md:border-l" : ""}`}
+                style={{ borderColor: RULE }}
+              >
+                {isRecommended && <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: SIGNATURE }} />}
+                <p className="text-[12.5px] font-semibold min-h-[18px]" style={{ color: SIGNATURE }}>
+                  {isRecommended ? "Our suggestion for you" : ""}
+                </p>
+                <h2 className="mt-1 text-[24px] font-bold tracking-tight" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
+                  {name}
+                </h2>
+                <p className="text-[14px]" style={{ color: QUIET_INK }}>
+                  {range}
+                </p>
+                <p className="mt-4 flex items-baseline gap-1.5">
+                  <span className="text-[40px] leading-none font-bold tracking-tight tabular-nums" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
+                    ${price}
+                  </span>
+                  <span className="text-[14px]" style={{ color: QUIET_INK }}>
+                    / month + GST
+                  </span>
+                </p>
+                <p className="mt-2 text-[13px] min-h-[20px]" style={{ color: QUIET_INK }}>
+                  {perPerson ?? ""}
+                </p>
+                <p className="mt-2 flex-1 text-[14px] leading-relaxed" style={{ color: INK }}>
+                  {note}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleChoose(tier)}
+                  disabled={busyTier !== null || !abbrevReady}
+                  className="group mt-5 h-12 rounded-full text-[14.5px] font-semibold inline-flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed"
+                  style={
+                    isRecommended || !recommendedTier
+                      ? { background: INK, color: PAPER }
+                      : { background: "transparent", color: INK, border: `1.5px solid ${INK}` }
+                  }
+                >
+                  {busyTier === tier ? <Loader2 size={15} className="animate-spin" /> : null}
+                  {abbrevReady ? "Start free month" : "Add your code first"}
+                  {abbrevReady && busyTier !== tier && (
+                    <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-1" />
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-10">
+          <p className="text-[13.5px] leading-relaxed" style={{ color: QUIET_INK }}>
+            <span className="font-semibold" style={{ color: INK }}>
+              Every plan includes
+            </span>{" "}
+            {SHARED_FEATURES.map((f) => f.toLowerCase()).join(" · ")}.
+          </p>
+          <p className="shrink-0 text-[13.5px]" style={{ color: QUIET_INK }}>
+            Already with us?{" "}
+            <button
+              type="button"
+              onClick={() => navigate("/login")}
+              className="font-semibold underline underline-offset-4"
+              style={{ color: INK }}
+            >
+              Sign in
+            </button>
+          </p>
+        </div>
+      </Reveal>
     </GetStartedShell>
   );
 }
