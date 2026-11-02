@@ -41,7 +41,9 @@ STATUSES = (
     "enquiry", "screening", "declined", "withdrawn", "meet_greet",
     "awaiting_signatures", "signed", "active", "inactive",
 )
-TERMINAL_STATUSES = {"declined", "withdrawn"}
+# "exited" (services ended) is only ever set by the director's profile
+# (director_participant_service.change_services), never by a board PATCH.
+TERMINAL_STATUSES = {"declined", "withdrawn", "exited"}
 REASON_FIELD_FOR_STATUS = {
     "declined": "decline_reason",
     "withdrawn": "withdrawn_reason",

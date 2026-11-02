@@ -194,7 +194,7 @@ export default function Sessions() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const isCoordinator = user?.role === "support_coordinator";
+  const isCoordinator = user?.role === "support_coordinator" || user?.role === "managing_director";
   const qc = useQueryClient();
 
   // -- Data fetching ------------------------------------------------------------

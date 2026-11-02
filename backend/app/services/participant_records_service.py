@@ -111,6 +111,69 @@ def render_shift_history_pdf(org_id: str, participant_id: str, date_from: date |
     return render_html_to_pdf(html, base_url=str(_TEMPLATES_DIR))
 
 
+MAX_EXPORT_DOCUMENTS = 100
+
+
+def _document_files(org_id: str, participant_id: str) -> tuple[dict[str, bytes], list[dict], list[str]]:
+    """Every document on file for the participant, for the ZIP: what was
+    imported on the director's profile (GP letters, assessments...) and the
+    current medication paperwork. Archived and superseded copies are left
+    out. Returns (files by ZIP path, manifest rows, documents that couldn't
+    be read)."""
+    from . import director_participant_service as directors
+    from . import medication_document_service
+
+    sources: list[tuple[str, str, str, str, str]] = []  # bucket, path, folder, title, date
+    try:
+        own = (
+            get_supabase_admin().table(directors.DOCUMENTS_TABLE)
+            .select("id, category, title, document_date, uploaded_at, file_path")
+            .eq("organization_id", org_id).eq("participant_id", participant_id)
+            .is_("archived_at", "null").order("uploaded_at").execute()
+        ).data or []
+    except Exception:
+        own = []  # migration 247 not applied yet
+    for row in own:
+        sources.append((
+            directors.DOCUMENTS_BUCKET, row["file_path"],
+            directors.DOCUMENT_CATEGORIES.get(row.get("category") or "", "Other document"),
+            row.get("title") or "document", str(row.get("document_date") or row.get("uploaded_at") or "")[:10],
+        ))
+    for row in medication_document_service.list_documents_for_participant(participant_id, org_id):
+        if row.get("document_type") == "verification_photo" or row.get("superseded_at"):
+            continue
+        sources.append((
+            medication_document_service.BUCKET, row["file_path"],
+            directors.MEDICATION_CATEGORIES.get(row.get("document_type") or "", "Medication document"),
+            (row.get("file_name") or "document").rsplit(".", 1)[0], str(row.get("uploaded_at") or "")[:10],
+        ))
+    if len(sources) > MAX_EXPORT_DOCUMENTS:
+        raise HTTPException(status_code=422, detail=f"More than {MAX_EXPORT_DOCUMENTS} documents are on file. Export them from the vault instead.")
+
+    files: dict[str, bytes] = {}
+    manifest: list[dict] = []
+    unreadable: list[str] = []
+    for bucket, path, folder, title, when in sources:
+        # Only files stored under this organisation and participant.
+        if not str(path).startswith(f"{org_id}/{participant_id}/") or ".." in str(path).split("/"):
+            unreadable.append(title)
+            continue
+        try:
+            content = get_supabase_admin().storage.from_(bucket).download(path)
+        except Exception:
+            unreadable.append(title)
+            continue
+        ext = str(path).rsplit(".", 1)[-1] if "." in str(path) else "pdf"
+        name = re.sub(r"[^A-Za-z0-9 _-]+", "", title).strip()[:80] or "document"
+        stem = f"Documents/{folder}/{(when + ' ') if when else ''}{name}"
+        zip_path, n = f"{stem}.{ext}", 2
+        while zip_path in files:
+            zip_path, n = f"{stem} ({n}).{ext}", n + 1
+        files[zip_path] = content
+        manifest.append({"kind": folder, "title": title, "date": when or None, "file": zip_path})
+    return files, manifest, unreadable
+
+
 async def export_records(
     user: dict,
     participant_id: str,
@@ -123,6 +186,7 @@ async def export_records(
     include_shifts: bool = False,
     date_from: date | None = None,
     date_to: date | None = None,
+    include_documents: bool = False,
 ):
     if not has_org_wide_access(user):
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
@@ -151,7 +215,9 @@ async def export_records(
         invoices = invoice_query(user, participant_id).in_("id", ids).execute().data or []
         if {str(row["id"]) for row in invoices} != set(ids):
             raise HTTPException(status_code=404, detail="One or more invoices are not linked to this participant or are no longer available.")
-    if not sections and not invoices and not include_shifts:
+    if include_documents and output == "pdf":
+        raise HTTPException(status_code=422, detail="Documents come as a ZIP folder. Choose ZIP to include them.")
+    if not sections and not invoices and not include_shifts and not include_documents:
         if all_invoices:
             raise HTTPException(status_code=422, detail="No invoices were found in this period.")
         raise HTTPException(status_code=422, detail="Choose at least one profile section, invoice or shift history.")
@@ -181,6 +247,13 @@ async def export_records(
         filename = f"Invoices/{number}-{invoice['id']}.pdf"
         invoice_files[str(invoice["id"])] = filename
         files[filename] = content
+    document_manifest: list[dict] = []
+    unreadable: list[str] = []
+    if include_documents:
+        document_files, document_manifest, unreadable = _document_files(org_id, participant_id)
+        if not document_files and not files:
+            raise HTTPException(status_code=422, detail="No documents are on file for this participant yet.")
+        files.update(document_files)
     manifest = {
         "participant_id": participant_id,
         "exported_at": datetime.now(timezone.utc).isoformat(),
@@ -189,6 +262,8 @@ async def export_records(
         "invoices": [{"id": inv["id"], "invoice_number": inv.get("invoice_number"), "status": inv.get("status"), "file": invoice_files[str(inv["id"])]} for inv in invoices],
         "files": list(files),
         "skipped_invoices": skipped,
+        "documents": document_manifest,
+        "unreadable_documents": unreadable,
     }
     if output == "pdf":
         content = next(iter(files.values()))
@@ -199,9 +274,9 @@ async def export_records(
             for path, content in files.items():
                 archive.writestr(path, content)
             archive.writestr("export-index.json", json.dumps(manifest, indent=2))
-            archive.writestr("Contents.txt", "Participant records export\n" + f"Participant ID: {participant_id}\nGenerated: {manifest['exported_at']}\n\n" + "\n".join(files) + (f"\n\nSkipped (PDF failed, regenerate in Invoicing): {', '.join(skipped)}" if skipped else "") + "\n\nOnly selected records are included. Profile sections reflect the current record. Invoice PDFs may show the status recorded when originally generated.")
+            archive.writestr("Contents.txt", "Participant records export\n" + f"Participant ID: {participant_id}\nGenerated: {manifest['exported_at']}\n\n" + "\n".join(files) + (f"\n\nSkipped (PDF failed, regenerate in Invoicing): {', '.join(skipped)}" if skipped else "") + (f"\n\nDocuments that couldn't be read from storage: {', '.join(unreadable)}" if unreadable else "") + "\n\nOnly selected records are included. Profile sections reflect the current record. Invoice PDFs may show the status recorded when originally generated.")
         content = buffer.getvalue()
         media_type, extension = "application/zip", "zip"
-    await audit_service.log_action(action_type="participant.records_exported", entity_type="participant", entity_id=participant_id, organization_id=org_id, user_id=billing_service.get_user_id(user), details={"profile_sections": sections, "invoice_ids": [str(inv["id"]) for inv in invoices], "all_invoices": all_invoices, "include_shifts": include_shifts, "date_from": date_from.isoformat() if date_from else None, "date_to": date_to.isoformat() if date_to else None, "format": output})
+    await audit_service.log_action(action_type="participant.records_exported", entity_type="participant", entity_id=participant_id, organization_id=org_id, user_id=billing_service.get_user_id(user), details={"profile_sections": sections, "invoice_ids": [str(inv["id"]) for inv in invoices], "all_invoices": all_invoices, "include_shifts": include_shifts, "documents": len(document_manifest), "date_from": date_from.isoformat() if date_from else None, "date_to": date_to.isoformat() if date_to else None, "format": output})
     filename = next(iter(files)).split("/")[-1] if output == "pdf" and (invoices or include_shifts) else f"participant-{participant_id}-records.{extension}"
     return filename, content, media_type

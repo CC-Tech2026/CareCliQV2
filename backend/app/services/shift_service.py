@@ -2580,15 +2580,13 @@ def clock_in_shift(
 
     ensure_briefing_completed(shift, worker_id)
 
-    validate_shift_scheduled_today(
-        str(shift.get("scheduled_start") or ""),
-        tz=participant_timezone(shift, organization_id=organization_id),
-    )
+    shift_tz = participant_timezone(shift, organization_id=organization_id)
+    validate_shift_scheduled_today(str(shift.get("scheduled_start") or ""), tz=shift_tz)
     check_in_meta: dict[str, Any] = {}
     verification_distance: Optional[float] = None
     qr_code_id: Optional[str] = None
 
-    validate_clock_in_window(str(shift.get("scheduled_start") or ""))
+    validate_clock_in_window(str(shift.get("scheduled_start") or ""), tz=shift_tz)
     if not method:
         raise ValueError(
             "Verified check-in required. Choose GPS or scan the location QR code."

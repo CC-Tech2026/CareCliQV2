@@ -660,50 +660,52 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      {/* The managing director holds every coordinator authority, so these
+          coordinator pages open for them too, inside the Hub layout. */}
       <Route path="/team">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><Team /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><Team /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/coordinator/verification">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><CoordinatorVerificationPage /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><CoordinatorVerificationPage /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
       <Route path="/coordinator/rostering">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><CoordinatorRosteringPage /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><CoordinatorRosteringPage /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/coordinator/live">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><CoordinatorLivePage /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><CoordinatorLivePage /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/coordinator/monitor">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><CoordinatorMonitorPage /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><CoordinatorMonitorPage /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/coordinator/travel">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><CoordinatorTravelExpenses /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><CoordinatorTravelExpenses /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/audit-pack">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><AuditPack /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><AuditPack /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/session-review">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><SessionReview /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><SessionReview /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
@@ -731,14 +733,14 @@ function Router() {
       {/* ── Sessions ─────────────────────────────────────────────────────── */}
       {/* All roles — backend scopes to allocated for workers */}
       <Route path="/sessions">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><Sessions /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><Sessions /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
       <Route path="/sessions/new">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><SessionNew /></AppLayout>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><SessionNew /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 

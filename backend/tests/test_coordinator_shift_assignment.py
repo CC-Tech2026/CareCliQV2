@@ -72,7 +72,7 @@ class TestAssignShiftValidation:
         )
         
         assert response.status_code == 403
-        assert "Support coordinator access required" in response.json()["detail"]
+        assert "Coordinator or managing director access required" in response.json()["detail"]
         
         app.dependency_overrides.clear()
 
