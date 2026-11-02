@@ -3,6 +3,7 @@ import {
   ClipboardList,
   Lock,
   Mail,
+  MapPin,
   Pencil,
   Phone,
   UsersRound,
@@ -88,6 +89,44 @@ function ContactCard({
               )}
             </div>
           )}
+        </div>
+      ) : (
+        <dd className="text-[12px] font-bold text-cc-text">{notSet}</dd>
+      )}
+    </div>
+  );
+}
+
+/** Home address, with a link that opens it in the device's maps app so a
+ * worker or coordinator can get directions without retyping it. */
+function AddressCard({
+  label,
+  address,
+  notSet,
+  openInMapsLabel,
+}: {
+  label: string;
+  address?: string | null;
+  notSet: string;
+  openInMapsLabel: string;
+}) {
+  const value = address?.trim();
+  return (
+    <div className="sm:col-span-2 rounded-lg bg-cc-surface border border-cc-border px-4 py-3">
+      <dt className="text-xs font-semibold uppercase tracking-wider text-cc-muted leading-none mb-1">
+        {label}
+      </dt>
+      {value ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <dd className="text-sm font-medium text-cc-text break-words">{value}</dd>
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(value)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 min-h-9 text-xs font-medium text-cc-plum hover:opacity-70"
+          >
+            <MapPin className="h-3 w-3" /> {openInMapsLabel}
+          </a>
         </div>
       ) : (
         <dd className="text-[12px] font-bold text-cc-text">{notSet}</dd>
@@ -193,6 +232,12 @@ export function ParticipantOverviewTab({
             label={translate("patients.field.email")}
             email={participant.email}
             notSet={notSet}
+          />
+          <AddressCard
+            label={translate("patients.field.address")}
+            address={participant.address}
+            notSet={notSet}
+            openInMapsLabel={translate("patients.action.openInMaps")}
           />
         </dl>
       </section>

@@ -159,6 +159,7 @@ const participantSchema = z.object({
   date_of_birth: z.string().min(1, "Date of birth is required"),
   email: z.string().email("Invalid email").optional().or(z.literal("")),
   phone: z.string().optional(),
+  address: z.string().optional(),
   primary_disability: z.string().optional(),
   biological_sex: z.string().optional(),
   plan_status: z.string().min(1, "Plan status is required"),
@@ -192,6 +193,7 @@ export type ParticipantRecord = {
   date_of_birth?: string | null;
   email?: string | null;
   phone?: string | null;
+  address?: string | null;
   primary_disability?: string | null;
   biological_sex?: string | null;
   plan_status?: string;
@@ -385,6 +387,19 @@ function ParticipantForm({
           />
           <FormField
             control={form.control}
+            name="address"
+            render={({ field }) => (
+              <FormItem className="col-span-2">
+                <FormLabel>{translate("patients.field.address")}</FormLabel>
+                <FormControl>
+                  <Input placeholder={translate("patients.placeholder.address")} autoComplete="street-address" data-testid="input-address" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
             name="primary_disability"
             render={({ field }) => (
               <FormItem className="col-span-2">
@@ -556,6 +571,7 @@ function EditParticipantPanel({
       date_of_birth: participant.date_of_birth ? String(participant.date_of_birth).slice(0, 10) : "",
       email: String(participant.email ?? ""),
       phone: String(participant.phone ?? ""),
+      address: String(participant.address ?? ""),
       primary_disability: String(participant.primary_disability ?? ""),
       biological_sex: String(participant.biological_sex ?? "unspecified"),
       plan_status: (participant.plan_status ?? "active") as ParticipantFormValues["plan_status"],
@@ -574,6 +590,7 @@ function EditParticipantPanel({
       date_of_birth: participant.date_of_birth ? String(participant.date_of_birth).slice(0, 10) : "",
       email: String(participant.email ?? ""),
       phone: String(participant.phone ?? ""),
+      address: String(participant.address ?? ""),
       primary_disability: String(participant.primary_disability ?? ""),
       biological_sex: String(participant.biological_sex ?? "unspecified"),
       plan_status: (participant.plan_status ?? "active") as ParticipantFormValues["plan_status"],

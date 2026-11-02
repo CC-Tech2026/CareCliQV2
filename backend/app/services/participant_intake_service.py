@@ -203,6 +203,24 @@ def _parse_budget(total_budget: str | None) -> float | None:
         return None
 
 
+def _intake_address(web_intake: dict[str, Any]) -> str | None:
+    """One-line home address from the intake: the importer stores a single
+    `address`, the referral and onboarding forms store it in parts.
+    Mirrored by the backfill in 248_participant_address_from_intake.sql."""
+    whole = str(web_intake.get("address") or "").strip()
+    if whole:
+        return whole
+    state_postcode = " ".join(
+        part for part in (str(web_intake.get("state") or "").strip(), str(web_intake.get("postcode") or "").strip()) if part
+    )
+    parts = [
+        str(web_intake.get("street_address") or "").strip(),
+        str(web_intake.get("suburb") or "").strip(),
+        state_postcode,
+    ]
+    return ", ".join(p for p in parts if p) or None
+
+
 async def _activate_side_effects(existing: dict[str, Any], merged: dict[str, Any], current_user: dict) -> dict[str, Any]:
     """Called when a PATCH moves status to "active". First-time activation
     (no participant_id yet) creates the real participant record; reactivating
@@ -221,6 +239,7 @@ async def _activate_side_effects(existing: dict[str, Any], merged: dict[str, Any
         date_of_birth=dob,
         email=merged.get("email") or None,
         phone=merged.get("phone") or None,
+        address=_intake_address(web_intake),
         plan_start_date=merged.get("plan_start_date"),
         plan_end_date=merged.get("plan_end_date"),
         total_budget=_parse_budget(merged.get("total_budget")),

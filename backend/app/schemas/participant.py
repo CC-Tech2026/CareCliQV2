@@ -74,6 +74,7 @@ class ParticipantCreate(BaseModel):
     date_of_birth: date
     email: Optional[str] = None
     phone: Optional[str] = None
+    address: Optional[str] = None
     plan_status: str = "active"
     plan_start_date: Optional[date] = None
     plan_end_date: Optional[date] = None
@@ -96,6 +97,7 @@ class ParticipantUpdate(BaseModel):
     date_of_birth: Optional[date] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    address: Optional[str] = None
     plan_status: Optional[str] = None
     plan_management_type: Optional[PlanManagementType] = None
     plan_start_date: Optional[date] = None
