@@ -88,24 +88,22 @@ async def _mark_audit_log_pending(table: str, row_id: str) -> None:
         )
 
 
+# The managing director holds every authority a coordinator has (rostering,
+# shift offers, messaging workers, live monitoring, note approval, goal
+# reviews), so coordinator actions accept both roles. Support workers and
+# participants are still refused.
 def _require_coordinator(user: dict) -> str:
-    if not is_coordinator_role(user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Support coordinator access required.")
+    if not has_org_wide_access(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
     org_id = get_user_organization_id(user)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
     return org_id
 
 
-# Same org_id-or-403 shape as _require_coordinator, but for the resources the
-# managing director should also read AND act on: worker-profile tabs (staff
-# detail, availability, skills, training assignment/review, onboarding
-# documents), NDIS goals/tasks, pay/SCHADS oversight (classification, shift
-# pay preview, pay ledger — the MD is accountable for payroll too), and
-# shift assign/reassign/unassign from the Master Schedule view. Rostering
-# creation, messaging, and account-management actions stay
-# _require_coordinator-only — those remain Coordinator's own operational
-# domain, not MD oversight.
+# Same check as _require_coordinator; kept as its own name for the read and
+# oversight endpoints (worker-profile tabs, NDIS goals/tasks, pay/SCHADS,
+# Master Schedule assign/reassign) that were opened to the MD first.
 def _require_org_read(user: dict) -> str:
     if not has_org_wide_access(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or managing director access required.")
