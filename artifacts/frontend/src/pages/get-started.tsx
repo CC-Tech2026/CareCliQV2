@@ -23,7 +23,18 @@ export default function GetStarted() {
     if (checkout === "success") {
       setPaidSuccess(true);
       if (sessionId) {
-        apiFetch(`/api/platform-billing/signup/session-email?session_id=${encodeURIComponent(sessionId)}`)
+        // Creates the organisation and sends the welcome email if Stripe's
+        // webhook hasn't yet, so signup never hangs on the webhook alone.
+        // The resend link needs the invite, so it waits for this first.
+        apiFetch("/api/platform-billing/signup/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId }),
+        })
+          .catch(() => null)
+          .then(() =>
+            apiFetch(`/api/platform-billing/signup/session-email?session_id=${encodeURIComponent(sessionId)}`),
+          )
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => setSignupEmail(data?.email ?? null))
           .catch(() => setSignupEmail(null));
@@ -87,7 +98,7 @@ export default function GetStarted() {
           {signupEmail && (
             <p className="mt-4 text-[13px]" style={{ color: "var(--cc-muted)" }}>
               {resent ? (
-                "Sent again — check your inbox (and spam folder)."
+                "Sent again. Check your inbox (and spam folder)."
               ) : (
                 <>
                   Didn't get it?{" "}

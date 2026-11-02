@@ -326,21 +326,31 @@ def _create_org_from_signup(session: dict[str, Any]) -> None:
             _send_founding_md_invite(org_id=org_id, email=email, organization_name=organization_name)
         return
 
-    org_resp = supabase.table("organizations").insert({
-        # "name" is a separate legacy NOT NULL column alongside
-        # organization_name (see admin.py's organization_name-or-name
-        # display fallback) - both need the same value on insert.
-        "name": organization_name,
-        "organization_name": organization_name,
-        "owner_user_id": None,
-        "plan_tier": plan_tier,
-        "stripe_customer_id": customer_id,
-        "stripe_subscription_id": subscription_id,
-        "subscription_status": subscription.get("status") or "trialing",
-        "trial_ends_at": trial_ends_at,
-        "email": email,
-        "org_abbrev": org_abbrev,
-    }).execute()
+    try:
+        org_resp = supabase.table("organizations").insert({
+            # "name" is a separate legacy NOT NULL column alongside
+            # organization_name (see admin.py's organization_name-or-name
+            # display fallback) - both need the same value on insert.
+            "name": organization_name,
+            "organization_name": organization_name,
+            "owner_user_id": None,
+            "plan_tier": plan_tier,
+            "stripe_customer_id": customer_id,
+            "stripe_subscription_id": subscription_id,
+            "subscription_status": subscription.get("status") or "trialing",
+            "trial_ends_at": trial_ends_at,
+            "email": email,
+            "org_abbrev": org_abbrev,
+        }).execute()
+    except Exception as exc:
+        # The webhook and the success page's confirm call can race for the
+        # same checkout. idx_organizations_stripe_customer lets only one
+        # insert win, and the winner sends the invite.
+        err = str(exc).lower()
+        if "duplicate" in err or "unique" in err or "23505" in err:
+            logger.info("Signup org for customer %s already created by a concurrent call", customer_id)
+            return
+        raise
     if not org_resp.data:
         logger.error("Failed to create organization for signup checkout %s", session.get("id"))
         return
@@ -519,6 +529,18 @@ def reconcile_signup_session(session_id: str) -> bool:
         return False
     _create_org_from_signup(session)
     return True
+
+
+def confirm_signup_session(session_id: str) -> bool:
+    """Called by the /get-started success page when Stripe redirects back,
+    so a new provider's organisation and welcome email never depend on the
+    webhook alone arriving. Same idempotent path as the webhook and
+    reconcile_signup_session; whichever runs first does the work. The
+    session id is unguessable and only reaches the browser through Stripe's
+    redirect, so this is safe to expose without auth."""
+    if not session_id.startswith("cs_"):
+        return False
+    return reconcile_signup_session(session_id)
 
 
 # ---------------------------------------------------------------------------

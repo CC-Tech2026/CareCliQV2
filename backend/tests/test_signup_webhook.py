@@ -120,3 +120,38 @@ def test_founding_welcome_email_reads_as_a_welcome():
     assert "invited" not in kwargs["text_body"].lower()
     assert "Sunshine &lt;Care&gt;" in kwargs["html_body"]
     assert kwargs.get("from_display_name") is None
+
+
+def test_concurrent_org_insert_is_treated_as_already_created():
+    db = MagicMock()
+    _org_lookup(db, [])
+    db.table.return_value.insert.return_value.execute.side_effect = Exception(
+        'duplicate key value violates unique constraint "idx_organizations_stripe_customer"'
+    )
+    sub = MagicMock()
+    sub.to_dict.return_value = {"status": "trialing", "trial_end": None}
+    with patch.object(service, "get_supabase_admin", return_value=db), \
+         patch.object(service.stripe.Subscription, "retrieve", return_value=sub), \
+         patch.object(service, "_send_founding_md_invite") as send:
+        service._create_org_from_signup(SESSION)
+    send.assert_not_called()
+
+
+def test_confirm_runs_signup_for_a_completed_session():
+    session = MagicMock()
+    session.to_dict.return_value = {**SESSION, "status": "complete"}
+    with patch.object(service.stripe.checkout.Session, "retrieve", return_value=session), \
+         patch.object(service, "_create_org_from_signup") as create:
+        assert service.confirm_signup_session("cs_1") is True
+    create.assert_called_once()
+
+
+def test_confirm_ignores_open_sessions_and_non_session_ids():
+    session = MagicMock()
+    session.to_dict.return_value = {**SESSION, "status": "open"}
+    with patch.object(service.stripe.checkout.Session, "retrieve", return_value=session) as retrieve, \
+         patch.object(service, "_create_org_from_signup") as create:
+        assert service.confirm_signup_session("cs_1") is False
+        assert service.confirm_signup_session("org_123") is False
+    create.assert_not_called()
+    retrieve.assert_called_once_with("cs_1")
