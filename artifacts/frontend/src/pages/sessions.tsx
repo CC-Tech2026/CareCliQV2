@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { exportBulkSessionsPDF } from "@/lib/pdf-export";
+import { shiftNoteTimes, type ShiftNoteLike } from "@/lib/shift-note-title";
 import { useGetSessions, useGetParticipants, getGetSessionsQueryKey } from "@workspace/api-client-react";
 import type { Session as ApiSession, Participant as ApiParticipant } from "@workspace/api-client-react";
 
@@ -408,10 +409,15 @@ export default function Sessions() {
               <span className="text-[14px] font-bold group-hover:text-[#E8457A] transition-colors truncate" style={{ color: T1 }}>
                 {session._participantName}
               </span>
-              <span className="hidden sm:inline text-slate-300 text-xs">·</span>
-              <span className="text-[12px] font-medium capitalize truncate" style={{ color: T2 }}>
-                {session.session_type?.replace(/_/g, " ") ?? translate("sessions.general")}
-              </span>
+              {/* Who worked it, not the session type every note shares. */}
+              {(session as ShiftNoteLike).worker_name && (
+                <>
+                  <span className="hidden sm:inline text-slate-300 text-xs">·</span>
+                  <span className="text-[12px] font-medium truncate" style={{ color: T2 }}>
+                    {(session as ShiftNoteLike).worker_name}
+                  </span>
+                </>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -421,7 +427,7 @@ export default function Sessions() {
               </span>
               <span className="flex items-center gap-1 text-[11px]" style={{ color: T3 }}>
                 <Clock size={11} className="opacity-70" />
-                {session.duration_minutes ? translateParams("sessions.durationMin", { minutes: String(session.duration_minutes) }) : translate("common.emDash")}
+                {shiftNoteTimes(session as ShiftNoteLike) ?? translate("common.emDash")}
               </span>
               {session.tags && session.tags.length > 0 && (
                 <div className="flex gap-1 items-center">

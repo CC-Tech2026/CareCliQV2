@@ -60,6 +60,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
 import { formatAppDate, formatAppTimeWithZone } from "@/lib/datetime";
 import { scanNoteHighlights, buildHighlightedHtml, type Highlight } from "@/lib/note-scanner";
+import { shiftNoteTimes, type ShiftNoteLike } from "@/lib/shift-note-title";
 
 // ---------------------------------------------------------------------------
 // Stage 1: Highlighted note editor (inline compliance overlay)
@@ -778,8 +779,8 @@ export default function SessionDetail({ id }: { id?: string }) {
               <Calendar className="h-4 w-4 text-slate-400" />
               {session.session_date ? formatAppDate(session.session_date, auditTrail?.timezone, { day: "numeric", month: "long", year: "numeric" }) : translate("sessions.detail.noDate")}
             </span>
-            <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-slate-400" /> {session.duration_minutes || 0} min</span>
-            <span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-slate-400" /> {session.session_type}</span>
+            {/* The shift's own times, not the session type every note shares. */}
+            <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-slate-400" /> {shiftNoteTimes(session as ShiftNoteLike) ?? `${session.duration_minutes || 0} min`}</span>
             {(session as ExtendedSession).worker_name && (
               <span className="flex items-center gap-1.5">
                 <User className="h-4 w-4 text-slate-400" /> {(session as ExtendedSession).worker_name}

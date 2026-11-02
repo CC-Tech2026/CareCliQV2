@@ -23,6 +23,7 @@ import {
 } from "@/services/coordinatorService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import type { CoordinatorDashboard } from "@/services/dashboardService";
+import { shiftNoteTitle, type ShiftNoteLike } from "@/lib/shift-note-title";
 
 // ── Token aliases ─────────────────────────────────────────────────────────────
 const TEXT   = "var(--cc-text)";
@@ -125,7 +126,7 @@ function fromFlagged(sessions: FlaggedSession[]): ActionItem[] {
       severity: sev,
       category: "Compliance flag",
       icon: ClipboardCheck,
-      title: `${s.participant_name || "Session"} — ${(s.session_type || "session").replace(/_/g, " ")}`,
+      title: shiftNoteTitle(s as ShiftNoteLike),
       detail: `Score ${cs != null ? `${cs}%` : "unscored"} · ${safeDate(s.session_date)}${s.review_note ? ` · "${s.review_note.slice(0, 40)}…"` : ""}`,
       actionLabel: "Review session",
       actionUrl: `/sessions/${s.id}`,

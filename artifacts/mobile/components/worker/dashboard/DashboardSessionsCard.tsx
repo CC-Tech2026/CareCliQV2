@@ -2,8 +2,9 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
-import { complianceBadgeMeta, safeClientDate, sessionScoreLabel } from "@/lib/client-utils";
+import { complianceBadgeMeta, sessionScoreLabel } from "@/lib/client-utils";
 import type { DashboardSession } from "@/lib/dashboard-api";
+import { shiftNoteSubtitle, shiftNoteTitle } from "@/lib/shift-note-title";
 
 type Props = {
   title: string;
@@ -46,9 +47,9 @@ export function DashboardSessionsCard({ title, sessions }: Props) {
                   </View>
                 </View>
                 <Text style={[styles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
-                  {safeClientDate(session.session_date)}
-                  {" · "}
-                  {(session.session_type || "session").replace(/_/g, " ")}
+                  {[shiftNoteTitle(session, { participant: false }), shiftNoteSubtitle(session, { worker: false })]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </Text>
               </View>
             );

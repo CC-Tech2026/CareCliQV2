@@ -1,7 +1,8 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { complianceBadgeMeta, safeClientDate, sessionScoreLabel } from "@/lib/client-utils";
+import { complianceBadgeMeta, sessionScoreLabel } from "@/lib/client-utils";
+import { shiftNoteSubtitle, shiftNoteTitle } from "@/lib/shift-note-title";
 import type { ClientSessionRecord } from "@/lib/worker-api";
 import { useColors } from "@/hooks/useColors";
 
@@ -39,12 +40,12 @@ export function ClientSessionList({
             ]}
           >
             <View style={styles.rowContent}>
+              {/* One participant's notes, written by this worker: the day and times tell them apart. */}
               <Text style={[styles.type, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                {(session.session_type || "Session").replace(/_/g, " ")}
+                {shiftNoteTitle(session, { participant: false })}
               </Text>
               <Text style={[styles.date, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {safeClientDate(session.session_date)}
-                {session.duration_minutes ? ` · ${session.duration_minutes} min` : ""}
+                {shiftNoteSubtitle(session, { worker: false })}
               </Text>
               {preview ? (
                 <Text
@@ -71,7 +72,7 @@ const styles = StyleSheet.create({
   card: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
   rowContent: { flex: 1, gap: 3 },
-  type: { fontSize: 14, textTransform: "capitalize" },
+  type: { fontSize: 14 },
   date: { fontSize: 12 },
   preview: { fontSize: 13, lineHeight: 18, marginTop: 4 },
   badge: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4, marginTop: 2 },

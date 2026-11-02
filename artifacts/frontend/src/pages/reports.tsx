@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { useReAuth } from "@/hooks/useReAuth";
+import { shiftNoteSubtitle, type ShiftNoteLike } from "@/lib/shift-note-title";
 import {
   LayoutDashboard, FileText, AlertTriangle, Users, ShieldCheck,
   ShieldAlert, Brain, FileDown, Layout, BookOpen,
@@ -342,7 +343,7 @@ function HubSection() {
                           {s.participant_name ?? translate("reports.unknownParticipant")}
                         </p>
                         <p className="text-[11px]" style={{ color: T3 }}>
-                          {format(parseISO(s.session_date), "MMM d")} · {(s.session_type ?? "session").replace(/_/g, " ")}
+                          {[format(parseISO(s.session_date), "MMM d"), shiftNoteSubtitle(s as ShiftNoteLike)].filter(Boolean).join(" · ")}
                         </p>
                       </div>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0"
@@ -396,7 +397,7 @@ function HubSection() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? translate("reports.unknown")}</p>
-                      <p className="text-[11px]" style={{ color: T3 }}>{(s.session_type ?? "session").replace(/_/g, " ")} · {s.duration_minutes ?? "N/A"} min</p>
+                      <p className="text-[11px]" style={{ color: T3 }}>{shiftNoteSubtitle(s as ShiftNoteLike) || `${s.duration_minutes ?? "N/A"} min`}</p>
                     </div>
                     <ComplianceBadge score={s.compliance_score} />
                     <ChevronRight size={14} className="shrink-0 opacity-0 group-hover:opacity-50 transition-opacity" style={{ color: T3 }} />
@@ -476,7 +477,7 @@ function SessionReportsSection() {
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? translate("reports.unknown")}</p>
                       <p className="text-[11px]" style={{ color: T3 }}>
-                        {(s.session_type ?? "session").replace(/_/g, " ")} · {s.duration_minutes ?? "N/A"} min
+                        {shiftNoteSubtitle(s as ShiftNoteLike) || `${s.duration_minutes ?? "N/A"} min`}
                       </p>
                     </div>
                     <ComplianceBadge score={s.compliance_score} />
@@ -640,7 +641,7 @@ function ParticipantNotesSection() {
                             <ComplianceBadge score={s.compliance_score} />
                           </div>
                           <p className="text-[13px] font-semibold" style={{ color: T1 }}>
-                            {(s.session_type ?? "session").replace(/_/g, " ")} · {s.duration_minutes ?? "N/A"} min
+                            {shiftNoteSubtitle(s as ShiftNoteLike) || `${s.duration_minutes ?? "N/A"} min`}
                           </p>
                           {legalNoteText(s) && (
                             <p className="text-[12px] mt-1.5 line-clamp-2" style={{ color: T2 }}>
@@ -774,7 +775,7 @@ function ComplianceReportsSection() {
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name}</p>
                           <p className="text-[11px]" style={{ color: T3 }}>
-                            {format(parseISO(s.session_date), "MMM d, yyyy")} · {(s.session_type ?? "session").replace(/_/g, " ")}
+                            {[format(parseISO(s.session_date), "MMM d, yyyy"), shiftNoteSubtitle(s as ShiftNoteLike)].filter(Boolean).join(" · ")}
                           </p>
                         </div>
                         <ComplianceBadge score={s.compliance_score} />

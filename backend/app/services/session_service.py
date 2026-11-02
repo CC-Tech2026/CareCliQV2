@@ -899,6 +899,11 @@ async def get_all_sessions(
     name_map = _fetch_patient_name_map(supabase, patient_ids)
 
     accessible_sessions = await _filter_sessions_for_user(sessions, current_user)
+    # Who worked each shift, so a note's title can say so (not just "Support work").
+    worker_names = _fetch_worker_name_map(
+        supabase,
+        list({str(s.get("worker_id") or s.get("support_worker_id")) for s in accessible_sessions if s.get("worker_id") or s.get("support_worker_id")}),
+    )
 
     output: List[Dict[str, Any]] = []
 
@@ -914,6 +919,8 @@ async def get_all_sessions(
             "full_name": patient_info.get("full_name", ""),
             "ndis_number": patient_info.get("ndis_number", ""),
         }
+        row["participant_name"] = row.get("participant_name") or patient_info.get("full_name") or None
+        row["worker_name"] = worker_names.get(str(session.get("worker_id") or session.get("support_worker_id") or "")) or None
 
         output.append(row)
 

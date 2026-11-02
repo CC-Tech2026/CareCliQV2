@@ -208,6 +208,9 @@ export type GoalDetail = {
 
 export type ClientSessionRecord = {
   id: string;
+  participant_name?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
   session_date?: string;
   session_type?: string;
   status?: string;
@@ -254,6 +257,10 @@ export type WorkerNdisPlan = {
 
 export type WorkerComplianceSession = {
   id: string;
+  participant_name?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  duration_minutes?: number | null;
   session_date?: string;
   session_type?: string;
   compliance_score?: number | null;

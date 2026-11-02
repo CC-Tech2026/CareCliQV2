@@ -5,6 +5,7 @@ import {
   useUpdateSession,
 } from "@workspace/api-client-react";
 import * as Haptics from "@/lib/haptics";
+import { shiftNoteTitle, type ShiftNoteLike } from "@/lib/shift-note-title";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -164,7 +165,9 @@ export default function ProgressNotesScreen() {
           </Text>
           {participantName ? (
             <Text style={[styles.headerSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {participantName} · {sessionType}
+              {[participantName, session ? shiftNoteTitle(session as ShiftNoteLike, { participant: false }) : null]
+                .filter(Boolean)
+                .join(" · ")}
             </Text>
           ) : null}
         </View>

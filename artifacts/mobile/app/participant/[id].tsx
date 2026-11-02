@@ -6,6 +6,7 @@ import {
   type Session,
 } from "@workspace/api-client-react";
 import * as Haptics from "@/lib/haptics";
+import { shiftNoteSubtitle, type ShiftNoteLike } from "@/lib/shift-note-title";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -101,7 +102,7 @@ function SessionRow({ session }: { session: Session }) {
             { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
           ]}
         >
-          {session.session_type} · {session.duration_minutes}m
+          {shiftNoteSubtitle(session as ShiftNoteLike, { worker: false }) || "Shift note"}
         </Text>
       </View>
       <View style={styles.sessionRowRight}>
