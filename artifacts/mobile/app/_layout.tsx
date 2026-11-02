@@ -31,6 +31,7 @@ import {
 } from "@/hooks/useExpoPush";
 import { readMobileAuthToken } from "@/lib/session";
 import { getMobileApiBaseUrl } from "@/lib/api-base-url";
+import { reportCrash } from "@/lib/report-crash";
 
 const apiBase = getMobileApiBaseUrl();
 if (apiBase) {
@@ -220,7 +221,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ErrorBoundary>
+      <ErrorBoundary onError={reportCrash}>
         <QueryClientProvider client={queryClient}>
           <PreferencesProvider>
             <ToastProvider>
