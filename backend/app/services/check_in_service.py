@@ -9,7 +9,7 @@ import json
 import logging
 import math
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Any, Optional
 
 from ..core.config import settings
@@ -40,12 +40,22 @@ def _parse_iso(value: str) -> datetime:
     return datetime.fromisoformat(normalized)
 
 
+def _clock_time(value: datetime) -> str:
+    """"9:05 am" - how workers read a time, without a leading zero."""
+    return value.strftime("%I:%M %p").lstrip("0").replace("AM", "am").replace("PM", "pm")
+
+
 def validate_clock_in_window(
     scheduled_start: str,
     *,
     now: Optional[datetime] = None,
+    tz: Optional[tzinfo] = None,
 ) -> None:
-    """Reject check-in outside the allowed window (-15 / +30 minutes)."""
+    """Reject check-in outside the allowed window (-15 / +30 minutes).
+
+    ``tz`` is the participant's zone, so the earliest time is given in the
+    time the worker is actually in (UTC read as 2:15 am to someone in Adelaide).
+    """
     if not scheduled_start:
         return
     current = now or datetime.now(timezone.utc)
@@ -55,10 +65,12 @@ def validate_clock_in_window(
     earliest = start - timedelta(minutes=CLOCK_IN_EARLY_MINUTES)
     latest = start + timedelta(minutes=CLOCK_IN_LATE_MINUTES)
     if current < earliest:
+        local = earliest.astimezone(tz or timezone.utc)
+        same_day = local.date() == current.astimezone(tz or timezone.utc).date()
+        when = _clock_time(local) if same_day else f"{_clock_time(local)} on {local.strftime('%a %d %b').replace(' 0', ' ')}"
         raise ValueError(
-            f"Too early to check in. You can check in from "
-            f"{earliest.astimezone(timezone.utc).strftime('%H:%M')} UTC "
-            f"({CLOCK_IN_EARLY_MINUTES} minutes before shift start)."
+            f"Too early to check in. You can check in from {when}"
+            f"{'' if tz else ' UTC'} ({CLOCK_IN_EARLY_MINUTES} minutes before the shift starts)."
         )
     if current > latest:
         raise ValueError(

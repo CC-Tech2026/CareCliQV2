@@ -24,6 +24,19 @@ def test_validate_clock_in_window_rejects_too_early():
         check_in_service.validate_clock_in_window(start)
 
 
+def test_too_early_message_uses_the_participants_local_time():
+    from zoneinfo import ZoneInfo
+
+    # 1:00 pm Adelaide start (02:30 UTC); the window opens at 12:45 pm local.
+    now = datetime(2026, 10, 31, 0, 0, tzinfo=timezone.utc)
+    with pytest.raises(ValueError) as exc:
+        check_in_service.validate_clock_in_window(
+            "2026-10-31T02:30:00+00:00", now=now, tz=ZoneInfo("Australia/Adelaide")
+        )
+    assert "12:45 pm" in str(exc.value)
+    assert "UTC" not in str(exc.value)
+
+
 def test_validate_clock_in_window_rejects_too_late():
     start = _scheduled_start(-45)
     with pytest.raises(ValueError, match="window closed"):
