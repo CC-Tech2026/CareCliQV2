@@ -310,3 +310,48 @@ export function usePushNotificationNavigation(
     return () => clearTimeout(timer);
   }, [isAuthenticated, isAuthLoading, router]);
 }
+
+/** "unavailable": Expo Go or web, where this build can't receive pushes. */
+export type PushPermission = "granted" | "denied" | "undetermined" | "unavailable";
+
+export async function getPushPermission(): Promise<PushPermission> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return "unavailable";
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status === "granted" || status === "denied" ? status : "undetermined";
+  } catch {
+    return "unavailable";
+  }
+}
+
+/**
+ * Turn notifications on for this phone from the settings screen: ask for
+ * permission if Android/iOS still allows asking, then register the tokens
+ * straight away rather than on the next app open. Returns the resulting
+ * permission; "denied" means only the system settings can change it now.
+ */
+export async function enablePushOnThisDevice(): Promise<PushPermission> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return "unavailable";
+  if (!(await requestPushPermission(Notifications))) return getPushPermission();
+  await ensureNotificationChannels(Notifications);
+
+  const authToken = await readMobileAuthToken();
+  if (!authToken) return "granted";
+  const deviceId = await getMobileDeviceId();
+  const fcmToken = await resolveNativeFcmToken(Notifications);
+  if (fcmToken) await registerFcmPushToken(authToken, deviceId, fcmToken).catch(() => false);
+  try {
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      (Constants.easConfig as { projectId?: string } | undefined)?.projectId;
+    if (projectId) {
+      const expoToken = await Notifications.getExpoPushTokenAsync({ projectId });
+      if (expoToken.data) await registerExpoPushToken(authToken, deviceId, expoToken.data);
+    }
+  } catch {
+    /* EAS project not linked / Expo push unavailable on this build */
+  }
+  return "granted";
+}
