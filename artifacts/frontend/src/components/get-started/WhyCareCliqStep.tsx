@@ -24,7 +24,7 @@ function Track({
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-x-8 gap-y-4 py-8" style={{ borderTop: `1px solid ${RULE}` }}>
+    <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-x-8 gap-y-4 py-6 [@media(max-height:820px)]:py-4" style={{ borderTop: `1px solid ${RULE}` }}>
       <div>
         <p className="text-[17px] font-semibold" style={{ color: INK }}>
           {label}
@@ -55,7 +55,7 @@ export function WhyCareCliqStep({ onContinue }: { onContinue: () => void }) {
     <GetStartedShell step={3}>
       <Reveal>
         <h1
-          className="max-w-4xl text-[36px] sm:text-[52px] font-bold tracking-tight leading-[1.04]"
+          className="max-w-4xl text-[36px] sm:text-[52px] [@media(max-height:820px)]:sm:text-[42px] font-bold tracking-tight leading-[1.04]"
           style={{ color: INK, fontFamily: DISPLAY_FONT }}
         >
           Most providers run on a dozen tools that don't talk to each other.
@@ -84,7 +84,7 @@ export function WhyCareCliqStep({ onContinue }: { onContinue: () => void }) {
         </p>
       </Reveal>
 
-      <Reveal delay={300} className="mt-10">
+      <Reveal delay={300} className="mt-8 [@media(max-height:820px)]:mt-5">
         {/* Day labels */}
         <div className="hidden md:grid grid-cols-[200px_1fr] gap-x-8 pb-3">
           <span />
@@ -163,7 +163,7 @@ export function WhyCareCliqStep({ onContinue }: { onContinue: () => void }) {
         </div>
       </Reveal>
 
-      <Reveal delay={500} className="mt-10">
+      <Reveal delay={500} className="mt-8 [@media(max-height:820px)]:mt-5">
         <PrimaryButton onClick={onContinue}>Tell us about your team</PrimaryButton>
       </Reveal>
     </GetStartedShell>

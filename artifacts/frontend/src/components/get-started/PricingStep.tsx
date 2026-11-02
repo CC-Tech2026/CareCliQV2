@@ -134,29 +134,31 @@ export function PricingStep({ recommendedTier }: Props) {
 
   return (
     <GetStartedShell step={6}>
-      <Reveal>
-        <h1
-          className="text-[40px] sm:text-[56px] font-bold tracking-tight leading-[1.02]"
-          style={{ color: INK, fontFamily: DISPLAY_FONT }}
-        >
-          Your first month is on us.
-        </h1>
-        <p className="mt-4 max-w-2xl text-[17px] leading-relaxed" style={{ color: QUIET_INK }}>
-          Pick the plan sized to your team. Every plan runs the same platform, so there's nothing
-          to upgrade into later. Prices exclude GST.
-        </p>
-      </Reveal>
+      {/* Heading on the left, organisation code on the right, so the plans
+          table fits a laptop window without scrolling. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_minmax(0,430px)] gap-8 lg:gap-14 items-end">
+        <Reveal>
+          <h1
+            className="text-[40px] sm:text-[52px] [@media(max-height:820px)]:sm:text-[42px] font-bold tracking-tight leading-[1.02]"
+            style={{ color: INK, fontFamily: DISPLAY_FONT }}
+          >
+            Your first month is on us.
+          </h1>
+          <p className="mt-3 max-w-xl text-[16px] leading-relaxed" style={{ color: QUIET_INK }}>
+            Pick the plan sized to your team. Every plan runs the same platform, so there's nothing
+            to upgrade into later. Prices exclude GST.
+          </p>
+        </Reveal>
 
-      <Reveal delay={150} className="mt-10">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 md:gap-12 items-end">
+        <Reveal delay={150}>
           <div>
             <label htmlFor="org-abbrev" className="text-[15px] font-semibold" style={{ color: INK }}>
               First, a 4-letter code for your organisation
             </label>
-            <p className="mt-1 text-[14px]" style={{ color: QUIET_INK }}>
-              It goes on the end of every staff member's employee ID, so pick something you'll recognise.
+            <p className="mt-1 text-[13.5px]" style={{ color: QUIET_INK }}>
+              It ends every staff member's employee ID, so pick something you'll recognise.
             </p>
-            <div className="mt-4 flex items-center gap-4">
+            <div className="mt-3 flex items-center gap-4">
               <input
                 id="org-abbrev"
                 type="text"
@@ -167,7 +169,7 @@ export function PricingStep({ recommendedTier }: Props) {
                 autoComplete="off"
                 aria-invalid={abbrevBad}
                 aria-describedby="org-abbrev-status"
-                className="w-[170px] bg-transparent py-1 text-[40px] font-bold tracking-[0.18em] uppercase outline-none placeholder:opacity-25"
+                className="w-[150px] bg-transparent py-0.5 text-[34px] font-bold tracking-[0.18em] uppercase outline-none placeholder:opacity-25"
                 style={{
                   color: INK,
                   fontFamily: DISPLAY_FONT,
@@ -193,20 +195,18 @@ export function PricingStep({ recommendedTier }: Props) {
                 )}
               </p>
             </div>
-          </div>
-          <div aria-hidden className="md:text-right">
-            <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: QUIET_INK }}>
-              Staff IDs will look like
-            </p>
-            <p className="mt-1 text-[28px] font-bold tracking-wide tabular-nums" style={{ fontFamily: DISPLAY_FONT }}>
-              <span style={{ color: QUIET_INK }}>SW003</span>
-              <span style={{ color: orgAbbrev.normalized ? SIGNATURE : RULE }}>{orgAbbrev.normalized.padEnd(4, "_")}</span>
+            <p aria-hidden className="mt-3 text-[13px] font-semibold" style={{ color: QUIET_INK }}>
+              Staff IDs will look like{" "}
+              <span className="tracking-wide tabular-nums" style={{ fontFamily: DISPLAY_FONT, color: INK }}>
+                SW003
+                <span style={{ color: orgAbbrev.normalized ? SIGNATURE : QUIET_INK }}>{orgAbbrev.normalized.padEnd(4, "_")}</span>
+              </span>
             </p>
           </div>
-        </div>
-      </Reveal>
+        </Reveal>
+      </div>
 
-      <Reveal delay={300} className="mt-12">
+      <Reveal delay={300} className="mt-9 [@media(max-height:820px)]:mt-6">
         <div
           className="grid grid-cols-1 md:grid-cols-3 rounded-[24px] overflow-hidden transition-opacity duration-500"
           style={{ border: `1px solid ${RULE}`, opacity: abbrevReady ? 1 : 0.55 }}
@@ -216,21 +216,21 @@ export function PricingStep({ recommendedTier }: Props) {
             return (
               <div
                 key={tier}
-                className={`relative flex flex-col p-7 ${i > 0 ? "border-t md:border-t-0 md:border-l" : ""}`}
+                className={`relative flex flex-col px-7 py-6 [@media(max-height:820px)]:py-5 ${i > 0 ? "border-t md:border-t-0 md:border-l" : ""}`}
                 style={{ borderColor: RULE }}
               >
                 {isRecommended && <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: SIGNATURE }} />}
                 <p className="text-[12.5px] font-semibold min-h-[18px]" style={{ color: SIGNATURE }}>
                   {isRecommended ? "Our suggestion for you" : ""}
                 </p>
-                <h2 className="mt-2 text-[26px] font-bold tracking-tight" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
+                <h2 className="mt-1 text-[24px] font-bold tracking-tight" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
                   {name}
                 </h2>
                 <p className="text-[14px]" style={{ color: QUIET_INK }}>
                   {range}
                 </p>
-                <p className="mt-6 flex items-baseline gap-1.5">
-                  <span className="text-[44px] leading-none font-bold tracking-tight tabular-nums" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
+                <p className="mt-4 flex items-baseline gap-1.5">
+                  <span className="text-[40px] leading-none font-bold tracking-tight tabular-nums" style={{ color: INK, fontFamily: DISPLAY_FONT }}>
                     ${price}
                   </span>
                   <span className="text-[14px]" style={{ color: QUIET_INK }}>
@@ -240,14 +240,14 @@ export function PricingStep({ recommendedTier }: Props) {
                 <p className="mt-2 text-[13px] min-h-[20px]" style={{ color: QUIET_INK }}>
                   {perPerson ?? ""}
                 </p>
-                <p className="mt-4 flex-1 text-[14.5px] leading-relaxed" style={{ color: INK }}>
+                <p className="mt-2 flex-1 text-[14px] leading-relaxed" style={{ color: INK }}>
                   {note}
                 </p>
                 <button
                   type="button"
                   onClick={() => void handleChoose(tier)}
                   disabled={busyTier !== null || !abbrevReady}
-                  className="group mt-8 h-12 rounded-full text-[14.5px] font-semibold inline-flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed"
+                  className="group mt-5 h-12 rounded-full text-[14.5px] font-semibold inline-flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed"
                   style={
                     isRecommended || !recommendedTier
                       ? { background: INK, color: PAPER }
@@ -265,23 +265,25 @@ export function PricingStep({ recommendedTier }: Props) {
           })}
         </div>
 
-        <p className="mt-6 text-[14px] leading-relaxed" style={{ color: QUIET_INK }}>
-          <span className="font-semibold" style={{ color: INK }}>
-            Every plan includes
-          </span>{" "}
-          {SHARED_FEATURES.map((f) => f.toLowerCase()).join(" · ")}.
-        </p>
-        <p className="mt-3 text-[14px]" style={{ color: QUIET_INK }}>
-          Already with us?{" "}
-          <button
-            type="button"
-            onClick={() => navigate("/login")}
-            className="font-semibold underline underline-offset-4"
-            style={{ color: INK }}
-          >
-            Sign in
-          </button>
-        </p>
+        <div className="mt-5 flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-10">
+          <p className="text-[13.5px] leading-relaxed" style={{ color: QUIET_INK }}>
+            <span className="font-semibold" style={{ color: INK }}>
+              Every plan includes
+            </span>{" "}
+            {SHARED_FEATURES.map((f) => f.toLowerCase()).join(" · ")}.
+          </p>
+          <p className="shrink-0 text-[13.5px]" style={{ color: QUIET_INK }}>
+            Already with us?{" "}
+            <button
+              type="button"
+              onClick={() => navigate("/login")}
+              className="font-semibold underline underline-offset-4"
+              style={{ color: INK }}
+            >
+              Sign in
+            </button>
+          </p>
+        </div>
       </Reveal>
     </GetStartedShell>
   );
