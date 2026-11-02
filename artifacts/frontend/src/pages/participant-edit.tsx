@@ -38,6 +38,7 @@ const schema = z.object({
   date_of_birth:      z.string().min(1, "Date of birth is required"),
   email:              z.string().email("Invalid email").optional().or(z.literal("")),
   phone:              z.string().optional(),
+  address:            z.string().optional(),
   primary_disability: z.string().optional(),
   biological_sex:     z.string().optional(),
   plan_status:        z.string().min(1, "Plan status is required"),
@@ -72,7 +73,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      full_name: "", ndis_number: "", date_of_birth: "", email: "", phone: "",
+      full_name: "", ndis_number: "", date_of_birth: "", email: "", phone: "", address: "",
       primary_disability: "", biological_sex: "unspecified", plan_status: "active",
       plan_management_type: "", plan_start_date: "", plan_end_date: "", total_budget: 0,
     },
@@ -86,6 +87,8 @@ export default function ParticipantEdit({ id }: { id: string }) {
       date_of_birth:      participant.date_of_birth ? String(participant.date_of_birth).slice(0, 10) : "",
       email:              String(participant.email ?? ""),
       phone:              String(participant.phone ?? ""),
+      // Not in the generated client type yet; the API returns every column.
+      address:            String((participant as { address?: string | null }).address ?? ""),
       primary_disability: String(participant.primary_disability ?? ""),
       biological_sex:     String(participant.biological_sex ?? "unspecified"),
       plan_status:        String(participant.plan_status ?? "active"),
@@ -239,6 +242,14 @@ export default function ParticipantEdit({ id }: { id: string }) {
               <FormItem>
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.phone")}</FormLabel>
                 <FormControl><Input type="tel" className="h-10 text-[14px] rounded-xl" placeholder={translate("patients.placeholder.phone")} data-testid="input-phone" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="address" render={({ field }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.address")}</FormLabel>
+                <FormControl><Input className="h-10 text-[14px] rounded-xl" placeholder={translate("patients.placeholder.address")} autoComplete="street-address" data-testid="input-address" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />

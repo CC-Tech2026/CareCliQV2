@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   ArrowLeft, UserPlus, Loader2, User, ClipboardList, ShieldCheck,
-  Cake, Mail, Phone, HeartPulse, MessagesSquare, Wallet, CalendarRange,
+  Cake, Mail, Phone, HeartPulse, MessagesSquare, Wallet, CalendarRange, MapPin,
 } from "lucide-react";
 
 // -- Design tokens -------------------------------------------------------------
@@ -34,6 +34,10 @@ const schema = z.object({
   date_of_birth:              z.string().min(1, "Date of birth is required"),
   email:                      z.string().email("Invalid email").optional().or(z.literal("")),
   phone:                      z.string().optional(),
+  street_address:             z.string().optional(),
+  suburb:                     z.string().optional(),
+  state:                      z.string().optional(),
+  postcode:                   z.string().optional(),
   primary_disability:         z.string().optional(),
   allergies:                  z.string().optional(),
   communication_preferences:  z.string().optional(),
@@ -86,6 +90,7 @@ export default function ParticipantNew() {
     resolver: zodResolver(schema),
     defaultValues: {
       full_name: "", ndis_number: "", date_of_birth: "", email: "", phone: "",
+      street_address: "", suburb: "", state: "", postcode: "",
       primary_disability: "", allergies: "", communication_preferences: "",
       biological_sex: "unspecified", plan_status: "active",
       plan_start_date: "", plan_end_date: "", total_budget: 0,
@@ -120,6 +125,12 @@ export default function ParticipantNew() {
       plan_start: data.plan_start_date || undefined,
       plan_end: data.plan_end_date || undefined,
       referral_source: "coordinator_referral",
+      // Same address fields as the onboarding form; becomes the participant's
+      // home address when the intake is activated.
+      street_address: data.street_address?.trim() || undefined,
+      suburb: data.suburb?.trim() || undefined,
+      state: data.state?.trim() || undefined,
+      postcode: data.postcode?.trim() || undefined,
       presenting_needs: data.primary_disability?.trim() ? [data.primary_disability.trim()] : [],
       notes: notes || undefined,
     };
@@ -229,6 +240,35 @@ export default function ParticipantNew() {
                   <FormItem>
                     <FieldLabel icon={Phone}>{translate("patients.field.phone")}</FieldLabel>
                     <FormControl><Input placeholder={translate("patients.placeholder.phone")} data-testid="input-phone" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+
+                <FormField control={form.control} name="street_address" render={({ field }) => (
+                  <FormItem className="sm:col-span-2 lg:col-span-3">
+                    <FieldLabel icon={MapPin}>{translate("patients.field.streetAddress")}</FieldLabel>
+                    <FormControl><Input placeholder={translate("patients.placeholder.streetAddress")} autoComplete="address-line1" data-testid="input-street-address" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="suburb" render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel icon={MapPin}>{translate("patients.field.suburb")}</FieldLabel>
+                    <FormControl><Input autoComplete="address-level2" data-testid="input-suburb" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="state" render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel icon={MapPin}>{translate("patients.field.state")}</FieldLabel>
+                    <FormControl><Input placeholder="SA" autoComplete="address-level1" data-testid="input-state" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="postcode" render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel icon={MapPin}>{translate("patients.field.postcode")}</FieldLabel>
+                    <FormControl><Input inputMode="numeric" maxLength={4} autoComplete="postal-code" data-testid="input-postcode" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />

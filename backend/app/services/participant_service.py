@@ -81,6 +81,13 @@ def _strip_optional_columns(payload: dict) -> dict:
     return payload
 
 
+def _normalize_address(payload: dict) -> None:
+    """Home address is free text; a blank one clears the field rather than
+    storing an empty string."""
+    if "address" in payload:
+        payload["address"] = (payload["address"] or "").strip() or None
+
+
 def _serialize_dates(payload: dict) -> dict:
     """Convert date objects to ISO strings."""
     for field in (
@@ -407,8 +414,7 @@ async def create_participant(
     supabase = get_supabase_admin()
 
     payload: dict = data.model_dump(exclude_none=True)
-
-    payload.pop("address", None)
+    _normalize_address(payload)
 
     payload = _strip_optional_columns(payload)
     payload = _serialize_dates(payload)
@@ -494,7 +500,7 @@ async def update_participant(
     if "branch_id" in payload and get_user_role(current_user) != "managing_director":
         payload.pop("branch_id")
 
-    payload.pop("address", None)
+    _normalize_address(payload)
 
     if "plan_management_type" in payload:
         from . import billing_period_service
