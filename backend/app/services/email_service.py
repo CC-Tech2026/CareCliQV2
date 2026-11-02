@@ -115,6 +115,168 @@ def _branded_footer_html() -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# Account-setup emails (founding welcome, staff invitation)
+#
+# Table layout with inline styles so Outlook and Gmail render it the same,
+# matching the /get-started look: ink text and buttons, hairline dividers,
+# pink kept to small accents. Images come from the web app's public folder.
+# ---------------------------------------------------------------------------
+
+_INK = "#2D2D3D"
+_MUTED = "#6A6A77"
+_RULE = "#E6E6EA"
+_PAGE = "#F2F3F5"
+_PINK = "#E8457A"
+_FONT = "'Helvetica Neue',Helvetica,Arial,sans-serif"
+
+
+def _asset_url(path: str) -> str:
+    return f"{settings.frontend_base_url.rstrip('/')}/{path.lstrip('/')}"
+
+
+def _ink_button(url: str, label: str) -> str:
+    safe_url = escape(url, quote=True)
+    return f"""\
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td bgcolor="{_INK}" style="border-radius:999px;">
+      <a href="{safe_url}" style="display:inline-block;padding:15px 30px;font-family:{_FONT};font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:999px;">{escape(label)}&nbsp;&nbsp;&rarr;</a>
+    </td>
+  </tr>
+</table>"""
+
+
+def _numbered_steps(steps: list[tuple[str, str]]) -> str:
+    rows = "".join(
+        f"""\
+  <tr>
+    <td valign="top" width="36" style="padding:16px 0;border-top:1px solid {_RULE};font-family:{_FONT};font-size:13px;font-weight:700;color:{_PINK};">0{i}</td>
+    <td style="padding:16px 0;border-top:1px solid {_RULE};font-family:{_FONT};">
+      <div style="font-size:15px;font-weight:700;color:{_INK};">{escape(title)}</div>
+      <div style="padding-top:3px;font-size:14px;line-height:1.55;color:{_MUTED};">{escape(body)}</div>
+    </td>
+  </tr>"""
+        for i, (title, body) in enumerate(steps, start=1)
+    )
+    return f"""\
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-bottom:1px solid {_RULE};">
+{rows}
+</table>"""
+
+
+def _account_email_shell(
+    *,
+    preheader: str,
+    header_html: str,
+    hero_photo: str | None,
+    body_html: str,
+    setup_url: str,
+    footer_note: str,
+    top_bar_color: str = _PINK,
+) -> str:
+    """The shared frame: page background, white card with a thin coloured
+    top bar, header, optional people photo, body, then the expiry and
+    fallback link and the company footer."""
+    safe_url = escape(setup_url, quote=True)
+    photo = (
+        f"""\
+        <tr>
+          <td style="padding:0 40px;">
+            <img src="{escape(hero_photo, quote=True)}" width="520" alt="" style="display:block;width:100%;max-width:520px;height:auto;border:0;border-radius:14px;">
+          </td>
+        </tr>"""
+        if hero_photo
+        else ""
+    )
+    return f"""\
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+  </head>
+  <body style="margin:0;padding:0;background:{_PAGE};">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:{_PAGE};">{escape(preheader)}</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="{_PAGE}">
+      <tr>
+        <td align="center" style="padding:32px 12px;">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="width:100%;max-width:600px;border-radius:20px;overflow:hidden;">
+            <tr><td height="4" bgcolor="{escape(top_bar_color, quote=True)}" style="font-size:0;line-height:0;">&nbsp;</td></tr>
+            <tr><td style="padding:28px 40px 24px;">{header_html}</td></tr>
+{photo}
+            <tr><td style="padding:32px 40px 8px;font-family:{_FONT};color:{_INK};">{body_html}</td></tr>
+            <tr>
+              <td style="padding:24px 40px 36px;font-family:{_FONT};font-size:12px;line-height:1.6;color:{_MUTED};">
+                {escape(footer_note)} If the button doesn't work, paste this link into your browser:<br>
+                <a href="{safe_url}" style="color:{_MUTED};word-break:break-all;">{safe_url}</a>
+              </td>
+            </tr>
+          </table>
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
+            <tr>
+              <td align="center" style="padding:20px 24px 0;font-family:{_FONT};font-size:11px;line-height:1.7;color:#9A9AA5;">
+                CareCliQ · Documentation software for NDIS providers<br>
+                CC Tech Australia Pty Ltd
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+"""
+
+
+def _carecliq_logo_header() -> str:
+    return (
+        f'<img src="{escape(_asset_url("carecliQ_logo_new.png"), quote=True)}" width="56" alt="CareCliQ" '
+        'style="display:block;width:56px;height:auto;border:0;">'
+    )
+
+
+def _build_founding_welcome_html(*, setup_url: str, organization_name: str, status_line: str, is_trial: bool) -> str:
+    safe_org = escape(organization_name)
+    steps = [
+        ("Set your password", "Use the button above to choose a password for your director account."),
+        (
+            "Add your organisation details",
+            "Head office state, business address, ABN, and your NDIS registration number if you're registered. About two minutes.",
+        ),
+        (
+            "Invite your team",
+            "Coordinators and support workers each get their own invite. The worker app runs in English, Vietnamese, Chinese and Arabic.",
+        ),
+    ]
+    body = f"""\
+<div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:{_PINK};">Welcome to CareCliQ</div>
+<h1 style="margin:10px 0 0;font-family:{_FONT};font-size:30px;line-height:1.15;font-weight:800;color:{_INK};">{safe_org} is ready to set up.</h1>
+<p style="margin:14px 0 0;font-size:16px;line-height:1.6;color:{_INK};">Thanks for choosing CareCliQ. {escape(status_line)}</p>
+<p style="margin:10px 0 28px;font-size:15px;line-height:1.6;color:{_MUTED};">
+  Less time on paperwork, more time with the people you support. Here's how to get going.
+</p>
+{_ink_button(setup_url, "Set up my account")}
+<div style="height:32px;line-height:32px;font-size:0;">&nbsp;</div>
+<div style="padding-bottom:6px;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:{_MUTED};">What happens next</div>
+{_numbered_steps(steps)}
+"""
+    return _account_email_shell(
+        preheader=(
+            f"{status_line} Set your password in about two minutes."
+            if is_trial
+            else "Your pilot account is ready. Set your password to get started."
+        ),
+        header_html=_carecliq_logo_header(),
+        hero_photo=_asset_url("auth-hero-login.jpg"),
+        body_html=body,
+        setup_url=setup_url,
+        footer_note="This link is just for you and expires in 7 days.",
+    )
+
+
 def queue_invitation_email(
     _background_tasks: Any | None = None,
     *,
@@ -256,35 +418,12 @@ def send_founding_welcome_email(
         "NDIS registration number (if you're registered).\n\n"
         "This secure link expires in 7 days."
     )
-    safe_org = escape(org_label)
-    safe_url = escape(setup_url, quote=True)
-    html_body = f"""\
-<!doctype html>
-<html>
-  <body style="margin:0;background:#FDF6EE;font-family:Arial,sans-serif;color:#1A1A2E;">
-    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
-      <div style="background:#ffffff;border:1px solid #E8E8EA;border-radius:16px;padding:28px;">
-        <h1 style="margin:0 0 12px;color:#1A1A2E;font-size:22px;">Welcome to CareCliQ</h1>
-        <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
-          Thanks for choosing CareCliQ for <strong>{safe_org}</strong>.
-          {escape(status_line)}
-        </p>
-        <p style="font-size:15px;line-height:1.6;margin:0 0 24px;">
-          Set your password and finish setting up your organisation. It takes about two minutes:
-          your head office state, business address, ABN and NDIS registration number (if you're registered).
-        </p>
-        <a href="{safe_url}" style="display:inline-block;background:#E8457A;color:#ffffff;text-decoration:none;font-weight:700;border-radius:999px;padding:12px 20px;">
-          Set up my account
-        </a>
-        <p style="font-size:12px;line-height:1.6;color:#6A6A77;margin:24px 0 0;">
-          This link expires in 7 days. If the button does not work, copy this URL into your browser:<br>
-          <span style="word-break:break-all;">{safe_url}</span>
-        </p>
-      </div>
-    </div>
-  </body>
-</html>
-"""
+    html_body = _build_founding_welcome_html(
+        setup_url=setup_url,
+        organization_name=organization_name or "Your organisation",
+        status_line=status_line,
+        is_trial=bool(trial_days),
+    )
     send_email(
         to_email=to_email,
         subject=subject,
@@ -870,43 +1009,48 @@ def _build_invitation_html(
 ) -> str:
     safe_org = escape(organization_name)
     safe_role = escape(role_label)
-    safe_url = escape(invite_url, quote=True)
     code_block = ""
     if short_code:
-        safe_code = escape(short_code)
-        code_block = f"""
-        <p style="font-size:15px;line-height:1.6;margin:0 0 24px;">
-          Mobile join code: <strong style="letter-spacing:0.12em;">{safe_code}</strong>
-        </p>
-        """
-    header = _branded_header_html(
-        logo_url=logo_url, org_label=organization_name, heading=f"You're invited to join {organization_name}",
-        accent_color=accent_color,
-    )
-    return f"""\
-<!doctype html>
-<html>
-  <body style="margin:0;background:#f7f4ff;font-family:Arial,sans-serif;color:#1E1640;">
-    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
-      <div style="background:#ffffff;border:1px solid #E2DEF2;border-radius:16px;padding:28px;">
-        {header}
-        <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
-          You have been invited to join <strong>{safe_org}</strong> as <strong>{safe_role}</strong>.
-        </p>
-        <p style="font-size:15px;line-height:1.6;margin:0 0 24px;">
-          Use the secure link below to activate your account and set your password.
-        </p>
-        {code_block}
-        <a href="{safe_url}" style="display:inline-block;background:#F03060;color:#ffffff;text-decoration:none;font-weight:700;border-radius:999px;padding:12px 20px;">
-          Accept invitation
-        </a>
-        <p style="font-size:12px;line-height:1.6;color:#7A6A9E;margin:24px 0 0;">
-          This link expires in 7 days. If the button does not work, copy this URL into your browser:<br>
-          <span style="word-break:break-all;">{safe_url}</span>
-        </p>
-        {_branded_footer_html()}
-      </div>
-    </div>
-  </body>
-</html>
+        code_block = f"""<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;border:1px solid {_RULE};border-radius:14px;">
+  <tr>
+    <td style="padding:18px 20px;font-family:{_FONT};">
+      <div style="font-size:14px;font-weight:700;color:{_INK};">Using the CareCliQ mobile app?</div>
+      <div style="padding-top:2px;font-size:13px;line-height:1.5;color:{_MUTED};">Enter this join code when the app asks for it.</div>
+      <div style="padding-top:12px;font-size:28px;font-weight:800;letter-spacing:0.2em;color:{_INK};">{escape(short_code)}</div>
+    </td>
+  </tr>
+</table>"""
+    # The organisation's own logo when it has one; otherwise its name, never
+    # CareCliQ's logo, so the invite reads as coming from the employer.
+    if logo_url:
+        header = (
+            f'<img src="{escape(logo_url, quote=True)}" alt="{safe_org}" '
+            'style="display:block;max-height:48px;max-width:220px;height:auto;border:0;">'
+        )
+    else:
+        header = f'<div style="font-family:{_FONT};font-size:17px;font-weight:800;color:{_INK};">{safe_org}</div>'
+    body = f"""<div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:{_PINK};">You're invited</div>
+<h1 style="margin:10px 0 0;font-family:{_FONT};font-size:30px;line-height:1.15;font-weight:800;color:{_INK};">Join {safe_org} on CareCliQ.</h1>
+<p style="margin:14px 0 0;font-size:16px;line-height:1.6;color:{_INK};">
+  {safe_org} has invited you to join as <strong>{safe_role}</strong>.
+</p>
+<p style="margin:10px 0 28px;font-size:15px;line-height:1.6;color:{_MUTED};">
+  CareCliQ is where your team keeps shifts, notes and records for the people you support.
+  Accept the invitation to set your password and get started.
+</p>
+{_ink_button(invite_url, "Accept invitation")}
+{code_block}
+<p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:{_MUTED};">
+  The mobile app works in English, Vietnamese, Chinese and Arabic, and you can write or speak
+  your notes in your own language.
+</p>
 """
+    return _account_email_shell(
+        preheader=f"{organization_name} has invited you to join as {role_label}.",
+        header_html=header,
+        hero_photo=_asset_url("auth-hero-signup.jpg"),
+        body_html=body,
+        setup_url=invite_url,
+        footer_note="This invitation is just for you and expires in 7 days.",
+        top_bar_color=accent_color or _PINK,
+    )
