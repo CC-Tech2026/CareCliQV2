@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from ..schemas.safety_protocol import SafetyProtocolUpdate
+from ..schemas.safety_protocol import ESCALATION_ROLES, SafetyProtocolUpdate
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -60,6 +60,76 @@ def _has_safety_content(protocol: dict[str, Any]) -> bool:
     return False
 
 
+def _text(value: Any) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _contact_role(text: str) -> str:
+    lowered = text.lower().replace("-", " ")
+    if "on call" in lowered:
+        return "on_call"
+    if "coordinator" in lowered:
+        return "coordinator"
+    return "emergency"
+
+
+def _normalize_protocol(row: dict[str, Any]) -> dict[str, Any]:
+    """Coerce the four JSONB lists into the shapes SafetyProtocolUpdate writes.
+
+    Rows written straight to the table (a seed script stored plain strings and
+    name/relationship contacts) otherwise reach the apps in a shape they can't
+    render, and the worker app crashed opening the safety card at clock-in.
+    Well-formed items pass through unchanged; anything unusable is dropped.
+    """
+    scenarios = []
+    for item in row.get("scenarios") or []:
+        if isinstance(item, dict):
+            trigger = _text(item.get("trigger")) or _text(item.get("title"))
+            response = _text(item.get("response"))
+            if trigger or response:
+                scenarios.append({**item, "trigger": trigger, "response": response})
+
+    techniques = []
+    for item in row.get("deescalation_techniques") or []:
+        if isinstance(item, str) and item.strip():
+            techniques.append({"title": item.strip(), "steps": []})
+        elif isinstance(item, dict):
+            steps = [s.strip() for s in item.get("steps") or [] if isinstance(s, str) and s.strip()]
+            title = _text(item.get("title"))
+            if title or steps:
+                techniques.append({**item, "title": title, "steps": steps})
+
+    notes = []
+    for item in row.get("physical_safety_notes") or []:
+        if isinstance(item, str) and item.strip():
+            notes.append({"note": item.strip()})
+        elif isinstance(item, dict) and _text(item.get("note")):
+            notes.append({**item, "note": _text(item.get("note"))})
+
+    contacts = []
+    for item in row.get("escalation_contacts") or []:
+        if not isinstance(item, dict) or not _text(item.get("phone")):
+            continue
+        relationship = _text(item.get("relationship"))
+        name = _text(item.get("name"))
+        label = _text(item.get("label")) or (f"{name} ({relationship})" if name and relationship else name or relationship)
+        role = _text(item.get("role")).lower()
+        contacts.append({
+            **item,
+            "role": role if role in ESCALATION_ROLES else _contact_role(f"{relationship} {name}"),
+            "label": label or "Contact",
+            "phone": _text(item.get("phone")),
+        })
+
+    return {
+        **row,
+        "scenarios": scenarios,
+        "deescalation_techniques": techniques,
+        "physical_safety_notes": notes,
+        "escalation_contacts": contacts,
+    }
+
+
 def get_protocol(participant_id: str, organization_id: str) -> dict[str, Any]:
     try:
         resp = (
@@ -80,7 +150,7 @@ def get_protocol(participant_id: str, organization_id: str) -> dict[str, Any]:
         raise
     if not row:
         return _empty_protocol(participant_id, organization_id)
-    return row
+    return _normalize_protocol(row)
 
 
 def _empty_org_content(organization_id: str) -> dict[str, Any]:

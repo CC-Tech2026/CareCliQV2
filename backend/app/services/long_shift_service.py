@@ -1204,7 +1204,7 @@ async def _prompt_worker_checkin(worker_id: str, shift_id: str, gap_mins: int) -
     from .notification_service import notify_worker
 
     title = "Shift check-in"
-    body = f"No activity for {gap_mins} minutes — tap to confirm you are OK."
+    body = f"No activity for {gap_mins} minutes. Tap to confirm you are OK."
     await send_push_to_user(
         worker_id,
         title=title,
@@ -1224,6 +1224,8 @@ async def _prompt_worker_checkin(worker_id: str, shift_id: str, gap_mins: int) -
             action_url=f"/my-shifts/{shift_id}",
             shift_id=shift_id,
             alert_type="long_shift_checkin",
+            # The high-priority push above already went out, once per gap.
+            send_push=False,
         )
     except Exception as exc:
         logger.debug("in-app check-in notification failed: %s", exc)

@@ -366,7 +366,7 @@ def _send_founding_md_invite(*, org_id: str, email: str, organization_name: str)
     import secrets as _secrets
 
     from ..api.invitations import _generate_short_code
-    from .email_service import queue_invitation_email
+    from .email_service import queue_founding_welcome_email
 
     supabase = get_supabase_admin()
     token = _secrets.token_hex(32)
@@ -384,13 +384,11 @@ def _send_founding_md_invite(*, org_id: str, email: str, organization_name: str)
     }).execute()
 
     invite_url = f"{settings.frontend_base_url.rstrip('/')}/accept-invite?token={token}"
-    queue_invitation_email(
-        None,
+    queue_founding_welcome_email(
         to_email=email,
-        invite_url=invite_url,
+        setup_url=invite_url,
         organization_name=organization_name,
-        role="managing_director",
-        short_code=short_code,
+        trial_days=SIGNUP_TRIAL_DAYS,
     )
     logger.info("Founding managing_director invite sent for new org %s to %s", org_id, email)
 
@@ -447,6 +445,30 @@ def _sync_from_customer(customer_id: Optional[str], *, organization_id: Optional
         query.eq("organization_id", organization_id).execute()
     else:
         query.eq("stripe_customer_id", customer_id).execute()
+    _record_lapse(subscription.get("status"), customer_id=customer_id, organization_id=organization_id)
+
+
+def _record_lapse(
+    status: Optional[str], *, customer_id: Optional[str] = None, organization_id: Optional[str] = None,
+) -> None:
+    """Keep organizations.subscription_lapsed_at (migration 246) in step with
+    the subscription status: read-only access starts GRACE_DAYS after it
+    (subscription_access.py). Best-effort; without 246 the trial end date is
+    used instead."""
+    from . import subscription_access
+
+    supabase = get_supabase_admin()
+    try:
+        query = supabase.table("organizations").select("organization_id, subscription_lapsed_at")
+        query = query.eq("organization_id", organization_id) if organization_id else query.eq("stripe_customer_id", customer_id)
+        for org in query.execute().data or []:
+            change = subscription_access.lapse_update(org, status)
+            if change:
+                supabase.table("organizations").update(change).eq("organization_id", org["organization_id"]).execute()
+            subscription_access.forget(org["organization_id"])
+    except Exception as exc:
+        logger.warning("Couldn't record subscription lapse for %s: %s", organization_id or customer_id, exc)
+        subscription_access.forget()
 
 
 def find_orphaned_signup_sessions(hours: int = 48) -> list[dict[str, Any]]:
@@ -513,7 +535,7 @@ def resend_signup_invite(email: str) -> None:
     invite or a resend was already sent recently - the caller (the API
     endpoint) always returns the same generic response either way, so this
     can't be used to probe which emails have a pending signup."""
-    from .email_service import queue_invitation_email
+    from .email_service import queue_founding_welcome_email
 
     supabase = get_supabase_admin()
     normalized = email.strip().lower()
@@ -552,13 +574,11 @@ def resend_signup_invite(email: str) -> None:
     organization_name = (org_resp.data or [{}])[0].get("organization_name") or "your organisation"
 
     invite_url = f"{settings.frontend_base_url.rstrip('/')}/accept-invite?token={invite['token']}"
-    queue_invitation_email(
-        None,
+    queue_founding_welcome_email(
         to_email=normalized,
-        invite_url=invite_url,
+        setup_url=invite_url,
         organization_name=organization_name,
-        role="managing_director",
-        short_code=invite.get("short_code"),
+        trial_days=SIGNUP_TRIAL_DAYS,
     )
 
 
@@ -582,3 +602,4 @@ def _set_status_by_customer(
     get_supabase_admin().table("organizations").update(update).eq(
         "stripe_customer_id", customer_id
     ).execute()
+    _record_lapse(status, customer_id=customer_id)

@@ -20,6 +20,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { COMPLIANCE_TREND_KEY, MD_DASHBOARD_KEY } from "@/lib/query-keys";
 import { getMdDemandCapacity, type MdDemandCapacity } from "@/services/dashboardService";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
+import { OrgSetupChecklist } from "@/components/hub/OrgSetupChecklist";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 // Aliased — recharts also exports a "Tooltip" (used for the chart tooltips
 // below), so both can't share the name in this file.
@@ -1291,6 +1292,12 @@ export function MDHubView() {
           {overviewQuery.isFetching ? "Refreshing…" : "Refresh overview"}
         </button>
       </div>
+
+      <OrgSetupChecklist
+        staffCount={(data.support_workers ?? 0) + (data.coordinators ?? 0)}
+        participantCount={data.active_participants ?? 0}
+        onNavigate={navigate}
+      />
 
       {/* Keep operational summaries together beside the action list. */}
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">

@@ -99,7 +99,7 @@ export function RecommendationStep({ answers, onContinueWithPlan, onSeeAllPlans 
             >
               ${plan.price}
             </span>
-            <span className="text-sm font-semibold" style={{ color: QUIET_INK }}>/ month</span>
+            <span className="text-sm font-semibold" style={{ color: QUIET_INK }}>/ month + GST</span>
           </div>
           <p className="mt-3 text-[13px] leading-relaxed" style={{ color: QUIET_INK }}>{plan.note}</p>
         </Card>

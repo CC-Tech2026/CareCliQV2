@@ -143,6 +143,12 @@ class Settings(BaseSettings):
     firebase_enabled: bool = os.environ.get("FIREBASE_ENABLED", "false").lower() == "true"
     firebase_credentials_json: str = os.environ.get("FIREBASE_CREDENTIALS_JSON", "")
     firebase_credentials_path: str = os.environ.get("FIREBASE_CREDENTIALS_PATH", "")
+    # Browser push (web_push_service.py). Generate a pair once with
+    # `python -m backend.scripts.generate_vapid_keys`; changing them later
+    # invalidates every browser subscription, so set them once per environment.
+    web_push_vapid_public_key: str = os.environ.get("WEB_PUSH_VAPID_PUBLIC_KEY", "")
+    web_push_vapid_private_key: str = os.environ.get("WEB_PUSH_VAPID_PRIVATE_KEY", "")
+    web_push_subject: str = os.environ.get("WEB_PUSH_SUBJECT", "mailto:support@carecliq.com.au")
 
     # Task evidence object storage (CARECLIQV2-230)
     # Provider: supabase (default) | s3 | azure — or set *_ENABLED flags below

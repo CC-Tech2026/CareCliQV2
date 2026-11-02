@@ -9,6 +9,7 @@ async def test_management_notification_read_stays_in_organisation(role):
     db = MagicMock()
     query = db.table.return_value.select.return_value
     query.eq.return_value = query
+    query.is_.return_value = query
     query.order.return_value = query
     query.limit.return_value = query
     query.execute.return_value.data = []
@@ -16,6 +17,8 @@ async def test_management_notification_read_stays_in_organisation(role):
         result = await coordinator.get_coordinator_notifications(limit=80, unread_only=False, current_user={'role': role, 'organization_id': 'org-1'})
     assert result == []
     query.eq.assert_any_call('organization_id', 'org-1')
+    # Alerts addressed to one person live in that person's inbox, not the team feed.
+    query.is_.assert_any_call('recipient_user_id', 'null')
 
 @pytest.mark.asyncio
 async def test_worker_cannot_read_management_notifications():

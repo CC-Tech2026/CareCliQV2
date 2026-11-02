@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from ..core.timezone import parse_shift_datetime, participant_timezone
+from ..core.timezone import APP_TIMEZONE, coerce_timezone, parse_shift_datetime, participant_timezone
 
 from ..core.config import settings
 from ..schemas.alert import AlertCreate
@@ -48,9 +48,37 @@ NOTIFICATION_EVENTS = (
     "account_reactivated",
     "incident_pending_reminder",
     "incident_pending_overdue",
+    # Sent by services that were raising "Unsupported notification event"
+    # before these were listed, so none of them ever reached anyone.
+    "medication_dose_reminder",
+    "long_shift_checkin",
+    "shift_feedback_received",
+    "buddy_assigned",
+    "availability_update_requested",
+    "training_request",
+    "training_request_update",
+    "ndis_screening_recheck_due",
+    "applicant_stage_stuck",
+    "onboarding_stage_reminder",
+    "onboarding_stage_auto_inactive",
+    "offer_letter_expired",
+    "hire_invite_expired",
+    "hire_invite_pending",
 )
 NOTIFICATION_CHANNELS = ("push", "email", "sms")
 SAFETY_EVENTS = frozenset({"safety_alert"})
+# In-shift prompts are useless by email (one per medication dose, say), so
+# email starts off for them; anyone can still turn it on.
+_CHANNELS_OFF_BY_DEFAULT = frozenset({
+    ("medication_dose_reminder", "email"),
+    ("long_shift_checkin", "email"),
+})
+# Severities that still pop up during someone's quiet hours.
+_QUIET_HOURS_EXEMPT_SEVERITIES = frozenset({"critical", "emergency"})
+
+
+def channel_default(event: str, channel: str) -> bool:
+    return (event, channel) not in _CHANNELS_OFF_BY_DEFAULT
 
 EVENT_ALERT_TYPES = {
     "shift_reminder": "shift_reminder",
@@ -81,7 +109,7 @@ EVENT_ALERT_TYPES = {
 
 def default_notification_preferences() -> dict[str, dict[str, bool]]:
     return {
-        event: {channel: True for channel in NOTIFICATION_CHANNELS}
+        event: {channel: channel_default(event, channel) for channel in NOTIFICATION_CHANNELS}
         for event in NOTIFICATION_EVENTS
     }
 
@@ -123,9 +151,60 @@ def get_effective_preferences(user_id: str) -> dict[str, dict[str, bool]]:
         for event in NOTIFICATION_EVENTS:
             event_prefs = stored.get(event) or {}
             for channel in NOTIFICATION_CHANNELS:
-                if bool(event_prefs.get(channel, True)):
+                if bool(event_prefs.get(channel, channel_default(event, channel))):
                     merged[event][channel] = True
     return merged
+
+
+def clean_quiet_hours(raw: Any) -> dict[str, Any]:
+    """Normalise a stored/submitted quiet-hours block; disabled if unusable."""
+    raw = raw if isinstance(raw, dict) else {}
+    start = str(raw.get("from") or "22:00")[:5]
+    end = str(raw.get("to") or "07:00")[:5]
+    tz_name = str(raw.get("timezone") or "")[:64]
+    valid = True
+    try:
+        datetime.strptime(start, "%H:%M")
+        datetime.strptime(end, "%H:%M")
+    except ValueError:
+        valid = False
+    return {
+        "enabled": bool(raw.get("enabled")) and valid,
+        "from": start if valid else "22:00",
+        "to": end if valid else "07:00",
+        "timezone": tz_name,
+    }
+
+
+def is_within_quiet_hours(quiet: dict[str, Any], now: Optional[datetime] = None) -> bool:
+    if not quiet.get("enabled"):
+        return False
+    tz = coerce_timezone(quiet.get("timezone")) or APP_TIMEZONE
+    local =(now or datetime.now(timezone.utc)).astimezone(tz).strftime("%H:%M")
+    start, end = quiet["from"], quiet["to"]
+    if start == end:
+        return False
+    # 22:00 to 07:00 wraps past midnight.
+    return start <= local < end if start < end else local >= start or local < end
+
+
+def quiet_hours_active(user_id: str, now: Optional[datetime] = None) -> bool:
+    """True if any of the user's saved preference rows has quiet hours covering now."""
+    try:
+        result = (
+            get_supabase_admin()
+            .table("user_notification_preferences")
+            .select("preferences")
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception:
+        return False
+    for row in result.data or []:
+        quiet = clean_quiet_hours((row.get("preferences") or {}).get("quiet_hours"))
+        if is_within_quiet_hours(quiet, now):
+            return True
+    return False
 
 
 def get_reminder_offsets_minutes(user_id: str) -> tuple[int, int]:
@@ -151,10 +230,42 @@ def get_reminder_offsets_minutes(user_id: str) -> tuple[int, int]:
     return max(1, first), max(1, second)
 
 
+def _held_for_quiet_hours(user_id: str, event: str, severity: str) -> bool:
+    """Quiet hours hold back the pop-up only; the inbox item and email still land."""
+    if event in SAFETY_EVENTS or severity in _QUIET_HOURS_EXEMPT_SEVERITIES:
+        return False
+    return quiet_hours_active(user_id)
+
+
 def _channel_enabled(prefs: dict, event: str, channel: str) -> bool:
     if event in SAFETY_EVENTS and channel == "push":
         return True
-    return bool((prefs.get(event) or {}).get(channel, True))
+    return bool((prefs.get(event) or {}).get(channel, channel_default(event, channel)))
+
+
+def _lookup_user_role(user_id: str) -> Optional[str]:
+    try:
+        result = get_supabase_admin().table("users").select("role").eq("id", user_id).limit(1).execute()
+        rows = result.data or []
+        return rows[0].get("role") if rows else None
+    except Exception as exc:
+        logger.debug("User role lookup failed for %s: %s", user_id, exc)
+        return None
+
+
+def _link_for_recipient(user_id: str, url: str, base_url: str) -> str:
+    """Directors can't open the coordinator roster or Team page; send them to
+    their own schedule and staff pages instead. Callers that notify every
+    office user build one coordinator link for all of them."""
+    roster = f"{base_url}/coordinator/rostering?openShift="
+    team = f"{base_url}/team"
+    if not (url.startswith(roster) or url == team or url.startswith(team + "?")):
+        return url
+    if _lookup_user_role(user_id) != "managing_director":
+        return url
+    if url.startswith(roster):
+        return f"{base_url}/md/schedule?shiftId={url[len(roster):]}"
+    return f"{base_url}/md/staff{url[len(team):]}"
 
 
 def _lookup_user_email(user_id: str) -> Optional[str]:
@@ -243,14 +354,24 @@ async def notify_worker(
     requires_ack: bool = False,
     payload: Optional[dict[str, Any]] = None,
     push_priority: str = "default",
+    send_push: bool = True,
 ) -> dict[str, Any]:
-    """Deliver via in-app inbox, push, and/or email based on saved prefs."""
+    """Deliver via in-app inbox, push, and/or email based on saved prefs.
+
+    send_push=False is for callers that already sent their own device push
+    (e.g. the long-shift welfare check), so the user isn't alerted twice."""
     if event not in NOTIFICATION_EVENTS:
         raise ValueError(f"Unsupported notification event: {event}")
 
     prefs = get_effective_preferences(user_id)
     resolved_alert_type = alert_type or EVENT_ALERT_TYPES.get(event, event)
-    action_url = action_url or f"{settings.frontend_base_url.rstrip('/')}/worker/profile"
+    base_url = settings.frontend_base_url.rstrip('/')
+    has_own_link = bool(action_url)
+    # Emails need absolute links; some callers pass "/team" and the like.
+    if action_url and action_url.startswith("/"):
+        action_url = f"{base_url}{action_url}"
+    # /notifications works for every role; /worker/profile 403'd office staff.
+    action_url = _link_for_recipient(user_id, action_url or f"{base_url}/notifications", base_url)
     results: dict[str, Any] = {
         "user_id": user_id,
         "event": event,
@@ -261,9 +382,16 @@ async def notify_worker(
         "push": False,
     }
 
+    payload = dict(payload or {})
+    if participant_id:
+        payload.setdefault("participant_id", participant_id)
+    if alert_type:
+        payload.setdefault("alert_type", alert_type)
+
     in_app_key = f"{reference_key}:in_app"
+    in_app_row: Optional[dict[str, Any]] = None
     if not _was_delivered(user_id, event, in_app_key, "in_app"):
-        notification_store.create_user_notification(
+        in_app_row = notification_store.create_user_notification(
             user_id=user_id,
             organization_id=org_id,
             event_type=event,
@@ -294,16 +422,30 @@ async def notify_worker(
         _record_delivery(user_id, event, in_app_key, "in_app")
         results["in_app"] = True
 
-    if _channel_enabled(prefs, event, "push") and not _was_delivered(user_id, event, reference_key, "push"):
+    # With no page of its own, the email button and the pop-up open this
+    # notification's full view in the inbox, which links on from there.
+    delivery_url = action_url
+    if not has_own_link and in_app_row and in_app_row.get("id"):
+        delivery_url = f"{base_url}/notifications?open={in_app_row['id']}"
+
+    if (
+        send_push
+        and _channel_enabled(prefs, event, "push")
+        and not _was_delivered(user_id, event, reference_key, "push")
+        and not _held_for_quiet_hours(user_id, event, severity)
+    ):
         pushed = await send_push_to_user(
             user_id,
             title=title,
             body=message,
             data={
                 "event": event,
-                "action_url": action_url,
+                "action_url": delivery_url,
                 "shift_id": shift_id,
                 "conversation_id": conversation_id,
+                # Browsers tag the OS notification with this so the copy the
+                # open tab shows and the pushed copy replace each other.
+                "notification_id": (in_app_row or {}).get("id"),
             },
             priority=push_priority if event in SAFETY_EVENTS else "default",
         )
@@ -319,7 +461,9 @@ async def notify_worker(
                 subject=email_subject or title,
                 title=title,
                 message=message,
-                action_url=action_url,
+                action_url=delivery_url,
+                severity=severity,
+                settings_url=f"{base_url}/notifications/settings",
             )
             _record_delivery(user_id, event, reference_key, "email")
             results["email"] = True
@@ -528,7 +672,7 @@ async def notify_shift_reminder(
         action_url=f"{settings.frontend_base_url.rstrip('/')}/my-shifts/{shift_id}",
         participant_id=str(shift.get("participant_id") or "") or None,
         shift_id=shift_id,
-        email_subject=f"Shift reminder — {participant}",
+        email_subject=f"Shift reminder: {participant}",
     )
 
 
@@ -540,19 +684,32 @@ async def notify_conversation_message(
     shift_id: Optional[str],
     message_preview: str,
     sender_name: str = "Coordinator",
+    sender_id: Optional[str] = None,
+    worker_id: Optional[str] = None,
+    recipient_is_office: bool = False,
 ) -> dict[str, Any]:
-    preview = message_preview[:60]
+    """The whole message goes in, so it can be read (and answered) from the
+    notification; it used to be cut at 60 characters."""
+    text = message_preview if len(message_preview) <= 500 else message_preview[:499] + "…"
+    base_url = settings.frontend_base_url.rstrip("/")
+    if recipient_is_office:
+        # The worker messages page is worker-only; office staff open the shift.
+        action_url = f"{base_url}/coordinator/rostering?openShift={shift_id}" if shift_id else None
+    else:
+        action_url = f"{base_url}/worker/messages?conversation={conversation_id}"
+    payload = {key: value for key, value in (("sender_id", sender_id), ("worker_id", worker_id)) if value}
     return await notify_worker(
         user_id=recipient_id,
         org_id=org_id,
         event="coordinator_message",
         title=f"Message from {sender_name}",
-        message=preview,
+        message=text,
         reference_key=f"conversation:{conversation_id}:{int(datetime.now(timezone.utc).timestamp())}",
         severity="medium",
-        action_url=f"{settings.frontend_base_url.rstrip('/')}/worker/messages?conversation={conversation_id}",
+        action_url=action_url,
         conversation_id=conversation_id,
         shift_id=shift_id,
+        payload=payload,
     )
 
 
@@ -616,7 +773,7 @@ async def notify_feedback_received(
         session_id=session_id,
         participant_id=participant_id,
         action_url=f"{settings.frontend_base_url.rstrip('/')}/sessions/{session_id}",
-        email_subject="Session feedback — action required",
+        email_subject="Session feedback: action required",
     )
 
 
@@ -644,7 +801,7 @@ async def notify_certification_expiry(
         reference_key=f"credential:{credential_id}:{status}:{expiry_date}",
         severity="high" if status == "expired" else "medium",
         action_url=f"{settings.frontend_base_url.rstrip('/')}/my-compliance",
-        email_subject=f"Credential {status_label} — {credential_title}",
+        email_subject=f"Credential {status_label}: {credential_title}",
     )
 
 
@@ -655,7 +812,9 @@ async def notify_coordinator_message(
     title: str,
     message: str,
     reference_key: Optional[str] = None,
+    sender_id: Optional[str] = None,
 ) -> dict[str, Any]:
+    """A direct message to one person. sender_id lets them reply to the sender."""
     key = reference_key or f"message:{user_id}:{int(datetime.now(timezone.utc).timestamp())}"
     return await notify_worker(
         user_id=user_id,
@@ -666,6 +825,7 @@ async def notify_coordinator_message(
         reference_key=key,
         severity="medium",
         email_subject=title,
+        payload={"sender_id": sender_id} if sender_id else None,
     )
 
 
@@ -724,6 +884,9 @@ async def _notify_office_staff(
     session_id: Optional[str] = None,
     event: str = "coordinator_message",
     push_priority: str = "default",
+    action_url: Optional[str] = None,
+    shift_id: Optional[str] = None,
+    payload: Optional[dict[str, Any]] = None,
 ) -> None:
     for coordinator_id in _org_coordinator_user_ids(org_id):
         await notify_worker(
@@ -736,9 +899,13 @@ async def _notify_office_staff(
             severity=severity,
             participant_id=participant_id,
             session_id=session_id,
-            action_url=f"{settings.frontend_base_url.rstrip('/')}/incidents",
+            # No default page: training requests and the like were linking to
+            # Incidents. Callers with a page pass it; the app works out the rest.
+            action_url=action_url,
+            shift_id=shift_id,
             email_subject=title,
             push_priority=push_priority,
+            payload=payload,
         )
 
 
@@ -771,6 +938,7 @@ async def notify_incident_reported(
         session_id=session_id,
         event=event,
         push_priority=push_priority,
+        action_url=f"{settings.frontend_base_url.rstrip('/')}/incidents/{incident_id}",
     )
 
     if is_emergency and participant_id:
@@ -798,12 +966,12 @@ async def notify_incident_status_changed(
         user_id=worker_id,
         org_id=org_id,
         event="coordinator_message",
-        title=f"Incident update — {ref}",
+        title=f"Incident update: {ref}",
         message=f"Your incident report is now: {status_label}.",
         reference_key=f"incident-status:{incident_id}:{status_label}",
         severity="medium",
         action_url=f"{settings.frontend_base_url.rstrip('/')}/incidents/{incident_id}",
-        email_subject=f"Incident {ref} — status update",
+        email_subject=f"Incident {ref}: status update",
     )
 
 
@@ -817,13 +985,35 @@ async def notify_office_worker_message(
 ) -> None:
     severity = "critical" if priority == "emergency" else ("high" if priority == "urgent" else "medium")
     preview = message[:280] + ("…" if len(message) > 280 else "")
+    sender = _user_display_name(worker_id) or "A worker"
     await _notify_office_staff(
         org_id=org_id,
-        title="Worker message during shift",
+        title=f"Message from {sender} on shift",
         message=preview,
         reference_key=f"shift-message:{shift_id}:{worker_id}:{int(datetime.now(timezone.utc).timestamp())}",
         severity=severity,
+        # The shift is where the conversation is, not the incident register.
+        action_url=f"{settings.frontend_base_url.rstrip('/')}/coordinator/rostering?openShift={shift_id}",
+        shift_id=shift_id,
+        payload={"worker_id": worker_id},
     )
+
+
+def _user_display_name(user_id: str) -> Optional[str]:
+    try:
+        result = (
+            get_supabase_admin()
+            .table("users")
+            .select("full_name")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+        )
+        rows = result.data or []
+        name = (rows[0].get("full_name") or "").strip() if rows else ""
+        return name or None
+    except Exception:
+        return None
 
 
 def _format_shift_time(value: Any, shift: Optional[dict[str, Any]] = None) -> str:

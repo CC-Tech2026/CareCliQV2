@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { TimePicker } from "@/components/ui/time-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -19,7 +18,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getStoredSignature, saveSignature, clearSignature } from "@/lib/signature-store";
-import { changePassword, requestPasswordReset, getMe } from "@/services/userService";
+import {
+  changePassword,
+  requestPasswordReset,
+  getMe,
+} from "@/services/userService";
+import { DeviceNotifications } from "@/components/notifications/DeviceNotifications";
+import { NotificationPreferencesEditor, type NotificationPrefGroup } from "@/components/notifications/NotificationPreferencesEditor";
 import { NavLayoutCard } from "@/components/settings/NavLayoutSettings";
 import {
   PenLine,
@@ -335,233 +340,43 @@ interface PendingInvite {
 // CARECLIQV2-241: Notification Preferences section
 // -----------------------------------------------------------------------------
 
-const NOTIF_EVENTS: { key: string; label: string; description: string }[] = [
-  { key: "worker_clocked_in",    label: "Worker Clocked In",         description: "Notified when a worker clocks in to a shift" },
-  { key: "session_started",      label: "Session Started",           description: "Notified when a session begins" },
-  { key: "session_completed",    label: "Session Completed",         description: "Notified when a session is finalised" },
-  { key: "no_session_started",   label: "No Session Started (Alert)",description: "Alert when worker is clocked in but no session after 30 min" },
-  { key: "shift_assigned",       label: "Shift Assigned",            description: "Notified when you assign a shift to a worker" },
-  { key: "low_compliance",       label: "Low Compliance",            description: "Alert when a session has low compliance score" },
-  { key: "worker_offline",       label: "Worker Offline",            description: "Alert when a worker goes offline mid-shift" },
-  { key: "feedback_received",    label: "Feedback Received",         description: "Notified when a participant submits feedback" },
+// What reaches coordinators and directors, grouped. Keys are backend
+// NOTIFICATION_EVENTS (notification_service.py); a row toggles all its keys.
+const OFFICE_NOTIF_GROUPS: NotificationPrefGroup[] = [
+  { id: "safety", keys: ["safety_alert"], label: "Emergency incidents", description: "Always pops up, even during quiet hours.", popupLocked: true },
+  { id: "cannot_attend", keys: ["worker_cannot_attend"], label: "A worker can't make their shift", description: "The shift needs reassigning." },
+  { id: "offer_exhausted", keys: ["shift_offer_exhausted"], label: "No one accepted a shift offer", description: "Every suggested worker declined or didn't respond." },
+  { id: "auto_cancelled", keys: ["shift_auto_cancelled_unassigned"], label: "Unfilled shift cancelled", description: "A shift reached its start time with no one assigned." },
+  { id: "overdue", keys: ["shift_auto_ended_overdue", "shift_documentation_overdue"], label: "Overdue shifts and notes", description: "Shifts ended automatically, or shift notes not finished in time." },
+  { id: "messages", keys: ["coordinator_message"], label: "Messages and incident reports", description: "Messages from staff on shift, new incident reports and staff requests." },
+  { id: "incident_followups", keys: ["incident_pending_overdue", "incident_notification_alert"], label: "Incident follow-ups", description: "Reports still missing details, and NDIS notification deadlines." },
+  { id: "medication", keys: ["medication_alert"], label: "Medication alerts", description: "Overdue doses and PRN limits reached." },
+  { id: "training", keys: ["training_request", "training_completion_review"], label: "Training", description: "Training requests and completions to review." },
+  { id: "screening", keys: ["ndis_screening_recheck_due"], label: "Worker screening rechecks", description: "NDIS Worker Screening coming up for renewal." },
+  {
+    id: "hiring",
+    keys: ["invite_request", "applicant_stage_stuck", "onboarding_stage_reminder", "onboarding_stage_auto_inactive", "offer_letter_expired", "hire_invite_expired", "hire_invite_pending"],
+    label: "Hiring and onboarding",
+    description: "Requests to join, applicants waiting on you, and offers or invites that need attention.",
+  },
 ];
 
-const NOTIF_CHANNELS = ["in_app", "email", "sms"] as const;
-type NotifChannel = (typeof NOTIF_CHANNELS)[number];
-
-const CHANNEL_LABELS: Record<NotifChannel, string> = { in_app: "In-App", email: "Email", sms: "SMS" };
-
-type NotifPrefs = {
-  events: Record<string, Record<NotifChannel, boolean>>;
-  quiet_hours_enabled: boolean;
-  quiet_from: string;
-  quiet_to: string;
-};
-
-function defaultPrefs(): NotifPrefs {
-  const events: Record<string, Record<NotifChannel, boolean>> = {};
-  for (const e of NOTIF_EVENTS) {
-    events[e.key] = { in_app: true, email: false, sms: false };
-  }
-  return { events, quiet_hours_enabled: false, quiet_from: "22:00", quiet_to: "07:00" };
-}
-
 function NotificationsSection() {
-  const { user } = useAuth();
-  const { toast } = useToast();
   const { translate } = useAccessibility();
-  const [prefs, setPrefs] = useState<NotifPrefs>(defaultPrefs());
-  const [pristine, setPristine] = useState<NotifPrefs>(defaultPrefs());
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    apiFetch("/api/users/me/notification-preferences?device_id=web")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data && data.notification_events) {
-          const events = { ...defaultPrefs().events };
-          for (const ev of (data.notification_events as Array<{ event_type: string; channel: string; is_enabled: boolean }>)) {
-            if (events[ev.event_type] && NOTIF_CHANNELS.includes(ev.channel as NotifChannel)) {
-              events[ev.event_type][ev.channel as NotifChannel] = ev.is_enabled;
-            }
-          }
-          const loaded: NotifPrefs = {
-            events,
-            quiet_hours_enabled: data.quiet_hours_enabled ?? false,
-            quiet_from: data.quiet_from ?? "22:00",
-            quiet_to: data.quiet_to ?? "07:00",
-          };
-          setPrefs(loaded);
-          setPristine(loaded);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  const dirty = JSON.stringify(prefs) !== JSON.stringify(pristine);
-
-  function cancel() {
-    setPrefs(pristine);
-  }
-
-  async function save() {
-    setSaving(true);
-    try {
-      const notification_events = Object.entries(prefs.events).flatMap(([event_type, channels]) =>
-        Object.entries(channels).map(([channel, is_enabled]) => ({ event_type, channel, is_enabled }))
-      );
-      await apiFetch("/api/users/me/notification-preferences", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          device_id: "web",
-          notification_events,
-          quiet_hours_enabled: prefs.quiet_hours_enabled,
-          quiet_from: prefs.quiet_from,
-          quiet_to: prefs.quiet_to,
-        }),
-      });
-      setPristine(prefs);
-      toast({ title: translate("settings.toast.notificationsSaved") });
-    } catch {
-      toast({ variant: "destructive", title: translate("settings.toast.saveFailed") });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function toggleEvent(eventKey: string, channel: NotifChannel) {
-    setPrefs((p) => ({
-      ...p,
-      events: {
-        ...p.events,
-        [eventKey]: { ...p.events[eventKey], [channel]: !p.events[eventKey][channel] },
-      },
-    }));
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 py-10 text-sm" style={{ color: "var(--cc-muted)" }}>
-        <Loader2 size={14} className="animate-spin" /> {translate("settings.loadingPreferences")}
-      </div>
-    );
-  }
-
   return (
     <Section
       title={translate("settings.notifications.title")}
       description={translate("settings.notifications.subtitle")}
       icon={Bell}
     >
-      {/* Desktop Table View */}
-      <div className="hidden md:block overflow-x-auto rounded-xl" style={{ border: "1px solid var(--cc-border)" }}>
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr style={{ background: "var(--cc-soft)" }}>
-              <th className="px-4 py-2.5 text-left font-semibold text-[11px] uppercase tracking-widest" style={{ color: "var(--cc-muted)" }}>Event</th>
-              {NOTIF_CHANNELS.map((ch) => (
-                <th key={ch} className="px-4 py-2.5 text-center font-semibold text-[11px] uppercase tracking-widest w-24" style={{ color: "var(--cc-muted)" }}>
-                  {CHANNEL_LABELS[ch]}
-                  {ch === "in_app" && <span className="ml-1 text-[9px] font-semibold rounded-full px-1 py-0.5 bg-gray-200 text-gray-500">always</span>}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {NOTIF_EVENTS.map((ev, i) => (
-              <tr key={ev.key} style={{ background: i % 2 === 0 ? "var(--cc-surface)" : "var(--cc-soft)" }}>
-                <td className="px-4 py-3">
-                  <p className="font-semibold" style={{ color: "var(--cc-text)" }}>{ev.label}</p>
-                  <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>{ev.description}</p>
-                </td>
-                {NOTIF_CHANNELS.map((ch) => (
-                  <td key={ch} className="px-4 py-3 text-center">
-                    <input
-                      type="checkbox"
-                      title={`Toggle ${CHANNEL_LABELS[ch]} notifications for ${ev.description}`}
-                      checked={prefs.events[ev.key]?.[ch] ?? false}
-                      disabled={ch === "in_app"}
-                      onChange={() => toggleEvent(ev.key, ch)}
-                      className="w-4 h-4 accent-[var(--cc-plum)] cursor-pointer disabled:cursor-default disabled:opacity-60"
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="rounded-2xl p-4" style={{ background: "var(--cc-soft)", border: "1px solid var(--cc-border)" }}>
+        <p className="font-bold text-[14px]" style={{ color: "var(--cc-text)" }}>{translate("devices.title")}</p>
+        <p className="mb-3 text-[12px]" style={{ color: "var(--cc-muted)" }}>{translate("devices.hint")}</p>
+        <DeviceNotifications />
       </div>
-
-      {/* Mobile Card View (sm, md only) */}
-      <div className="md:hidden space-y-3">
-        {NOTIF_EVENTS.map((ev) => (
-          <div key={ev.key} className="rounded-xl p-4 border transition-colors" style={{ borderColor: "var(--cc-border)", background: "var(--cc-bg)" }}>
-            {/* Event name & description */}
-            <div className="mb-3">
-              <p className="text-[13px] font-bold" style={{ color: "var(--cc-text)" }}>{ev.label}</p>
-              <p className="text-[12px] mt-1" style={{ color: "var(--cc-muted)" }}>{ev.description}</p>
-            </div>
-
-            {/* Channel toggles */}
-            <div className="space-y-2.5">
-              {NOTIF_CHANNELS.map((ch) => (
-                <div key={ch} className="flex items-center justify-between gap-2">
-                  <label className="text-[12px] font-semibold" style={{ color: "var(--cc-text)" }}>
-                    {CHANNEL_LABELS[ch]}
-                    {ch === "in_app" && <span className="ml-1 text-[9px] font-semibold rounded-full px-1.5 py-0.5 bg-gray-200 text-gray-500">always on</span>}
-                  </label>
-                  <input
-                    type="checkbox"
-                    title={`Toggle ${CHANNEL_LABELS[ch]} notifications for ${ev.description}`}
-                    checked={prefs.events[ev.key]?.[ch] ?? false}
-                    disabled={ch === "in_app"}
-                    onChange={() => toggleEvent(ev.key, ch)}
-                    className="w-4 h-4 accent-[var(--cc-plum)] cursor-pointer disabled:cursor-default disabled:opacity-60"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+      <div className="mt-4">
+        <NotificationPreferencesEditor groups={OFFICE_NOTIF_GROUPS} />
       </div>
-
-      {/* Quiet hours */}
-      <div className="mt-4 rounded-2xl p-4 space-y-3" style={{ background: "var(--cc-soft)", border: "1px solid var(--cc-border)" }}>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-bold text-[14px]" style={{ color: "var(--cc-text)" }}>Quiet Hours</p>
-            <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>Suppress non-critical notifications during these hours</p>
-          </div>
-          <Switch checked={prefs.quiet_hours_enabled} onCheckedChange={(v) => setPrefs((p) => ({ ...p, quiet_hours_enabled: v }))} />
-        </div>
-        {prefs.quiet_hours_enabled && (
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>From</label>
-              <TimePicker
-                value={prefs.quiet_from}
-                onChange={(v) => setPrefs((p) => ({ ...p, quiet_from: v }))}
-                className="rounded-xl px-3 text-[13px]"
-                style={{ border: "1px solid var(--cc-border)" }}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>To</label>
-              <TimePicker
-                value={prefs.quiet_to}
-                onChange={(v) => setPrefs((p) => ({ ...p, quiet_to: v }))}
-                className="rounded-xl px-3 text-[13px]"
-                style={{ border: "1px solid var(--cc-border)" }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <StickyActionBar visible={dirty} saving={saving} onSave={save} onCancel={cancel} saveLabel="Update settings" />
     </Section>
   );
 }

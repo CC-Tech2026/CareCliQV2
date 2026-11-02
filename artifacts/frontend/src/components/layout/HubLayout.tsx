@@ -1,5 +1,6 @@
 import { ManagementNavigationDrawer } from "./ManagementNavigationDrawer";
-import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
+import { NotificationBell, NotificationInbox } from "@/components/notifications/NotificationInbox";
+import { NotificationRealtimeBridge } from "@/components/worker/NotificationRealtimeBridge";
 import { PageErrorBoundary } from "@/components/ErrorBoundary";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ManagementPageSearch } from "./ManagementPageSearch";
@@ -24,7 +25,6 @@ import {
   Mail,
   DollarSign,
   BarChart3,
-  Files,
   ClipboardCheck,
   GraduationCap,
   MessageSquareWarning,
@@ -86,7 +86,6 @@ const MD_NAV_GROUPS = [
     items: [
       { href: "/hub", label: "Executive Hub", icon: LayoutDashboard },
       { href: "/md/executive", label: "Performance review", icon: BarChart3 },
-      { href: "/reports", label: "Report library", icon: Files },
     ],
   },
   {
@@ -475,7 +474,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           {/* Executive Control Group */}
           <div className="flex shrink-0 items-center gap-1 sm:gap-2" ref={profileRef}>
             <NotificationBell onClick={() => setNotificationsOpen(true)} />
-              <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}><SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg [&>button]:hidden"><SheetHeader className="sr-only"><SheetTitle>Notifications</SheetTitle><SheetDescription>Organisation alerts and updates</SheetDescription></SheetHeader>{notificationsOpen && <NotificationPanel embedded onClose={() => setNotificationsOpen(false)} />}</SheetContent></Sheet>
+            <NotificationRealtimeBridge />
+              <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}><SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md [&>button]:hidden"><SheetHeader className="sr-only"><SheetTitle>Notifications</SheetTitle><SheetDescription>Your notifications and team alerts</SheetDescription></SheetHeader>{notificationsOpen && <NotificationInbox onClose={() => setNotificationsOpen(false)} />}</SheetContent></Sheet>
 
             {/* HubLayout is also shared with coordinators (e.g. /hub, /md/staff-onboarding)
                 and the Calendar page itself is MD-only (App.tsx), so the button only

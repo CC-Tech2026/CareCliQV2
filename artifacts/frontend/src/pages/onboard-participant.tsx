@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
-  ArrowLeft, HeartHandshake, ClipboardCheck, Mic, FileSignature, Send, CheckCircle2, Clock3,
+  ArrowLeft, HeartHandshake, ClipboardCheck, FileUp, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users,
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
   SlidersHorizontal, X, AlertTriangle, ArrowUp, ArrowDown, Accessibility, HeartPulse, Link2, Check,
@@ -135,9 +135,13 @@ const SOURCE_META: Record<EnquirySource, { label: string; icon: typeof Mail }> =
   email: { label: "Email", icon: Mail },
   phone_call: { label: "Phone call", icon: PhoneCall },
   coordinator_referral: { label: "Support coordinator referral", icon: Users },
+  import: { label: "Data import", icon: FileUp },
 };
 const sourceMeta = (source: string | null | undefined) =>
   SOURCE_META[source as EnquirySource] ?? { label: "Other", icon: ClipboardCheck };
+/** Imports filed before migration 244 carry a stand-in source; the marker wins. */
+const intakeSourceMeta = (intake: Intake) =>
+  intake.web_intake?.imported ? SOURCE_META.import : sourceMeta(intake.source);
 
 /** A titled group of fields in the New referral panel. */
 function ReferralSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -306,7 +310,7 @@ function subtitleForIntake(intake: Intake): string {
     case "enquiry": {
       const age = daysSince(intake.created_at);
       const relative = age < 1 ? "today" : age === 1 ? "1 day ago" : `${age} days ago`;
-      return `${sourceMeta(intake.source).label} · ${relative}`;
+      return `${intakeSourceMeta(intake).label} · ${relative}`;
     }
     case "screening": return "Awaiting plan copy";
     case "meet_greet": return "Awaiting scheduling";
@@ -2512,7 +2516,7 @@ function IntakeDetail({
           </h1>
           <p className="mt-1 text-sm" style={{ color: MUTED }}>
             <span className="font-medium" style={{ color: STATUS_META[intake.status].color }}>{STATUS_META[intake.status].label}</span>
-            {" · "}Referred {formatDate(intake.created_at)} via {sourceMeta(intake.source).label.toLowerCase()}
+            {" · "}Referred {formatDate(intake.created_at)} via {intakeSourceMeta(intake).label.toLowerCase()}
             {inPipeline(intake.status) && (() => {
               const days = daysSince(intake.created_at);
               return <span style={{ color: days >= 7 ? DANGER : MUTED }}>{" · "}{days === 0 ? "Started today" : `${days} ${days === 1 ? "day" : "days"} in onboarding`}</span>;
@@ -2572,7 +2576,7 @@ function IntakeDetail({
                     {intake.status === "enquiry" ? (
                       <>
                         <p className="text-xs" style={{ color: MUTED }}>
-                          Logged via {sourceMeta(intake.source).label.toLowerCase()}. Start screening when you're ready to review this enquiry.
+                          Logged via {intakeSourceMeta(intake).label.toLowerCase()}. Start screening when you're ready to review this enquiry.
                         </p>
                         <div className="pt-2 space-y-1.5">
                           <label className="text-sm font-medium" style={{ color: TEXT }}>Not a fit? Say why, then decline</label>
@@ -2601,7 +2605,7 @@ function IntakeDetail({
                       <div className="flex items-center gap-2.5 rounded-lg p-3" style={{ background: SUCCESS_BG }}>
                         <CheckCircle2 size={16} style={{ color: SUCCESS }} className="shrink-0" />
                         <p className="text-xs font-bold" style={{ color: SUCCESS }}>
-                          Logged via {sourceMeta(intake.source).label.toLowerCase()}. Passed to screening.
+                          Logged via {intakeSourceMeta(intake).label.toLowerCase()}. Passed to screening.
                         </p>
                       </div>
                     )}
@@ -2871,7 +2875,7 @@ function IntakeDetail({
                 ["Category", intake.service_category === "aged_care" ? "Aged Care" : "Disability"],
                 ["Email", intake.email ? <a href={`mailto:${intake.email}`} className="break-all underline-offset-4 hover:underline" style={{ color: TEXT }}>{intake.email}</a> : "Not recorded"],
                 ["Phone", intake.phone ? <a href={`tel:${intake.phone.replace(/\s+/g, "")}`} className="underline-offset-4 hover:underline" style={{ color: TEXT }}>{intake.phone}</a> : "Not recorded"],
-                ["Came in by", sourceMeta(intake.source).label],
+                ["Came in by", intakeSourceMeta(intake).label],
               ] as [string, React.ReactNode][]).map(([term, value]) => (
                 <div key={term} className="flex justify-between gap-3">
                   <dt style={{ color: MUTED }}>{term}</dt>

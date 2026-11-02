@@ -85,3 +85,38 @@ def test_new_signup_creates_org_and_sends_invite():
     row = db.table.return_value.insert.call_args.args[0]
     assert row["organization_name"] == "Sunshine Care" and row["org_abbrev"] == "SUNC" and row["owner_user_id"] is None
     send.assert_called_once_with(org_id="org-9", email="founder@example.com", organization_name="Sunshine Care")
+
+
+def test_founding_invite_sends_welcome_email_not_staff_invitation():
+    db = MagicMock()
+    with patch.object(service, "get_supabase_admin", return_value=db), \
+         patch("backend.app.api.invitations._generate_short_code", return_value="ABC123"), \
+         patch("backend.app.services.email_service.queue_founding_welcome_email") as welcome, \
+         patch("backend.app.services.email_service.queue_invitation_email") as staff_invite:
+        service._send_founding_md_invite(org_id="org-9", email="founder@example.com", organization_name="Sunshine Care")
+    staff_invite.assert_not_called()
+    kwargs = welcome.call_args.kwargs
+    assert kwargs["to_email"] == "founder@example.com"
+    assert kwargs["organization_name"] == "Sunshine Care"
+    assert kwargs["trial_days"] == service.SIGNUP_TRIAL_DAYS
+    assert "/accept-invite?token=" in kwargs["setup_url"]
+    row = db.table.return_value.insert.call_args.args[0]
+    assert row["role"] == "managing_director" and row["organization_id"] == "org-9"
+
+
+def test_founding_welcome_email_reads_as_a_welcome():
+    from backend.app.services import email_service
+
+    with patch.object(email_service, "send_email") as send:
+        email_service.send_founding_welcome_email(
+            to_email="founder@example.com",
+            setup_url="https://app.example/accept-invite?token=t",
+            organization_name="Sunshine <Care>",
+            trial_days=30,
+        )
+    kwargs = send.call_args.kwargs
+    assert kwargs["subject"] == "Welcome to CareCliQ: set up Sunshine <Care>"
+    assert "30-day free trial" in kwargs["text_body"]
+    assert "invited" not in kwargs["text_body"].lower()
+    assert "Sunshine &lt;Care&gt;" in kwargs["html_body"]
+    assert kwargs.get("from_display_name") is None

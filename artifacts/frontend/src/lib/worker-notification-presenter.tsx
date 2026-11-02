@@ -8,6 +8,7 @@ import {
 } from "@/services/notificationService";
 import { showDesktopNotification } from "@/lib/desktop-notifications";
 import { notificationAccentColor } from "@/lib/notification-copy";
+import { notificationDestination, type NotificationAudience } from "@/lib/notification-destination";
 import {
   isBannerNotification,
   isMobileViewport,
@@ -51,26 +52,15 @@ export function parseRealtimeNotificationRow(
   };
 }
 
-export function resolveNotificationPath(notification: UserNotification): string | null {
-  if (notification.shift_id) {
-    if (notification.event_type === "compliance_checkin") {
-      return `/my-shifts/${notification.shift_id}?checkin=pending`;
-    }
-    return `/my-shifts/${notification.shift_id}`;
-  }
-  if (notification.conversation_id) {
-    return `/worker/messages?conversation=${notification.conversation_id}`;
-  }
-  if (notification.action_url) {
-    try {
-      const url = new URL(notification.action_url, window.location.origin);
-      const path = url.pathname + url.search;
-      if (path.startsWith("/")) return path;
-    } catch {
-      /* fall through */
-    }
-  }
-  return null;
+export type { NotificationAudience } from "@/lib/notification-destination";
+
+/** Where a toast, desktop pop-up or the panel sends someone. Notifications
+ *  with nothing specific to open land on their own full view in the inbox. */
+export function resolveNotificationPath(
+  notification: UserNotification,
+  audience: NotificationAudience = "worker",
+): string {
+  return notificationDestination(notification, audience)?.path ?? `/notifications?open=${notification.id}`;
 }
 
 function toastVariant(
@@ -118,32 +108,35 @@ function presentMobileBannerNotificationToast(notification: UserNotification): v
 export function presentWorkerNotification(
   notification: UserNotification,
   navigate: (path: string) => void,
+  audience: NotificationAudience = "worker",
 ): void {
   if (presentedIds.has(notification.id)) return;
   if (notification.dismissed_at) return;
   presentedIds.add(notification.id);
 
-  const path = resolveNotificationPath(notification);
-  const open = () => {
-    if (path) navigate(path);
-  };
+  const path = resolveNotificationPath(notification, audience);
+  const open = () => navigate(path);
 
-  if (!document.hidden && isBannerNotification(notification) && isMobileViewport()) {
+  // Sticky banners (and their mobile toast form) are a worker-only surface;
+  // office staff get every notification as a regular toast.
+  const isWorkerBanner = audience === "worker" && isBannerNotification(notification);
+
+  if (!document.hidden && isWorkerBanner && isMobileViewport()) {
     presentMobileBannerNotificationToast(notification);
     return;
   }
 
-  if (!document.hidden && shouldShowToast(notification)) {
+  if (!document.hidden && (audience !== "worker" || shouldShowToast(notification))) {
     toast({
       title: notification.title,
       description: notification.body,
       duration: 8_000,
       variant: toastVariant(notification),
-      action: path ? (
+      action: (
         <ToastAction altText="Open notification" onClick={open}>
           Open
         </ToastAction>
-      ) : undefined,
+      ),
     });
   }
 
@@ -151,7 +144,31 @@ export function presentWorkerNotification(
     showDesktopNotification(notification.title, notification.body, {
       tag: notification.id,
       requireInteraction: Boolean(notification.requires_ack),
+      url: path,
       onClick: open,
     });
   }
+}
+
+/** sw.js hands a push to the visible tab instead of the OS; show it in-app.
+ *  Realtime usually got there first, in which case the shared id dedupes it. */
+export function presentPushedNotification(
+  payload: { tag?: string; title?: string; body?: string; url?: string; urgent?: boolean; event?: string },
+  navigate: (path: string) => void,
+  audience: NotificationAudience,
+): void {
+  if (!payload.tag || !payload.title) return;
+  presentWorkerNotification(
+    {
+      id: payload.tag,
+      event_type: payload.event ?? "",
+      title: payload.title,
+      body: payload.body ?? "",
+      severity: payload.urgent ? "high" : "medium",
+      action_url: payload.url ?? null,
+      created_at: new Date().toISOString(),
+    },
+    navigate,
+    audience,
+  );
 }

@@ -1,17 +1,14 @@
 import { ChevronDown } from "lucide-react";
 import { useViewingParticipant } from "@/components/participant-portal/ParticipantPortalContext";
-import { ProfileAvatar, getInitials } from "@/components/participant-portal/ProfileAvatar";
+import { ProfileAvatar } from "@/components/participant-portal/ProfileAvatar";
 import { usePortalOverview } from "@/components/participant-portal/usePortalOverview";
 import { GENDER_OPTIONS, PRONOUN_OPTIONS, intakeOptionLabel } from "@/services/participantIntakeService";
 
-// The profile sits on a bold brand card (deep plum → CareCliQ pink). The
-// gradient is darkened from the brand pink so white text keeps at least
-// 4.5:1 contrast everywhere on it, in both themes.
-const CARD_GRADIENT = "linear-gradient(160deg, #6E1B45 0%, #A62A60 55%, #BC356B 100%)";
-const TEXT = "#FFFFFF";
-const MUTED = "rgba(255, 255, 255, 0.85)";
-const BORDER = "rgba(255, 255, 255, 0.22)";
-const CHIP_BG = "rgba(255, 255, 255, 0.16)";
+const SURFACE = "var(--cc-surface)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const CHIP_BG = "var(--cc-soft)";
 
 const FUNDING_LABELS: Record<string, string> = {
   ndia_managed: "NDIA-managed",
@@ -46,7 +43,7 @@ function Section({ title, children, defaultOpen = true }: { title: string; child
 function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   if (value === undefined || value === null || value === "") return null;
   return (
-    <div className="grid grid-cols-[132px_1fr] gap-4 text-[14px] leading-relaxed">
+    <div className="grid grid-cols-[104px_1fr] gap-3 text-[14px] leading-relaxed sm:grid-cols-[120px_1fr]">
       <span style={{ color: MUTED }}>{label}</span>
       <span className="min-w-0 break-words font-semibold" style={{ color: TEXT }}>{value}</span>
     </div>
@@ -63,13 +60,13 @@ export function ProfilePanel() {
 
   if (error) {
     return (
-      <div className="rounded-[24px] p-6" style={{ background: CARD_GRADIENT }}>
-        <p className="text-[13px]" style={{ color: MUTED }}>{error}</p>
+      <div className="rounded-2xl border p-6" style={{ background: SURFACE, borderColor: BORDER }}>
+        <p className="text-[14px]" style={{ color: MUTED }}>{error}</p>
       </div>
     );
   }
   if (!data) {
-    return <div className="h-[520px] animate-pulse rounded-[24px]" style={{ background: CARD_GRADIENT, opacity: 0.6 }} />;
+    return <div className="h-[520px] animate-pulse rounded-2xl" style={{ background: CHIP_BG }} />;
   }
 
   const p = data.profile;
@@ -79,24 +76,29 @@ export function ProfilePanel() {
     [intake.street_address, intake.suburb, [intake.state, intake.postcode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
   const funding = FUNDING_LABELS[p.plan_management_type ?? ""] || FUNDING_LABELS[intake.funding_type ?? ""];
   const planDates =
-    intake.plan_start || intake.plan_end ? `${formatDate(intake.plan_start) ?? "—"} – ${formatDate(intake.plan_end) ?? "—"}` : undefined;
+    intake.plan_start || intake.plan_end ? `${formatDate(intake.plan_start) ?? "N/A"} to ${formatDate(intake.plan_end) ?? "N/A"}` : undefined;
   const hasPlanManager = intake.plan_manager_name || intake.plan_manager_org || intake.plan_manager_phone || intake.plan_manager_email;
   const nextOfKin = intake.next_of_kin ?? [];
+  const activities = [
+    ...(Array.isArray(p.preferred_activities) ? p.preferred_activities : (p.preferred_activities ?? "").split(",")),
+    ...(p.favourite_activities ?? "").split(","),
+  ]
+    .map((a) => a.trim())
+    .filter((a, i, all) => a && all.indexOf(a) === i);
   const index = participants && current ? participants.indexOf(current) : 0;
 
   return (
-    <div className="space-y-5 rounded-[24px] p-6 shadow-lg sm:p-7" style={{ background: CARD_GRADIENT }}>
-      <div className="space-y-4 pb-1">
+    <div className="space-y-5 rounded-2xl border p-6" style={{ background: SURFACE, borderColor: BORDER }}>
+      <div className="flex items-center gap-4 pb-1">
         {current && (
           <ProfileAvatar
             participant={{ ...current, profile_photo_url: p.profile_photo_url ?? current.profile_photo_url }}
             index={index}
-            size={96}
-            className="ring-4 ring-white/30"
+            size={72}
           />
         )}
-        <div>
-          <h1 className="text-[28px] font-black leading-tight" style={{ color: TEXT }}>{p.full_name}</h1>
+        <div className="min-w-0">
+          <h1 className="text-[24px] font-black leading-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{p.full_name}</h1>
           {p.active_since && (
             <p className="mt-1 text-[13px]" style={{ color: MUTED }}>Supported since {formatDate(p.active_since)}</p>
           )}
@@ -160,31 +162,22 @@ export function ProfilePanel() {
         </Section>
       )}
 
-      <Section title="Your support team">
-        {data.support_team.length === 0 ? (
-          <p className="text-[14px] leading-relaxed" style={{ color: MUTED }}>Your provider will let you know who's supporting you.</p>
-        ) : (
-          <ul className="space-y-3">
-            {data.support_team.map((w) => (
-              <li key={w.id} className="flex items-center gap-3">
-                {w.profile_photo_url ? (
-                  <img src={w.profile_photo_url} alt="" className="h-10 w-10 rounded-full object-cover" />
-                ) : (
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-black" style={{ background: CHIP_BG, color: TEXT }}>
-                    {getInitials(w.full_name || "?")}
-                  </span>
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-bold" style={{ color: TEXT }}>{w.full_name}</span>
-                  <span className="block text-[12px]" style={{ color: MUTED }}>
-                    {w.role_label}{w.is_assigned ? " · Main support worker" : ""}
-                  </span>
+      {/* The support team lives on the Overview, beside who's coming next. */}
+      {(activities.length > 0 || p.interests || p.daily_routine) && (
+        <Section title="Interests & routine">
+          <Row label="Interests" value={p.interests} />
+          <Row label="Daily routine" value={p.daily_routine} />
+          {activities.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {activities.map((a) => (
+                <span key={a} className="rounded-lg px-3 py-1.5 text-[13px] font-bold" style={{ background: CHIP_BG, color: TEXT }}>
+                  {a}
                 </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+              ))}
+            </div>
+          )}
+        </Section>
+      )}
     </div>
   );
 }

@@ -26,6 +26,7 @@ import { defaultHomePathForRole } from "@/lib/auth-session";
 import { AuthSessionGuards } from "@/components/auth/AuthSessionGuards";
 import { WelcomeScreenGate } from "@/components/onboarding/WelcomeScreenGate";
 import { OnboardingCompleteGate } from "@/components/onboarding/OnboardingCompleteGate";
+import { SubscriptionBanner } from "@/components/billing/SubscriptionBanner";
 import Dashboard from "@/pages/dashboard";
 import Patients from "@/pages/patients";
 import ParticipantNew from "@/pages/participant-new";
@@ -89,6 +90,7 @@ import PortalLoginPage from "@/pages/portal-login";
 import PortalForgotPasswordPage from "@/pages/portal-forgot-password";
 import { ParticipantPortalProvider } from "@/components/participant-portal/ParticipantPortalContext";
 import MDOnboardingPage from "@/pages/md/onboarding";
+import DataImportPage from "@/pages/md/data-import";
 import MDOnboardingTrainingPage, { MDOnboardingSetupPage } from "@/pages/md/onboarding-training";
 import TagManagementPage from "@/pages/md/tag-management";
 import DevProgressTestPage from "@/pages/dev-progress-test";
@@ -101,7 +103,7 @@ import WorkerScheduleCalendar from "@/pages/worker-schedule-calendar";
 import WorkerScheduleRequests from "@/pages/worker-schedule-requests";
 import WorkerAvailabilityPage from "@/pages/worker-availability";
 import WorkerMessages from "@/pages/worker-messages";
-import WorkerNotificationsPage from "@/pages/worker-notifications";
+import NotificationsPage, { NotificationSettingsRedirect } from "@/pages/worker-notifications";
 import Tasks from "@/pages/tasks";
 import WorkerProfile from "@/pages/worker-profile";
 import WorkerSecurity from "@/pages/worker-security";
@@ -433,6 +435,13 @@ function Router() {
 
       {/* Worker-Participant Matching Enhancement, Phase 1 — shared tag taxonomy,
              same coordinator+MD access as /md/staff-onboarding. */}
+      {/* Move to CareCliQ: CSV import of participants and staff. */}
+      <Route path="/md/import">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <DataImportPage />
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/md/tags">
         <ProtectedRoute allowedRoles={["support_coordinator", "managing_director"]}>
           <TagManagementPage />
@@ -623,10 +632,20 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      <Route path="/worker/notifications">
-        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
-          <AppLayout><WorkerNotificationsPage /></AppLayout>
+      <Route path="/notifications/settings">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <NotificationSettingsRedirect />
         </ProtectedRoute>
+      </Route>
+
+      <Route path="/notifications">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <RoleAwareShell><NotificationsPage /></RoleAwareShell>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/notifications">
+        <Redirect to="/notifications" />
       </Route>
 
       <Route path="/worker-ndis-plan">
@@ -855,6 +874,7 @@ function App() {
                 <AuthSessionGuards />
                 <WelcomeScreenGate />
                 <OnboardingCompleteGate />
+                <SubscriptionBanner />
                 <Router />
               </WouterRouter>
             </OfflineSyncProvider>

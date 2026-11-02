@@ -252,16 +252,17 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
     try:
         rr_resp = (
             supabase.table("compliance_rule_results")
-            .select("rule_id, status, checked_at, sessions!inner(organization_id)")
+            .select("rule_code, status, created_at, sessions!inner(organization_id)")
+            .eq("sessions.organization_id", org_id)
             .in_("status", ["fail", "warning"])
-            .gte("checked_at", since)
+            .gte("created_at", since)
             .execute()
         )
         counts: dict[str, int] = {}
         for r in (rr_resp.data or []):
             if (r.get("sessions") or {}).get("organization_id") != org_id:
                 continue
-            code = r.get("rule_id")
+            code = r.get("rule_code")
             if code:
                 counts[code] = counts.get(code, 0) + 1
         catalog = {r["rule"]: r for r in get_rules_catalog()}
@@ -277,7 +278,7 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
     try:
         crit_resp = (
             supabase.table("incidents")
-            .select("id, participant_id, user_id, incident_type, incident_date")
+            .select("id, participant_id, user_id, incident_type, incident_date, ndis_reported_at")
             .eq("organization_id", org_id)
             .eq("ndis_reportable", True)
             .in_("status", ["reported", "under_investigation"])
@@ -349,29 +350,47 @@ async def compliance_centre_overview(current_user: dict = Depends(get_current_us
         except Exception:
             pass
 
+    from ..services.vault_service import REQUIRED_CREDENTIAL_LABELS
+
     urgent: list[dict[str, Any]] = []
     for r in crit_rows:
         pid = str(r.get("participant_id") or "")
         pname = participants_by_id.get(pid, {}).get("full_name") or "Unknown participant"
+        # Every open reportable incident lands here, not only restrictive
+        # practices, so say what it is and whether the Commission was told.
+        if r.get("incident_type") == "restrictive_practice":
+            what = "Restrictive practice"
+        elif r.get("ndis_reported_at"):
+            what = "Reportable incident under investigation"
+        else:
+            what = "Reportable incident not yet notified"
         urgent.append({
             "severity": "critical",
             "type": "incident",
-            "label": f"Restrictive practice — {pname}",
+            "label": f"{what} — {pname}",
             "detail": _local_day(r.get("incident_date")),
             "link": f"/incident/{r.get('id')}",
         })
     for r in exp_rows_dedup:
         wid = str(r.get("user_id") or "")
         wname = workers_by_id.get(wid, {}).get("full_name") or "Team member"
+        credential = REQUIRED_CREDENTIAL_LABELS.get(str(r.get("credential_type") or ""), "Credential")
         try:
             days_left = (date.fromisoformat(str(r["expiry_date"])[:10]) - app_today()).days
         except Exception:
             days_left = None
+        expired = days_left is not None and days_left < 0
+        if days_left is None:
+            detail = ""
+        elif expired:
+            detail = f"{-days_left} {'day' if days_left == -1 else 'days'} ago"
+        else:
+            detail = f"{days_left} {'day' if days_left == 1 else 'days'} left"
         urgent.append({
             "severity": "high",
             "type": "credential",
-            "label": f"Screening expiring — {wname}",
-            "detail": f"{max(days_left, 0)} days" if days_left is not None else "",
+            "label": f"{credential} {'expired' if expired else 'expiring'} — {wname}",
+            "detail": detail,
             "link": f"/team?workerId={wid}&tab=credentials" if wid else "/team",
         })
     for r in agr_rows:
@@ -785,18 +804,29 @@ async def compliance_centre_incidents(current_user: dict = Depends(get_current_u
 
     try:
         month_start = app_today().replace(day=1).isoformat()
-        inc_resp = (
-            supabase.table("incidents")
-            .select(
+        def fetch_incidents(columns: str):
+            return (
+                supabase.table("incidents")
+                .select(columns)
+                .eq("organization_id", org_id)
+                .order("incident_date", desc=True)
+                .limit(50)
+                .execute()
+            )
+
+        try:
+            inc_resp = fetch_incidents(
                 "id, participant_id, user_id, incident_type, description, status, severity, "
                 "incident_date, identified_at, reportable_categories, participant_harmed, "
                 "ndis_reportable, ndis_reportable_override"
             )
-            .eq("organization_id", org_id)
-            .order("incident_date", desc=True)
-            .limit(50)
-            .execute()
-        )
+        except Exception as col_exc:
+            # A missing column (an incident migration not yet applied) used to
+            # leave this panel empty; fall back to whatever columns exist.
+            if "42703" not in str(col_exc):
+                raise
+            logger.warning("compliance centre incidents: %s; retrying with all columns", col_exc)
+            inc_resp = fetch_incidents("*")
         rows = inc_resp.data or []
     except Exception as exc:
         logger.warning("compliance centre incidents: fetch failed: %s", exc)

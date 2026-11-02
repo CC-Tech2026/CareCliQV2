@@ -32,7 +32,7 @@ const QUESTIONS: QuestionDef[] = [
     key: "teamSize",
     otherKey: "teamSizeOther",
     panelLabel: "Team size",
-    prompt: "How many people are on your team, including coordinators, support workers, and allied health staff?",
+    prompt: "How many people are on your team, including coordinators and support workers?",
     options: [
       { value: "1-4", label: "1 to 4 people" },
       { value: "5-10", label: "5 to 10 people" },
@@ -49,8 +49,8 @@ const QUESTIONS: QuestionDef[] = [
     options: [
       { value: "registered", label: "Registered NDIS provider" },
       { value: "unregistered", label: "Unregistered NDIS provider" },
-      { value: "sole-trader", label: "Sole trader or independent support worker" },
-      { value: "allied-health", label: "Allied health practice" },
+      { value: "applying", label: "Applying for NDIS registration" },
+      { value: "sole-trader", label: "Sole trader delivering NDIS supports" },
       { value: "other", label: "Other" },
     ],
   },

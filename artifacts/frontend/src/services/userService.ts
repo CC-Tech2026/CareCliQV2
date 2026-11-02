@@ -87,20 +87,27 @@ export async function requestPasswordReset(): Promise<{ message: string }> {
   });
 }
 
-export async function getNotificationPreferences(deviceId: string): Promise<{
+/** Pop-ups are held back in this window (emergencies still come through). */
+export type QuietHours = { enabled: boolean; from: string; to: string; timezone: string };
+
+type PreferencesFor<E extends string> = Record<E, Record<NotificationChannel, boolean>>;
+
+export async function getNotificationPreferences<E extends string = NotificationEvent>(deviceId: string): Promise<{
   device_id: string;
-  preferences: NotificationPreferences;
+  preferences: PreferencesFor<E>;
+  quiet_hours?: QuietHours;
 }> {
   return jsonFetch(`/api/users/me/notification-preferences?device_id=${encodeURIComponent(deviceId)}`);
 }
 
-export async function saveNotificationPreferences(
+export async function saveNotificationPreferences<E extends string = NotificationEvent>(
   deviceId: string,
-  preferences: NotificationPreferences,
-): Promise<{ device_id: string; preferences: NotificationPreferences }> {
+  preferences: PreferencesFor<E>,
+  quietHours?: QuietHours,
+): Promise<{ device_id: string; preferences: PreferencesFor<E>; quiet_hours?: QuietHours }> {
   return jsonFetch("/api/users/me/notification-preferences", {
     method: "PUT",
-    body: JSON.stringify({ device_id: deviceId, preferences }),
+    body: JSON.stringify({ device_id: deviceId, preferences, quiet_hours: quietHours }),
   });
 }
 

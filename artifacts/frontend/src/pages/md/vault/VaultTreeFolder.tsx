@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { ChevronRight, Copy } from "lucide-react";
+import { ChevronRight, Copy, FileText } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -17,6 +17,7 @@ import { TreePeopleList, personHref } from "./components/TreePeopleList";
 import { TreeDocumentsPane } from "./components/TreeDocumentsPane";
 import { sizeDetails, sizeLabel, useVaultSizes } from "./components/useVaultSizes";
 import { useFolderActions } from "./components/useFolderActions";
+import { GenerateReportSheet } from "./components/GenerateReportSheet";
 import { uniqueDocs } from "@/lib/vault-share";
 import type { FolderMenuItem } from "./components/FileManager";
 import { UserRound } from "lucide-react";
@@ -55,6 +56,8 @@ export default function VaultTreeFolderPage({
   const [tree, setTree] = useState<VaultTreeFolder[] | null>(null);
   const [people, setPeople] = useState<VaultTreePerson[] | null>(null);
   const [documents, setDocuments] = useState<VaultDocument[] | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [docsReload, setDocsReload] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const sizes = useVaultSizes();
   const actions = useFolderActions();
@@ -95,7 +98,7 @@ export default function VaultTreeFolderPage({
         setDocuments([]);
       });
     return () => { cancelled = true; };
-  }, [top, sub, personId]);
+  }, [top, sub, personId, docsReload]);
 
   const topFolder = tree?.find((f) => f.key === top);
   const person = personId ? people?.find((p) => p.id === personId) : undefined;
@@ -158,6 +161,8 @@ export default function VaultTreeFolderPage({
     );
   }
   const title = sub ? subLabel : personId ? person?.name ?? "" : topFolder?.label ?? "";
+  // Participant reports are generated here and filed in Clinical Docs.
+  const canGenerateReport = top === "participant" && !!person && (!sub || sub === "clinical_docs");
 
   async function copyPath() {
     try {
@@ -294,6 +299,17 @@ export default function VaultTreeFolderPage({
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{title}</h1>
             {personSub && <StatePill state={personSub.state} />}
+            {canGenerateReport && (
+              <button
+                type="button"
+                onClick={() => setReportOpen(true)}
+                className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+                style={{ background: "var(--cc-cta)" }}
+              >
+                <FileText size={15} />
+                Generate report
+              </button>
+            )}
           </div>
           {personId && person && !sub && (
             <p className="text-[13px]" style={{ color: MUTED }}>
@@ -314,6 +330,18 @@ export default function VaultTreeFolderPage({
         {body()}
       </div>
       {actions.dialogs}
+      {canGenerateReport && person && (
+        <GenerateReportSheet
+          open={reportOpen}
+          onOpenChange={setReportOpen}
+          participantId={person.id}
+          participantName={person.name}
+          onGenerated={() => {
+            if (sub === "clinical_docs") setDocsReload((n) => n + 1);
+            else navigate(personHref(top, person.id, "clinical_docs"));
+          }}
+        />
+      )}
     </HubLayout>
   );
 }

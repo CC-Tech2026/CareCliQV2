@@ -27,6 +27,7 @@ import {
   listCoordinatorShifts,
   getWorkerAvailability,
   getOverdueUnassignedShifts,
+  getShiftDetail,
   type CoordinatorShiftRecord,
   type WorkerStats,
   type WorkerAvailability,
@@ -391,6 +392,28 @@ export default function CoordinatorRosteringPage() {
     setWeekStart(startOfWeek(now, { weekStartsOn: 1 }));
     setSelectedDay(now);
   };
+
+  // ?openShift= (from a notification): RosterBoard opens the shift only once
+  // it's in the loaded week, so jump to that shift's week first. Otherwise
+  // anything outside this week (yesterday's overdue notes, next week's
+  // reassignment) silently didn't open.
+  useEffect(() => {
+    const shiftId = new URLSearchParams(window.location.search).get("openShift");
+    if (!shiftId) return;
+    let cancelled = false;
+    getShiftDetail(shiftId)
+      .then((shift) => {
+        if (cancelled || !shift?.scheduled_start) return;
+        const target = parseISO(shift.scheduled_start);
+        setPageTab("roster");
+        setViewMode("roster");
+        setCurrentMonth(target);
+        setWeekStart(startOfWeek(target, { weekStartsOn: 1 }));
+        setSelectedDay(target);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   const handleJumpToOverdueShift = (shift: OverdueUnassignedShift) => {
     setPageTab("roster");

@@ -85,7 +85,7 @@ export function HubHeader() {
         }
         actions={
           <nav aria-label="Executive resources" className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:gap-2">
-            <Link href="/reports" className={ghostClass}>Report library</Link>
+            <Link href="/md/vault" className={ghostClass}>Document vault</Link>
             <Link href="/md/executive" className={`${ctaClass} order-first w-full sm:order-none sm:w-auto`}>
               Performance review
               <ArrowRight size={15} />

@@ -63,8 +63,8 @@ it("keeps the overview available when only the trend fails", async () => {
   ).toBeTruthy();
   expect(screen.getByText("Compliance trend unavailable")).toBeTruthy();
   expect(
-    screen.getByRole("link", { name: "NDIS invoices" }).getAttribute("href"),
-  ).toBe("/md/financial");
+    screen.getAllByRole("link", { name: /Review shift notes/ })[0].getAttribute("href"),
+  ).toBe("/md/compliance?view=shifts");
   expect(screen.queryByText("Building your performance trend")).toBeNull();
 });
 it("retries a failed overview without a page reload", async () => {

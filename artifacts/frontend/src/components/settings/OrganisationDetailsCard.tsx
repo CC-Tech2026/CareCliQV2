@@ -38,7 +38,7 @@ export function formatAbn(value: string): string {
   return [d.slice(0, 2), d.slice(2, 5), d.slice(5, 8), d.slice(8, 11)].filter(Boolean).join(" ");
 }
 
-const registrationValid = (value: string) => /^\d{9,10}$/.test(value.replace(/\s/g, ""));
+export const registrationValid = (value: string) => /^\d{9,10}$/.test(value.replace(/\s/g, ""));
 
 function toForm(d?: OrganisationDetails | null): Form {
   if (!d) return EMPTY;

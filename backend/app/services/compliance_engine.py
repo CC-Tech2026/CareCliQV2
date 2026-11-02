@@ -196,8 +196,6 @@ def check_session_time_and_duration(session: dict, config: dict | None = None) -
 # ---------------------------------------------------------------------------
 
 def check_48_hour_documentation(session: dict, config: dict | None = None) -> dict:
-    from datetime import datetime, timezone
-
     cfg = config or {}
     warn_after_days = cfg.get("warn_after_days", 2)
     fail_after_days = cfg.get("fail_after_days", 7)
@@ -214,13 +212,15 @@ def check_48_hour_documentation(session: dict, config: dict | None = None) -> di
             "severity": "medium",
         }
 
-    if not note_time_raw:
-        note_date = datetime.now(timezone.utc).date()
-    else:
-        try:
-            note_date = datetime.fromisoformat(str(note_time_raw)[:19]).date()
-        except Exception:
-            note_date = datetime.now(timezone.utc).date()
+    # session_date is the office's local day; compare the note's local day
+    # too. Cutting the timestamp to 19 characters kept its UTC wall time, so
+    # a shift ending before ~10:30am in Adelaide read as written the day
+    # before ("Note date precedes session date").
+    from ..core.timezone import app_today, shift_local_date
+
+    note_date = shift_local_date(str(note_time_raw)) if note_time_raw else None
+    if note_date is None:
+        note_date = app_today()
 
     delta_days = (note_date - session_date).days
 
@@ -297,6 +297,27 @@ def check_note_quality(session: dict, config: dict | None = None) -> dict:
     notes = (session.get("notes") or "").strip()
     structured_text = _structured_fields_text(session)
     effective_text = structured_text if len(structured_text) > len(notes) else notes
+    word_count = len(effective_text.split())
+    filler = next(
+        (phrase for pattern, phrase in phrases if re.search(pattern, effective_text, re.IGNORECASE)),
+        None,
+    )
+
+    # Under the minimum, length is the headline problem: "Shift was fine.
+    # No issues." used to fail only on its filler phrase and still score in
+    # the 70s. too_short caps the session's overall score (run_compliance_check).
+    if word_count < min_words_warn:
+        message = f"R3: Note is too short ({word_count} words) — must contain at least {min_words_pass} words"
+        if filler:
+            message += f", and avoid vague filler like \"{filler}\""
+        return {
+            "rule": "R3",
+            "label": "Note quality",
+            "status": "fail",
+            "message": message,
+            "severity": "high",
+            "too_short": True,
+        }
 
     for pattern, phrase in phrases:
         if re.search(pattern, effective_text, re.IGNORECASE):
@@ -311,8 +332,6 @@ def check_note_quality(session: dict, config: dict | None = None) -> dict:
                 "severity": "high",
             }
 
-    word_count = len(effective_text.split())
-
     if word_count >= min_words_pass:
         return {
             "rule": "R3",
@@ -321,23 +340,15 @@ def check_note_quality(session: dict, config: dict | None = None) -> dict:
             "message": f"R3: Clinical documentation meets the {min_words_pass}-word standard ({word_count} words)",
             "severity": "high",
         }
-    if word_count >= min_words_warn:
-        return {
-            "rule": "R3",
-            "label": "Note quality",
-            "status": "warning",
-            "message": (
-                f"R3: Note is brief ({word_count} words) — "
-                f"NDIS auditors expect at least {min_words_pass} words of clinical detail"
-            ),
-            "severity": "medium",
-        }
     return {
         "rule": "R3",
         "label": "Note quality",
-        "status": "fail",
-        "message": f"R3: Note is too short ({word_count} words) — must contain at least {min_words_pass} words",
-        "severity": "high",
+        "status": "warning",
+        "message": (
+            f"R3: Note is brief ({word_count} words) — "
+            f"NDIS auditors expect at least {min_words_pass} words of clinical detail"
+        ),
+        "severity": "medium",
     }
 
 
@@ -1057,6 +1068,8 @@ def check_budget_alignment(budget_context: Optional[dict]) -> list[dict]:
 _DURATION_WARNING_THRESHOLD = 30
 _DURATION_ERROR_THRESHOLD = 60
 _DURATION_ERROR_SCORE_PENALTY = 10.0
+# Below 60 is the non-compliant / priority-review band everywhere scores show.
+_TOO_SHORT_NOTE_SCORE_CAP = 50.0
 
 
 def check_duration_consistency(duration_context: Optional[dict]) -> list[dict]:
@@ -1353,6 +1366,11 @@ def run_compliance_check(
 
     if any(r.get("rule") == "duration_consistency_error" for r in rules):
         score = max(0.0, round(score - _DURATION_ERROR_SCORE_PENALTY, 1))
+
+    # A note under the minimum length can't evidence the support, however many
+    # other rules it technically passes: keep it in the non-compliant band.
+    if any(r.get("rule") == "R3" and r.get("too_short") for r in rules):
+        score = min(score, _TOO_SHORT_NOTE_SCORE_CAP)
 
     rp_flags = detect_restrictive_practices(session, phrases=_cfg("R10").get("categories"))
     rp_categories = list({f["category"] for f in rp_flags}) if rp_flags else []

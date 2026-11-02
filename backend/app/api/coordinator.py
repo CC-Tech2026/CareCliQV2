@@ -36,6 +36,7 @@ from ..services.notification_service import (
     notify_certification_expiry,
     notify_coordinator_message,
     notify_conversation_message,
+    _user_display_name,
     notify_feedback_received,
     notify_shift_cancelled,
     notify_shift_change,
@@ -1431,11 +1432,14 @@ async def send_worker_message(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=internal_error_detail("Worker lookup failed", exc))
 
+    sender_id = get_user_id(current_user)
+    sender_name = _user_display_name(sender_id)
     result = await notify_coordinator_message(
         user_id=worker_id,
         org_id=org_id,
-        title=(body.title or "Message from your coordinator").strip(),
+        title=(body.title or (f"Message from {sender_name}" if sender_name else "Message from your coordinator")).strip(),
         message=message,
+        sender_id=sender_id,
     )
     return {"worker_id": worker_id, "delivered": result}
 
@@ -4484,20 +4488,22 @@ def _fetch_live_shifts_raw(
     org_id: str,
     window_start: str,
 ) -> list[dict[str, Any]]:
+    # tasks: the checklist the worker ticks off. Without it the task count
+    # fell back to the blank template, so every shift read "Tasks 0 of N".
     full_columns = (
         "id, organization_id, worker_id, participant_id, participant_name, "
         "shift_type, scheduled_start, scheduled_end, status, "
         "clocked_in_at, clocked_out_at, duration_minutes, clock_in_verified, clock_in_method, "
         "session_id, visit_notes, coordinator_notes, special_instructions, "
         "emergency_flagged, emergency_flagged_at, emergency_note, "
-        "created_at, updated_at"
+        "tasks, service_agreement_support_id, created_at, updated_at"
     )
     legacy_columns = (
         "id, organization_id, worker_id, participant_id, participant_name, "
         "scheduled_start, scheduled_end, status, "
         "clocked_in_at, clocked_out_at, duration_minutes, "
         "session_id, visit_notes, coordinator_notes, "
-        "created_at, updated_at"
+        "tasks, created_at, updated_at"
     )
 
     def _run(select_columns: str):
@@ -4859,6 +4865,8 @@ async def send_shift_message(
         conversation_id=str(conv["id"]),
         shift_id=shift_id,
         message_preview=body.message,
+        sender_name=_user_display_name(sender_id) or "the office",
+        sender_id=sender_id,
     )
     return msg
 
@@ -5032,14 +5040,17 @@ async def get_coordinator_notifications(
     unread_only: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get alerts/notifications for the coordinator's current organisation only."""
+    """The organisation's shared alert feed (no-shows, missing notes, flags,
+    worker replies). Alerts addressed to one person are left out: those are
+    copies of that person's own notifications, which live in their inbox."""
     org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
         q = (
             supabase.table("alerts")
-            .select("id, alert_type, message, severity, is_read, session_id, patient_id, created_at, organization_id, recipient_user_id")
+            .select("id, alert_type, title, message, severity, is_read, session_id, shift_id, patient_id, created_at, organization_id")
             .eq("organization_id", org_id)
+            .is_("recipient_user_id", "null")
             .order("created_at", desc=True)
             .limit(limit)
         )
@@ -5060,7 +5071,7 @@ async def mark_coordinator_notification_read(
     org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
-        supabase.table("alerts").update({"is_read": True}).eq("id", alert_id).eq("organization_id", org_id).execute()
+        supabase.table("alerts").update({"is_read": True}).eq("id", alert_id).eq("organization_id", org_id).is_("recipient_user_id", "null").execute()
         return {"ok": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=internal_error_detail("Mark read failed", exc))
@@ -5070,11 +5081,12 @@ async def mark_coordinator_notification_read(
 async def mark_all_coordinator_notifications_read(
     current_user: dict = Depends(get_current_user),
 ):
-    """Mark all alerts as read for this organization."""
+    """Mark the organisation's shared alerts as read. Alerts addressed to one
+    person (a worker's messages, say) are theirs to read, so they're untouched."""
     org_id = _require_org_read(current_user)
     supabase = get_supabase_admin()
     try:
-        supabase.table("alerts").update({"is_read": True}).eq("organization_id", org_id).eq("is_read", False).execute()
+        supabase.table("alerts").update({"is_read": True}).eq("organization_id", org_id).eq("is_read", False).is_("recipient_user_id", "null").execute()
         return {"ok": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=internal_error_detail("Mark all read failed", exc))

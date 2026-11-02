@@ -155,7 +155,7 @@ export function ParticipantSafetyPage({
             <section key={i} className="rounded-xl border bg-card p-4 shadow-sm">
               <h4 className="text-sm font-black">{tech.title}</h4>
               <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
-                {tech.steps.map((step, si) => (
+                {(tech.steps ?? []).map((step, si) => (
                   <li key={si}>{step}</li>
                 ))}
               </ol>
@@ -186,7 +186,7 @@ export function ParticipantSafetyPage({
                     <div>
                       <p className="text-sm font-bold">{contact.label}</p>
                       <p className="text-xs text-muted-foreground capitalize">
-                        {contact.role.replace("_", " ")}
+                        {(contact.role ?? "").replace("_", " ")}
                       </p>
                     </div>
                     <a href={`tel:${contact.phone.replace(/\s/g, "")}`}>

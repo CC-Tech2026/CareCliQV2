@@ -25,7 +25,7 @@ export const STEP_LABELS = [
 export type Answers = {
   teamSize?: "1-4" | "5-10" | "11-25" | "25+" | "other";
   teamSizeOther?: string;
-  providerType?: "registered" | "unregistered" | "sole-trader" | "allied-health" | "other";
+  providerType?: "registered" | "unregistered" | "applying" | "sole-trader" | "other";
   providerTypeOther?: string;
   painPoint?: "notes" | "compliance" | "rostering" | "medication" | "too-many-tools" | "other";
   painPointOther?: string;

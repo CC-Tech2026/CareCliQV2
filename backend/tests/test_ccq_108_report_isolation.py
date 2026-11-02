@@ -271,21 +271,21 @@ def _chainable_table_mock(data):
 
 class TestComplianceCommonIssuesIsolation:
     """The Compliance Centre 'common issues' panel must never aggregate another
-    org's compliance_rule_results. That table has no organization_id column, so
-    isolation depends entirely on the sessions!inner(organization_id) embedded-join
-    filter added in compliance.py — this is a regression test for that fix."""
+    org's compliance_rule_results. Rows written before the save carried
+    organization_id don't have one, so isolation rests on the
+    sessions!inner(organization_id) embedded-join filter in compliance.py — this is a regression test for that fix."""
 
     def test_common_issues_excludes_other_org_rule_results(self):
         from backend.app.api import compliance
 
         rule_result_rows = [
-            {"rule_id": "RULE_A_ONLY", "status": "fail", "checked_at": "2026-06-01T00:00:00",
+            {"rule_code": "RULE_A_ONLY", "status": "fail", "created_at": "2026-06-01T00:00:00",
              "sessions": {"organization_id": ORG_A}},
-            {"rule_id": "RULE_A_ONLY", "status": "fail", "checked_at": "2026-06-02T00:00:00",
+            {"rule_code": "RULE_A_ONLY", "status": "fail", "created_at": "2026-06-02T00:00:00",
              "sessions": {"organization_id": ORG_A}},
-            {"rule_id": "RULE_B_ONLY", "status": "fail", "checked_at": "2026-06-01T00:00:00",
+            {"rule_code": "RULE_B_ONLY", "status": "fail", "created_at": "2026-06-01T00:00:00",
              "sessions": {"organization_id": ORG_B}},
-            {"rule_id": "RULE_B_ONLY", "status": "warning", "checked_at": "2026-06-02T00:00:00",
+            {"rule_code": "RULE_B_ONLY", "status": "warning", "created_at": "2026-06-02T00:00:00",
              "sessions": {"organization_id": ORG_B}},
         ]
 

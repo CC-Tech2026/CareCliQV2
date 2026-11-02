@@ -1,0 +1,12 @@
+{
+  "name": "CareCliQ",
+  "short_name": "CareCliQ",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FDF6EE",
+  "theme_color": "#5533CC",
+  "icons": [
+    { "src": "/favicon.png", "sizes": "2000x2000", "type": "image/png", "purpose": "any" }
+  ]
+}

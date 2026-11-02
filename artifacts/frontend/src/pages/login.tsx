@@ -486,6 +486,19 @@ export default function Login() {
 
             {!mfaStep && (
               <p className="text-center text-[13px] font-medium mt-3" style={{ color: "var(--cc-muted)" }}>
+                {t("auth.login.providerPrompt")}{" "}
+                <button
+                  onClick={() => navigate("/get-started")}
+                  className="font-black transition-opacity hover:opacity-75"
+                  style={{ color: CORAL }}
+                >
+                  {t("auth.login.providerLink")}
+                </button>
+              </p>
+            )}
+
+            {!mfaStep && (
+              <p className="text-center text-[13px] font-medium mt-3" style={{ color: "var(--cc-muted)" }}>
                 {t("auth.login.participantPrompt")}{" "}
                 <button
                   onClick={() => navigate("/portal/login")}

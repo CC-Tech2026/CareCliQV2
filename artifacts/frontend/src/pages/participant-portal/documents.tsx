@@ -11,17 +11,11 @@ import {
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SURFACE = "var(--cc-surface)";
+const PLUM = "var(--cc-plum)";
 const AMBER = "#9A5B0A";
 const AMBER_SOFT = "#FBF2E6";
-
-// One colour family per kind of document. Backgrounds are translucent tints
-// of the accent, so the rows read on both the light and dark surface; the
-// document name stays in the regular text colour for contrast.
-const TONES = {
-  agreement: { accent: "#0F8A83", tint: "rgba(15, 138, 131, 0.10)", tile: "rgba(15, 138, 131, 0.18)" },
-  details: { accent: "#6366F1", tint: "rgba(99, 102, 241, 0.10)", tile: "rgba(99, 102, 241, 0.18)" },
-  plan: { accent: "#E0513C", tint: "rgba(224, 81, 60, 0.10)", tile: "rgba(224, 81, 60, 0.18)" },
-} as const;
 
 // The file lives on Supabase Storage (another origin), where the HTML
 // `download` attribute is ignored; Storage's own `download` query flag makes
@@ -31,7 +25,7 @@ function downloadUrl(url: string) {
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "N/A";
   return new Date(value).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -41,14 +35,15 @@ type DocumentRow = {
   type: string;
   date: string;
   icon: typeof FileText;
-  tone: keyof typeof TONES;
   file?: { url: string };
   view?: { href: string };
   status?: string;
 };
 
+const ACTION_CLASS = "flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-[var(--cc-plum-soft)]";
+
 function ActionButton({ label, children, ...props }: { label: string; children: React.ReactNode } & ({ href: string; external?: boolean })) {
-  const className = "flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-black/10";
+  const className = ACTION_CLASS;
   if (props.external) {
     return (
       <a href={props.href} target="_blank" rel="noreferrer" aria-label={label} title={label} className={className}>
@@ -64,53 +59,42 @@ function ActionButton({ label, children, ...props }: { label: string; children: 
 }
 
 function DocumentCard({ row }: { row: DocumentRow }) {
-  const tone = TONES[row.tone];
   const Icon = row.icon;
   return (
-    <li
-      className="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-2xl px-4 py-4 sm:grid-cols-[auto_1fr_220px_150px_auto] sm:px-5"
-      style={{ background: tone.tint }}
-    >
-      <span className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ background: tone.tile }}>
-        <Icon size={20} style={{ color: tone.accent }} />
+    <li className="grid grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-4 sm:grid-cols-[auto_1fr_220px_auto] sm:px-5">
+      <span className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: "var(--cc-soft)" }}>
+        <Icon size={20} style={{ color: MUTED }} />
       </span>
 
       <div className="min-w-0">
-        <p className="truncate text-[14px] font-black" style={{ color: TEXT }}>{row.name}</p>
-        {/* Phones: type and date fold under the name. */}
-        <p className="truncate text-[12px] sm:hidden" style={{ color: MUTED }}>
-          {row.type} · {row.date}
+        <p className="text-[15px] font-black" style={{ color: TEXT }}>{row.name}</p>
+        <p className="text-[13px]" style={{ color: MUTED }}>
+          {row.type}{row.status ? ` · ${row.status.charAt(0).toUpperCase()}${row.status.slice(1)}` : ""}
+          {/* Phones: the date folds under the name. */}
+          <span className="sm:hidden"> · {row.date}</span>
         </p>
       </div>
 
-      <p className="hidden truncate text-[12px] font-semibold sm:block" style={{ color: tone.accent }}>
-        {row.type}{row.status ? ` · ${row.status}` : ""}
-      </p>
-      <p className="hidden text-[12px] font-bold sm:block" style={{ color: TEXT }}>{row.date}</p>
+      <p className="hidden text-[13px] font-semibold sm:block" style={{ color: TEXT }}>{row.date}</p>
 
-      <div className="flex items-center gap-1 rounded-xl p-1" style={{ background: tone.tile, color: tone.accent }}>
+      <div className="flex items-center gap-1" style={{ color: PLUM }}>
         {row.file && (
           <>
             <ActionButton href={row.file.url} external label={`Open ${row.name}`}>
-              <ExternalLink size={16} />
+              <ExternalLink size={18} />
             </ActionButton>
-            <a
-              href={downloadUrl(row.file.url)}
-              aria-label={`Download ${row.name}`}
-              title={`Download ${row.name}`}
-              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-black/10"
-            >
-              <Download size={16} />
+            <a href={downloadUrl(row.file.url)} aria-label={`Download ${row.name}`} title={`Download ${row.name}`} className={ACTION_CLASS}>
+              <Download size={18} />
             </a>
           </>
         )}
         {row.view && (
           <ActionButton href={row.view.href} label={`View ${row.name}`}>
-            <ArrowRight size={16} />
+            <ArrowRight size={18} />
           </ActionButton>
         )}
         {!row.file && !row.view && (
-          <span className="px-2 text-[11px] font-bold" style={{ color: MUTED }}>On file</span>
+          <span className="rounded-lg px-2.5 py-1 text-[12px] font-bold" style={{ background: "var(--cc-soft)", color: MUTED }}>On file</span>
         )}
       </div>
     </li>
@@ -150,18 +134,18 @@ export default function ParticipantDocumentsPage() {
       type: "Service agreement",
       date: `Signed ${formatDate(signedDocument.updated_at)}`,
       icon: FileSignature,
-      tone: "agreement",
       file: signedDocument.url ? { url: signedDocument.url } : undefined,
     });
   }
   for (const agreement of agreements) {
     rows.push({
       key: agreement.id,
-      name: `Agreement ${formatDate(agreement.start_date)} – ${agreement.end_date ? formatDate(agreement.end_date) : "ongoing"}`,
-      type: agreement.plan_management_type ? `Agreement · ${agreement.plan_management_type}` : "Agreement details",
-      date: formatDate(agreement.start_date),
+      name: `Service agreement, ${formatDate(agreement.start_date)} to ${agreement.end_date ? formatDate(agreement.end_date) : "ongoing"}`,
+      type: agreement.plan_management_type
+        ? `${agreement.plan_management_type.charAt(0).toUpperCase()}${agreement.plan_management_type.slice(1)}`
+        : "Agreement details",
+      date: `Starts ${formatDate(agreement.start_date)}`,
       icon: FileText,
-      tone: "details",
       status: agreement.status,
     });
   }
@@ -170,9 +154,8 @@ export default function ParticipantDocumentsPage() {
       key: "ndis-plan",
       name: "NDIS Plan",
       type: "Dates, funding, budgets & goals",
-      date: `${formatDate(plan.plan_start)} – ${formatDate(plan.plan_end)}`,
+      date: `${formatDate(plan.plan_start)} to ${formatDate(plan.plan_end)}`,
       icon: NotebookTabs,
-      tone: "plan",
       view: { href: "/participant-portal/plan" },
     });
   }
@@ -183,8 +166,8 @@ export default function ParticipantDocumentsPage() {
     <ParticipantPortalShell>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-black" style={{ color: TEXT }}>Documents</h1>
-          <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>Everything on file for your supports.</p>
+          <h1 className="text-2xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Documents</h1>
+          <p className="mt-1 text-[14px]" style={{ color: MUTED }}>Everything on file for your supports.</p>
         </div>
 
         {loadError && (
@@ -201,11 +184,11 @@ export default function ParticipantDocumentsPage() {
             ))}
           </div>
         ) : rows.length === 0 ? (
-          <p className="rounded-2xl border border-dashed p-8 text-center text-[13px] font-medium" style={{ borderColor: "var(--cc-border)", color: MUTED }}>
+          <p className="rounded-2xl border border-dashed p-8 text-center text-[14px]" style={{ borderColor: BORDER, color: MUTED }}>
             No documents on file yet.
           </p>
         ) : (
-          <ul className="space-y-3">
+          <ul className="divide-y divide-[var(--cc-border)] rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
             {rows.map((row) => <DocumentCard key={row.key} row={row} />)}
           </ul>
         )}

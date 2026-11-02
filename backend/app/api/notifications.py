@@ -1,8 +1,12 @@
-"""Worker notification inbox API (CARECLIQV2-261/262)."""
+"""Worker notification inbox API (CARECLIQV2-261/262), plus the device
+endpoints every role uses to get OS notifications on their phone or browser."""
 
 from __future__ import annotations
 
+import json
 import logging
+import time
+from collections import defaultdict
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,8 +15,9 @@ from pydantic import BaseModel, Field
 from ..core.errors import internal_error_detail
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
-from ..services import conversation_service
-from ..services.notification_service import notify_conversation_message
+from ..services import conversation_service, push_service, web_push_service
+from ..services.notification_service import _user_display_name, notify_conversation_message
+from ..services import notification_reply_service
 from ..services.push_service import register_push_token
 from ..services import user_notification_store as notification_store
 from ..services.supabase_client import get_supabase_admin
@@ -20,6 +25,7 @@ from ..services.supabase_client import get_supabase_admin
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/worker/notifications", tags=["worker-notifications"])
+devices_router = APIRouter(prefix="/notifications/devices", tags=["notification-devices"])
 
 
 def _require_worker(current_user: dict) -> None:
@@ -58,7 +64,8 @@ async def register_worker_push_token(
     body: PushTokenBody,
     current_user: dict = Depends(get_current_user),
 ):
-    _require_worker(current_user)
+    # Any signed-in role may register its own device, so coordinators and
+    # directors who use the app get safety and rostering alerts on their phone.
     ok = register_push_token(
         get_user_id(current_user),
         body.device_id,
@@ -78,7 +85,8 @@ async def list_notifications(
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
 ):
-    _require_worker(current_user)
+    # Every role has a personal inbox (coordinators get reassign requests,
+    # incident reports and so on), so the inbox endpoints aren't worker-only.
     user_id = get_user_id(current_user)
     items = notification_store.list_user_notifications(
         user_id,
@@ -91,12 +99,44 @@ async def list_notifications(
     return {"notifications": items, "count": len(items)}
 
 
+@router.post("/read-all")
+async def read_all_notifications(current_user: dict = Depends(get_current_user)):
+    if not notification_store.mark_all_read(get_user_id(current_user)):
+        raise HTTPException(status_code=500, detail="Could not mark notifications as read")
+    return {"ok": True}
+
+
+class ReplyBody(BaseModel):
+    message: str = Field(min_length=1, max_length=1000)
+
+
+@router.post("/{notification_id}/reply")
+async def reply_to_notification(
+    notification_id: str,
+    body: ReplyBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reply to a message from its notification, for every role. The reply
+    goes into the thread it came from (see notification_reply_service)."""
+    try:
+        return await notification_reply_service.reply_to_notification(
+            user_id=get_user_id(current_user),
+            role=str(current_user.get("role") or ""),
+            org_id=get_user_organization_id(current_user) or "",
+            notification_id=notification_id,
+            text=body.message,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Message not found")
+    except notification_reply_service.ReplyNotPossible as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
 @router.post("/{notification_id}/read")
 async def read_notification(
     notification_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    _require_worker(current_user)
     ok = notification_store.mark_notification_read(notification_id, get_user_id(current_user))
     if not ok:
         raise HTTPException(status_code=404, detail="Notification not found")
@@ -108,7 +148,6 @@ async def dismiss_notification(
     notification_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    _require_worker(current_user)
     ok = notification_store.dismiss_notification(notification_id, get_user_id(current_user))
     if not ok:
         raise HTTPException(status_code=404, detail="Notification not found")
@@ -287,7 +326,10 @@ async def send_conversation_message(
             conversation_id=conversation_id,
             shift_id=str(conv.data.get("shift_id") or "") or None,
             message_preview=body.body or "Sent an image",
-            sender_name="Worker",
+            sender_name=_user_display_name(user_id) or "A worker",
+            sender_id=user_id,
+            worker_id=user_id,
+            recipient_is_office=True,
         )
     return msg
 
@@ -302,3 +344,77 @@ async def action_conversation_message(
     if not ok:
         raise HTTPException(status_code=404, detail="Message not found")
     return {"ok": True}
+
+
+# ── Devices: OS notifications on phones and browsers (every role) ────────────
+
+class WebPushKeys(BaseModel):
+    p256dh: str = Field(min_length=1, max_length=256)
+    auth: str = Field(min_length=1, max_length=64)
+
+
+class WebPushSubscriptionBody(BaseModel):
+    endpoint: str = Field(min_length=12, max_length=1024)
+    keys: WebPushKeys
+    label: Optional[str] = Field(default=None, max_length=80)
+
+
+class WebPushRemoveBody(BaseModel):
+    endpoint: str = Field(min_length=12, max_length=1024)
+
+
+_TEST_LIMIT = 5
+_TEST_WINDOW_SECONDS = 60.0
+_test_sends: dict[str, list[float]] = defaultdict(list)
+
+
+@devices_router.get("")
+async def list_notification_devices(current_user: dict = Depends(get_current_user)):
+    return {
+        "devices": push_service.list_push_devices(get_user_id(current_user)),
+        "web_push": {
+            "enabled": web_push_service.is_configured(),
+            "public_key": web_push_service.public_key() or None,
+        },
+    }
+
+
+@devices_router.post("/web-push")
+async def register_web_push(
+    body: WebPushSubscriptionBody,
+    current_user: dict = Depends(get_current_user),
+):
+    if not web_push_service.is_configured():
+        return {"registered": False, "reason": "not_configured"}
+    sub = web_push_service.parse_subscription(body.model_dump())
+    if not sub:
+        raise HTTPException(status_code=422, detail="That browser subscription isn't valid")
+    user_id = get_user_id(current_user)
+    device_id = web_push_service.device_id_for_endpoint(sub["endpoint"])
+    ok =register_push_token(user_id, device_id, json.dumps(sub), "web", "webpush")
+    if ok:
+        push_service.release_device_from_other_users(user_id, device_id)
+    return {"registered": ok, "reason": None if ok else "not_available"}
+
+
+@devices_router.post("/web-push/remove")
+async def remove_web_push(
+    body: WebPushRemoveBody,
+    current_user: dict = Depends(get_current_user),
+):
+    push_service.remove_push_token(
+        get_user_id(current_user),
+        web_push_service.device_id_for_endpoint(body.endpoint.strip()),
+    )
+    return {"ok": True}
+
+
+@devices_router.post("/test")
+async def send_test_notification(current_user: dict = Depends(get_current_user)):
+    user_id = get_user_id(current_user)
+    now = time.monotonic()
+    recent = [t for t in _test_sends[user_id] if t > now - _TEST_WINDOW_SECONDS]
+    if len(recent) >= _TEST_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many test notifications. Try again in a minute.")
+    _test_sends[user_id] = recent + [now]
+    return await push_service.send_test_push(user_id)

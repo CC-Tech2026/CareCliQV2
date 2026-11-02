@@ -28,6 +28,7 @@ const SHARED_NAV_KEYS: Record<string, string> = {
   "/settings": "nav.settings",
   "/worker/messages": "nav.messages",
   "/worker/notifications": "nav.notifications",
+  "/notifications": "nav.notifications",
 };
 
 const ALL_NAV_KEYS: Record<string, string> = {
@@ -114,6 +115,7 @@ const ROUTE_LABEL_KEYS: [string, string][] = [
   ["/worker/security", "nav.security"],
   ["/worker/messages", "nav.messages"],
   ["/worker/notifications", "nav.notifications"],
+  ["/notifications", "nav.notifications"],
   ["/hub", "nav.hub"],
   ["/md/executive", "nav.executive"],
   ["/md/staff", "nav.staff"],
