@@ -35,6 +35,14 @@ import {
   Search,
   PanelLeftClose,
   PanelLeftOpen,
+  Radio,
+  NotebookPen,
+  Activity,
+  FileSearch,
+  ClipboardList,
+  BadgeCheck,
+  Car,
+  Contact,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -92,6 +100,7 @@ const MD_NAV_GROUPS = [
     label: "Operations & Care",
     items: [
       { href: "/md/schedule", label: "Master Schedule", icon: CalendarDays },
+      { href: "/coordinator/rostering", label: "Rostering & live shifts", icon: Radio },
       {
         href: "/md/service-delivery",
         label: "Delivery Quality",
@@ -102,12 +111,15 @@ const MD_NAV_GROUPS = [
         label: "Participants",
         icon: HeartHandshake,
       },
+      { href: "/sessions", label: "Shift notes", icon: NotebookPen },
+      { href: "/coordinator/monitor", label: "Long-shift monitor", icon: Activity },
     ],
   },
   {
     label: "Workforce & People",
     items: [
       { href: "/md/staff", label: "Staff", icon: Users },
+      { href: "/team", label: "Workers", icon: Contact },
       { href: "/billing", label: "NDIS invoices", icon: DollarSign },
       { href: "/md/staff-onboarding", label: "Onboarding", icon: UserPlus },
       {
@@ -127,6 +139,8 @@ const MD_NAV_GROUPS = [
         icon: ShieldCheck,
       },
       { href: "/md/vault", label: "Documents & Audit Vault", icon: FolderLock },
+      { href: "/session-review", label: "Shift note review", icon: FileSearch },
+      { href: "/audit-pack", label: "Audit pack", icon: ClipboardList },
       { href: "/incidents", label: "Incident reporting", icon: AlertTriangle },
       {
         href: "/onboard-participant/complaints",
@@ -148,6 +162,8 @@ const MD_NAV_GROUPS = [
         label: "Financial Governance",
         icon: DollarSign,
       },
+      { href: "/coordinator/verification", label: "Shift verification", icon: BadgeCheck },
+      { href: "/coordinator/travel", label: "Travel claims", icon: Car },
     ],
   },
 ] as const;
