@@ -744,6 +744,9 @@ class ParticipantRecordsExport(BaseModel):
     include_shifts: bool = False
     date_from: Optional[date] = None
     date_to: Optional[date] = None
+    # Documents on file: imported GP letters, assessments and medication
+    # paperwork, copied into the ZIP as they were received.
+    include_documents: bool = False
 
 
 @router.get("/{participant_id}/invoices")
@@ -813,6 +816,7 @@ async def export_participant_records(participant_id: str, body: ParticipantRecor
             include_shifts=body.include_shifts,
             date_from=body.date_from,
             date_to=body.date_to,
+            include_documents=body.include_documents,
         )
     except ParticipantProfileExportError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

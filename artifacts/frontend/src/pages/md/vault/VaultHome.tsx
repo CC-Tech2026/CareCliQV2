@@ -96,6 +96,7 @@ const FOLDER_ICONS: Record<string, LucideIcon> = {
   invoices: Receipt,
   audit_packs: ShieldCheck,
   participant_reports: FileBarChart2,
+  participant_documents: FileText,
   consent_onboarding: FileCheck2,
   governance_operational: Building2,
   risk_management: ShieldAlert,

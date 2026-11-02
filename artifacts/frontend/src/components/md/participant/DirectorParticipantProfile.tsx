@@ -449,7 +449,7 @@ export function DirectorParticipantProfile({
         <SheetContent className="flex w-full flex-col p-0 sm:max-w-3xl">
           <SheetHeader className="border-b border-cc-border p-5 pr-12">
             <SheetTitle>Export records</SheetTitle>
-            <SheetDescription>Download {firstName}'s profile, care information, medication, shift history and invoices as one PDF or ZIP.</SheetDescription>
+            <SheetDescription>Download {firstName}'s profile, shift history, invoices and documents on file as one PDF or ZIP.</SheetDescription>
           </SheetHeader>
           <ParticipantRecordsTab key={participantId} participantId={participantId} participantName={p.full_name} />
         </SheetContent>

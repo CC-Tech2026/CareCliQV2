@@ -44,6 +44,7 @@ export type RecordsExportRequest = {
   all_invoices?: boolean;
   invoice_status?: string;
   include_shifts?: boolean;
+  include_documents?: boolean;
   date_from?: string;
   date_to?: string;
 };

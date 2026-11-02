@@ -665,6 +665,16 @@ async def change_services(
 
 # ── Documents ────────────────────────────────────────────────────────────────
 
+def _refresh_vault(org_id: str, category: str) -> None:
+    """The vault caches each folder for a few minutes; drop it so a document
+    imported or archived here shows there straight away."""
+    try:
+        from . import vault_service
+        vault_service.forget_category_docs(org_id, category)
+    except Exception as exc:
+        logger.warning("director participant: vault cache refresh failed: %s", exc)
+
+
 def list_documents(participant_id: str, org_id: str) -> dict[str, Any]:
     available = True
     try:
@@ -739,6 +749,7 @@ async def upload_document(
             user_id=actor, organization_id=org_id,
             details={"document_id": result["document"]["id"], "category": category, "file_name": filename, "store": "medication"},
         )
+        _refresh_vault(org_id, "medication_records")
         return {"source": "medication", **result}
 
     if category not in DOCUMENT_CATEGORIES:
@@ -789,6 +800,7 @@ async def upload_document(
         user_id=actor, organization_id=org_id,
         details={"document_id": document_id, "category": category, "title": record["title"], "file_name": filename},
     )
+    _refresh_vault(org_id, "participant_documents")
     return {"source": "participant", "document": row}
 
 
@@ -831,6 +843,7 @@ async def archive_document(participant_id: str, org_id: str, current_user: dict,
         action_type="participant.document_archived", entity_type="participant", entity_id=participant_id,
         user_id=actor, organization_id=org_id, details={"document_id": document_id, "reason": reason},
     )
+    _refresh_vault(org_id, "participant_documents")
 
 
 # ── Audit trail ──────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   CalendarDays,
   FileDown,
+  FileStack,
   FolderArchive,
   Loader2,
   Receipt,
@@ -48,12 +49,15 @@ export function ParticipantRecordsTab({
   const [sections, setSections] = useState<string[]>([]);
   const [includeShifts, setIncludeShifts] = useState(false);
   const [includeInvoices, setIncludeInvoices] = useState(false);
+  const [includeDocuments, setIncludeDocuments] = useState(false);
   const [invoiceStatus, setInvoiceStatus] = useState("");
 
   const fileCount =
     (sections.length ? 1 : 0) +
     (includeShifts ? 1 : 0) +
-    (includeInvoices ? 2 : 0);
+    (includeInvoices ? 2 : 0) +
+    // Documents are copied as received, so they always come as a ZIP.
+    (includeDocuments ? 2 : 0);
   const format: "pdf" | "zip" = fileCount === 1 ? "pdf" : "zip";
   const nothingChosen = fileCount === 0;
   const usesPeriod = includeInvoices || includeShifts;
@@ -72,6 +76,7 @@ export function ParticipantRecordsTab({
           }
         : {}),
       ...(includeShifts ? { include_shifts: true } : {}),
+      ...(includeDocuments ? { include_documents: true } : {}),
       ...(usesPeriod && period.from ? { date_from: period.from } : {}),
       ...(usesPeriod && period.to ? { date_to: period.to } : {}),
     });
@@ -83,6 +88,7 @@ export function ParticipantRecordsTab({
     includeShifts && `Shift history, ${period.text}`,
     includeInvoices &&
       `All${invoiceStatus ? ` ${statusLabel(invoiceStatus).toLowerCase()}` : ""} invoices, ${period.text}`,
+    includeDocuments && "Documents on file",
   ].filter(Boolean) as string[];
 
   return (
@@ -230,6 +236,32 @@ export function ParticipantRecordsTab({
             </label>
           )}
         </section>
+
+        <section
+          aria-label="Documents"
+          className="rounded-xl border border-cc-border bg-white p-4"
+        >
+          <label className="flex min-h-11 cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              className="h-4 w-4 shrink-0"
+              checked={includeDocuments}
+              disabled={busy}
+              onChange={(e) => setIncludeDocuments(e.target.checked)}
+            />
+            <FileStack className="h-4 w-4 shrink-0 text-cc-plum" />
+            <span>
+              <span className="block text-sm font-semibold">
+                Documents on file
+              </span>
+              <span className="block text-xs text-cc-muted">
+                GP letters, clinical assessments, therapy reports and
+                medication paperwork, copied as they were received and
+                grouped by kind. Archived documents are left out.
+              </span>
+            </span>
+          </label>
+        </section>
       </div>
 
       <div className="border-t border-cc-border bg-white p-4">
@@ -241,12 +273,12 @@ export function ParticipantRecordsTab({
                 ? "Nothing selected yet"
                 : format === "pdf"
                   ? "Single PDF"
-                  : "ZIP folder with separate PDFs"}
+                  : "ZIP folder with separate files"}
             </p>
             <p className="mt-0.5 truncate text-xs text-cc-muted">
               {summary.length
                 ? summary.join(" | ")
-                : "Tick a profile summary, shift history or invoices above."}
+                : "Tick a profile summary, shift history, invoices or documents above."}
             </p>
           </div>
           <Button

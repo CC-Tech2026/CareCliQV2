@@ -141,6 +141,7 @@ CATEGORY_META: dict[str, dict[str, str]] = {
     "audit_packs": {"label": "Audit Packs & Compliance Reports", "group": "record"},
     "consent_onboarding": {"label": "Signed Consent & Onboarding Docs", "group": "record"},
     "participant_reports": {"label": "Participant Reports", "group": "record"},
+    "participant_documents": {"label": "Participant Documents", "group": "record"},
     "governance_operational": {"label": "Governance & Operational Management", "group": "governance"},
     "risk_management": {"label": "Risk Management", "group": "governance"},
     "quality_management": {"label": "Quality Management", "group": "governance"},
@@ -1631,6 +1632,87 @@ def _render_participant_report(org_id: str, document_id: str, exclude_fields: se
     return f"{safe}.pdf", data
 
 
+# Documents imported on the director's participant profile
+# (director_participant_service): GP letters, assessments, plans and the like.
+# Kept in their own store; archived rows stay out of the vault.
+PARTICIPANT_DOCUMENTS_BUCKET = "participant-documents"
+PARTICIPANT_DOCUMENT_KINDS: dict[str, str] = {
+    "gp_letter": "GP letter",
+    "clinical_assessment": "Clinical assessment report",
+    "behaviour_support_plan": "Behaviour support plan",
+    "risk_assessment": "Risk assessment",
+    "hospital_discharge": "Hospital discharge summary",
+    "therapy_report": "Therapy report",
+    "ndis_plan": "NDIS plan",
+    "consent": "Consent form",
+    "other": "Other document",
+}
+# Which participant subfolder each kind files into; anything else is clinical.
+PARTICIPANT_DOCUMENT_SUBFOLDERS: dict[str, str] = {
+    "behaviour_support_plan": "behaviour_support",
+    "risk_assessment": "emergency_risk",
+    "ndis_plan": "service_support",
+    "consent": "intake_docs",
+}
+
+
+def _list_participant_documents(org_id: str) -> list[VaultDocument]:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("participant_documents")
+            .select("id, participant_id, category, title, document_date, author, uploaded_at")
+            .eq("organization_id", org_id)
+            .is_("archived_at", "null")
+            .order("uploaded_at", desc=True)
+            .limit(1000)
+            .execute()
+        )
+    except Exception:
+        return []  # migration 247 not applied yet
+    patients = _patient_name_map(org_id)
+    docs: list[VaultDocument] = []
+    for row in resp.data or []:
+        kind = row.get("category") or "other"
+        label = PARTICIPANT_DOCUMENT_KINDS.get(kind, "Document")
+        docs.append(VaultDocument(
+            id=row["id"],
+            category="participant_documents",
+            folder_label=CATEGORY_META["participant_documents"]["label"],
+            title=row.get("title") or label,
+            person_name=patients.get(row.get("participant_id") or "", "Unknown participant"),
+            person_type="Participant",
+            person_id=row.get("participant_id"),
+            date=str(row.get("document_date") or row.get("uploaded_at") or ""),
+            status="on_file",
+            source_table="participant_documents",
+            source_id=row["id"],
+            has_stored_file=True,
+            subtype=kind,
+            detail=" · ".join(x for x in (label, row.get("author")) if x),
+        ))
+    return docs
+
+
+def _render_participant_document(org_id: str, document_id: str, exclude_fields: set[str] | None = None) -> tuple[str, bytes]:
+    resp = (
+        get_supabase_admin()
+        .table("participant_documents")
+        .select("id, title, file_path, file_name")
+        .eq("id", document_id)
+        .eq("organization_id", org_id)
+        .limit(1)
+        .execute()
+    )
+    row = (resp.data or [None])[0]
+    if not row or not row.get("file_path"):
+        raise HTTPException(status_code=404, detail="Participant document not found.")
+    data = _download_stored_file(PARTICIPANT_DOCUMENTS_BUCKET, row["file_path"])
+    ext = str(row["file_path"]).rsplit(".", 1)[-1] if "." in str(row["file_path"]) else "pdf"
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", row.get("title") or "participant-document").strip("-")
+    return f"{safe}.{ext}", data
+
+
 def governance_expiry_status(expiry_date: Any) -> str:
     """on_file, or expiring / expired once a governance upload with an
     expiry date (an insurance certificate, an NDIS registration) nears or
@@ -1785,6 +1867,7 @@ _RECORD_LOADERS = {
     "consent_onboarding": _list_consent_onboarding,
     "audit_packs": _list_audit_packs,
     "participant_reports": _list_participant_reports,
+    "participant_documents": _list_participant_documents,
 }
 
 _RECORD_RENDERERS = {
@@ -1797,6 +1880,7 @@ _RECORD_RENDERERS = {
     "consent_onboarding": _render_consent_onboarding,
     "audit_packs": _render_audit_pack,
     "participant_reports": _render_participant_report,
+    "participant_documents": _render_participant_document,
 }
 
 
@@ -2152,6 +2236,7 @@ DOC_TYPE_CODES: dict[str, str] = {
     "plan_meeting_sessions": "CON",
     "audit_pack_exports": "AUD",
     "report_history": "RPT",
+    "participant_documents": "CLN",
     "governance_documents": "POL",
     "governance_records": "GOV",
     "vault_custom_folder_documents": "DOC",
@@ -2182,6 +2267,7 @@ DOC_SOURCE_LABELS: dict[str, str] = {
     "vault_custom_folder_documents": "Uploaded",
     "participant_complaints": "Participant complaint",
     "report_history": "Generated participant report",
+    "participant_documents": "Imported on the participant's profile",
     "operational_feedback": "Staff feedback",
     "vault_registers": "Live register",
 }
@@ -2532,6 +2618,8 @@ def _tree_placement(doc: VaultDocument) -> tuple[str, str] | None:
         return "participant", "incident_reports"
     if category == "participant_reports":
         return "participant", "clinical_docs"
+    if category == "participant_documents":
+        return "participant", PARTICIPANT_DOCUMENT_SUBFOLDERS.get(doc.get("subtype") or "", "clinical_docs")
     if category == "invoices":
         return "participant", "invoices"
     # An intake's signed agreement PDF is the service agreement, before the
@@ -3910,6 +3998,7 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "invoices": ["invoice", "billing", "payment"],
     "audit_packs": ["audit pack", "audit"],
     "participant_reports": ["participant report", "progress report", "report"],
+    "participant_documents": ["gp letter", "clinical assessment", "assessment", "therapy report", "discharge", "participant document"],
     "consent_onboarding": ["consent", "onboarding"],
     "governance_operational": ["governance", "operational management"],
     "risk_management": ["risk"],
