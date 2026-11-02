@@ -26,6 +26,7 @@ new ones) -> compare table counts.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -114,8 +115,32 @@ def main() -> None:
         except RuntimeError as exc:
             print(f"     skipped {name}: {str(exc).splitlines()[-1]}")
 
+    # Custom NOLOGIN roles the app created on dev (e.g. quill_agent, migration 197).
+    # Roles live outside the schema dump, so recreate them before policies/grants reference them.
+    custom_roles = _sql(dev, "select r.rolname, r.rolinherit, "
+                             "exists(select 1 from pg_auth_members m join pg_roles a on a.oid = m.member "
+                             "where m.roleid = r.oid and a.rolname = 'authenticator') "
+                             "from pg_roles r where not r.rolcanlogin and r.rolname !~ '^(pg_|supabase|anon$|authenticated$|service_role$|dashboard_user$|pgsodium|pgbouncer|authenticator$)' "
+                             "order by 1;")
+    prod_roles = {row[0] for row in _sql(prod, "select rolname from pg_roles;")}
+    for role, inherit, to_authenticator in custom_roles:
+        if role not in prod_roles:
+            _sql(prod, f'create role "{role}" nologin {"inherit" if inherit == "t" else "noinherit"};')
+            print(f"     created role {role}")
+        if to_authenticator == "t":
+            _sql(prod, f'grant "{role}" to authenticator;')
+
     print("2/6 Schema (structure only, one transaction)")
-    schema_sql = _run(dev, 'pg_dump "$DBURL" --schema-only --schema=public --no-owner --no-privileges')
+    # Keep privileges so GRANTs to anon/authenticated/service_role/custom roles match dev.
+    schema_sql = _run(dev, 'pg_dump "$DBURL" --schema-only --schema=public --no-owner')
+    # Every Supabase project already has the public schema; drop the dump's CREATE for it.
+    schema_sql = re.sub(r'(?im)^\s*CREATE\s+SCHEMA\s+(?:IF\s+NOT\s+EXISTS\s+)?"?public"?\s*;', "CREATE SCHEMA IF NOT EXISTS public;", schema_sql)
+    # New Supabase projects ship some functions in public (e.g. rls_auto_enable); replace instead of failing.
+    schema_sql = re.sub(r"(?m)^CREATE FUNCTION ", "CREATE OR REPLACE FUNCTION ", schema_sql)
+    schema_sql = re.sub(r"(?m)^CREATE PROCEDURE ", "CREATE OR REPLACE PROCEDURE ", schema_sql)
+    # Supabase manages supabase_admin's default privileges itself (already set on every new project);
+    # the pooler's postgres user isn't allowed to change them.
+    schema_sql = re.sub(r"(?m)^ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin .*$", "", schema_sql)
     _run(prod, 'psql "$DBURL" -X -q -v ON_ERROR_STOP=1 --single-transaction -f -', stdin=schema_sql)
 
     print("3/6 Storage buckets")
