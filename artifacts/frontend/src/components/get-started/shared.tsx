@@ -116,9 +116,19 @@ export function GetStartedShell({
         />
       </div>
 
-      <header className="relative flex items-center justify-between gap-4 px-5 sm:px-10 py-4">
+      <header className="relative flex items-center justify-between gap-4 px-5 sm:px-10 py-3">
         <div className="flex items-center gap-4 min-w-0">
-          <CareCliQLogo size={44} />
+          <CareCliQLogo size={40} />
+          {back && (
+            <button
+              type="button"
+              onClick={back}
+              className="inline-flex items-center gap-1.5 text-[13px] font-semibold underline-offset-4 hover:underline"
+              style={{ color: text }}
+            >
+              <ArrowLeft size={15} /> Back
+            </button>
+          )}
           <span className="hidden md:inline text-[12.5px] font-medium" style={{ color: muted }}>
             Step {step} of {STEP_LABELS.length} · {STEP_LABELS[step - 1]}
           </span>
@@ -138,22 +148,12 @@ export function GetStartedShell({
         </div>
       </header>
 
-      <main className="relative flex-1 flex flex-col px-5 sm:px-10 lg:px-16 pb-8">
-        <div className="flex-1 flex items-center w-full max-w-6xl mx-auto py-6 sm:py-10">
+      {/* Sized so each step fits a laptop window without scrolling; phones
+          still scroll. */}
+      <main className="relative flex-1 flex flex-col px-5 sm:px-10 lg:px-16">
+        <div className="flex-1 flex items-center w-full max-w-6xl mx-auto py-6 lg:py-4">
           <div className="w-full">{children}</div>
         </div>
-        {back && (
-          <div className="w-full max-w-6xl mx-auto">
-            <button
-              type="button"
-              onClick={back}
-              className="inline-flex items-center gap-2 text-[13px] font-semibold underline-offset-4 hover:underline"
-              style={{ color: muted }}
-            >
-              <ArrowLeft size={15} /> Back
-            </button>
-          </div>
-        )}
       </main>
     </div>
   );
