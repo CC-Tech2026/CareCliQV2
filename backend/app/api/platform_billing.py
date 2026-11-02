@@ -103,6 +103,23 @@ async def get_signup_session_email(session_id: str):
     return {"email": email}
 
 
+class ConfirmSignupBody(BaseModel):
+    session_id: str
+
+
+@router.post("/signup/confirm")
+async def confirm_signup(body: ConfirmSignupBody):
+    """Public - the success page calls this as soon as Stripe redirects
+    back, so the organisation and welcome email are created even if the
+    webhook is late or never arrives. Idempotent with the webhook."""
+    try:
+        confirmed = stripe_service.confirm_signup_session(body.session_id)
+    except Exception as exc:
+        logger.error("confirm_signup failed for %s: %s", body.session_id, exc)
+        confirmed = False
+    return {"confirmed": confirmed}
+
+
 @router.get("/access")
 async def get_access(current_user: dict = Depends(get_current_user)):
     """Any member: whether the organisation can still add records (full,
