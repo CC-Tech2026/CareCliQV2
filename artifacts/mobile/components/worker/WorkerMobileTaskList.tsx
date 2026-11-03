@@ -195,45 +195,33 @@ export function WorkerMobileTaskList({
                   </View>
                 )}
 
-                <View style={[styles.thread, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                  {taskNotes.length === 0 ? (
-                    <View style={styles.emptyThread}>
-                      <View style={[styles.emptyIcon, { backgroundColor: colors.primary + "15" }]}>
-                        <Feather name="message-circle" size={18} color={colors.primary} />
-                      </View>
-                      <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                        No updates yet.
-                      </Text>
-                      <Text style={[styles.emptyBody, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-                        Type a note, take a photo, or record your voice below.
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={styles.threadNotes}>
-                      {taskNotes.map((note) => (
-                        <WorkerMobileNoteBubble
-                          key={note.note_id}
-                          note={note}
-                          participantName={participantName}
-                          goalTitle={task.goal_title ?? undefined}
-                          flag={compliance.noteFlags.find((f) => f.noteId === note.note_id)}
-                          onIncidentReport={
-                            compliance.noteFlags.find((f) => f.noteId === note.note_id)?.severity === "fail"
-                              ? onOpenIncidentReport
-                              : undefined
-                          }
-                          tz={tz}
-                        />
-                      ))}
-                    </View>
-                  )}
-                </View>
+                {taskNotes.length > 0 && (
+                  <View style={styles.threadNotes}>
+                    {taskNotes.map((note) => (
+                      <WorkerMobileNoteBubble
+                        key={note.note_id}
+                        variant="chat"
+                        note={note}
+                        participantName={participantName}
+                        goalTitle={task.goal_title ?? undefined}
+                        flag={compliance.noteFlags.find((f) => f.noteId === note.note_id)}
+                        onIncidentReport={
+                          compliance.noteFlags.find((f) => f.noteId === note.note_id)?.severity === "fail"
+                            ? onOpenIncidentReport
+                            : undefined
+                        }
+                        tz={tz}
+                      />
+                    ))}
+                  </View>
+                )}
 
                 <WorkerMobileComposer
                   sessionId={sessionId}
                   taskId={task.task_id}
                   taskLabel={task.label}
                   goalTitle={task.goal_title ?? undefined}
+                  taskNotesText={taskNotes.filter((n) => !n.needs_translation).map((n) => n.content).join("\n")}
                   participantName={participantName}
                   participantId={participantId}
                   disabled={disabled || !sessionId}
@@ -309,8 +297,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   expanded: {
-    paddingHorizontal: 14,
-    paddingBottom: 14,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
     gap: 10,
   },
   description: {
@@ -327,38 +315,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
   },
-  thread: {
-    minHeight: 110,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderRadius: 12,
-    padding: 12,
-  },
-  emptyThread: {
-    flex: 1,
-    minHeight: 86,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-  },
-  emptyIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
-  emptyTitle: {
-    fontSize: 12,
-  },
-  emptyBody: {
-    fontSize: 11,
-    lineHeight: 16,
-    textAlign: "center",
-    maxWidth: 220,
-  },
   threadNotes: {
-    gap: 8,
+    gap: 6,
   },
 });

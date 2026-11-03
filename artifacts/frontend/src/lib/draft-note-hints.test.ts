@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { checkDraftNoteHints } from "@workspace/worker-compliance";
+import { checkDraftNoteHints, nextNotePrompt } from "@workspace/worker-compliance";
 
 // The live hints the worker app shows while a note is typed. They mirror the
 // server's scored rules (compliance_engine.py R6, R7, R12).
@@ -27,4 +27,22 @@ it("leaves a short note to the length hint alone", () => {
 
 it("still flags a possible restrictive practice first", () => {
   expect(ids("Locked the door so Sam could not leave the house.", "Sam")[0]).toBe("restrictive-practice");
+});
+
+// The note guide in the worker app asks about what a task's notes don't cover yet.
+it("asks first what was supported, then how the participant responded", () => {
+  expect(nextNotePrompt("", { hasGoal: true })).toBe("did");
+  expect(nextNotePrompt("Went to the shops at 10am for groceries.", { hasGoal: true })).toBe("response");
+});
+
+it("asks about the goal only when the task has one", () => {
+  const note = "Cooked lunch with Sam. He chose the vegetables.";
+  expect(nextNotePrompt(note, { hasGoal: true })).toBe("goal");
+  expect(nextNotePrompt(note, { hasGoal: false })).toBe("concern");
+});
+
+it("moves past skipped questions and finishes when everything is covered", () => {
+  const note = "Cooked lunch with Sam. He chose the vegetables.";
+  expect(nextNotePrompt(note, { hasGoal: true, skipped: ["goal"] })).toBe("concern");
+  expect(nextNotePrompt(`${note} He is more independent with chopping now. No concerns.`, { hasGoal: true })).toBeNull();
 });

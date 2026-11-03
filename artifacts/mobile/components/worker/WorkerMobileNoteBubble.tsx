@@ -9,7 +9,7 @@ import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
 import { isCheckinSessionNote } from "@workspace/worker-compliance";
 import type { SessionNoteRecord } from "@/lib/worker-api";
-import { noteLanguageLabel } from "@/lib/note-languages";
+import { noteLanguageNative } from "@/lib/note-languages";
 import type { NoteComplianceFlag } from "@workspace/worker-compliance";
 import { buildAttachmentFileName, formatTimeWithZone, SESSION_NOTE_MAX } from "@/lib/shift-utils";
 
@@ -26,6 +26,10 @@ type Props = {
   onPress?: () => void;
   /** Participant's branch zone. */
   tz?: string | null;
+  /** "chat": the worker's own message in a task's conversation (right
+   * aligned, no task label, since the thread already belongs to the task).
+   * "card" (default): the full-width card the end-of-shift review uses. */
+  variant?: "card" | "chat";
 };
 
 const CLAMP_LINES = 4;
@@ -68,6 +72,7 @@ export function WorkerMobileNoteBubble({
   onIncidentReport,
   onPress,
   tz,
+  variant = "card",
 }: Props) {
   const colors = useColors();
   const t = useT();
@@ -101,12 +106,11 @@ export function WorkerMobileNoteBubble({
   const photoUrl = type === "photo" ? note.attachment_urls?.find((u) => u.startsWith("http")) : undefined;
   const isFail = flag?.severity === "fail";
   const accent = isFail ? colors.destructive : colors.warning;
-  const metaLine = [
-    time,
-    isCheckin ? "check-in" : isVoice ? "voice" : type,
-    `${wc} words`,
-    flag ? "flagged" : null,
-  ]
+  // In a chat the time is enough; the review card keeps type and length.
+  const metaLine = (variant === "chat"
+    ? [time, isVoice ? "voice" : null, flag ? "flagged" : null]
+    : [time, isCheckin ? "check-in" : isVoice ? "voice" : type, `${wc} words`, flag ? "flagged" : null]
+  )
     .filter(Boolean)
     .join(" · ");
 
@@ -139,17 +143,19 @@ export function WorkerMobileNoteBubble({
     ]);
   };
 
+  const chat = variant === "chat";
   const bubbleContent = (
     <View
       style={[
         styles.bubble,
+        chat && styles.chatBubble,
         {
-          backgroundColor: isCheckin ? colors.clockInBg : colors.card,
-          borderColor: isCheckin ? colors.clockInBorder : flag ? accent : colors.border,
+          backgroundColor: isCheckin ? colors.clockInBg : chat ? colors.activeBg : colors.card,
+          borderColor: isCheckin ? colors.clockInBorder : flag ? accent : chat ? colors.primary + "26" : colors.border,
         },
       ]}
     >
-      {categoryLabel ? (
+      {categoryLabel && !chat ? (
         <Text style={[styles.category, { color: colors.composerPurple, fontFamily: "Inter_600SemiBold" }]}>
           {categoryLabel}
         </Text>
@@ -214,7 +220,7 @@ export function WorkerMobileNoteBubble({
                 accessibilityState={{ expanded: showOriginal }}
               >
                 <Text style={[styles.originalToggle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                  {t("notes.translatedFrom", { language: noteLanguageLabel(note.original_language) })} ·{" "}
+                  {t("notes.translatedFrom", { language: noteLanguageNative(note.original_language) })} ·{" "}
                   {showOriginal ? t("notes.hideOriginal") : t("notes.showOriginal")}
                 </Text>
               </Pressable>
@@ -366,6 +372,17 @@ const styles = StyleSheet.create({
     gap: 6,
     marginHorizontal: 14,
     marginVertical: 4,
+  },
+  chatBubble: {
+    alignSelf: "flex-end",
+    maxWidth: "88%",
+    minWidth: 0,
+    marginHorizontal: 0,
+    marginVertical: 0,
+    borderRadius: 18,
+    borderBottomRightRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   category: {
     fontSize: 11,

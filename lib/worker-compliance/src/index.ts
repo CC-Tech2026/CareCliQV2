@@ -336,6 +336,40 @@ const SUBJECTIVE_PHRASES: RegExp[] = [
 const PARTICIPANT_RESPONSE =
   /\b(report(?:ed|s)?|demonstrat(?:ed|es|ing)?|engag(?:ed|es|ing)?|declin(?:ed|es|ing)?|express(?:ed|es|ing)?|stat(?:ed|es|ing)?|indicated|respond(?:ed|s)?|participat(?:ed|es|ing)?|communicat(?:ed|es|ing)?|verbali[sz]ed|appear(?:ed|s)?|observ(?:ed|es|ing)?|comment(?:ed|s)?|said|smiled|laughed|chose|asked|enjoyed|refused)\b/i;
 
+// The server's R5 goal language, plus everyday ways a worker says it.
+const GOAL_PROGRESS =
+  /\b(goal|objective|aim(?:ed|s)?|target|milestone|worked\s+(?:on|toward)|toward|towards|progress\w*|achiev\w+|independen\w+|skill\w*|develop\w+|improv\w+|practi[sc]\w+|by (?:him|her|them)sel(?:f|ves))\b/i;
+
+const CONCERN_RECORDED =
+  /\b(concern\w*|noticed|worr\w+|incident|unwell|pain|injur\w+|upset|distress\w*|fall|fell|refus\w+|no (?:concerns|issues|incidents)|nothing to report|all (?:good|well))\b/i;
+
+export type NotePromptId = "did" | "response" | "goal" | "concern";
+
+/**
+ * The next thing a task's notes don't cover yet, for the worker app's note
+ * guide: what was supported, how the participant responded (R12), progress
+ * toward the task's goal (R5), and anything of concern. Reads the English
+ * record, so it works whatever language the worker wrote in. Null once
+ * everything is covered or skipped.
+ */
+export function nextNotePrompt(
+  notesText: string,
+  options: { hasGoal?: boolean; skipped?: ReadonlyArray<NotePromptId> } = {},
+): NotePromptId | null {
+  const text = notesText.trim();
+  const skipped = new Set(options.skipped ?? []);
+  const order: Array<[NotePromptId, boolean]> = [
+    ["did", text.length > 0],
+    ["response", PARTICIPANT_RESPONSE.test(text)],
+    ["goal", !options.hasGoal || GOAL_PROGRESS.test(text)],
+    ["concern", CONCERN_RECORDED.test(text)],
+  ];
+  for (const [id, covered] of order) {
+    if (!covered && !skipped.has(id)) return id;
+  }
+  return null;
+}
+
 /**
  * Live, single-note hints for a note still being typed/recorded - a
  * lightweight subset of evaluateWorkerCompliance's rules that only need the

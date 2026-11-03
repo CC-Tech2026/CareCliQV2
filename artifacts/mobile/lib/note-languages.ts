@@ -46,6 +46,20 @@ export function noteLanguageLabel(code: string | null | undefined): string {
   return option.nativeLabel === option.label ? option.label : `${option.nativeLabel} (${option.label})`;
 }
 
+/** The language's own name only ("Tiếng Việt"), for tight spaces. */
+export function noteLanguageNative(code: string | null | undefined): string {
+  return NOTE_LANGUAGES.find((o) => o.value === code)?.nativeLabel ?? code ?? "";
+}
+
+/** Languages matching a search, by English name, own name or code. */
+export function searchNoteLanguages(query: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) return NOTE_LANGUAGES;
+  return NOTE_LANGUAGES.filter(
+    (o) => o.label.toLowerCase().includes(q) || o.nativeLabel.toLowerCase().includes(q) || o.value.toLowerCase() === q,
+  );
+}
+
 export async function loadNoteLanguage(): Promise<string | null> {
   try {
     const saved = await AsyncStorage.getItem(CCQ_NOTE_LANGUAGE_KEY);
