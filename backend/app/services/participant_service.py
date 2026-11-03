@@ -88,6 +88,26 @@ def _normalize_address(payload: dict) -> None:
         payload["address"] = (payload["address"] or "").strip() or None
 
 
+# Shifts that haven't started yet. Each shift carries its own copy of the
+# address (shifts.participant_address), which the worker app, maps link and
+# travel claims read; shifts already worked keep the address they happened at.
+UPCOMING_SHIFT_STATUSES = ("unassigned", "scheduled")
+
+
+def _sync_upcoming_shift_addresses(participant_id: str, address: Optional[str]) -> None:
+    try:
+        (
+            get_supabase_admin()
+            .table("shifts")
+            .update({"participant_address": address})
+            .eq("participant_id", participant_id)
+            .in_("status", list(UPCOMING_SHIFT_STATUSES))
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("Could not update upcoming shift addresses for %s: %s", participant_id, exc)
+
+
 def _serialize_dates(payload: dict) -> dict:
     """Convert date objects to ISO strings."""
     for field in (
@@ -547,6 +567,9 @@ async def update_participant(
         return None
 
     updated = _normalize(rows[0])
+
+    if "address" in payload:
+        _sync_upcoming_shift_addresses(participant_id, payload["address"])
 
     if existing_before and current_user:
         from . import audit_service
