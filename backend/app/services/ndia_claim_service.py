@@ -474,6 +474,162 @@ async def mark_paid(user: dict, invoice_ids: list[str], payment_date: Optional[s
     return {"paid": len(updated)}
 
 
+# ── Reconciling the NDIA's results file ──────────────────────────────────
+#
+# After a bulk upload the provider portal returns a results CSV: the claim
+# lines as sent plus each one's outcome. Columns are matched by name
+# (case, spaces and punctuation ignored) rather than position, since the
+# NDIA has renamed and added columns over time. ClaimReference is required;
+# it's the reference build_bulk_csv wrote for each line.
+
+_RESULT_COLUMNS = {
+    "reference": ("claimreference",),
+    "status": ("paymentrequeststatus", "claimstatus", "paymentstatus", "status", "result"),
+    "error": ("errormessage", "error", "errors", "errordescription", "rejectionreason", "reason"),
+    "payment_reference": ("paymentrequestnumber", "paymentrequestid", "remittancereference", "paymentreference"),
+    "paid_amount": ("paidtotalamount", "paidamount", "amountpaid", "totalpaid"),
+}
+_REJECTED_WORDS = ("error", "reject", "fail", "declin", "invalid", "cancel")
+_PAID_WORDS = ("success", "paid", "approv", "complete", "accept", "processed")
+RESULTS_FILE_MAX_BYTES = 2_000_000
+
+
+def _key(header: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (header or "").lower())
+
+
+def _money(value: str) -> float:
+    try:
+        return float(re.sub(r"[^0-9.\-]", "", value or "") or 0)
+    except ValueError:
+        return 0.0
+
+
+def parse_results_file(content: str) -> list[dict[str, Any]]:
+    """One entry per claim line: reference, outcome (paid, rejected or
+    pending), the NDIA's message and payment request number."""
+    reader = csv.DictReader(io.StringIO((content or "").lstrip("﻿")))
+    by_key = {_key(h): h for h in (reader.fieldnames or []) if h}
+    columns = {
+        field: next((by_key[name] for name in names if name in by_key), None)
+        for field, names in _RESULT_COLUMNS.items()
+    }
+    if not columns["reference"]:
+        raise HTTPException(
+            status_code=422,
+            detail="This file has no ClaimReference column. Use the bulk payment request results file "
+            "downloaded from the NDIS provider portal.",
+        )
+    lines = []
+    for raw in reader:
+        get = lambda field: str(raw.get(columns[field]) or "").strip() if columns[field] else ""  # noqa: E731
+        reference = get("reference")
+        if not reference:
+            continue
+        status, error = get("status"), get("error")
+        paid_amount = _money(get("paid_amount"))
+        lowered = status.lower()
+        if error or any(word in lowered for word in _REJECTED_WORDS):
+            outcome = "rejected"
+        elif any(word in lowered for word in _PAID_WORDS) or paid_amount > 0:
+            outcome = "paid"
+        else:
+            outcome = "pending"
+        lines.append({
+            "reference": reference,
+            "outcome": outcome,
+            "status": status,
+            "message": error or (status if outcome == "rejected" else ""),
+            "payment_reference": get("payment_reference"),
+            "paid_cents": round(paid_amount * 100),
+        })
+    return lines
+
+
+async def reconcile_results(user: dict, content: str, apply: bool) -> dict[str, Any]:
+    """Match a results file to submitted claims. apply=False is the preview;
+    apply=True marks fully paid invoices paid and returns rejected ones to
+    Ready to claim with the NDIA's reason."""
+    org_id = _require_billing(user)
+    if len((content or "").encode("utf-8")) > RESULTS_FILE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="That file is too large for a results file.")
+    lines = parse_results_file(content)
+    if not lines:
+        raise HTTPException(status_code=422, detail="No claim lines were found in this file.")
+
+    supabase = get_supabase_admin()
+    from .billing_service import _fetch_all
+
+    claimed = _fetch_all(
+        lambda: supabase.table("invoices")
+        .select("id, invoice_number, participant_id, billing_period_id, recipient_name, line_items, total_cents, "
+                "status, claim_batch_id")
+        .eq("organization_id", org_id)
+        .not_.is_("claim_batch_id", "null")
+        .in_("status", list(SUBMITTED_STATUSES))
+        .order("id")
+    )
+    periods = _periods(list({str(i["billing_period_id"]) for i in claimed if i.get("billing_period_id")}))
+    participants = _participants(org_id, list({str(i["participant_id"]) for i in claimed if i.get("participant_id")}))
+    invoice_for_ref: dict[str, dict] = {}
+    refs_for_invoice: dict[str, list[str]] = {}
+    for invoice in claimed:
+        invoice_lines = claim_lines(invoice, periods.get(str(invoice.get("billing_period_id"))))
+        refs = [claim_reference(invoice.get("invoice_number") or "", i, len(invoice_lines)) for i in range(len(invoice_lines))]
+        refs_for_invoice[invoice["id"]] = refs
+        for ref in refs:
+            invoice_for_ref[ref.upper()] = invoice
+
+    results_by_invoice: dict[str, list[dict]] = {}
+    unmatched: list[str] = []
+    for line in lines:
+        invoice = invoice_for_ref.get(line["reference"].upper())
+        if invoice:
+            results_by_invoice.setdefault(invoice["id"], []).append(line)
+        else:
+            unmatched.append(line["reference"])
+
+    matched = []
+    for invoice_id, results in results_by_invoice.items():
+        invoice = next(i for i in claimed if i["id"] == invoice_id)
+        rejected = [r for r in results if r["outcome"] == "rejected"]
+        expected = len(refs_for_invoice[invoice_id])
+        if rejected:
+            outcome = "rejected"
+        elif len(results) >= expected and all(r["outcome"] == "paid" for r in results):
+            outcome = "paid"
+        else:
+            outcome = "pending"
+        participant = participants.get(str(invoice.get("participant_id"))) or {}
+        matched.append({
+            "invoice_id": invoice_id,
+            "invoice_number": invoice.get("invoice_number"),
+            "participant_name": participant.get("full_name") or invoice.get("recipient_name"),
+            "total_cents": int(invoice.get("total_cents") or 0),
+            "outcome": outcome,
+            "reason": "; ".join(dict.fromkeys(r["message"] for r in rejected if r["message"])) or None,
+            "payment_reference": next((r["payment_reference"] for r in results if r["payment_reference"]), None),
+        })
+
+    if apply:
+        by_reference: dict[str, list[str]] = {}
+        for row in matched:
+            if row["outcome"] == "paid":
+                by_reference.setdefault(row["payment_reference"] or "", []).append(row["invoice_id"])
+        for reference, ids in by_reference.items():
+            await mark_paid(user, ids, None, reference or None)
+        for row in matched:
+            if row["outcome"] == "rejected":
+                await return_to_ready(user, row["invoice_id"], f"NDIA: {row['reason'] or 'claim rejected'}"[:500])
+
+    return {
+        "lines": len(lines),
+        "matched": matched,
+        "unmatched_references": unmatched[:50],
+        "applied": apply,
+    }
+
+
 async def return_to_ready(user: dict, invoice_id: str, reason: str) -> dict[str, Any]:
     """The NDIA rejected the claim: take the invoice out of its batch so it
     can be corrected and claimed again. The batch keeps its file as sent."""

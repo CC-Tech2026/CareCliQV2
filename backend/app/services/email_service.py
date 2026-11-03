@@ -231,6 +231,120 @@ def _account_email_shell(
 """
 
 
+def build_invoice_email(
+    *,
+    provider_name: str,
+    logo_url: str | None,
+    accent_color: str | None,
+    recipient_name: str,
+    participant_name: str | None,
+    invoice_number: str,
+    amount: str,
+    due_date: str,
+    service_period: str | None,
+    reminder: bool = False,
+    days_overdue: int = 0,
+    note: str | None = None,
+    contact_email: str | None = None,
+    contact_phone: str | None = None,
+) -> tuple[str, str, str]:
+    """(subject, text, html) for an invoice sent to a plan manager or
+    participant. The PDF goes as an attachment; the email is the cover note
+    with what they need to pay or process it."""
+    if reminder:
+        subject = f"Reminder: invoice {invoice_number} from {provider_name}"
+        headline = (
+            f"Invoice {invoice_number} is {days_overdue} day{'s' if days_overdue != 1 else ''} past due."
+            if days_overdue > 0
+            else f"A reminder about invoice {invoice_number}."
+        )
+        lead = "We haven't recorded a payment for this invoice yet. A copy is attached."
+    else:
+        subject = f"Invoice {invoice_number} from {provider_name}"
+        headline = f"Invoice {invoice_number}"
+        lead = "Please find our invoice attached."
+    if participant_name:
+        lead += f" It covers NDIS supports delivered to {participant_name}."
+
+    rows = [("Amount due", amount), ("Due date", due_date)]
+    if service_period:
+        rows.append(("Service period", service_period))
+    if participant_name:
+        rows.append(("Participant", participant_name))
+    summary = "".join(
+        f"""\
+  <tr>
+    <td style="padding:12px 0;border-top:1px solid {_RULE};font-family:{_FONT};font-size:13px;color:{_MUTED};">{escape(label)}</td>
+    <td align="right" style="padding:12px 0;border-top:1px solid {_RULE};font-family:{_FONT};font-size:15px;font-weight:700;color:{_INK};">{escape(value)}</td>
+  </tr>"""
+        for label, value in rows
+    )
+    contact = " · ".join(x for x in (contact_email, contact_phone) if x)
+    note_html = (
+        f'<p style="margin:20px 0 0;font-size:15px;line-height:1.6;color:{_INK};white-space:pre-line;">{escape(note)}</p>'
+        if note
+        else ""
+    )
+    header = (
+        f'<img src="{escape(logo_url, quote=True)}" alt="{escape(provider_name)}" '
+        'style="display:block;max-height:44px;max-width:200px;border:0;">'
+        if logo_url
+        else f'<div style="font-family:{_FONT};font-size:17px;font-weight:700;color:{_INK};">{escape(provider_name)}</div>'
+    )
+    html = f"""\
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+  </head>
+  <body style="margin:0;padding:0;background:{_PAGE};">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:{_PAGE};">{escape(f"{amount} due {due_date}")}</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="{_PAGE}">
+      <tr>
+        <td align="center" style="padding:32px 12px;">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="width:100%;max-width:600px;border-radius:20px;overflow:hidden;">
+            <tr><td height="4" bgcolor="{escape(accent_color or _INK, quote=True)}" style="font-size:0;line-height:0;">&nbsp;</td></tr>
+            <tr><td style="padding:28px 40px 8px;">{header}</td></tr>
+            <tr>
+              <td style="padding:20px 40px 8px;font-family:{_FONT};color:{_INK};">
+                <p style="margin:0 0 6px;font-size:14px;color:{_MUTED};">Hi {escape(recipient_name or "there")},</p>
+                <h1 style="margin:0;font-size:24px;line-height:1.25;color:{_INK};">{escape(headline)}</h1>
+                <p style="margin:12px 0 22px;font-size:15px;line-height:1.6;color:{_INK};">{escape(lead)}</p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-bottom:1px solid {_RULE};">
+{summary}
+                </table>
+                {note_html}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 40px 36px;font-family:{_FONT};font-size:13px;line-height:1.6;color:{_MUTED};">
+                Questions about this invoice? Reply to this email{f" or contact us on {escape(contact)}" if contact else ""}.
+              </td>
+            </tr>
+          </table>
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
+            <tr>
+              <td align="center" style="padding:20px 24px 0;font-family:{_FONT};font-size:11px;line-height:1.7;color:#9A9AA5;">
+                Sent by {escape(provider_name)} using CareCliQ
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+"""
+    text_lines = [f"Hi {recipient_name or 'there'},", "", headline, lead, ""]
+    text_lines += [f"{label}: {value}" for label, value in rows]
+    if note:
+        text_lines += ["", note]
+    text_lines += ["", f"Questions? Reply to this email{f' or contact us on {contact}' if contact else ''}.", "", provider_name]
+    return subject, "\n".join(text_lines), html
+
+
 def _carecliq_logo_header() -> str:
     return (
         f'<img src="{escape(_asset_url("carecliQ_logo_new.png"), quote=True)}" width="56" alt="CareCliQ" '
@@ -703,7 +817,10 @@ def send_email(
     text_body: str,
     html_body: str | None = None,
     from_display_name: str | None = None,
+    reply_to: str | None = None,
+    attachments: list[tuple[str, bytes, str]] | None = None,
 ) -> None:
+    """attachments: (file name, content, MIME type such as "application/pdf")."""
     if not settings.email_enabled:
         logger.info("Email disabled; skipping outbound email to %s", to_email)
         return
@@ -714,9 +831,14 @@ def send_email(
     message["Subject"] = subject
     message["From"] = formataddr((from_display_name or settings.smtp_from_name, settings.smtp_from_email))
     message["To"] = to_email
+    if reply_to:
+        message["Reply-To"] = reply_to
     message.set_content(text_body)
     if html_body:
         message.add_alternative(html_body, subtype="html")
+    for file_name, content, mime_type in attachments or []:
+        maintype, _, subtype = mime_type.partition("/")
+        message.add_attachment(content, maintype=maintype, subtype=subtype or "octet-stream", filename=file_name)
 
     if settings.smtp_use_starttls:
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
