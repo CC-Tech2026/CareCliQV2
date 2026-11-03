@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   ShieldCheck,
   ShieldAlert,
-  FileCheck2,
   Users,
   ChevronRight,
   FolderLock,
@@ -40,6 +39,8 @@ import {
   type Tone,
 } from "@/components/layout/PageKit";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { AUDIT_READINESS_KEY, fetchChecklist, type Area } from "@/services/auditReadinessService";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -79,6 +80,9 @@ interface MDData {
     at_risk: number;
     non_compliant: number;
   };
+
+  workers_at_risk?: Array<{ id: string }>;
+  workers_at_risk_count?: number;
 }
 
 interface TrendPoint {
@@ -89,17 +93,18 @@ interface TrendPoint {
 
 type AuditStatus = "ready" | "attention" | "pending";
 
+// The same bands as a single shift note (sessions.tsx, dashboards.py), so a
+// score means the same thing on every page.
 function scoreTone(score: number): Tone {
   if (score >= 85) return "good";
-  if (score >= 70) return "warning";
+  if (score >= 60) return "warning";
   return "danger";
 }
 
 function getScoreLabel(score: number) {
-  if (score >= 90) return "Strong";
-  if (score >= 85) return "On track";
-  if (score >= 70) return "Needs attention";
-  return "Critical";
+  if (score >= 85) return "On target";
+  if (score >= 60) return "Needs review";
+  return "Priority review";
 }
 
 function getAuditStatus(
@@ -146,30 +151,6 @@ function IconTile({ icon: Icon, tone }: { icon: React.ComponentType<{ size?: num
   );
 }
 
-function ReadinessRow({
-  icon,
-  label,
-  description,
-  status,
-}: {
-  icon: React.ComponentType<{ size?: number }>;
-  label: string;
-  description: string;
-  status: AuditStatus;
-}) {
-  const config = AUDIT_STATUS[status];
-  return (
-    <li className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
-      <IconTile icon={icon} tone={config.tone} />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold" style={{ color: TEXT }}>{label}</span>
-        <span className="block text-xs" style={{ color: MUTED }}>{description}</span>
-      </span>
-      <StatusText tone={config.tone}>{config.item}</StatusText>
-    </li>
-  );
-}
-
 function WorkerRow({ worker, tone }: { worker: MDData["worker_rankings"][number]; tone: Tone }) {
   return (
     <li className="flex items-center gap-3 px-4 py-3 sm:px-5">
@@ -186,6 +167,167 @@ function WorkerRow({ worker, tone }: { worker: MDData["worker_rankings"][number]
       </span>
       <span className="text-sm font-semibold tabular-nums" style={{ color: toneColor(tone) }}>{worker.compliance_score}%</span>
     </li>
+  );
+}
+
+type EvidenceArea = { ready: number; total: number; gaps: number };
+
+/** The numbers people call "compliance" measure different things. Side by
+ *  side, each with what it counts and where to act, so a documentation score
+ *  is never read as a credentials or participant-file figure. */
+function ComplianceMeasures({ data, workersBelow }: { data: MDData; workersBelow: number }) {
+  const checklist = useOrgQuery([...AUDIT_READINESS_KEY, "checklist"], { queryFn: fetchChecklist, retry: false });
+  const summary = checklist.data?.summary;
+  const area = (key: Area): EvidenceArea | undefined => summary?.by_area?.find((a) => a.area === key);
+  const percentOf = (a: EvidenceArea | undefined) => (a && a.total ? Math.round((100 * a.ready) / a.total) : null);
+  const evidenceValue = (a: EvidenceArea | undefined) => {
+    if (checklist.isLoading) return "...";
+    const pct = percentOf(a);
+    return pct == null ? "N/A" : `${pct}%`;
+  };
+  const evidenceTone = (a: EvidenceArea | undefined): Tone => {
+    const pct = percentOf(a);
+    return pct == null ? "neutral" : scoreTone(pct);
+  };
+  const evidenceDetail = (a: EvidenceArea | undefined) => {
+    if (checklist.isError) return "Evidence figures couldn't be loaded.";
+    if (!a || !a.total) return "";
+    return `${a.ready} of ${a.total} requirements have current evidence${a.gaps ? `, ${a.gaps} missing or overdue` : ""}.`;
+  };
+  const staff = area("staff");
+  const participant = area("participant");
+  const overall = summary?.readiness_percent ?? null;
+
+  const rows: Array<{ label: string; value: string; tone: Tone; measures: string; detail: string; href: string; action: string }> = [
+    {
+      label: "Documentation",
+      value: `${data.compliance_score}%`,
+      tone: scoreTone(data.compliance_score),
+      measures: "How well shift notes evidence the support delivered.",
+      detail: `Average score of the most recent scored shift notes, up to 400. Target ${data.compliance_target}%.`,
+      href: "/sessions",
+      action: "Shift notes",
+    },
+    {
+      label: "Staff documentation",
+      value: String(workersBelow),
+      tone: workersBelow ? "warning" : "good",
+      measures: workersBelow === 1 ? "Worker whose notes average under 85%." : "Workers whose notes average under 85%.",
+      detail: "Each worker's score is the average of their own shift note scores. It doesn't cover credentials.",
+      href: "/md/staff",
+      action: "Staff",
+    },
+    {
+      label: "Staff files",
+      value: evidenceValue(staff),
+      tone: evidenceTone(staff),
+      measures: "Screening, Working with Children Check, first aid, induction and other staff requirements.",
+      detail: evidenceDetail(staff),
+      href: "/md/compliance?view=checklist&area=staff",
+      action: "Staff evidence",
+    },
+    {
+      label: "Participant files",
+      value: evidenceValue(participant),
+      tone: evidenceTone(participant),
+      measures: "Service agreements, plans, risk assessments and other participant requirements.",
+      detail: evidenceDetail(participant),
+      href: "/md/compliance?view=checklist&area=participant",
+      action: "Participant evidence",
+    },
+    {
+      label: "Audit evidence overall",
+      value: checklist.isLoading ? "..." : overall == null ? "N/A" : `${overall}%`,
+      tone: overall == null ? "neutral" : scoreTone(overall),
+      measures: "Every requirement that applies to you: staff, participants, governance, quality and insurance.",
+      detail: checklist.isError
+        ? "Evidence figures couldn't be loaded."
+        : summary
+          ? `${summary.counts.current + summary.counts.due_soon} of ${summary.applicable} have current evidence (in date, or due within 60 days).`
+          : "",
+      href: "/md/compliance?view=overview",
+      action: "Evidence overview",
+    },
+  ];
+
+  return (
+    <Section
+      title="What each score measures"
+      description="Documentation scores come from shift notes. Staff and participant files come from the evidence checklist. They move independently."
+    >
+      <Surface>
+        <RowList>
+          {rows.map((row) => (
+            <li key={row.label}>
+              <Link href={row.href} className={`${rowClass} items-start`}>
+                <span
+                  className="w-16 shrink-0 text-lg font-semibold tabular-nums"
+                  style={{ color: row.tone === "neutral" ? MUTED : toneColor(row.tone) }}
+                >
+                  {row.value}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold" style={{ color: TEXT }}>{row.label}</span>
+                  <span className="block text-sm" style={{ color: TEXT }}>{row.measures}</span>
+                  {row.detail && <span className="mt-0.5 block text-xs leading-5" style={{ color: MUTED }}>{row.detail}</span>}
+                </span>
+                <span className="hidden shrink-0 items-center gap-1 text-xs font-semibold sm:inline-flex" style={{ color: PLUM }}>
+                  {row.action}
+                  <ChevronRight size={14} />
+                </span>
+              </Link>
+            </li>
+          ))}
+        </RowList>
+      </Surface>
+    </Section>
+  );
+}
+
+/** How one shift note gets its score (sessions.py, compliance_engine.py). */
+function ScoreExplainer() {
+  return (
+    <Section
+      title="How a shift note is scored"
+      description="Every submitted shift note gets a score out of 100. The documentation figures on this page are averages of these."
+    >
+      <Surface className="p-5 sm:p-6">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div>
+            <p className="text-sm font-semibold" style={{ color: TEXT }}>70% from CareCliQ's rule checks</p>
+            <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>
+              Session time and duration, written within 48 hours, note detail, support type, goals referenced, objective
+              language, person-first language, scope of practice, incident triggers, restrictive practice reported, not
+              copied from earlier notes, and the participant's response. Budget, shift-length and long-shift checks are
+              added when they apply.
+            </p>
+            <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>
+              A pass earns the full share, a warning half, a fail nothing. A note whose times don't match the shift loses
+              10 points, and a note too short to evidence the support can't score above 50%.
+            </p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: TEXT }}>30% from the AI review</p>
+            <ul className="mt-1 space-y-0.5 text-sm leading-6" style={{ color: MUTED }}>
+              <li>Documentation completeness, 30 points</li>
+              <li>Goal alignment, 25 points</li>
+              <li>NDIS language, 20 points</li>
+              <li>Risk detection, 15 points</li>
+              <li>Audit readiness, 10 points</li>
+            </ul>
+            <p className="mt-3 text-sm font-semibold" style={{ color: TEXT }}>Bands</p>
+            <ul className="mt-1 space-y-0.5 text-sm leading-6" style={{ color: MUTED }}>
+              <li><span className="font-semibold" style={{ color: GREEN }}>85% and above</span>: compliant</li>
+              <li><span className="font-semibold" style={{ color: AMBER }}>60% to 84%</span>: at risk, needs review</li>
+              <li><span className="font-semibold" style={{ color: RED }}>Under 60%</span>: non-compliant, priority review</li>
+            </ul>
+            <p className="mt-2 text-xs leading-5" style={{ color: MUTED }}>
+              Notes not yet submitted aren't scored and aren't counted.
+            </p>
+          </div>
+        </div>
+      </Surface>
+    </Section>
   );
 }
 
@@ -336,14 +478,14 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
             <div className="flex flex-wrap items-center justify-between gap-3">
               <SummaryStrip
                 items={[
-                  { value: `${data.compliance_score}%`, label: `organisation score, target ${data.compliance_target}%`, tone: scoreTone(data.compliance_score) },
-                  { value: `${derived.compliantPercent}%`, label: "compliant", tone: "good" },
-                  { value: `${derived.atRiskPercent}%`, label: "at risk", tone: derived.atRiskPercent ? "warning" : undefined },
+                  { value: `${data.compliance_score}%`, label: `documentation score, target ${data.compliance_target}%`, tone: scoreTone(data.compliance_score) },
+                  { value: `${derived.compliantPercent}%`, label: "of notes compliant", tone: "good" },
+                  { value: `${derived.atRiskPercent}%`, label: "of notes at risk", tone: derived.atRiskPercent ? "warning" : undefined },
                   {
                     value: data.team_compliance_breakdown.non_compliant,
-                    label: "non-compliant",
+                    label: data.team_compliance_breakdown.non_compliant === 1 ? "non-compliant note" : "non-compliant notes",
                     tone: data.team_compliance_breakdown.non_compliant ? "danger" : "good",
-                    onClick: () => navigate("/md/staff"),
+                    onClick: () => navigate("/sessions?band=non_compliant"),
                   },
                   { value: derived.highAlerts, label: derived.highAlerts === 1 ? "high-priority alert" : "high-priority alerts", tone: derived.highAlerts ? "danger" : "good" },
                 ]}
@@ -367,8 +509,8 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
                   </div>
                   <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>
                     {data.compliance_score >= data.compliance_target
-                      ? "The organisation is at or above its compliance target."
-                      : "The organisation is below target. Focus on the highest-impact quality gaps first."}
+                      ? "Shift notes are at or above the documentation target."
+                      : "Shift notes are below the documentation target. Start with the issues that recur most."}
                   </p>
                   <div className="mt-4">
                     <div className="mb-1.5 flex justify-between text-xs" style={{ color: MUTED }}>
@@ -387,9 +529,9 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
                 </div>
 
                 <div>
-                  <p className="text-base font-semibold" style={{ color: TEXT }}>How the team splits</p>
+                  <p className="text-base font-semibold" style={{ color: TEXT }}>How shift notes split</p>
                   <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>
-                    {derived.total} {derived.total === 1 ? "record" : "records"} scored across the organisation.
+                    {derived.total} scored {derived.total === 1 ? "shift note" : "shift notes"}, the most recent up to 400.
                   </p>
                   <div className="mt-4 flex h-2 overflow-hidden rounded-full" style={{ background: SOFT }} aria-hidden="true">
                     <div style={{ width: `${derived.compliantPercent}%`, background: GREEN }} />
@@ -480,47 +622,10 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
                 </Surface>
               </Section>
 
-              <Section
-                title="Audit readiness"
-                description="Whether the organisation can evidence compliance today."
-                action={<StatusText tone={AUDIT_STATUS[derived.readiness].tone}>{AUDIT_STATUS[derived.readiness].overall}</StatusText>}
-              >
-                <Surface>
-                  <RowList>
-                    <ReadinessRow
-                      icon={FileCheck2}
-                      label="Session evidence"
-                      description="Session documentation and compliance outcomes."
-                      status={data.team_compliance_breakdown.non_compliant === 0 ? "ready" : "attention"}
-                    />
-                    <ReadinessRow
-                      icon={ShieldCheck}
-                      label="Compliance target"
-                      description={`Organisation score against the ${data.compliance_target}% target.`}
-                      status={data.compliance_score >= data.compliance_target ? "ready" : "attention"}
-                    />
-                    <ReadinessRow
-                      icon={AlertTriangle}
-                      label="High-priority alerts"
-                      description="Open alerts that need executive review."
-                      status={derived.highAlerts === 0 ? "ready" : "attention"}
-                    />
-                    <ReadinessRow
-                      icon={Users}
-                      label="Worker credentials"
-                      description="Credential and certification currency."
-                      status="pending"
-                    />
-                    <ReadinessRow
-                      icon={FileCheck2}
-                      label="Training evidence"
-                      description="Current staff training records."
-                      status="pending"
-                    />
-                  </RowList>
-                </Surface>
-              </Section>
+              <ComplianceMeasures data={data} workersBelow={data.workers_at_risk_count ?? data.workers_at_risk?.length ?? derived.attentionWorkers.length} />
             </div>
+
+            <ScoreExplainer />
 
             {trendError && (
               <p role="status" className="rounded-2xl bg-cc-surface px-5 py-4 text-sm" style={{ color: MUTED }}>

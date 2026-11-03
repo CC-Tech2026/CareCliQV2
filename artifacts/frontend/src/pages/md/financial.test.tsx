@@ -150,14 +150,11 @@ it("shows the months as a table", async () => {
   expect(within(table).getByText("$35,000.00")).toBeTruthy();
 });
 
-it("opens NDIS claims as its own section and remembers it in the address", async () => {
+it("sends claims to Billing & claims rather than repeating them here", async () => {
   renderPage();
   await screen.findAllByText("$451,300.00");
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Financial sections" })).getByRole("button", { name: /NDIS claims/ }));
-  expect(await screen.findByRole("region", { name: "NDIS invoices" })).toBeTruthy();
-  expect(window.location.search).toBe("?tab=claims");
-  fireEvent.click(await screen.findByRole("checkbox", { name: /Select Liam Carter/ }));
-  expect(screen.getByText(/1 invoice selected/)).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
-  expect(screen.queryByText(/1 invoice selected/)).toBeNull();
+  expect(screen.queryByRole("navigation", { name: "Financial sections" })).toBeNull();
+  fireEvent.click(await screen.findByRole("button", { name: /Claim 1 invoice/ }));
+  expect(window.location.pathname).toBe("/billing");
+  expect(window.location.search).toBe("?workspace=claims");
 });

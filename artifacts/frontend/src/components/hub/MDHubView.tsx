@@ -328,7 +328,7 @@ function ExecutiveMetric({
       style={{ borderColor: BORDER, background: SURFACE }}
     >
       {content}
-      <span className="flex w-full items-center justify-between gap-2 border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-text">{label === "Support visits" ? "Review the schedule" : "Review participant outcomes"}<ArrowRight size={14} /></span>
+      <span className="flex w-full items-center justify-between gap-2 border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-text">{label === "Support visits" ? "Review the schedule" : "Review participants"}<ArrowRight size={14} /></span>
     </button>
   );
 }
@@ -1347,10 +1347,10 @@ export function MDHubView() {
           />
 
           <ExecutiveMetric
-            label="Goal achievement"
+            label="Active NDIS plans"
             value={`${data.goal_achievement_rate}%`}
-            detail="Participant goals"
-            onClick={() => navigate("/md/service-delivery")}
+            detail="Participants whose plan is active"
+            onClick={() => navigate("/onboard-participant/active")}
             achievementPct={data.goal_achievement_rate}
           />
         </div>

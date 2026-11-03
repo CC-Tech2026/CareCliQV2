@@ -770,6 +770,8 @@ async def _md_dashboard_payload(
         "goal_achievement_rate": goal_rate,
         "workers_at_risk": workers_at_risk[:10],
         "workers_needing_attention": workers_at_risk[:10],
+        # The lists above stop at 10; this is how many there are in total.
+        "workers_at_risk_count": len(workers_at_risk),
         "documentation_summary": {
             "sample_size": len(sessions),
             "scored": sum(1 for s in sessions if s.get("compliance_score") is not None),

@@ -59,6 +59,8 @@ interface MDData {
   compliance_target: number;
   incidents_this_month: number;
   goal_achievement_rate: number;
+  /** workers_at_risk stops at 10; this is the full count. */
+  workers_at_risk_count?: number;
   workers_at_risk: Array<{
     id: string;
     full_name: string;
@@ -240,6 +242,7 @@ export default function MDExecutivePage() {
   ];
   const goalTone: Tone = data.goal_achievement_rate >= 50 ? "good" : data.goal_achievement_rate >= 25 ? "warning" : "danger";
   const workersBelow = [...data.workers_at_risk].sort((a, b) => a.compliance_score - b.compliance_score);
+  const workersBelowCount = data.workers_at_risk_count ?? workersBelow.length;
 
   const scorecard: Array<{ label: string; value: string; target: string; tone: Tone; status: string; href: string; action: string }> = [
     {
@@ -248,24 +251,26 @@ export default function MDExecutivePage() {
       target: `${target}% target`,
       tone: complianceTone,
       status: data.compliance_score >= target ? "On target" : `${Math.round(gap)} pts below target`,
-      href: "/md/compliance?view=shifts",
+      href: "/sessions",
       action: "Review shift notes",
     },
     {
       label: "Workers below the documentation threshold",
-      value: String(workersBelow.length),
+      value: String(workersBelowCount),
       target: `scoring under ${WORKER_THRESHOLD}%`,
-      tone: workersBelow.length ? "warning" : "good",
-      status: workersBelow.length ? "Support needed" : "Everyone on target",
+      tone: workersBelowCount ? "warning" : "good",
+      status: workersBelowCount ? "Support needed" : "Everyone on target",
       href: "/md/staff",
       action: "Open staff",
     },
     {
-      label: "Participant goal achievement",
+      // goal_achievement_rate is the share of participants whose plan status is
+      // active; there is no per-goal achieved status to measure goals by yet.
+      label: "Participants with an active plan",
       value: percent(data.goal_achievement_rate),
-      target: "of active goals achieved",
+      target: `of ${data.active_participants} participants`,
       tone: goalTone,
-      status: data.goal_achievement_rate >= 50 ? "Progressing" : "Few goals achieved",
+      status: data.goal_achievement_rate >= 50 ? "Most plans current" : "Plans need renewing",
       href: "/onboard-participant/active",
       action: "View participants",
     },
@@ -351,11 +356,11 @@ export default function MDExecutivePage() {
               label: "documentation compliance",
               tone: complianceTone,
               hint: data.compliance_score >= target ? `At or above the ${target}% target` : `${Math.round(gap)} pts below the ${target}% target`,
-              onClick: () => navigate("/md/compliance?view=shifts"),
+              onClick: () => navigate("/sessions"),
             },
             {
               value: percent(data.goal_achievement_rate),
-              label: "goals achieved",
+              label: "with an active plan",
               tone: goalTone,
               hint: `${data.active_participants} active participants`,
               onClick: () => navigate("/onboard-participant/active"),
@@ -475,7 +480,7 @@ export default function MDExecutivePage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/md/compliance?view=shifts" className={`${outlineClass} mt-4 w-full`}>
+              <Link href="/sessions" className={`${outlineClass} mt-4 w-full`}>
                 Review shift notes
                 <ArrowRight size={15} />
               </Link>

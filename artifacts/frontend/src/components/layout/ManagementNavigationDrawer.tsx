@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Menu, Search } from "lucide-react";
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-type Group = { label: string; items: readonly { href: string; label: string; icon: ElementType }[] };
+type Group = { label: string; items: readonly { href: string; label: string; icon: ElementType; tabs?: readonly { label: string }[] }[] };
 export function ManagementNavigationDrawer({ groups, location, isActive }: { groups: readonly Group[]; location: string; isActive: (href: string) => boolean }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -14,7 +14,7 @@ export function ManagementNavigationDrawer({ groups, location, isActive }: { gro
     media.addEventListener("change", closeOnDesktop);
     return () => media.removeEventListener("change", closeOnDesktop);
   }, []);
-  const filtered = groups.map(group => ({ ...group, items: group.items.filter(item => (group.label + " " + item.label).toLowerCase().includes(search.trim().toLowerCase())) })).filter(group => group.items.length);
+  const filtered = groups.map(group => ({ ...group, items: group.items.filter(item => [group.label, item.label, ...(item.tabs ?? []).map(tab => tab.label)].join(" ").toLowerCase().includes(search.trim().toLowerCase())) })).filter(group => group.items.length);
   return <Sheet open={open} onOpenChange={value => { setOpen(value); if (value) setSearch(""); }}>
     <SheetTrigger asChild><button type="button" aria-label="Open management navigation" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-cc-text hover:bg-cc-soft xl:hidden"><Menu size={22} /></button></SheetTrigger>
     <SheetContent className="flex h-[100dvh] w-full flex-col gap-3 bg-cc-surface p-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:max-w-md [&>button]:h-11 [&>button]:w-11 [&>button]:flex [&>button]:items-center [&>button]:justify-center">

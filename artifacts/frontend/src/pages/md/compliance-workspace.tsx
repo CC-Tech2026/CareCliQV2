@@ -1,18 +1,17 @@
 import { Link, Redirect, useSearch } from "wouter";
-import { Activity, ClipboardCheck, FileSearch, FileText, FolderLock, ShieldCheck } from "lucide-react";
+import { Activity, ClipboardCheck, FileSearch, FolderLock, ShieldCheck } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PageHeader, PillTabs, ghostClass } from "@/components/layout/PageKit";
 import QualityOverview from "./compliance";
 import AuditEvidence from "./audit-readiness";
-import ShiftNotesReport from "./shift-notes";
+import { AuditPackPanel } from "@/pages/audit-pack";
 
 const tabs = [
   { key: "quality", label: "Quality & risk", icon: Activity, detail: "Documentation quality, team trends and staff follow-up." },
-  { key: "shifts", label: "Shift notes", icon: FileText, detail: "Every recent shift note and its documentation score." },
   { key: "overview", label: "Evidence overview", icon: ShieldCheck, detail: "Evidence coverage, with missing and overdue records first." },
   { key: "checklist", label: "Evidence checklist", icon: ClipboardCheck, detail: "Find a requirement, link supporting records and review evidence." },
-  { key: "packs", label: "Audit packs", icon: FileSearch, detail: "Export outstanding actions and gather documents for an auditor." },
+  { key: "packs", label: "Audit packs", icon: FileSearch, detail: "Export the NDIS audit pack, outstanding actions and documents for an auditor." },
 ] as const;
 
 export function LegacyAuditRedirect() {
@@ -23,6 +22,8 @@ export function LegacyAuditRedirect() {
 
 export default function ComplianceWorkspace() {
   const params = new URLSearchParams(useSearch());
+  // Shift notes used to have a second list here; the one list is Shift notes.
+  if (params.get("view") === "shifts") return <Redirect to="/sessions" replace />;
   const selected = tabs.find(tab => tab.key === params.get("view")) ?? tabs[0];
   return <HubLayout>
     <div className="space-y-8 pb-12">
@@ -38,7 +39,9 @@ export default function ComplianceWorkspace() {
         options={tabs.map(({ key, label, icon, detail }) => ({ key, label, icon, title: detail, href: `/md/compliance?view=${key}` }))}
       />
       <section aria-label={selected.label}>
-        {selected.key === "quality" ? <ProtectedRoute allowedRoles={["managing_director", "super_admin"]}><QualityOverview embedded /></ProtectedRoute> : selected.key === "shifts" ? <ProtectedRoute allowedRoles={["managing_director", "super_admin"]}><ShiftNotesReport /></ProtectedRoute> : <ProtectedRoute allowedRoles={["managing_director", "super_admin"]} requiredCapability="governance_vault" capabilityLabel="Audit evidence"><AuditEvidence embedded /></ProtectedRoute>}
+        {selected.key === "quality" ? <ProtectedRoute allowedRoles={["managing_director", "super_admin"]}><QualityOverview embedded /></ProtectedRoute> : <ProtectedRoute allowedRoles={["managing_director", "super_admin"]} requiredCapability="governance_vault" capabilityLabel="Audit evidence"><AuditEvidence embedded /></ProtectedRoute>}
+        {/* The coordinator's audit pack export, here rather than as a second "Audit pack" page in the MD nav. */}
+        {selected.key === "packs" && <div className="mt-10 space-y-4"><h2 className="text-base font-semibold text-cc-text">NDIS audit pack export</h2><AuditPackPanel embedded /></div>}
       </section>
     </div>
   </HubLayout>;

@@ -8,6 +8,7 @@ vi.mock("@/components/layout/HubLayout", () => ({ HubLayout: ({ children }: any)
 vi.mock("@/components/ProtectedRoute", () => ({ ProtectedRoute: ({ children }: any) => children }));
 vi.mock("./compliance", () => ({ default: () => <p>Quality metrics loaded</p> }));
 vi.mock("./audit-readiness", () => ({ default: () => <p>Evidence workspace loaded</p> }));
+vi.mock("@/pages/audit-pack", () => ({ AuditPackPanel: () => <p>Audit pack export loaded</p> }));
 afterEach(cleanup);
 
 it("offers all four views inside one compliance workspace", () => {
@@ -20,6 +21,7 @@ it("offers all four views inside one compliance workspace", () => {
     expect(screen.getByRole("link", { name: new RegExp(label) }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByText("Evidence workspace loaded")).toBeTruthy();
   }
+  expect(screen.getByText("Audit pack export loaded")).toBeTruthy();
 });
 
 it("preserves checklist filters and the selected item from legacy audit links", async () => {
