@@ -94,12 +94,36 @@ def _normalize_address(payload: dict) -> None:
 UPCOMING_SHIFT_STATUSES = ("unassigned", "scheduled")
 
 
-def _sync_upcoming_shift_addresses(participant_id: str, address: Optional[str]) -> None:
+async def _address_coordinates(address: Optional[str], previous_address: Optional[str]) -> Optional[dict]:
+    """latitude/longitude to save with an address, or None to keep the stored
+    ones. GPS clock-in checks the worker is within 100 m of these, so after
+    a move the old point is cleared even when the new address can't be
+    looked up: workers then clock in unverified instead of being refused at
+    the right door."""
+    if not address:
+        return {"latitude": None, "longitude": None}
+    from . import geocoding_service
+
+    coords = await geocoding_service.geocode_address(address)
+    if coords:
+        return {"latitude": coords[0], "longitude": coords[1]}
+    if address != (previous_address or "").strip():
+        return {"latitude": None, "longitude": None}
+    return None
+
+
+def _sync_upcoming_shift_addresses(
+    participant_id: str, address: Optional[str], coordinates: Optional[dict] = None
+) -> None:
+    fields: dict = {"participant_address": address}
+    if coordinates is not None:
+        fields["participant_latitude"] = coordinates["latitude"]
+        fields["participant_longitude"] = coordinates["longitude"]
     try:
         (
             get_supabase_admin()
             .table("shifts")
-            .update({"participant_address": address})
+            .update(fields)
             .eq("participant_id", participant_id)
             .in_("status", list(UPCOMING_SHIFT_STATUSES))
             .execute()
@@ -551,9 +575,15 @@ async def update_participant(
         if not existing_before:
             return None
 
+    coordinates: Optional[dict] = None
+    if "address" in payload:
+        coordinates = await _address_coordinates(
+            payload["address"], (existing_before or {}).get("address")
+        )
+
     result = (
         supabase.table(TABLE)
-        .update(payload)
+        .update({**payload, **(coordinates or {})})
         .eq("id", participant_id)
         .execute()
     )
@@ -569,7 +599,7 @@ async def update_participant(
     updated = _normalize(rows[0])
 
     if "address" in payload:
-        _sync_upcoming_shift_addresses(participant_id, payload["address"])
+        _sync_upcoming_shift_addresses(participant_id, payload["address"], coordinates)
 
     if existing_before and current_user:
         from . import audit_service
