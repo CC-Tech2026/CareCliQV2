@@ -67,3 +67,43 @@ def test_a_blank_address_clears_the_field_instead_of_storing_spaces():
     payload = {"phone": "0412"}
     participant_service._normalize_address(payload)
     assert payload == {"phone": "0412"}
+
+
+def test_upcoming_shifts_take_the_new_address():
+    supabase = MagicMock()
+    with patch("backend.app.services.participant_service.get_supabase_admin", return_value=supabase):
+        participant_service._sync_upcoming_shift_addresses("p-1", "27 Rundle Mall, Adelaide SA 5000")
+
+    supabase.table.assert_called_once_with("shifts")
+    update = supabase.table.return_value.update
+    update.assert_called_once_with({"participant_address": "27 Rundle Mall, Adelaide SA 5000"})
+    update.return_value.eq.assert_called_once_with("participant_id", "p-1")
+    update.return_value.eq.return_value.in_.assert_called_once_with("status", ["unassigned", "scheduled"])
+
+
+def test_a_failed_shift_refresh_does_not_fail_the_participant_save():
+    supabase = MagicMock()
+    supabase.table.side_effect = RuntimeError("network down")
+    with patch("backend.app.services.participant_service.get_supabase_admin", return_value=supabase):
+        participant_service._sync_upcoming_shift_addresses("p-1", None)
+
+
+@pytest.mark.asyncio
+async def test_saving_an_address_refreshes_upcoming_shifts_and_other_saves_do_not():
+    from backend.app.schemas.participant import ParticipantUpdate
+
+    supabase = MagicMock()
+    supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{"id": "p-1", "address": "27 Rundle Mall"}]
+    )
+    svc_path = "backend.app.services.participant_service"
+    with patch(f"{svc_path}.get_supabase_admin", return_value=supabase), \
+         patch(f"{svc_path}._sync_upcoming_shift_addresses") as sync, \
+         patch("backend.app.services.goals_service.enrich_participant", new=AsyncMock(side_effect=lambda p, **_: p)), \
+         patch("backend.app.services.funding_service.enrich_participant_plan_fields", new=AsyncMock(side_effect=lambda p: p)):
+        await participant_service.update_participant("p-1", ParticipantUpdate(address=" 27 Rundle Mall "))
+        sync.assert_called_once_with("p-1", "27 Rundle Mall")
+
+        sync.reset_mock()
+        await participant_service.update_participant("p-1", ParticipantUpdate(phone="0412 000 000"))
+        sync.assert_not_called()

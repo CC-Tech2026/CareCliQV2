@@ -2111,7 +2111,7 @@ async def assign_shift(
     # Verify participant exists and belongs to organization
     try:
         participant_resp = supabase.table("participants").select(
-            "id, full_name, ndis_number"
+            "id, full_name, ndis_number, address"
         ).eq("id", body.participant_id).eq("organization_id", org_id).execute()
         
         if not participant_resp.data:
@@ -2168,6 +2168,7 @@ async def assign_shift(
             "worker_id": body.worker_id,
             "participant_id": body.participant_id,
             "participant_name": participant.get("full_name"),
+            "participant_address": participant.get("address"),
             "shift_type": shift_type,
             "duty_type": body.duty_type or "disability_services",
             "is_sleepover": bool(body.is_sleepover and body.sleepover_start and body.sleepover_end),
@@ -3611,7 +3612,7 @@ async def bulk_create_shifts(
     # Resolve participant
     p_resp = (
         supabase.table("participants")
-        .select("id, full_name")
+        .select("id, full_name, address")
         .eq("id", body.participant_id)
         .eq("organization_id", org_id)
         .limit(1)
@@ -3694,6 +3695,7 @@ async def bulk_create_shifts(
                 "organization_id": org_id,
                 "participant_id": body.participant_id,
                 "participant_name": participant.get("full_name"),
+                "participant_address": participant.get("address"),
                 "shift_type": _normalize_shift_type(body.shift_type),
                 "scheduled_start": shift_start_dt.isoformat(),
                 "scheduled_end": shift_end_dt.isoformat(),
@@ -3813,7 +3815,7 @@ async def create_unassigned_shift(
 
     p_resp = (
         supabase.table("participants")
-        .select("id, full_name")
+        .select("id, full_name, address")
         .eq("id", body.participant_id)
         .eq("organization_id", org_id)
         .limit(1)
@@ -3843,6 +3845,7 @@ async def create_unassigned_shift(
         "organization_id": org_id,
         "participant_id": body.participant_id,
         "participant_name": participant.get("full_name"),
+        "participant_address": participant.get("address"),
         "worker_id": UNASSIGNED_SHIFT_PLACEHOLDER_ID,
         "shift_type": _normalize_shift_type(body.shift_type),
         "duty_type": body.duty_type or "disability_services",

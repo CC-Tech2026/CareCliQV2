@@ -649,3 +649,57 @@ class TestAssignShiftDurationCalculation:
         assert data["shift"]["duration_minutes"] == 240  # 4 hours
         
         app.dependency_overrides.clear()
+
+
+class TestAssignShiftCopiesParticipantAddress:
+    """The worker app reads the address from the shift, so a new shift takes
+    the participant's current one."""
+
+    @patch("backend.app.services.induction_service.is_induction_incomplete", return_value=False)
+    @patch("backend.app.services.worker_training_service.is_training_overdue", return_value=False)
+    @patch("backend.app.api.coordinator.get_supabase_admin")
+    @patch("backend.app.api.coordinator.notify_shift_change", new_callable=AsyncMock)
+    def test_new_shift_carries_the_participant_address(
+        self, mock_notify, mock_supabase, _mock_training_overdue, _mock_induction_incomplete,
+        test_client, coordinator_user, mock_active_participant_plan
+    ):
+        mock_client = MagicMock()
+        mock_supabase.return_value = mock_client
+        tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+
+        worker_mock = MagicMock()
+        worker_mock.select.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
+            data=[{"id": "worker-123", "full_name": "John Worker", "role": "support_worker", "is_active": True}]
+        )
+        participant_mock = MagicMock()
+        participant_mock.select.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
+            data=[{"id": "participant-123", "full_name": "Jane Participant", "address": "12 King St, Adelaide SA 5000"}]
+        )
+        creds_mock = MagicMock()
+        creds_mock.select.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
+            data=[{"id": "cred-123", "credential_type": "NDIS Screening", "status": "valid", "expiry_date": tomorrow}]
+        )
+        shift_mock = MagicMock()
+        shift_mock.insert.return_value.execute.return_value = MagicMock(
+            data=[{"id": "shift-123", "worker_id": "worker-123", "participant_id": "participant-123", "status": "scheduled"}]
+        )
+        tables = {"users": worker_mock, "participants": participant_mock, "credentials": creds_mock, "shifts": shift_mock}
+        mock_client.table.side_effect = lambda name: tables.get(name, MagicMock())
+
+        app.dependency_overrides[get_current_user] = lambda: coordinator_user
+        try:
+            response = test_client.post(
+                "/api/coordinator/shifts",
+                json={
+                    "worker_id": "worker-123",
+                    "participant_id": "participant-123",
+                    "scheduled_start": "2026-06-20T09:00:00Z",
+                    "scheduled_end": "2026-06-20T13:00:00Z",
+                },
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+        inserted = shift_mock.insert.call_args.args[0]
+        assert inserted["participant_address"] == "12 King St, Adelaide SA 5000"
