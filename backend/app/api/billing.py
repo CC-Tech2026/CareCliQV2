@@ -156,10 +156,59 @@ async def mark_invoice_sent(invoice_id: str, request: Request, current_user: dic
     return await billing_service.mark_invoice_sent(invoice_id, current_user)
 
 
+class InvoicePaid(BaseModel):
+    payment_date: Optional[date] = None
+    reference: Optional[str] = Field(default=None, max_length=120)
+    method: Optional[Literal["bank_transfer", "plan_manager", "ndis_portal", "card", "cash", "other"]] = None
+
+
 @router.post("/invoices/{invoice_id}/mark-paid")
-async def mark_invoice_paid(invoice_id: str, request: Request, current_user: dict = Depends(get_current_user)):
+async def mark_invoice_paid(
+    invoice_id: str,
+    request: Request,
+    body: Optional[InvoicePaid] = None,
+    current_user: dict = Depends(get_current_user),
+):
     require_recent_reauth(request, current_user)
-    return await billing_service.mark_invoice_paid(invoice_id, current_user)
+    body = body or InvoicePaid()
+    return await billing_service.mark_invoice_paid(
+        invoice_id,
+        current_user,
+        payment_date=body.payment_date.isoformat() if body.payment_date else None,
+        reference=body.reference,
+        method=body.method,
+    )
+
+
+class InvoiceSend(BaseModel):
+    to_email: Optional[str] = Field(default=None, max_length=254)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+@router.post("/invoices/{invoice_id}/send")
+async def send_invoice(
+    invoice_id: str,
+    request: Request,
+    body: Optional[InvoiceSend] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Email the approved invoice and its PDF to the plan manager or participant."""
+    require_recent_reauth(request, current_user)
+    body = body or InvoiceSend()
+    return await billing_service.send_invoice(invoice_id, current_user, to_email=body.to_email, note=body.note)
+
+
+@router.post("/invoices/{invoice_id}/remind")
+async def send_invoice_reminder(
+    invoice_id: str,
+    request: Request,
+    body: Optional[InvoiceSend] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Re-send an unpaid invoice with a payment reminder."""
+    require_recent_reauth(request, current_user)
+    body = body or InvoiceSend()
+    return await billing_service.send_invoice(invoice_id, current_user, note=body.note, reminder=True)
 
 
 @router.post("/invoices/{invoice_id}/pdf")
@@ -223,6 +272,20 @@ async def mark_ndia_claims_paid(body: ClaimsPaid, request: Request, current_user
     return await ndia_claim_service.mark_paid(
         current_user, body.invoice_ids, body.payment_date.isoformat() if body.payment_date else None, body.reference,
     )
+
+
+class ClaimResults(BaseModel):
+    content: str = Field(min_length=1, max_length=2_000_000)
+    apply: bool = False
+
+
+@router.post("/claims/results")
+async def reconcile_ndia_claim_results(body: ClaimResults, request: Request, current_user: dict = Depends(get_current_user)):
+    """Match the NDIA's bulk payment results file to submitted claims: a
+    preview first, then (apply) mark paid or return rejected claims."""
+    if body.apply:
+        require_recent_reauth(request, current_user)
+    return await ndia_claim_service.reconcile_results(current_user, body.content, body.apply)
 
 
 @router.post("/claims/{invoice_id}/rejected")

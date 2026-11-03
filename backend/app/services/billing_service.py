@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 from uuid import uuid4
@@ -63,6 +63,9 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
 }
 # Once an invoice has gone out, who it's addressed to is part of the record.
 RECIPIENT_LOCKED_STATUSES = {"issued", "sent", "overdue", "paid", "cancelled", "void"}
+# The invoice PDF's stated terms. An invoice approved without a due date gets
+# one this many days out, so it can fall overdue.
+PAYMENT_TERMS_DAYS = 14
 
 
 def check_transition(current: str, target: str) -> None:
@@ -102,6 +105,17 @@ def _fmt_dmy(val: Any) -> str:
         return datetime.fromisoformat(str(val)[:10]).strftime("%d/%m/%Y")
     except Exception:
         return str(val)[:10]
+
+
+def _fmt_long(val: Any) -> str:
+    """'14 November 2026'."""
+    if not val:
+        return ""
+    try:
+        day = datetime.fromisoformat(str(val)[:10])
+    except Exception:
+        return str(val)[:10]
+    return f"{day.day} {day.strftime('%B %Y')}"
 
 
 def _require_org(user: dict) -> str:
@@ -337,16 +351,39 @@ async def _enrich_with_service_category(supabase, invoices: list[dict]) -> list[
     try:
         result = (
             supabase.table("participants")
-            .select("id, service_category")
+            .select("id, service_category, plan_management_type")
             .in_("id", participant_ids)
             .execute()
         )
-        category_by_id = {str(r["id"]): r.get("service_category") for r in (result.data or [])}
+        participant_by_id = {str(r["id"]): r for r in (result.data or [])}
     except Exception:
-        category_by_id = {}
+        participant_by_id = {}
+    period_ids = list({str(inv["billing_period_id"]) for inv in invoices if inv.get("billing_period_id")})
+    try:
+        locked_by_period = {
+            str(r["id"]): r.get("locked_plan_management_type")
+            for r in (
+                supabase.table("billing_periods")
+                .select("id, locked_plan_management_type")
+                .in_("id", period_ids)
+                .execute()
+                .data
+                or []
+            )
+        } if period_ids else {}
+    except Exception:
+        locked_by_period = {}
     for inv in invoices:
         pid = inv.get("participant_id")
-        inv["service_category"] = category_by_id.get(str(pid)) if pid else None
+        participant = participant_by_id.get(str(pid), {}) if pid else {}
+        inv["service_category"] = participant.get("service_category")
+        # Who pays: the type locked on the billing period, else the
+        # participant's current one (as NDIA claims decide it). The invoice
+        # workflow offers "claim with the NDIA" or "mark as sent" from this.
+        raw_type = locked_by_period.get(str(inv.get("billing_period_id"))) or participant.get("plan_management_type")
+        inv["plan_management_type"] = (
+            billing_period_service.normalize_plan_management_type(str(raw_type)) if raw_type else None
+        )
         # Participant's branch zone — clients show the invoice date in it.
         inv["timezone"] = str(participant_timezone(inv, organization_id=inv.get("organization_id")))
     return invoices
@@ -802,6 +839,8 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
         payload["issued_at"] = _now_iso()
     if status_value in {"finalized", "issued", "sent", "paid"} and not existing.get("finalized_at"):
         payload["finalized_at"] = _now_iso()
+    if status_value in {"finalized", "issued", "sent"} and not payload.get("due_date"):
+        payload["due_date"] = (app_today() + timedelta(days=PAYMENT_TERMS_DAYS)).isoformat()
     if status_value == "paid" and not existing.get("paid_at"):
         payload["paid_at"] = _now_iso()
         payload["payment_date"] = data.get("payment_date") or app_today().isoformat()
@@ -839,8 +878,24 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
     return updated
 
 
-async def mark_invoice_paid(invoice_id: str, user: dict) -> dict:
-    return await update_invoice(invoice_id, user, {"status": "paid"})
+async def mark_invoice_paid(
+    invoice_id: str,
+    user: dict,
+    *,
+    payment_date: str | None = None,
+    reference: str | None = None,
+    method: str | None = None,
+) -> dict:
+    """Record a payment: when it arrived and the remittance or bank
+    reference it came with, so it can be matched to the bank statement."""
+    data: dict[str, Any] = {"status": "paid"}
+    if payment_date:
+        data["payment_date"] = payment_date
+    if reference:
+        data["payment_reference"] = reference.strip()
+    if method:
+        data["payment_method"] = method
+    return await update_invoice(invoice_id, user, data)
 
 
 async def finalize_invoice(invoice_id: str, user: dict) -> dict:
@@ -849,6 +904,138 @@ async def finalize_invoice(invoice_id: str, user: dict) -> dict:
 
 async def mark_invoice_sent(invoice_id: str, user: dict) -> dict:
     return await update_invoice(invoice_id, user, {"status": "sent"})
+
+
+SENDABLE_STATUSES = {"finalized", "issued", "sent", "overdue"}
+
+
+def _service_period(line_items: list[dict]) -> str | None:
+    days = sorted(
+        str(day)[:10]
+        for item in line_items
+        for day in (item.get("service_date_from"), item.get("service_date_to"), item.get("service_date"))
+        if day
+    )
+    if not days:
+        return None
+    first, last = _fmt_long(days[0]), _fmt_long(days[-1])
+    return first if first == last else f"{first} to {last}"
+
+
+async def send_invoice(
+    invoice_id: str,
+    user: dict,
+    *,
+    to_email: str | None = None,
+    note: str | None = None,
+    reminder: bool = False,
+) -> dict:
+    """Email an approved invoice, with its PDF, to the plan manager or
+    participant who pays it, and record it as sent. A reminder re-sends a
+    sent invoice that hasn't been paid. NDIA-managed invoices are claimed
+    through the bulk payment request instead."""
+    from . import email_service
+
+    invoice = await get_invoice(invoice_id, user)
+    org_id = invoice["organization_id"]
+    status_now = invoice.get("status") or "draft"
+    if status_now == "draft":
+        raise HTTPException(status_code=409, detail="Approve the invoice before sending it.")
+    if status_now not in SENDABLE_STATUSES:
+        raise HTTPException(status_code=409, detail=f"A {status_now} invoice can't be sent.")
+    if reminder and status_now not in {"sent", "overdue"}:
+        raise HTTPException(status_code=409, detail="Send the invoice before sending a reminder.")
+
+    supabase = get_supabase_admin()
+    enriched = (await _enrich_with_service_category(supabase, [dict(invoice)]))[0]
+    if enriched.get("plan_management_type") == "NDIA-managed":
+        raise HTTPException(
+            status_code=409,
+            detail="NDIA-managed invoices are claimed with the NDIA bulk payment request, not emailed.",
+        )
+
+    email = (to_email or invoice.get("recipient_email") or "").strip()
+    if "@" not in email:
+        raise HTTPException(status_code=422, detail="Add the email address of the plan manager or participant.")
+    if email != (invoice.get("recipient_email") or "").strip():
+        if status_now in RECIPIENT_LOCKED_STATUSES:
+            raise HTTPException(
+                status_code=409,
+                detail=f"This invoice was sent to {invoice.get('recipient_email') or 'another address'}; "
+                "reminders go to the same address.",
+            )
+        supabase.table("invoices").update({"recipient_email": email, "updated_at": _now_iso()}).eq(
+            "id", invoice_id
+        ).eq("organization_id", org_id).execute()
+
+    delivery = email_service.delivery_state()
+    if delivery.status != "queued":
+        raise HTTPException(status_code=503, detail=f"Invoice email isn't available yet. {delivery.message}")
+
+    # A fresh PDF, so the attachment matches the invoice as approved.
+    with_pdf = await generate_invoice_pdf(invoice_id, user)
+    try:
+        pdf_bytes = supabase.storage.from_(INVOICE_FILES_BUCKET).download(with_pdf["pdf_path"])
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=internal_error_detail("The invoice PDF couldn't be attached", exc))
+
+    letterhead = get_letterhead(org_id)
+    provider = letterhead.get("provider_name") or "Your NDIS provider"
+    participant_name = None
+    if invoice.get("participant_id"):
+        rows = (
+            supabase.table("participants").select("full_name")
+            .eq("id", str(invoice["participant_id"])).eq("organization_id", org_id).limit(1).execute().data
+            or []
+        )
+        participant_name = rows[0].get("full_name") if rows else None
+    due_raw = invoice.get("due_date") or (app_today() + timedelta(days=PAYMENT_TERMS_DAYS)).isoformat()
+    days_overdue = max(0, (app_today() - date.fromisoformat(str(due_raw)[:10])).days)
+    subject, text_body, html_body = email_service.build_invoice_email(
+        provider_name=provider,
+        logo_url=letterhead.get("logo_url"),
+        accent_color=letterhead.get("brand_accent_color"),
+        recipient_name=invoice.get("recipient_name") or "",
+        participant_name=participant_name,
+        invoice_number=invoice["invoice_number"],
+        amount=f"${(invoice.get('total_cents') or 0) / 100:,.2f}",
+        due_date=_fmt_long(due_raw),
+        service_period=_service_period(invoice.get("line_items") or []),
+        reminder=reminder,
+        days_overdue=days_overdue,
+        note=(note or "").strip() or None,
+        contact_email=letterhead.get("email"),
+        contact_phone=letterhead.get("phone"),
+    )
+    try:
+        email_service.send_email(
+            to_email=email,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            from_display_name=f"{provider} via CareCliQ",
+            reply_to=letterhead.get("email") or None,
+            attachments=[(f"{invoice['invoice_number']}.pdf", pdf_bytes, "application/pdf")],
+        )
+    except Exception as exc:
+        logger.exception("Invoice %s email to the payer failed", invoice_id)
+        raise HTTPException(
+            status_code=502,
+            detail=internal_error_detail("The email couldn't be sent, so the invoice wasn't marked as sent", exc),
+        )
+
+    updated = {**invoice, **with_pdf, "recipient_email": email}
+    if status_now in {"finalized", "issued"}:
+        updated = await update_invoice(invoice_id, user, {"status": "sent"})
+    await audit_service.log_action(
+        action_type="invoice.reminder_sent" if reminder else "invoice.emailed",
+        entity_type="invoice",
+        entity_id=invoice_id,
+        user_id=get_user_id(user),
+        organization_id=org_id,
+        after_state={"to": email, "days_overdue": days_overdue if reminder else None},
+    )
+    return _with_signed_pdf_url(updated)
 
 
 async def cancel_invoice(invoice_id: str, user: dict) -> dict:
@@ -1055,7 +1242,7 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
     else:
         try:
             due_date = (
-                datetime.fromisoformat(str(invoice_date_raw)[:10]) + timedelta(days=30)
+                datetime.fromisoformat(str(invoice_date_raw)[:10]) + timedelta(days=PAYMENT_TERMS_DAYS)
             ).strftime("%d %B %Y")
         except Exception:
             due_date = ""
@@ -1175,7 +1362,7 @@ def _build_template_data(invoice: dict, supabase: Any) -> dict:
         "bank_account_name": "",
         "bank_bsb": "",
         "bank_account_number": "",
-        "payment_terms_days": 14,
+        "payment_terms_days": PAYMENT_TERMS_DAYS,
         # Plan management routing
         "plan_manager_name": plan_manager_name,
         "plan_manager_email": plan_manager_email,

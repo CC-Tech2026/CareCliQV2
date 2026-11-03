@@ -120,7 +120,6 @@ const MD_NAV_GROUPS = [
     items: [
       { href: "/md/staff", label: "Staff", icon: Users },
       { href: "/team", label: "Workers", icon: Contact },
-      { href: "/billing", label: "NDIS invoices", icon: DollarSign },
       { href: "/md/staff-onboarding", label: "Onboarding", icon: UserPlus },
       {
         href: "/md/onboarding/training",
@@ -162,6 +161,7 @@ const MD_NAV_GROUPS = [
         label: "Financial Governance",
         icon: DollarSign,
       },
+      { href: "/billing", label: "NDIS invoices", icon: DollarSign },
       { href: "/coordinator/verification", label: "Shift verification", icon: BadgeCheck },
       { href: "/coordinator/travel", label: "Travel claims", icon: Car },
     ],

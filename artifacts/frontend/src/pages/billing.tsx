@@ -11,11 +11,11 @@ import {
   FileText,
   Search,
   ChevronDown,
-  Send,
-  ClipboardCheck,
-  ListChecks,
   BarChart3,
   BookOpen,
+  ArrowRight,
+  Download,
+  Send,
 } from "lucide-react";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -23,9 +23,17 @@ import {
   getRevenueReport,
   getParticipantCurrentBillingPeriod,
   getReadyToInvoice,
+  getShiftVerificationQueue,
   planManagementTypeLabel,
   type ReadyToInvoiceEntry,
 } from "@/services/coordinatorService";
+import {
+  FLOW_STEPS,
+  InvoiceFlowSteps,
+  StepDone,
+  firstStepWithWork,
+  type FlowStep,
+} from "@/components/billing/InvoiceFlow";
 import {
   resolveNdisPrice,
   listCurrentNdisCatalogue,
@@ -38,7 +46,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { SectionInfo } from "@/components/ui/section-info";
-import { PageHeader, PillTabs, ctaClass } from "@/components/layout/PageKit";
+import { PageHeader, PillTabs, ctaClass, outlineClass } from "@/components/layout/PageKit";
 import { PanelHeader, PrimaryButton } from "@/pages/md/vault/components/PanelKit";
 import { useReAuth } from "@/hooks/useReAuth";
 import { NdiaClaimsPanel } from "@/components/billing/NdiaClaimsPanel";
@@ -80,6 +88,10 @@ export interface Invoice {
   issued_at?: string | null;
   cancelled_at?: string | null;
   pdf_generation_failed?: boolean;
+  /** Who pays: "NDIA-managed" ones are claimed, the rest are sent. */
+  plan_management_type?: string | null;
+  claim_submitted_at?: string | null;
+  participant_id?: string | null;
   id: string;
   invoice_number: string;
   recipient_name: string;
@@ -95,6 +107,9 @@ export interface Invoice {
     unit_amount_cents: number;
     item_code?: string | null;
     service_date?: string | null;
+    /** Lines billed from timesheets cover a range of service dates. */
+    service_date_from?: string | null;
+    service_date_to?: string | null;
     location_type?: string | null;
     line_total_cents: number;
     /** The service agreement the line was delivered under (verified shifts). */
@@ -128,24 +143,34 @@ export function overdueDays(
   return Number.isFinite(days) ? Math.max(0, days) : 0;
 }
 
+/** Matches the invoice PDF's stated terms (billing_service.PAYMENT_TERMS_DAYS). */
+const PAYMENT_TERMS_DAYS = 14;
+
+/** "4 Oct 2026", or "4 Oct 2026 – 25 Oct 2026" for a line billed from timesheets. */
+export function lineServiceDates(item: Invoice["line_items"][number]) {
+  const from = item.service_date_from || item.service_date;
+  const to = item.service_date_to || from;
+  if (!from) return null;
+  return from === to ? formatShortDate(from) : `${formatShortDate(from)} – ${formatShortDate(to!)}`;
+}
+
 export function invoiceReviewWarnings(invoice: Invoice) {
   const warnings: string[] = [];
   if (!invoice.recipient_name?.trim())
     warnings.push("Add the billing recipient.");
   if (!invoice.recipient_email?.trim())
     warnings.push(
-      "No recipient email is recorded. Confirm how this invoice will be delivered.",
+      "No payer email on file. Add it in the next step when you email the invoice.",
     );
-  if (!invoice.due_date) warnings.push("No payment due date is recorded.");
   if (!invoice.line_items.length)
     warnings.push("This invoice has no service items.");
-  if (invoice.line_items.some((item) => item.item_code && !item.service_date))
+  if (invoice.line_items.some((item) => item.item_code && !lineServiceDates(item)))
     warnings.push(
-      "Some NDIS items have no service date. Check the applicable rate before finalising.",
+      "Some NDIS items have no service date. Check the applicable rate before approving.",
     );
   if (invoice.pdf_generation_failed)
     warnings.push(
-      "The invoice PDF could not be generated. Regenerate it before finalising.",
+      "The invoice PDF could not be generated. Regenerate it before approving.",
     );
   return warnings;
 }
@@ -165,7 +190,7 @@ function InvoiceRecord({ invoice }: { invoice: Invoice }) {
         </div>
         <div>
           <dt className="text-cc-muted">Payment due</dt>
-          <dd>{invoice.due_date || "Not recorded"}</dd>
+          <dd>{invoice.due_date ? formatShortDate(invoice.due_date) : "Not set (set when approved)"}</dd>
         </div>
       </dl>
       <div className="divide-y divide-cc-border">
@@ -185,7 +210,7 @@ function InvoiceRecord({ invoice }: { invoice: Invoice }) {
                 </p>
               )}
               <p className="text-cc-muted">
-                Service: {item.service_date || "Not recorded"}
+                Delivered: {lineServiceDates(item) ?? "Not recorded"}
               </p>
               <p className="text-cc-muted">
                 {quantity(item.quantity)} x{" "}
@@ -258,6 +283,8 @@ function InvoiceActivity({ invoiceId }: { invoiceId: string }) {
     "invoice.cancelled": "Invoice cancelled",
     "invoice.pdf_generated": "PDF generated",
     "invoice.pdf_generation_failed": "PDF generation failed",
+    "invoice.emailed": "Emailed to the payer",
+    "invoice.reminder_sent": "Payment reminder emailed",
   };
   return (
     <section className="mt-5 border-t border-cc-border pt-4">
@@ -309,8 +336,43 @@ function statusTone(status: string) {
 
 // ── Invoice register ─────────────────────────────────────────────────────────
 
-const BILLING_WORKSPACES = ["claims", "invoices", "ready", "checks", "reports", "pricing"] as const;
+/** The four invoicing steps, then the reference views beside them. */
+const BILLING_WORKSPACES = [...FLOW_STEPS, "invoices", "reports", "pricing"] as const;
 type BillingWorkspace = (typeof BILLING_WORKSPACES)[number];
+/** Section names from before the steps, so old links still land. */
+const LEGACY_WORKSPACES: Record<string, BillingWorkspace> = { checks: "check", ready: "create", claims: "paid" };
+
+function requestedWorkspace(): BillingWorkspace | null {
+  if (typeof window === "undefined") return null;
+  const raw = new URLSearchParams(window.location.search).get("workspace");
+  if (!raw) return null;
+  if (raw in LEGACY_WORKSPACES) return LEGACY_WORKSPACES[raw];
+  return BILLING_WORKSPACES.includes(raw as BillingWorkspace) ? (raw as BillingWorkspace) : null;
+}
+
+const isNdiaManaged = (invoice: Invoice) => invoice.plan_management_type === "NDIA-managed";
+
+/** Approve & send: drafts to approve, and approved invoices not yet sent to
+ * a plan manager or participant. Approved NDIA-managed ones are claimed in
+ * Get paid instead. */
+export function awaitingApproval(invoice: Invoice) {
+  if (invoice.status === "draft") return true;
+  return ["finalized", "issued"].includes(invoice.status) && !isNdiaManaged(invoice);
+}
+
+/** Get paid: sent invoices not yet paid, and approved NDIA-managed ones
+ * (claimed with the NDIA from here). */
+export function awaitingPayment(invoice: Invoice) {
+  if (["sent", "overdue"].includes(invoice.status)) return true;
+  return ["finalized", "issued"].includes(invoice.status) && isNdiaManaged(invoice);
+}
+
+function payerLabel(invoice: Invoice) {
+  if (isNdiaManaged(invoice)) return "Claimed from the NDIA";
+  if (invoice.plan_management_type === "plan-managed") return "Plan manager";
+  if (invoice.plan_management_type === "self-managed") return "Participant";
+  return null;
+}
 
 type InvoiceFilter = "all" | "draft" | "outstanding" | "overdue" | "paid" | "cancelled";
 const INVOICE_FILTERS: Array<[InvoiceFilter, string]> = [
@@ -357,7 +419,7 @@ export function invoiceStatusPill(invoice: Invoice): { label: string; fg: string
     case "paid":
       return { label: "Paid", fg: "var(--cc-status-success)", bg: "var(--cc-status-success-bg)" };
     case "finalized":
-      return { label: "Finalised", fg: "var(--cc-status-info)", bg: "var(--cc-status-info-bg)" };
+      return { label: "Approved", fg: "var(--cc-status-info)", bg: "var(--cc-status-info-bg)" };
     case "issued":
       return { label: "Issued", fg: "var(--cc-status-info)", bg: "var(--cc-status-info-bg)" };
     case "sent":
@@ -428,6 +490,317 @@ function InvoiceRows({
   );
 }
 
+/** How each payer reads on a row: plan-managed and self-managed invoices
+ * are emailed, NDIA-managed ones are claimed. */
+const PAYER_BADGES: Record<string, { label: string; fg: string; bg: string }> = {
+  "NDIA-managed": { label: "NDIA-managed", fg: "var(--cc-plum)", bg: "var(--cc-soft)" },
+  "plan-managed": { label: "Plan-managed", fg: "var(--cc-status-info)", bg: "var(--cc-status-info-bg)" },
+  "self-managed": { label: "Self-managed", fg: "var(--cc-status-success)", bg: "var(--cc-status-success-bg)" },
+};
+
+function PayerBadge({ invoice }: { invoice: Invoice }) {
+  const badge = PAYER_BADGES[invoice.plan_management_type ?? ""];
+  if (!badge) return null;
+  return (
+    <span
+      className="hidden rounded-md px-1.5 py-0.5 text-[10px] font-semibold sm:inline-block"
+      style={{ color: badge.fg, background: badge.bg }}
+    >
+      {badge.label}
+    </span>
+  );
+}
+
+/** A step's invoices: who it's for, where it goes, and its one action. */
+function InvoiceQueue({
+  invoices,
+  nameOf,
+  actionLabel,
+  onOpen,
+  onAction,
+  busyId,
+  detail,
+}: {
+  invoices: Invoice[];
+  nameOf: (invoice: Invoice) => string;
+  actionLabel: (invoice: Invoice) => string;
+  onOpen: (invoice: Invoice) => void;
+  onAction?: (invoice: Invoice) => void;
+  busyId?: string | null;
+  /** Replaces the due date in the second line (e.g. "12 days overdue"). */
+  detail?: (invoice: Invoice) => string | null;
+}) {
+  return (
+    <ul className="divide-y divide-cc-border">
+      {invoices.map((invoice) => {
+        const pill = invoiceStatusPill(invoice);
+        const name = nameOf(invoice);
+        const extra = detail?.(invoice);
+        return (
+          <li key={invoice.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <button type="button" className="min-w-0 flex-1 basis-56 text-left" onClick={() => onOpen(invoice)}>
+              <span className="flex items-center gap-2">
+                <span className="truncate text-sm font-semibold text-cc-text">{name}</span>
+                <PayerBadge invoice={invoice} />
+              </span>
+              <span className="block truncate text-xs text-cc-muted">
+                {[
+                  invoice.invoice_number,
+                  invoice.recipient_name && invoice.recipient_name !== name ? `to ${invoice.recipient_name}` : null,
+                  extra ?? (invoice.due_date ? `due ${formatShortDate(invoice.due_date)}` : null),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </button>
+            <div className="flex shrink-0 items-center gap-3">
+              <span
+                className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide"
+                style={{ color: pill.fg, background: pill.bg }}
+              >
+                {pill.label}
+              </span>
+              <span className="w-24 text-right text-sm font-semibold tabular-nums text-cc-text">
+                {cents(invoice.total_cents, invoice.currency)}
+              </span>
+              <button
+                type="button"
+                className={outlineClass}
+                disabled={busyId === invoice.id}
+                onClick={() => (onAction ?? onOpen)(invoice)}
+                aria-label={`${actionLabel(invoice)} ${invoice.invoice_number}`}
+              >
+                {busyId === invoice.id && <Loader2 className="h-4 w-4 animate-spin" />}
+                {actionLabel(invoice)}
+              </button>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+const fieldClass =
+  "mt-1 min-h-10 w-full rounded-xl border border-cc-border bg-white px-3 text-sm text-cc-text focus:outline-none focus:ring-2 focus:ring-[var(--cc-plum)] disabled:opacity-60";
+
+/** The invoice panel's footer: the one thing to do next for this invoice.
+ * Remount it per invoice and status (key) so its fields start fresh. */
+function InvoiceNextAction({
+  invoice,
+  busy,
+  reviewConfirmed,
+  onReviewConfirmed,
+  onApprove,
+  onPdf,
+  onEmail,
+  onMarkSent,
+  onRemind,
+  onPaid,
+  onClaim,
+  next,
+  onNext,
+  onClose,
+}: {
+  invoice: Invoice;
+  busy: boolean;
+  reviewConfirmed: boolean;
+  onReviewConfirmed: (checked: boolean) => void;
+  onApprove: () => void;
+  onPdf: () => void;
+  onEmail: (details: { to_email: string; note?: string }) => void;
+  onMarkSent: () => void;
+  onRemind: (details: { note?: string }) => void;
+  onPaid: (details: { payment_date?: string; reference?: string }) => void;
+  onClaim: () => void;
+  next: Invoice | null;
+  onNext: (invoice: Invoice) => void;
+  onClose: () => void;
+}) {
+  const [toEmail, setToEmail] = useState(invoice.recipient_email ?? "");
+  const [note, setNote] = useState("");
+  const [showNote, setShowNote] = useState(false);
+  const today = appLocalDateKey(new Date().toISOString());
+  const [paymentDate, setPaymentDate] = useState(today);
+  const [reference, setReference] = useState("");
+  const footer = "space-y-3 border-t border-cc-border px-6 py-4";
+  const overdue = overdueDays(invoice);
+  const nextLink = next && (
+    <button
+      type="button"
+      className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-cc-text underline-offset-2 hover:underline"
+      onClick={() => onNext(next)}
+    >
+      Next to issue: {next.invoice_number}
+      <ArrowRight className="h-3.5 w-3.5" />
+    </button>
+  );
+  const pdfButton = (
+    <button type="button" className={outlineClass} disabled={busy} onClick={onPdf}>
+      <Download className="h-4 w-4" />
+      PDF
+    </button>
+  );
+  const noteField = showNote ? (
+    <label className="block text-xs font-medium text-cc-muted">
+      Message (optional)
+      <textarea
+        className={`${fieldClass} min-h-[72px] py-2`}
+        value={note}
+        maxLength={1000}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Added above the invoice summary in the email."
+      />
+    </label>
+  ) : (
+    <button type="button" className="text-xs font-medium text-cc-muted underline-offset-2 hover:underline" onClick={() => setShowNote(true)}>
+      Add a message
+    </button>
+  );
+
+  if (invoice.status === "draft")
+    return (
+      <div className={footer}>
+        <label className="flex min-h-11 items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1 h-5 w-5 shrink-0 accent-cc-plum"
+            checked={reviewConfirmed}
+            onChange={(e) => onReviewConfirmed(e.target.checked)}
+          />
+          I've checked the payer, the support items and their service dates against the timesheets.
+        </label>
+        <PrimaryButton
+          className="w-full"
+          disabled={
+            !reviewConfirmed ||
+            !invoice.line_items.length ||
+            !invoice.recipient_name?.trim() ||
+            invoice.pdf_generation_failed
+          }
+          busy={busy}
+          onClick={onApprove}
+        >
+          {busy ? "Approving..." : "Approve invoice"}
+        </PrimaryButton>
+        <p className="text-xs text-cc-muted">
+          Approving locks the lines and sets the due date ({PAYMENT_TERMS_DAYS} days). Nothing is sent yet.
+        </p>
+      </div>
+    );
+
+  if (["finalized", "issued"].includes(invoice.status)) {
+    if (isNdiaManaged(invoice))
+      return (
+        <div className={footer}>
+          <p className="text-sm text-cc-text">
+            Approved. NDIA-managed supports are claimed from the NDIA in a bulk payment request, not emailed.
+          </p>
+          <PrimaryButton className="w-full" onClick={onClaim}>
+            <Send className="h-4 w-4" />
+            Go to NDIA claims
+          </PrimaryButton>
+          {nextLink}
+        </div>
+      );
+    const validEmail = /\S+@\S+\.\S+/.test(toEmail.trim());
+    return (
+      <div className={footer}>
+        <label className="block text-xs font-medium text-cc-muted">
+          Email to {invoice.plan_management_type === "plan-managed" ? "the plan manager" : invoice.recipient_name || "the payer"}
+          <input
+            type="email"
+            className={fieldClass}
+            value={toEmail}
+            onChange={(e) => setToEmail(e.target.value)}
+            placeholder="accounts@planmanager.com.au"
+          />
+        </label>
+        {noteField}
+        <div className="flex flex-wrap gap-2">
+          {pdfButton}
+          <PrimaryButton
+            className="flex-1"
+            busy={busy}
+            disabled={!validEmail}
+            onClick={() => onEmail({ to_email: toEmail.trim(), note: note.trim() || undefined })}
+          >
+            <Send className="h-4 w-4" />
+            Email invoice
+          </PrimaryButton>
+        </div>
+        <button
+          type="button"
+          className="text-xs font-medium text-cc-muted underline-offset-2 hover:underline disabled:opacity-50"
+          disabled={busy}
+          onClick={onMarkSent}
+        >
+          Sent it another way (portal, post)? Mark as issued
+        </button>
+        {nextLink}
+      </div>
+    );
+  }
+
+  if (["sent", "overdue"].includes(invoice.status))
+    return (
+      <div className={footer}>
+        <p className="text-sm text-cc-text">
+          {overdue > 0 ? (
+            <strong style={{ color: "var(--cc-status-danger)" }}>
+              {overdue} day{overdue === 1 ? "" : "s"} overdue.{" "}
+            </strong>
+          ) : invoice.due_date ? (
+            `Due ${formatShortDate(invoice.due_date)}. `
+          ) : null}
+          Record the payment when the remittance arrives.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs font-medium text-cc-muted">
+            Paid on
+            <input type="date" className={fieldClass} value={paymentDate} max={today} onChange={(e) => setPaymentDate(e.target.value)} />
+          </label>
+          <label className="block text-xs font-medium text-cc-muted">
+            Remittance reference
+            <input
+              className={fieldClass}
+              value={reference}
+              maxLength={120}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="From the remittance or bank line"
+            />
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {invoice.recipient_email && !isNdiaManaged(invoice) && (
+            <button type="button" className={outlineClass} disabled={busy} onClick={() => onRemind({ note: note.trim() || undefined })}>
+              Send reminder
+            </button>
+          )}
+          <PrimaryButton
+            className="flex-1"
+            busy={busy}
+            onClick={() => onPaid({ payment_date: paymentDate || undefined, reference: reference.trim() || undefined })}
+          >
+            Record payment
+          </PrimaryButton>
+        </div>
+        {invoice.recipient_email && !isNdiaManaged(invoice) && noteField}
+        {nextLink}
+      </div>
+    );
+
+  return (
+    <div className={footer}>
+      {nextLink ?? (
+        <button type="button" className={`${outlineClass} w-full`} onClick={onClose}>
+          Done
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Shared card component ─────────────────────────────────────────────────────
 function Card({
   title,
@@ -463,20 +836,17 @@ export default function Billing() {
   const canInvoice = isCoordinator || isManagingDirector;
   const priceRequest = useRef(0);
 
-  const [workspace, setWorkspaceState] = useState<BillingWorkspace>(() => {
-    const requested =
-      typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("workspace") : null;
-    return BILLING_WORKSPACES.includes(requested as BillingWorkspace) ? (requested as BillingWorkspace) : "claims";
-  });
+  // null until chosen: the page then opens on the first step with work.
+  const [chosenWorkspace, setWorkspaceState] = useState<BillingWorkspace | null>(requestedWorkspace);
   // Kept in the address so a section can be linked to and survives a refresh.
   const setWorkspace = (next: BillingWorkspace) => {
     setWorkspaceState(next);
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
-    if (next === "claims") url.searchParams.delete("workspace");
-    else url.searchParams.set("workspace", next);
+    url.searchParams.set("workspace", next);
     window.history.replaceState(null, "", url.toString());
   };
+  const [draftingFor, setDraftingFor] = useState<string | null>(null);
   const [readySearch, setReadySearch] = useState("");
   const [preparingDraft, setPreparingDraft] = useState(false);
   const [invoicePage, setInvoicePage] = useState(1);
@@ -555,6 +925,12 @@ export default function Billing() {
       staleTime: 60_000,
     },
   );
+  // Same cache as the Check shifts list, so its count moves as shifts are checked.
+  const verificationQueue = useOrgQuery(["shift-verification-queue"], {
+    queryFn: getShiftVerificationQueue,
+    enabled: canInvoice,
+    staleTime: 30_000,
+  });
 
   function routingRecipient(
     participant: Record<string, unknown>,
@@ -658,6 +1034,70 @@ export default function Billing() {
     } finally {
       setPreparingDraft(false);
     }
+  }
+
+  /** A draft for one participant's verified shifts in a period, addressed
+   * the way the New invoice form would address it. */
+  async function postDraftFor(entry: ReadyToInvoiceEntry): Promise<Invoice> {
+    const participant =
+      participants.find((p) => String(p.id) === entry.participant_id) ??
+      ({ full_name: entry.participant_name } as Record<string, unknown>);
+    let lockedType: string | null | undefined = String(participant.plan_management_type || "");
+    try {
+      const period = await getParticipantCurrentBillingPeriod(entry.participant_id);
+      lockedType = period.open_period?.locked_plan_management_type ?? period.current_plan_management_type;
+    } catch {
+      /* fall back to the participant's own plan type */
+    }
+    const routed = routingRecipient(participant, lockedType);
+    const res = await apiFetch("/api/billing/invoices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        participant_id: entry.participant_id,
+        recipient_name: routed.recipient_name || entry.participant_name,
+        recipient_email: routed.recipient_email || null,
+        due_date: null,
+        status: "draft",
+        generate_from_verified_tasks: true,
+        period_start: entry.period_start,
+        period_end: entry.period_end,
+        line_items: [],
+      }),
+    });
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      throw new Error(b.detail || `Could not create ${entry.participant_name}'s invoice.`);
+    }
+    return res.json();
+  }
+
+  async function createDrafts(entries: ReadyToInvoiceEntry[]) {
+    if (draftingFor || !entries.length) return;
+    setDraftingFor(entries.length === 1 ? `${entries[0].participant_id}-${entries[0].period_start}` : "all");
+    const created: Invoice[] = [];
+    const failed: string[] = [];
+    for (const entry of entries) {
+      try {
+        created.push(await postDraftFor(entry));
+      } catch (err) {
+        failed.push((err as Error).message);
+      }
+    }
+    setDraftingFor(null);
+    if (created.length) {
+      setInvoices((prev) => [...created, ...prev]);
+      // The list adds who pays each invoice, which creating it doesn't return.
+      void loadBilling({ silent: true });
+    }
+    void readyToInvoiceQuery.refetch();
+    if (created.length)
+      toast({
+        title: created.length === 1 ? "Draft invoice created" : `${created.length} draft invoices created`,
+        description: "Approve them in step 3.",
+      });
+    if (failed.length)
+      toast({ title: "Some invoices weren't created", description: failed.join(" "), variant: "destructive" });
   }
 
   const totalOutstanding = useMemo(
@@ -782,8 +1222,9 @@ export default function Billing() {
       }
       const inv = await res.json();
       setInvoices((prev) => [inv, ...prev]);
+      void loadBilling({ silent: true });
       setShowInvoiceForm(false);
-      setWorkspace("invoices");
+      setWorkspace("approve");
       setInvoicePage(1);
       setInvoiceSearch("");
       setInvoiceFilter("all");
@@ -813,39 +1254,14 @@ export default function Billing() {
     }
   }
 
-  async function markPaid(invoice: Invoice) {
-    if (busyInvoice) return;
-    setBusyInvoice(invoice.id);
-    try {
-      const res = await requireReAuth(() =>
-        apiFetch(`/api/billing/invoices/${invoice.id}/mark-paid`, {
-          method: "POST",
-        }),
-      );
-      if (!res) return;
-      if (!res.ok) throw new Error("Could not mark paid.");
-      const updated = await res.json();
-      setInvoices((prev) =>
-        prev.map((i) => (i.id === updated.id ? updated : i)),
-      );
-      toast({
-        title: translate("billing.toast.markedPaid"),
-        description: updated.invoice_number,
-      });
-    } catch (err) {
-      toast({
-        title: translate("billing.toast.updateFailed"),
-        description: (err as Error).message,
-        variant: "destructive",
-      });
-    } finally {
-      setBusyInvoice(null);
-    }
+  function markPaid(invoice: Invoice, details?: { payment_date?: string; reference?: string }) {
+    return invoiceAction(invoice, "mark-paid", details);
   }
 
   async function invoiceAction(
     invoice: Invoice,
-    action: "finalize" | "mark-sent" | "cancel" | "pdf",
+    action: "finalize" | "mark-sent" | "mark-paid" | "send" | "remind" | "cancel" | "pdf",
+    body?: Record<string, unknown>,
   ) {
     if (busyInvoice) return;
     setBusyInvoice(invoice.id);
@@ -853,6 +1269,7 @@ export default function Billing() {
       const res = await requireReAuth(() =>
         apiFetch(`/api/billing/invoices/${invoice.id}/${action}`, {
           method: "POST",
+          ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
         }),
       );
       if (!res) return;
@@ -862,13 +1279,24 @@ export default function Billing() {
       }
       const updated = await res.json();
       setInvoices((prev) =>
-        prev.map((i) => (i.id === updated.id ? updated : i)),
+        prev.map((i) => (i.id === updated.id ? { ...i, ...updated } : i)),
       );
       toast({
-        title: translate("billing.toast.invoiceUpdated"),
-        description: updated.invoice_number,
+        title:
+          action === "send"
+            ? "Invoice emailed"
+            : action === "remind"
+              ? "Reminder emailed"
+              : action === "mark-paid"
+                ? translate("billing.toast.markedPaid")
+                : translate("billing.toast.invoiceUpdated"),
+        description:
+          action === "send" || action === "remind"
+            ? `${updated.invoice_number} to ${updated.recipient_email ?? invoice.recipient_email ?? "the payer"}`
+            : updated.invoice_number,
       });
-      if (action === "finalize") setReviewInvoice(null);
+      // The open panel follows the invoice to its next action.
+      setReviewInvoice((open) => (open?.id === updated.id ? { ...open, ...updated } : open));
       if (action === "pdf" && updated.pdf_url)
         window.open(updated.pdf_url, "_blank", "noopener,noreferrer");
     } catch (err) {
@@ -942,6 +1370,54 @@ export default function Billing() {
             !resolvingPrice)),
       );
 
+  const approveQueue = invoices.filter(awaitingApproval);
+  const draftsToCheck = approveQueue.filter((invoice) => invoice.status === "draft");
+  const approvedToIssue = approveQueue.filter((invoice) => invoice.status !== "draft");
+  const sentAwaitingPayment = invoices.filter((invoice) => awaitingPayment(invoice) && !isNdiaManaged(invoice));
+  const overdueInvoices = sentAwaitingPayment
+    .filter((invoice) => overdueDays(invoice) > 0)
+    .sort((a, b) => overdueDays(b) - overdueDays(a));
+  const notYetDue = sentAwaitingPayment.filter((invoice) => overdueDays(invoice) === 0);
+  const ndiaAwaitingClaim = invoices.filter((invoice) => awaitingPayment(invoice) && isNdiaManaged(invoice));
+  const readyEntries = readyToInvoiceQuery.data ?? [];
+  const unbilledCents = readyEntries.reduce((sum, entry) => sum + entry.total_cents, 0);
+  const outstandingCents = [...sentAwaitingPayment, ...ndiaAwaitingClaim].reduce((sum, i) => sum + i.total_cents, 0);
+  const stepCounts: Record<FlowStep, number | undefined> = {
+    check: verificationQueue.isLoading
+      ? undefined
+      : Array.isArray(verificationQueue.data)
+        ? verificationQueue.data.length
+        : 0,
+    create: readyToInvoiceQuery.isLoading ? undefined : readyEntries.length,
+    approve: approveQueue.length,
+    paid: sentAwaitingPayment.length + ndiaAwaitingClaim.length,
+  };
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+  const stepDetails: Record<FlowStep, string> = {
+    check: `${plural(stepCounts.check ?? 0, "timesheet")} to approve`,
+    create: `${plural(readyEntries.length, "participant")} · ${cents(unbilledCents)} unbilled`,
+    approve: [
+      draftsToCheck.length ? `${draftsToCheck.length} to check` : null,
+      approvedToIssue.length ? `${approvedToIssue.length} to email` : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    paid: [`${cents(outstandingCents)} outstanding`, overdueInvoices.length ? `${overdueInvoices.length} overdue` : null]
+      .filter(Boolean)
+      .join(" · "),
+  };
+  const workspace: BillingWorkspace | null =
+    chosenWorkspace ??
+    (stepCounts.check === undefined || stepCounts.create === undefined ? null : firstStepWithWork(stepCounts));
+  const participantNameOf = (invoice: Invoice) => {
+    const participant = participants.find((p) => String(p.id) === String(invoice.participant_id ?? ""));
+    return String(participant?.full_name ?? invoice.recipient_name);
+  };
+  const openInvoice = (invoice: Invoice) => {
+    setReviewConfirmed(false);
+    setReviewInvoice(invoice);
+  };
+
   return (
     <>
       {modal}
@@ -952,18 +1428,32 @@ export default function Billing() {
         }}
       >
         <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
-<div className="shrink-0 border-b border-cc-border px-6 py-5">
-            <SheetTitle className="sr-only">Review invoice</SheetTitle>
-            <SheetDescription className="sr-only">{`${reviewInvoice?.invoice_number ?? ""} · Check the recipient, services and total before finalising.`}</SheetDescription>
-            <PanelHeader icon={FileText} title="Review invoice" description={`${reviewInvoice?.invoice_number ?? ""} · Check the recipient, services and total before finalising.`} />
+          <div className="shrink-0 border-b border-cc-border px-6 py-5">
+            <SheetTitle className="sr-only">{reviewInvoice?.status === "draft" ? "Check invoice" : "Invoice"}</SheetTitle>
+            <SheetDescription className="sr-only">{reviewInvoice?.invoice_number ?? ""}</SheetDescription>
+            <PanelHeader
+              icon={FileText}
+              title={reviewInvoice ? `${participantNameOf(reviewInvoice)} · ${reviewInvoice.invoice_number}` : "Invoice"}
+              description={
+                reviewInvoice
+                  ? [
+                      payerLabel(reviewInvoice),
+                      invoiceStatusPill(reviewInvoice).label,
+                      cents(reviewInvoice.total_cents, reviewInvoice.currency),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : ""
+              }
+            />
           </div>
           {reviewInvoice && (
             <>
               <div className="min-h-0 flex-1 overflow-y-auto p-5">
                 <InvoiceRecord invoice={reviewInvoice} />
-                {invoiceReviewWarnings(reviewInvoice).length > 0 && (
+                {reviewInvoice.status === "draft" && invoiceReviewWarnings(reviewInvoice).length > 0 && (
                   <div className="mt-4 rounded-2xl p-4 text-sm" style={{ background: "var(--cc-status-warning-bg)", color: "var(--cc-text)" }}>
-                    <p className="font-semibold">Check before continuing</p>
+                    <p className="font-semibold">Check before approving</p>
                     <ul className="mt-2 list-disc space-y-1 pl-4">
                       {invoiceReviewWarnings(reviewInvoice).map((warning) => (
                         <li key={warning}>{warning}</li>
@@ -971,56 +1461,47 @@ export default function Billing() {
                     </ul>
                   </div>
                 )}
+                <InvoiceActivity invoiceId={reviewInvoice.id} />
               </div>
-              <div className="space-y-3 border-t border-cc-border px-6 py-4">
-                <label className="flex min-h-11 items-start gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1 h-5 w-5 shrink-0 accent-cc-plum"
-                    checked={reviewConfirmed}
-                    onChange={(e) => setReviewConfirmed(e.target.checked)}
-                  />
-                  I have checked the billing details and service items.
-                </label>
-                <PrimaryButton
-                  className="w-full"
-                  disabled={
-                    !reviewConfirmed ||
-                    !reviewInvoice.line_items.length ||
-                    !reviewInvoice.recipient_name?.trim() ||
-                    reviewInvoice.pdf_generation_failed
-                  }
-                  busy={Boolean(busyInvoice)}
-                  onClick={() => invoiceAction(reviewInvoice, "finalize")}
-                >
-                  {busyInvoice ? "Finalising..." : "Finalise invoice"}
-                </PrimaryButton>
-                <p className="text-xs text-cc-muted">
-                  Finalising does not email the invoice to the recipient.
-                </p>
-              </div>
+              <InvoiceNextAction
+                key={`${reviewInvoice.id}-${reviewInvoice.status}`}
+                invoice={reviewInvoice}
+                busy={Boolean(busyInvoice)}
+                reviewConfirmed={reviewConfirmed}
+                onReviewConfirmed={setReviewConfirmed}
+                onApprove={() => invoiceAction(reviewInvoice, "finalize")}
+                onPdf={() => invoiceAction(reviewInvoice, "pdf")}
+                onEmail={(details) => invoiceAction(reviewInvoice, "send", details)}
+                onMarkSent={() => invoiceAction(reviewInvoice, "mark-sent")}
+                onRemind={(details) => invoiceAction(reviewInvoice, "remind", details)}
+                onPaid={(details) => markPaid(reviewInvoice, details)}
+                onClaim={() => {
+                  setReviewInvoice(null);
+                  setWorkspace("paid");
+                }}
+                next={approveQueue.find((invoice) => invoice.id !== reviewInvoice.id) ?? null}
+                onNext={openInvoice}
+                onClose={() => setReviewInvoice(null)}
+              />
             </>
           )}
         </SheetContent>
       </Sheet>
       <div className="w-full min-w-0 space-y-6 pb-10">
         <PageHeader
-          eyebrow="NDIS billing"
+          eyebrow="NDIS revenue"
           title={
             <span className="inline-flex items-center gap-2">
-              NDIS invoices
-              <SectionInfo text="NDIS invoicing for delivered shifts: generate invoices, claim NDIA-managed ones in bulk, track payments and review pricing." />
+              Billing & claims
+              <SectionInfo text="Approve timesheets, raise invoices from them, email plan-managed and self-managed invoices to whoever pays, and claim NDIA-managed supports in a bulk payment request." />
             </span>
           }
-          description="Create, review and claim invoices from delivered sessions."
+          description="From approved timesheets to money in the bank."
           actions={
             <button
               type="button"
-              className={`${ctaClass} w-full sm:w-auto`}
-              onClick={() => {
-                setWorkspace("invoices");
-                setShowInvoiceForm((open) => !open);
-              }}
+              className={`${outlineClass} w-full sm:w-auto`}
+              onClick={() => setShowInvoiceForm((open) => !open)}
               aria-expanded={showInvoiceForm}
               aria-controls="invoice-draft-form"
             >
@@ -1030,18 +1511,22 @@ export default function Billing() {
           }
         />
 
+        <InvoiceFlowSteps
+          value={workspace && (FLOW_STEPS as readonly string[]).includes(workspace) ? (workspace as FlowStep) : null}
+          counts={stepCounts}
+          details={stepDetails}
+          onChange={setWorkspace}
+        />
+
         <PillTabs<BillingWorkspace>
           label="Invoicing sections"
-          value={workspace}
+          value={workspace ?? "check"}
           onChange={setWorkspace}
           options={(
             [
-              ["claims", "NDIS claims", Send],
-              ["invoices", "All invoices", FileText],
-              ["ready", "To invoice", ClipboardCheck],
-              ["checks", "Check shifts", ListChecks],
+              ["invoices", "Invoice register", FileText],
               ["reports", "Revenue", BarChart3],
-              ["pricing", "NDIS pricing", BookOpen],
+              ["pricing", "Price limits", BookOpen],
             ] as const
           )
             .filter(([key]) => key !== "reports" || isManagingDirector)
@@ -1049,136 +1534,179 @@ export default function Billing() {
               key,
               label,
               icon,
-              count: key === "ready" ? readyToInvoiceQuery.data?.length : key === "invoices" ? invoices.length : undefined,
+              count: key === "invoices" ? invoices.length : undefined,
             }))}
         />
-        {workspace === "claims" && (
-          <NdiaClaimsPanel
-            onChanged={() => void loadBilling({ silent: true })}
-            onShowAllInvoices={() => setWorkspace("invoices")}
-          />
+
+        {workspace === null && (
+          <div className="flex min-h-[200px] items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-cc-plum" />
+          </div>
         )}
-        {workspace === "ready" && readyToInvoiceQuery.isLoading && (
-          <p role="status" className="py-6 text-sm text-cc-muted">
-            Loading completed shifts...
-          </p>
-        )}
-        {workspace === "ready" && readyToInvoiceQuery.isError && (
-          <div
-            role="alert"
-            className="rounded-xl border border-cc-border bg-white p-5 text-sm"
-          >
-            Ready-to-invoice shifts could not be loaded.
-            <Button
-              variant="outline"
-              className="ml-3"
-              onClick={() => void readyToInvoiceQuery.refetch()}
-            >
+
+        {/* ── 1. Approve timesheets ───────────────────────────────────────── */}
+        {workspace === "check" &&
+          (stepCounts.check === 0 ? (
+            <StepDone step="check" next="create" nextCount={stepCounts.create} onNext={() => setWorkspace("create")} />
+          ) : (
+            <Card title="Timesheet approval">
+              <div className="min-w-0">
+                <ShiftVerificationPanel onVerified={() => void readyToInvoiceQuery.refetch()} />
+              </div>
+            </Card>
+          ))}
+
+        {/* ── 2. Raise invoices ───────────────────────────────────────────── */}
+        {workspace === "create" && readyToInvoiceQuery.isError && (
+          <div role="alert" className="rounded-xl border border-cc-border bg-white p-5 text-sm">
+            Unbilled supports could not be loaded.
+            <Button variant="outline" className="ml-3" onClick={() => void readyToInvoiceQuery.refetch()}>
               Retry
             </Button>
           </div>
         )}
-        {workspace === "ready" &&
-          !readyToInvoiceQuery.isLoading &&
+        {workspace === "create" &&
           !readyToInvoiceQuery.isError &&
-          !(readyToInvoiceQuery.data ?? []).length && (
-            <Card title="Ready to invoice">
-              <p className="text-sm text-cc-muted">
-                No verified shifts are waiting to be invoiced.
-              </p>
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => setWorkspace("checks")}
-              >
-                Check completed shifts
-              </Button>
-            </Card>
-          )}
-
-        {/* ── Awaiting verification — completed shifts, one step before they
-              can be invoiced. Lives here (not a separate page) so verifying a
-              shift and seeing it become invoiceable happen in one place. ──── */}
-        {canInvoice && workspace === "checks" && (
-          <Card title="Check completed shifts">
-            <div className="min-w-0">
-              <ShiftVerificationPanel
-                onVerified={() => void readyToInvoiceQuery.refetch()}
-              />
-            </div>
-          </Card>
-        )}
-
-        {/* ── Ready to invoice — verified shifts with no invoice yet ──────────── */}
-        {canInvoice &&
-          workspace === "ready" &&
-          !readyToInvoiceQuery.isLoading &&
-          (readyToInvoiceQuery.data ?? []).length > 0 && (
+          (stepCounts.create === 0 ? (
+            <StepDone step="create" next="approve" nextCount={stepCounts.approve} onNext={() => setWorkspace("approve")} />
+          ) : (
             <Card
-              title={`Ready to invoice (${readyToInvoiceQuery.data!.length})`}
+              title={`Unbilled supports · ${cents(unbilledCents)}`}
+              action={
+                readyEntries.length > 1 ? (
+                  <button
+                    type="button"
+                    className={ctaClass}
+                    disabled={Boolean(draftingFor)}
+                    onClick={() => void createDrafts(readyEntries)}
+                  >
+                    {draftingFor === "all" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Raise all {readyEntries.length} invoices
+                  </button>
+                ) : undefined
+              }
             >
-              {!readyToInvoiceQuery.data!.some((entry) =>
-                [
-                  entry.participant_name,
-                  entry.participant_id,
-                  entry.period_start,
-                  entry.period_end,
-                ]
-                  .join(" ")
-                  .toLowerCase()
-                  .includes(readySearch.trim().toLowerCase()),
-              ) && (
-                <p className="py-4 text-sm text-cc-muted">
-                  No billing periods match your search.
-                </p>
-              )}
-              <div className="space-y-2">
-                {readyToInvoiceQuery
-                  .data!.filter((entry) =>
-                    [
-                      entry.participant_name,
-                      entry.participant_id,
-                      entry.period_start,
-                      entry.period_end,
-                    ]
-                      .join(" ")
-                      .toLowerCase()
-                      .includes(readySearch.trim().toLowerCase()),
-                  )
-                  .map((entry) => (
-                    <div
-                      key={`${entry.participant_id}-${entry.period_start}`}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cc-border px-4 py-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-cc-text">
-                          {entry.participant_name}
-                        </p>
-                        <p className="break-all text-xs text-cc-muted">
-                          Participant ID: {entry.participant_id}
-                        </p>
+              <p className="mb-4 text-sm text-cc-muted">
+                Approved timesheets, one line per participant and month. Raising an invoice bills them at the approved rates
+                as a draft; you check it before it goes to the payer.
+              </p>
+              <ul className="divide-y divide-cc-border">
+                {readyEntries.map((entry) => {
+                  const key = `${entry.participant_id}-${entry.period_start}`;
+                  return (
+                    <li key={key} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <div className="min-w-0 flex-1 basis-56">
+                        <p className="truncate text-sm font-semibold text-cc-text">{entry.participant_name}</p>
                         <p className="text-xs text-cc-muted">
-                          {entry.completions_count} verified{" "}
-                          {entry.completions_count === 1 ? "shift" : "shifts"} ·{" "}
-                          {entry.period_start} to {entry.period_end} ·{" "}
-                          {cents(entry.total_cents)}
+                          {plural(entry.completions_count, "approved shift")} · {formatShortDate(entry.period_start)} to{" "}
+                          {formatShortDate(entry.period_end)}
                         </p>
                       </div>
-                      <Button
-                        variant="outline"
-                        className="shrink-0 rounded-xl"
-                        disabled={preparingDraft}
-                        onClick={() => void prefillFromReady(entry)}
-                      >
-                        {preparingDraft
-                          ? "Preparing draft..."
-                          : "Prepare invoice"}
-                      </Button>
-                    </div>
-                  ))}
-              </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="text-sm font-semibold tabular-nums text-cc-text">{cents(entry.total_cents)}</span>
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-cc-muted underline-offset-2 hover:underline disabled:opacity-50"
+                          disabled={Boolean(draftingFor) || preparingDraft}
+                          onClick={() => void prefillFromReady(entry)}
+                        >
+                          Edit details
+                        </button>
+                        <button
+                          type="button"
+                          className={outlineClass}
+                          disabled={Boolean(draftingFor)}
+                          onClick={() => void createDrafts([entry])}
+                        >
+                          {draftingFor === key && <Loader2 className="h-4 w-4 animate-spin" />}
+                          Raise invoice
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             </Card>
-          )}
+          ))}
+
+        {/* ── 3. Issue to payers ──────────────────────────────────────────── */}
+        {workspace === "approve" &&
+          (approveQueue.length === 0 ? (
+            <StepDone step="approve" next="paid" nextCount={stepCounts.paid} onNext={() => setWorkspace("paid")} />
+          ) : (
+            <div className="space-y-6">
+              {draftsToCheck.length > 0 && (
+                <Card title={`Drafts to check · ${draftsToCheck.length}`}>
+                  <p className="mb-4 text-sm text-cc-muted">
+                    Check the payer, support items and service dates, then approve. Approving sets the due date.
+                  </p>
+                  <InvoiceQueue
+                    nameOf={participantNameOf}
+                    invoices={draftsToCheck}
+                    actionLabel={() => "Check"}
+                    onOpen={openInvoice}
+                  />
+                </Card>
+              )}
+              {approvedToIssue.length > 0 && (
+                <Card title={`Approved, ready to email · ${approvedToIssue.length}`}>
+                  <p className="mb-4 text-sm text-cc-muted">
+                    Each goes to the plan manager or the participant by email with the PDF attached. NDIA-managed invoices
+                    skip this and are claimed in Payments & claims.
+                  </p>
+                  <InvoiceQueue
+                    nameOf={participantNameOf}
+                    invoices={approvedToIssue}
+                    actionLabel={() => "Email"}
+                    onOpen={openInvoice}
+                  />
+                </Card>
+              )}
+            </div>
+          ))}
+
+        {/* ── 4. Payments & claims ────────────────────────────────────────── */}
+        {workspace === "paid" && (
+          <div className="space-y-6">
+            {stepCounts.paid === 0 && <StepDone step="paid" />}
+            {overdueInvoices.length > 0 && (
+              <Card title={`Overdue · ${cents(overdueInvoices.reduce((s, i) => s + i.total_cents, 0))}`}>
+                <p className="mb-4 text-sm text-cc-muted">
+                  Past the due date with no payment recorded. Send a reminder, or record the payment if it has arrived.
+                </p>
+                <InvoiceQueue
+                  nameOf={participantNameOf}
+                  invoices={overdueInvoices}
+                  detail={(invoice) => `${plural(overdueDays(invoice), "day")} overdue`}
+                  actionLabel={() => "Follow up"}
+                  onOpen={openInvoice}
+                />
+              </Card>
+            )}
+            {notYetDue.length > 0 && (
+              <Card title={`Awaiting payment · ${cents(notYetDue.reduce((s, i) => s + i.total_cents, 0))}`}>
+                <p className="mb-4 text-sm text-cc-muted">
+                  Issued to a plan manager or participant and not yet due. Record each payment when the remittance arrives.
+                </p>
+                <InvoiceQueue
+                  nameOf={participantNameOf}
+                  invoices={notYetDue}
+                  actionLabel={() => "Record payment"}
+                  onOpen={openInvoice}
+                />
+              </Card>
+            )}
+            <section aria-labelledby="ndis-claims-heading" className="space-y-3">
+              <h2 id="ndis-claims-heading" className="text-sm font-semibold text-cc-text">
+                NDIA bulk claims
+              </h2>
+              <NdiaClaimsPanel
+                onChanged={() => void loadBilling({ silent: true })}
+                onShowAllInvoices={() => setWorkspace("invoices")}
+              />
+            </section>
+          </div>
+        )}
 
         {/* ── Main grid: form + register ─────────────────────────────────────── */}
         <div className="min-w-0">
@@ -1746,7 +2274,7 @@ export default function Billing() {
                                           {[
                                             item.item_code,
                                             item.agreement_number ? `Agreement ${item.agreement_number}` : null,
-                                            item.service_date ? `Service ${item.service_date}` : null,
+                                            lineServiceDates(item) ? `Delivered ${lineServiceDates(item)}` : null,
                                             item.location_type ? item.location_type.replaceAll("_", " ") : null,
                                             `${quantity(item.quantity)} × ${cents(item.unit_amount_cents, invoice.currency)}`,
                                           ]
@@ -1765,7 +2293,7 @@ export default function Billing() {
                                         disabled={busyInvoice !== null}
                                         onClick={() => (setReviewConfirmed(false), setReviewInvoice(invoice))}
                                       >
-                                        Review & finalise
+                                        Review & approve
                                       </Button>
                                     )}
                                     {["finalized", "issued"].includes(invoice.status) && (

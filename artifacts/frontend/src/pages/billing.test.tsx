@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
@@ -96,7 +96,7 @@ vi.mock("@/lib/api-fetch", () => ({
   })),
 }));
 
-/** The register is a section now; NDIS claims is the landing view. */
+/** The register is a section beside the four invoicing steps. */
 function openRegister() {
   window.history.replaceState(null, "", "/billing?workspace=invoices");
 }
@@ -110,14 +110,81 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 describe("coordinator invoice workspace", () => {
-  it("opens on NDIS claims and keeps the chosen section in the address", async () => {
+  it("opens on the first step with work and keeps the chosen section in the address", async () => {
     render(<Billing />);
-    expect(await screen.findByRole("heading", { name: /NDIS invoices/ })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: /Billing & claims/ })).toBeTruthy();
+    // No shifts to check or bill; one draft to approve.
+    const steps = screen.getByRole("navigation", { name: "Invoicing steps" });
+    expect(within(steps).getByRole("button", { name: /Issue to payers/ }).getAttribute("aria-current")).toBe("step");
+    expect(within(steps).getByText("1 to check")).toBeTruthy();
+    expect(within(steps).getByText("All timesheets approved")).toBeTruthy();
     const nav = screen.getByRole("navigation", { name: "Invoicing sections" });
-    expect(within(nav).getByRole("button", { name: /NDIS claims/ }).getAttribute("aria-current")).toBe("page");
-    fireEvent.click(within(nav).getByRole("button", { name: /All invoices/ }));
+    fireEvent.click(within(nav).getByRole("button", { name: /Invoice register/ }));
     expect(window.location.search).toBe("?workspace=invoices");
     expect(await screen.findByRole("textbox", { name: "Search invoices" })).toBeTruthy();
+  });
+  it("lands old section links on their step", async () => {
+    window.history.replaceState(null, "", "/billing?workspace=claims");
+    render(<Billing />);
+    await screen.findByRole("heading", { name: /Billing & claims/ });
+    const steps = screen.getByRole("navigation", { name: "Invoicing steps" });
+    expect(within(steps).getByRole("button", { name: /Payments & claims/ }).getAttribute("aria-current")).toBe("step");
+  });
+  it("creates a draft straight from the ready-to-bill list", async () => {
+    window.history.replaceState(null, "", "/billing?workspace=create");
+    queryState.data = [
+      {
+        participant_id: "p-1",
+        participant_name: "Jordan Hale",
+        period_start: "2026-10-01",
+        period_end: "2026-10-31",
+        completions_count: 3,
+        total_cents: 45000,
+      },
+    ];
+    const listOrPeriod = vi.mocked(apiFetch).getMockImplementation()!;
+    vi.mocked(apiFetch).mockImplementation(async (url, init) =>
+      init?.method === "POST"
+        ? ({
+            ok: true,
+            json: async () => ({
+              id: "new",
+              invoice_number: "INV-103",
+              recipient_name: "Jordan Hale",
+              status: "draft",
+              total_cents: 45000,
+              currency: "AUD",
+              created_at: "2026-11-01",
+              line_items: [],
+            }),
+          } as Response)
+        : listOrPeriod(url, init),
+    );
+    onTestFinished(() => {
+      vi.mocked(apiFetch).mockImplementation(listOrPeriod);
+    });
+    render(<Billing />);
+    await screen.findByText("Jordan Hale");
+    fireEvent.click(screen.getByRole("button", { name: "Raise invoice" }));
+    await waitFor(() =>
+      expect(
+        vi.mocked(apiFetch).mock.calls.some(
+          ([url, init]) => url === "/api/billing/invoices" && init?.method === "POST",
+        ),
+      ).toBe(true),
+    );
+    const [, init] = vi
+      .mocked(apiFetch)
+      .mock.calls.find(([url, req]) => url === "/api/billing/invoices" && req?.method === "POST")!;
+    expect(JSON.parse(String(init!.body))).toMatchObject({
+      participant_id: "p-1",
+      generate_from_verified_tasks: true,
+      period_start: "2026-10-01",
+      period_end: "2026-10-31",
+      status: "draft",
+    });
+    // The form never opened.
+    expect(screen.queryByTestId("select-billing-participant")).toBeNull();
   });
   it("filters by recipient and status, and clears unmatched filters", async () => {
     openRegister();
@@ -149,7 +216,8 @@ describe("coordinator invoice workspace", () => {
     await screen.findByText("Alex Morgan");
     const nav = screen.getByRole("navigation", { name: "Invoicing sections" });
     expect(within(nav).queryByRole("button", { name: /Revenue/ })).toBeNull();
-    expect(within(nav).getByRole("button", { name: /Check shifts/ })).toBeTruthy();
+    const steps = screen.getByRole("navigation", { name: "Invoicing steps" });
+    expect(within(steps).getByRole("button", { name: /Approve timesheets/ })).toBeTruthy();
     expect(screen.queryByText(/outstanding ·/)).toBeNull();
   });
   it("gives the managing director revenue and the register's totals", async () => {
@@ -189,7 +257,7 @@ it.each([
   async (role, loadsSubscription) => {
     auth.role = role;
     render(<Billing />);
-    await screen.findByText("Alex Morgan");
+    await screen.findAllByText("Alex Morgan");
     expect(screen.getByRole("button", { name: "New invoice" })).toBeTruthy();
     expect(
       vi
@@ -213,7 +281,7 @@ it("resolves dollars for the selected date and region and clears a failed lookup
     time_type: null,
   });
   render(<Billing />);
-  await screen.findByText("Alex Morgan");
+  await screen.findAllByText("Alex Morgan");
   fireEvent.click(screen.getByRole("button", { name: "New invoice" }));
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.change(screen.getByLabelText("Service date"), {
@@ -253,16 +321,15 @@ it("keeps pricing and reports separate from the invoice list", async () => {
   await screen.findByText("Alex Morgan");
   const nav = () => within(screen.getByRole("navigation", { name: "Invoicing sections" }));
   expect(screen.getByRole("textbox", { name: "Search invoices" })).toBeTruthy();
-  fireEvent.click(nav().getByRole("button", { name: /NDIS pricing/ }));
+  fireEvent.click(nav().getByRole("button", { name: /Price limits/ }));
   expect(screen.queryByRole("textbox", { name: "Search invoices" })).toBeNull();
   expect(
     screen.getByRole("region", { name: "NDIS pricing catalogue" }),
   ).toBeTruthy();
-  fireEvent.click(nav().getByRole("button", { name: /To invoice/ }));
-  expect(
-    screen.getByText("No verified shifts are waiting to be invoiced."),
-  ).toBeTruthy();
-  fireEvent.click(nav().getByRole("button", { name: /All invoices/ }));
+  const steps = within(screen.getByRole("navigation", { name: "Invoicing steps" }));
+  fireEvent.click(steps.getByRole("button", { name: /Raise invoices/ }));
+  expect(screen.getAllByText("Nothing unbilled").length).toBeGreaterThan(0);
+  fireEvent.click(nav().getByRole("button", { name: /Invoice register/ }));
   expect(screen.getByRole("textbox", { name: "Search invoices" })).toBeTruthy();
 });
 
@@ -398,15 +465,13 @@ it("flags incomplete NDIS service dates and failed PDFs for review", () => {
     }),
   ).toHaveLength(2);
 });
-it("requires deliberate review before finalising a draft", async () => {
-  openRegister();
+it("requires deliberate review before approving a draft", async () => {
   render(<Billing />);
-  await screen.findByText("Alex Morgan");
-  fireEvent.click(screen.getByText("Alex Morgan"));
-  fireEvent.click(screen.getByRole("button", { name: "Review & finalise" }));
+  // Opens on Issue to payers, where the draft is waiting.
+  fireEvent.click(await screen.findByRole("button", { name: "Check INV-101" }));
   expect(screen.getByRole("dialog")).toBeTruthy();
   const finalise = screen.getByRole("button", {
-    name: "Finalise invoice",
+    name: "Approve invoice",
   }) as HTMLButtonElement;
   expect(finalise.disabled).toBe(true);
   fireEvent.click(screen.getByRole("checkbox"));

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Download, Loader2, Search, Send, CheckCircle2, Undo2, Wallet, X } from "lucide-react";
+import { AlertTriangle, Download, FileCheck2, Loader2, Search, Send, CheckCircle2, Undo2, Upload, Wallet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -37,9 +37,30 @@ type ClaimsResponse = {
 type Tab = "ready" | "submitted" | "paid";
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: "ready", label: "Ready to claim" },
-  { key: "submitted", label: "Submitted" },
-  { key: "paid", label: "Paid" },
+  { key: "submitted", label: "Awaiting NDIA" },
+  { key: "paid", label: "Paid by NDIA" },
 ];
+
+type ResultOutcome = "paid" | "rejected" | "pending";
+type ClaimResults = {
+  lines: number;
+  matched: Array<{
+    invoice_id: string;
+    invoice_number: string;
+    participant_name: string;
+    total_cents: number;
+    outcome: ResultOutcome;
+    reason: string | null;
+    payment_reference: string | null;
+  }>;
+  unmatched_references: string[];
+  applied: boolean;
+};
+const OUTCOME_COPY: Record<ResultOutcome, { title: string; fg: string; bg: string }> = {
+  paid: { title: "Paid by the NDIA", fg: "var(--cc-status-success)", bg: "var(--cc-status-success-bg)" },
+  rejected: { title: "Rejected: back to Ready to claim to fix", fg: "var(--cc-status-danger)", bg: "var(--cc-status-danger-bg)" },
+  pending: { title: "Not settled yet", fg: "var(--cc-muted)", bg: "var(--cc-soft)" },
+};
 
 const AVATAR = ["#8B7FD1", "#C7853D", "#E8457A", "#D9A441", "#4E9A76", "#3B4A63"];
 const money = (cents: number) =>
@@ -111,6 +132,9 @@ export function NdiaClaimsPanel({
   const [paymentDate, setPaymentDate] = useState("");
   const [reference, setReference] = useState("");
   const [search, setSearch] = useState("");
+  const [results, setResults] = useState<ClaimResults | null>(null);
+  const [resultsContent, setResultsContent] = useState("");
+  const [importing, setImporting] = useState(false);
   const query = useOrgQuery<ClaimsResponse>(["billing", "ndia-claims"], {
     queryFn: async () => (await json<ClaimsResponse>(await apiFetch("/api/billing/claims")))!,
   });
@@ -240,6 +264,58 @@ export function NdiaClaimsPanel({
     }
   };
 
+  /** The results CSV the provider portal gives back after a bulk upload:
+   * preview what it settles, then apply. */
+  const readResults = async (file: File) => {
+    setImporting(true);
+    try {
+      const content = await file.text();
+      const preview = await json<ClaimResults>(
+        await apiFetch("/api/billing/claims/results", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, apply: false }),
+        }),
+      );
+      if (!preview) return;
+      setResultsContent(content);
+      setResults(preview);
+    } catch (err) {
+      toast({ title: "Couldn't read that file", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const applyResults = async () => {
+    setBusy(true);
+    try {
+      const applied = await json<ClaimResults>(
+        await requireReAuth(() =>
+          apiFetch("/api/billing/claims/results", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: resultsContent, apply: true }),
+          }),
+        ),
+      );
+      if (!applied) return;
+      const paid = applied.matched.filter((m) => m.outcome === "paid").length;
+      const rejected = applied.matched.filter((m) => m.outcome === "rejected").length;
+      toast({
+        title: `${paid} claim${paid === 1 ? "" : "s"} paid${rejected ? `, ${rejected} returned to fix` : ""}`,
+        description: rejected ? "Rejected claims are back in Ready to claim with the NDIA's reason." : undefined,
+      });
+      setResults(null);
+      setResultsContent("");
+      refresh();
+    } catch (err) {
+      toast({ title: "Results not applied", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const downloadBatch = async (batchId: string) => {
     try {
       const res = await apiFetch(`/api/billing/claims/batches/${encodeURIComponent(batchId)}/file`);
@@ -263,7 +339,7 @@ export function NdiaClaimsPanel({
           <p className="max-w-xl text-sm text-cc-muted">
             {heading
               ? "Create, review and claim invoices from delivered sessions."
-              : "NDIA-managed invoices, claimed together as one bulk payment request."}
+              : "Agency-managed supports are claimed from the NDIA as one bulk payment request, uploaded in the my NDIS provider portal."}
           </p>
         </div>
         <div role="tablist" aria-label="Claim status" className="flex items-center rounded-full border border-cc-border p-1">
@@ -300,7 +376,27 @@ export function NdiaClaimsPanel({
               <span style={{ color: "var(--cc-status-danger)" }}> · {toFix} need{toFix === 1 ? "s" : ""} fixing first</span>
             )}
           </p>
-          <label className="relative ml-auto w-full sm:w-64">
+          {tab === "submitted" && query.data.submitted.length > 0 && (
+            <label
+              className="ml-auto inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-full border border-cc-border px-4 text-[13px] font-medium text-cc-text transition hover:bg-cc-soft focus-within:ring-2 focus-within:ring-[var(--cc-plum)]"
+              title="The results CSV from the provider portal after your bulk upload"
+            >
+              {importing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+              Import NDIA results
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="sr-only"
+                disabled={importing}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) void readResults(file);
+                }}
+              />
+            </label>
+          )}
+          <label className={`relative w-full sm:w-64 ${tab === "submitted" && query.data.submitted.length > 0 ? "" : "ml-auto"}`}>
             <span className="sr-only">Search claims</span>
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-cc-muted" />
             <Input
@@ -490,6 +586,74 @@ export function NdiaClaimsPanel({
           )}
         </div>
       )}
+
+      <Sheet open={Boolean(results)} onOpenChange={(open) => !open && !busy && setResults(null)}>
+        <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+          <SheetTitle className="sr-only">NDIA results</SheetTitle>
+          <SheetDescription className="sr-only">What the NDIA paid and rejected.</SheetDescription>
+          <PanelHeader
+            icon={FileCheck2}
+            title="NDIA results"
+            description={
+              results
+                ? `${results.lines} claim line${results.lines === 1 ? "" : "s"} in the file, matching ${results.matched.length} of your claims. Nothing changes until you apply.`
+                : ""
+            }
+          />
+          {results && (
+            <div className="mt-6 flex-1 space-y-6">
+              {(["paid", "rejected", "pending"] as const).map((outcome) => {
+                const group = results.matched.filter((m) => m.outcome === outcome);
+                if (!group.length) return null;
+                const copy = OUTCOME_COPY[outcome];
+                return (
+                  <section key={outcome} className="space-y-2">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-cc-text">
+                      <span className="rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums" style={{ color: copy.fg, background: copy.bg }}>
+                        {group.length}
+                      </span>
+                      {copy.title}
+                    </h3>
+                    <ul className="divide-y divide-cc-border rounded-xl border border-cc-border">
+                      {group.map((m) => (
+                        <li key={m.invoice_id} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
+                          <div className="min-w-0">
+                            <p className="font-medium text-cc-text">{m.participant_name}</p>
+                            <p className="text-[11px] text-cc-muted">
+                              {m.invoice_number}
+                              {m.payment_reference ? ` · ${m.payment_reference}` : ""}
+                            </p>
+                            {m.reason && <p className="mt-0.5 text-[12px]" style={{ color: "var(--cc-status-danger)" }}>{m.reason}</p>}
+                          </div>
+                          <span className="shrink-0 font-semibold tabular-nums text-cc-text">{money(m.total_cents)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                );
+              })}
+              {results.unmatched_references.length > 0 && (
+                <p className="text-xs text-cc-muted">
+                  {results.unmatched_references.length} line{results.unmatched_references.length === 1 ? "" : "s"} didn't match a
+                  claim awaiting payment (already settled, or claimed outside CareCliQ):{" "}
+                  {results.unmatched_references.slice(0, 5).join(", ")}
+                  {results.unmatched_references.length > 5 ? "…" : ""}
+                </p>
+              )}
+            </div>
+          )}
+          <PanelFooter>
+            <SecondaryButton onClick={() => setResults(null)} disabled={busy}>Cancel</SecondaryButton>
+            <PrimaryButton
+              busy={busy}
+              disabled={!results?.matched.some((m) => m.outcome !== "pending")}
+              onClick={() => void applyResults()}
+            >
+              {busy ? "Applying…" : "Apply results"}
+            </PrimaryButton>
+          </PanelFooter>
+        </SheetContent>
+      </Sheet>
 
       <Sheet open={paying} onOpenChange={setPaying}>
         <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
