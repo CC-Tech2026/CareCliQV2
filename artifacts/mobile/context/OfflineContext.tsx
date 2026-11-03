@@ -31,6 +31,7 @@ import {
   type SessionNoteRecord,
 } from "@/lib/worker-api";
 import { createWorkerIncident } from "@/lib/resource-api";
+import { toEnglishRecord } from "@/lib/note-languages";
 
 interface OfflineContextValue {
   isOnline: boolean;
@@ -113,7 +114,24 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     for (const item of queue) {
       try {
         if (item.type === "sync_notes") {
-          await syncSessionNotes(item.sessionId, item.notes);
+          // A note written offline in another language goes up in English
+          // with the worker's words beside it. If translation still isn't
+          // available, the throw keeps it queued rather than syncing the
+          // untranslated text as the record.
+          const notes = await Promise.all(
+            item.notes.map(async (note) => {
+              if (!note.needs_translation) return note;
+              const record = await toEnglishRecord(note.content, note.original_language ?? "auto");
+              return {
+                ...note,
+                content: record.english,
+                original_content: record.original ?? null,
+                original_language: record.originalLanguage ?? null,
+                needs_translation: false,
+              };
+            }),
+          );
+          await syncSessionNotes(item.sessionId, notes);
         } else if (item.type === "update_tasks") {
           await updateShiftTasks(item.shiftId, item.tasks);
         } else if (item.type === "delete_note") {

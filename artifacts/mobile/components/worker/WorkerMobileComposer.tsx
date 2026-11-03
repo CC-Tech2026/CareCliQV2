@@ -15,6 +15,7 @@ import {
   Animated,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -26,13 +27,20 @@ import { useOffline } from "@/context/OfflineContext";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
-import type { TranslationKey } from "@/lib/i18n/translations";
+import { translate, type AppLanguage, type TranslationKey } from "@/lib/i18n/translations";
+import {
+  NOTE_LANGUAGES,
+  loadNoteLanguage,
+  noteLanguageLabel,
+  saveNoteLanguage,
+  toEnglishRecord,
+  type RecordTranslation,
+} from "@/lib/note-languages";
 import type { SessionNoteRecord, SessionNoteType } from "@/lib/worker-api";
 import {
   improveNote,
   syncSessionNotes,
   translateForWorkerPreview,
-  translateNoteToEnglish,
   transcribeSessionAudio,
   uploadSessionAttachment,
 } from "@/lib/worker-api";
@@ -45,6 +53,7 @@ const HINT_TRANSLATION_KEYS: Partial<Record<string, TranslationKey>> = {
   "word-count": "composer.hint.wordCount",
   "specific-observation": "composer.hint.specificObservation",
   "participant-reference": "composer.hint.participantReference",
+  "participant-response": "composer.hint.participantResponse",
 };
 
 /**
@@ -60,37 +69,27 @@ function localizeHint(hint: DraftNoteHint, t: Translator): string {
   if (hint.id === "restrictive-practice") {
     return t("composer.hint.restrictivePractice", { phrase: hint.phrase ?? "" });
   }
+  if (hint.id === "person-first") {
+    return t("composer.hint.personFirst", { phrase: hint.phrase ?? "", suggestion: hint.suggestion ?? "" });
+  }
+  if (hint.id === "subjective-language") {
+    return t("composer.hint.subjective", { phrase: hint.phrase ?? "" });
+  }
   const key = HINT_TRANSLATION_KEYS[hint.id];
   return key ? t(key) : hint.message;
 }
 
-const LANGUAGE_OPTIONS = [
-  { value: "auto", label: "Auto detect" },
-  { value: "en", label: "English" },
-  { value: "es", label: "Spanish" },
-  { value: "fr", label: "French" },
-  { value: "ar", label: "Arabic" },
-  { value: "tl", label: "Filipino" },
-  { value: "zh", label: "Chinese" },
-  { value: "hi", label: "Hindi" },
-] as const;
+const APP_LANGUAGES: readonly AppLanguage[] = ["en", "vi", "zh", "ar"];
 
-async function toEnglishNote(text: string, language: string): Promise<string> {
-  const trimmed = text.trim();
-  if (!trimmed) return trimmed;
-  const source = language === "auto" ? "auto" : language;
-  if (source === "en") return trimmed;
-  try {
-    const result = await translateNoteToEnglish(trimmed, source);
-    const translated = String(result?.translated ?? "").trim();
-    if (translated && result?.status !== "failed" && result?.status !== "unsupported") {
-      return translated;
-    }
-  } catch {
-    /* fall back to original text */
-  }
-  return trimmed;
-}
+/** Prompts for what a compliant note covers: the support given, how the
+ * participant responded, progress toward the goal this task is for, and
+ * anything of concern. Each inserts a sentence starter the worker finishes. */
+const NOTE_PROMPTS = [
+  { id: "did", label: "composer.prompt.did", starter: "composer.prompt.didStarter" },
+  { id: "response", label: "composer.prompt.response", starter: "composer.prompt.responseStarter" },
+  { id: "goal", label: "composer.prompt.goal", starter: "composer.prompt.goalStarter" },
+  { id: "concern", label: "composer.prompt.concern", starter: "composer.prompt.concernStarter" },
+] as const satisfies ReadonlyArray<{ id: string; label: TranslationKey; starter: TranslationKey }>;
 
 function formatDuration(secs: number): string {
   const m = Math.floor(secs / 60);
@@ -345,6 +344,8 @@ type Props = {
   sessionId?: string | null;
   taskId?: string | null;
   taskLabel?: string;
+  /** The participant goal this task works toward, for the goal prompt. */
+  goalTitle?: string;
   participantName?: string;
   participantId?: string | null;
   disabled?: boolean;
@@ -355,6 +356,7 @@ export function WorkerMobileComposer({
   sessionId,
   taskId,
   taskLabel,
+  goalTitle,
   participantName,
   participantId,
   disabled,
@@ -366,7 +368,23 @@ export function WorkerMobileComposer({
   const { isOnline, queueWorkerUpdate } = useOffline();
   const [value, setValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [language, setLanguage] = useState<string>("auto");
+  // Defaults to the language the worker runs the app in, then to whatever
+  // they last wrote a note in, so a worker who writes in Nepali isn't asked
+  // to pick it again on every task.
+  const [language, setLanguageState] = useState<string>(appLanguage);
+  const setLanguage = (code: string) => {
+    setLanguageState(code);
+    void saveNoteLanguage(code);
+  };
+  useEffect(() => {
+    let cancelled = false;
+    void loadNoteLanguage().then((saved) => {
+      if (saved && !cancelled) setLanguageState(saved);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [langOpen, setLangOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const voiceControlsRef = useRef<VoiceRecordingControls | null>(null);
@@ -383,10 +401,31 @@ export function WorkerMobileComposer({
   const placeholder = taskId
     ? taskLabel ?? "Start typing a note…"
     : "Select a task above to start noting";
-  const languageLabel =
-    LANGUAGE_OPTIONS.find((o) => o.value === language)?.label ?? "Auto detect";
+  const languageLabel = noteLanguageLabel(language);
   const hasText = value.trim().length > 0;
   const showTranslateBadge = hasText && language !== "en";
+  // The live checks read English. A note in another language is checked once
+  // it has been translated, when it's saved.
+  const checksLive = language === "en";
+  const firstName = participantName?.split(" ")[0] || undefined;
+
+  /** A sentence starter in the language the worker is writing in, or null
+   * when the app has no translation for that language. */
+  const starterFor = (key: TranslationKey) => {
+    const inLanguage = language === "auto" ? appLanguage : language;
+    if (!(APP_LANGUAGES as readonly string[]).includes(inLanguage)) return null;
+    return translate(inLanguage as AppLanguage, key, { name: firstName ?? "", goal: goalTitle ?? "" });
+  };
+  const prompts = NOTE_PROMPTS.filter((p) => p.id !== "goal" || !!goalTitle);
+  const applyPrompt = (prompt: (typeof NOTE_PROMPTS)[number]) => {
+    const starter = starterFor(prompt.starter);
+    Haptics.selectionAsync();
+    if (!starter) return;
+    setValue((current) => {
+      const trimmed = current.trimEnd();
+      return trimmed ? `${trimmed}${/[.!?]$/.test(trimmed) ? "" : "."} ${starter}` : starter;
+    });
+  };
 
   // Live, debounced compliance nudge while typing - soft/advisory only (see
   // checkDraftNoteHints' own docstring), so the note already reads as
@@ -397,11 +436,15 @@ export function WorkerMobileComposer({
       setDraftHints([]);
       return;
     }
+    if (!checksLive) {
+      setDraftHints([]);
+      return;
+    }
     const handle = setTimeout(() => {
-      setDraftHints(checkDraftNoteHints(value, participantName?.split(" ")[0]));
+      setDraftHints(checkDraftNoteHints(value, firstName));
     }, 600);
     return () => clearTimeout(handle);
-  }, [value, hasText, participantName]);
+  }, [value, hasText, firstName, checksLive]);
 
   // Reset any pending suggestion when switching tasks - a suggestion for one
   // task's note has no business appearing against a different task's draft.
@@ -487,7 +530,7 @@ export function WorkerMobileComposer({
   // worker actively chooses to use) are the right tools for that case, not
   // an unprompted AI suggestion.
   useEffect(() => {
-    if (!hasText || recording || disabled || autoFiredRef.current) return;
+    if (!hasText || recording || disabled || autoFiredRef.current || !checksLive) return;
     const words = value.trim().split(/\s+/).filter(Boolean).length;
     if (words < 15) return;
     if (value === lastAutoSuggestRef.current) return;
@@ -502,13 +545,14 @@ export function WorkerMobileComposer({
     }, 3200);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, hasText, recording, disabled, participantName]);
+  }, [value, hasText, recording, disabled, participantName, checksLive]);
 
   const saveNote = async (
     content: string,
     noteType: SessionNoteType = "text",
     fileName?: string,
     attachmentUrls?: string[],
+    language?: Pick<SessionNoteRecord, "original_content" | "original_language" | "needs_translation">,
   ) => {
     if (!sessionId || !content.trim() || disabled) return;
 
@@ -528,6 +572,7 @@ export function WorkerMobileComposer({
       file_name: fileName,
       attachment_urls: attachmentUrls,
       synced: false,
+      ...language,
     };
 
     onNoteSaved?.(payload);
@@ -539,8 +584,9 @@ export function WorkerMobileComposer({
     // this request" (a weak cell signal, a timeout, or a 5xx all look
     // "online" but still fail the request). Previously an online-but-failed
     // save was silently dropped: the note stayed visible locally looking
-    // saved, but nothing was ever persisted server-side.
-    const trySync = isOnline;
+    // saved, but nothing was ever persisted server-side. A note still waiting
+    // on translation always goes through the queue, which translates it first.
+    const trySync = isOnline && !language?.needs_translation;
     let syncFailed = false;
     if (trySync) {
       try {
@@ -579,11 +625,48 @@ export function WorkerMobileComposer({
     setSubmitting(false);
   };
 
+  /** After translation, the English record gets the same checks an English
+   * note gets while typing. Only a possible restrictive practice is raised
+   * here, since it may need an incident report. */
+  const checkTranslated = (record: RecordTranslation) => {
+    if (!record.original) return;
+    const rp = checkDraftNoteHints(record.english, firstName).find((h) => h.id === "restrictive-practice");
+    if (rp) showAlert(t("composer.translate.checkTitle"), localizeHint(rp, t));
+  };
+
+  /** Saves what the worker wrote, in English with their words kept beside
+   * it. Offline, a non-English note waits in the queue and is translated
+   * before it syncs. If translation fails, the text stays in the box: an
+   * untranslated note is never saved as the English record. */
+  const saveInWorkerLanguage = async (text: string, noteType: SessionNoteType) => {
+    if (language === "en") return saveNote(text, noteType);
+    if (!isOnline) {
+      return saveNote(text, noteType, undefined, undefined, {
+        original_content: text,
+        original_language: language,
+        needs_translation: true,
+      });
+    }
+    let record: RecordTranslation;
+    try {
+      record = await toEnglishRecord(text, language);
+    } catch {
+      setValue(text);
+      setSubmitting(false);
+      showAlert(t("composer.translate.failedTitle"), t("composer.translate.failedBody"));
+      return;
+    }
+    await saveNote(record.english, noteType, undefined, undefined, {
+      original_content: record.original ?? null,
+      original_language: record.originalLanguage ?? null,
+    });
+    checkTranslated(record);
+  };
+
   const handleSend = async () => {
     if (!hasText || disabledInput) return;
     setSubmitting(true);
-    const english = await toEnglishNote(value, language).catch(() => value.trim());
-    await saveNote(english, "text");
+    await saveInWorkerLanguage(value.trim(), "text");
   };
 
   const startRecording = async () => {
@@ -638,8 +721,7 @@ export function WorkerMobileComposer({
         );
         return;
       }
-      const english = await toEnglishNote(trimmed, language).catch(() => trimmed);
-      await saveNote(english, "voice");
+      await saveInWorkerLanguage(trimmed, "voice");
     } catch (err) {
       showAlert(
         "Transcription failed",
@@ -771,14 +853,14 @@ export function WorkerMobileComposer({
     <View style={[styles.wrap, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 10) }]}>
       <View style={styles.langRow}>
         <Text style={[styles.langLabel, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-          INPUT LANGUAGE
+          {t("composer.language.label")}
         </Text>
         <View style={styles.langRight}>
           {showTranslateBadge && (
             <View style={[styles.translateBadge, { backgroundColor: colors.activeBg, borderColor: colors.primary + "40" }]}>
               <Feather name="globe" size={13} color={colors.primary} />
               <Text style={[styles.translateBadgeText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
-                Translate → EN
+                {t("composer.language.badge")}
               </Text>
             </View>
           )}
@@ -794,6 +876,29 @@ export function WorkerMobileComposer({
           </Pressable>
         </View>
       </View>
+
+      {!!taskId && !recording && !disabled && (
+        <View>
+          <Text style={[styles.promptTitle, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
+            {t("composer.prompt.title")}
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promptRow}>
+            {prompts.map((prompt) => (
+              <Pressable
+                key={prompt.id}
+                onPress={() => applyPrompt(prompt)}
+                accessibilityRole="button"
+                accessibilityHint={t("composer.prompt.a11yHint")}
+                style={[styles.promptChip, { borderColor: colors.border, backgroundColor: colors.background }]}
+              >
+                <Text style={[styles.promptChipText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                  {t(prompt.label, { name: firstName ?? t("composer.prompt.theParticipant") })}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       <View style={styles.inputRow}>
         {recording ? (
@@ -928,7 +1033,9 @@ export function WorkerMobileComposer({
                   ? t("composer.hint.recording")
                   : voiceUnavailable && !hasText
                     ? t("composer.voice.offlineHint")
-                    : t("composer.hint.idle")}
+                    : !checksLive && hasText
+                      ? t("composer.hint.otherLanguage")
+                      : t("composer.hint.idle")}
           </Text>
         );
       })()}
@@ -942,14 +1049,17 @@ export function WorkerMobileComposer({
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                Input language
+                {t("composer.language.title")}
               </Text>
               <Pressable onPress={() => setLangOpen(false)} hitSlop={8}>
                 <Feather name="x" size={20} color={colors.mutedForeground} />
               </Pressable>
             </View>
-            <View style={styles.sheetBody}>
-              {LANGUAGE_OPTIONS.map((opt) => {
+            <Text style={[styles.sheetIntro, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              {t("composer.language.intro")}
+            </Text>
+            <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetBody}>
+              {NOTE_LANGUAGES.map((opt) => {
                 const active = opt.value === language;
                 return (
                   <Pressable
@@ -966,13 +1076,13 @@ export function WorkerMobileComposer({
                         { color: active ? colors.primary : colors.foreground, fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular" },
                       ]}
                     >
-                      {opt.label}
+                      {noteLanguageLabel(opt.value)}
                     </Text>
                     {active ? <Feather name="check" size={16} color={colors.primary} /> : null}
                   </Pressable>
                 );
               })}
-            </View>
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -981,6 +1091,34 @@ export function WorkerMobileComposer({
 }
 
 const styles = StyleSheet.create({
+  promptTitle: {
+    fontSize: 10,
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  promptRow: {
+    gap: 6,
+    paddingRight: 8,
+  },
+  promptChip: {
+    minHeight: 36,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  promptChipText: {
+    fontSize: 13,
+  },
+  sheetIntro: {
+    fontSize: 13,
+    lineHeight: 18,
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  sheetScroll: {
+    maxHeight: 420,
+  },
   wrap: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12,

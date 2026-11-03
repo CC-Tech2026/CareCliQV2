@@ -9,6 +9,7 @@ import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
 import { isCheckinSessionNote } from "@workspace/worker-compliance";
 import type { SessionNoteRecord } from "@/lib/worker-api";
+import { noteLanguageLabel } from "@/lib/note-languages";
 import type { NoteComplianceFlag } from "@workspace/worker-compliance";
 import { buildAttachmentFileName, formatTimeWithZone, SESSION_NOTE_MAX } from "@/lib/shift-utils";
 
@@ -75,6 +76,7 @@ export function WorkerMobileNoteBubble({
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.content);
+  const [showOriginal, setShowOriginal] = useState(false);
 
   useEffect(() => {
     if (!editing) setDraft(note.content);
@@ -199,6 +201,30 @@ export function WorkerMobileNoteBubble({
               {displayContent}
             </Text>
           </View>
+          {note.needs_translation ? (
+            <Text style={[styles.checkinNote, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              {t("notes.awaitingTranslation")}
+            </Text>
+          ) : note.original_content ? (
+            <View style={styles.originalBox}>
+              <Pressable
+                onPress={() => setShowOriginal((v) => !v)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showOriginal }}
+              >
+                <Text style={[styles.originalToggle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                  {t("notes.translatedFrom", { language: noteLanguageLabel(note.original_language) })} ·{" "}
+                  {showOriginal ? t("notes.hideOriginal") : t("notes.showOriginal")}
+                </Text>
+              </Pressable>
+              {showOriginal ? (
+                <Text style={[styles.originalText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  {note.original_content}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
           {!editable && truncated ? (
             <Pressable onPress={() => setModalOpen(true)} hitSlop={6}>
               <Text style={[styles.readMore, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
@@ -343,6 +369,17 @@ const styles = StyleSheet.create({
   },
   category: {
     fontSize: 11,
+  },
+  originalBox: {
+    marginTop: 6,
+    gap: 4,
+  },
+  originalToggle: {
+    fontSize: 12,
+  },
+  originalText: {
+    fontSize: 13,
+    lineHeight: 19,
   },
   contentRow: {
     flexDirection: "row",

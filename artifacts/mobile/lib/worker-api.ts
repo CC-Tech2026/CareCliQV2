@@ -169,6 +169,13 @@ export type SessionNoteRecord = {
   note_type?: SessionNoteType;
   file_name?: string;
   attachment_urls?: string[];
+  /** The worker's own words when the note was written in another language;
+   * content is always the English record. */
+  original_content?: string | null;
+  original_language?: string | null;
+  /** Written offline in another language: content is still the worker's own
+   * words and is translated before it syncs (OfflineContext). */
+  needs_translation?: boolean;
 };
 
 export type GoalProgressNote = {

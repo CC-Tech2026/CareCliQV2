@@ -233,6 +233,7 @@ export function WorkerMobileTaskList({
                   sessionId={sessionId}
                   taskId={task.task_id}
                   taskLabel={task.label}
+                  goalTitle={task.goal_title ?? undefined}
                   participantName={participantName}
                   participantId={participantId}
                   disabled={disabled || !sessionId}
