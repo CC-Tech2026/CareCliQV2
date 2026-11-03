@@ -59,6 +59,12 @@ interface MDData {
   compliance_target: number;
   incidents_this_month: number;
   goal_achievement_rate: number;
+  /** From the goals themselves (ndis_goals); null when they couldn't be read. */
+  goals_total?: number | null;
+  goals_achieved?: number | null;
+  goals_active?: number | null;
+  goal_outcome_rate?: number | null;
+  active_goals_supported_30d?: number | null;
   /** workers_at_risk stops at 10; this is the full count. */
   workers_at_risk_count?: number;
   workers_at_risk: Array<{
@@ -240,7 +246,13 @@ export default function MDExecutivePage() {
     { key: "at_risk", label: "At risk", value: breakdown.at_risk, tone: "warning" as Tone },
     { key: "non_compliant", label: "Non-compliant", value: breakdown.non_compliant, tone: "danger" as Tone },
   ];
-  const goalTone: Tone = data.goal_achievement_rate >= 50 ? "good" : data.goal_achievement_rate >= 25 ? "warning" : "danger";
+  // Goals supported: active goals with at least one shift note recorded
+  // against them in the last 30 days, through the task the note was for.
+  const goalsActive = data.goals_active ?? null;
+  const goalsSupported = data.active_goals_supported_30d ?? null;
+  const supportedPct = goalsActive && goalsSupported != null ? Math.round((goalsSupported / goalsActive) * 100) : null;
+  const supportTone: Tone = supportedPct == null ? "neutral" : supportedPct >= 80 ? "good" : supportedPct >= 50 ? "warning" : "danger";
+  const unsupportedGoals = goalsActive != null && goalsSupported != null ? goalsActive - goalsSupported : null;
   const workersBelow = [...data.workers_at_risk].sort((a, b) => a.compliance_score - b.compliance_score);
   const workersBelowCount = data.workers_at_risk_count ?? workersBelow.length;
 
@@ -264,13 +276,25 @@ export default function MDExecutivePage() {
       action: "Open staff",
     },
     {
-      // goal_achievement_rate is the share of participants whose plan status is
-      // active; there is no per-goal achieved status to measure goals by yet.
-      label: "Participants with an active plan",
-      value: percent(data.goal_achievement_rate),
-      target: `of ${data.active_participants} participants`,
-      tone: goalTone,
-      status: data.goal_achievement_rate >= 50 ? "Most plans current" : "Plans need renewing",
+      label: "Participant goals achieved",
+      value: data.goal_outcome_rate == null ? "N/A" : percent(data.goal_outcome_rate),
+      target: data.goals_total ? `${data.goals_achieved} of ${data.goals_total} goals` : "no goals recorded",
+      tone: "neutral",
+      status: data.goals_total ? "Marked completed by coordinators" : "Add goals to participant plans",
+      href: "/onboard-participant/active",
+      action: "View participants",
+    },
+    {
+      label: "Active goals supported in the last 30 days",
+      value: supportedPct == null ? "N/A" : `${supportedPct}%`,
+      target: goalsActive ? `${goalsSupported} of ${goalsActive} goals` : "no active goals",
+      tone: supportTone,
+      status:
+        unsupportedGoals == null
+          ? "Not available"
+          : unsupportedGoals === 0
+            ? "Every goal has support recorded"
+            : `${unsupportedGoals} with no shift notes against them`,
       href: "/onboard-participant/active",
       action: "View participants",
     },
@@ -359,10 +383,10 @@ export default function MDExecutivePage() {
               onClick: () => navigate("/sessions"),
             },
             {
-              value: percent(data.goal_achievement_rate),
-              label: "with an active plan",
-              tone: goalTone,
-              hint: `${data.active_participants} active participants`,
+              value: supportedPct == null ? "N/A" : `${supportedPct}%`,
+              label: "of active goals supported",
+              tone: supportTone,
+              hint: goalsActive ? `${goalsSupported} of ${goalsActive} goals had shift notes in 30 days` : `${data.active_participants} active participants`,
               onClick: () => navigate("/onboard-participant/active"),
             },
             {

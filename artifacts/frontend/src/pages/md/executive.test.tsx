@@ -158,3 +158,22 @@ it("separates documentation, staff files and participant files", async () => {
   );
   expect(screen.getByRole("heading", { name: "How a shift note is scored" })).toBeTruthy();
 });
+
+it("shows goal outcomes from the goals themselves", async () => {
+  mocks.alerts.mockResolvedValue([]);
+  mocks.api.mockImplementation((url: string) =>
+    Promise.resolve({
+      ok: true,
+      json: async () =>
+        url.endsWith("compliance-trend")
+          ? { trend: [] }
+          : { ...data, goals_total: 8, goals_achieved: 2, goals_active: 6, goal_outcome_rate: 25, active_goals_supported_30d: 4 },
+    }),
+  );
+  render(<MDExecutivePage />);
+  expect(await screen.findByText("Participant goals achieved")).toBeTruthy();
+  expect(screen.getByText("2 of 8 goals")).toBeTruthy();
+  expect(screen.getByText("Active goals supported in the last 30 days")).toBeTruthy();
+  expect(screen.getByText("4 of 6 goals")).toBeTruthy();
+  expect(screen.getByText("2 with no shift notes against them")).toBeTruthy();
+});

@@ -38,7 +38,26 @@ type ExtendedSession = Session & {
   participant_choice_control?: string | null;
   worker_id?: string | null;
   worker_name?: string | null;
+  /** The worker app's per-task notes. original_content is the worker's own
+   * words when they wrote in another language; content is the English record. */
+  session_notes?: Array<{
+    id: string;
+    content: string;
+    created_at?: string | null;
+    original_content?: string | null;
+    original_language?: string | null;
+  }> | null;
 };
+
+/** Language names for the codes the worker app offers (note-languages.ts). */
+function languageName(code?: string | null) {
+  if (!code) return "another language";
+  try {
+    return new Intl.DisplayNames(["en-AU"], { type: "language" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -977,6 +996,42 @@ export default function SessionDetail({ id }: { id?: string }) {
               </div>
             </div>
           )}
+
+          {(() => {
+            const translated = ((session as ExtendedSession).session_notes ?? []).filter((n) => n.original_content);
+            if (translated.length === 0) return null;
+            return (
+              <section
+                aria-label="Notes written in another language"
+                className="rounded-2xl bg-white overflow-hidden"
+                style={{ boxShadow: "var(--cc-card-shadow)" }}
+              >
+                <div className="px-5 py-4 border-b" style={{ borderColor: "var(--cc-card-divider)" }}>
+                  <p className="text-[14px] font-semibold" style={{ color: "var(--cc-text)" }}>Notes written in another language</p>
+                  <p className="mt-0.5 text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                    The English is the record. The worker's own words are kept so the translation can be checked.
+                  </p>
+                </div>
+                <ul className="divide-y" style={{ borderColor: "var(--cc-card-divider)" }}>
+                  {translated.map((n) => (
+                    <li key={n.id} className="grid gap-3 px-5 py-4 md:grid-cols-2">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>
+                          Written in {languageName(n.original_language)}
+                          {n.created_at ? ` · ${formatAppTimeWithZone(n.created_at)}` : ""}
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap text-[13px]" style={{ color: "var(--cc-text)" }}>{n.original_content}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>English record</p>
+                        <p className="mt-1 whitespace-pre-wrap text-[13px]" style={{ color: "var(--cc-text)" }}>{n.content}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })()}
 
           {/* Structured Clinical Note Fields */}
           {(() => {

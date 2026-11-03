@@ -83,6 +83,8 @@ interface MDData {
 
   workers_at_risk?: Array<{ id: string }>;
   workers_at_risk_count?: number;
+  goals_active?: number | null;
+  active_goals_supported_30d?: number | null;
 }
 
 interface TrendPoint {
@@ -234,6 +236,23 @@ function ComplianceMeasures({ data, workersBelow }: { data: MDData; workersBelow
       detail: evidenceDetail(participant),
       href: "/md/compliance?view=checklist&area=participant",
       action: "Participant evidence",
+    },
+    {
+      label: "Participant goals",
+      value:
+        data.goals_active && data.active_goals_supported_30d != null
+          ? `${Math.round((data.active_goals_supported_30d / data.goals_active) * 100)}%`
+          : "N/A",
+      tone:
+        data.goals_active && data.active_goals_supported_30d != null
+          ? scoreTone(Math.round((data.active_goals_supported_30d / data.goals_active) * 100))
+          : "neutral",
+      measures: "Active goals with support recorded against them in the last 30 days.",
+      detail: data.goals_active
+        ? `${data.active_goals_supported_30d ?? 0} of ${data.goals_active} active goals had a shift note written under one of their tasks.`
+        : "No active goals recorded for participants yet.",
+      href: "/onboard-participant/active",
+      action: "Participants",
     },
     {
       label: "Audit evidence overall",
