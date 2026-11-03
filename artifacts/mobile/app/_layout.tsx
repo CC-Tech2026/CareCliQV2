@@ -116,6 +116,14 @@ function RootLayoutNav() {
           options={{ headerShown: false, animation: "slide_from_right" }}
         />
         <Stack.Screen
+          name="shift/[id]/record"
+          options={{ headerShown: false, animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="worker/past-shifts"
+          options={{ headerShown: false, animation: "slide_from_right" }}
+        />
+        <Stack.Screen
           name="client/[id]"
           options={{ headerShown: false, animation: "slide_from_right" }}
         />

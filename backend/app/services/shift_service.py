@@ -3547,12 +3547,9 @@ def end_shift(
         **_build_completion_summary(updated, session),
         "validation": validation,
     }
-    try:
-        from .conversation_service import set_conversation_read_only_for_shift
-
-        set_conversation_read_only_for_shift(shift_id)
-    except Exception:
-        pass
+    # The shift's conversation stays open after clock-out: the office may ask
+    # for changes while it's reviewed, and the worker answers there. It closes
+    # when the shift is verified (shift_verification_service.verify_shift).
     try:
         from .shift_signature_service import get_shift_signature
 

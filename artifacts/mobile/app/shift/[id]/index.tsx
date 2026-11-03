@@ -80,6 +80,18 @@ export default function ShiftDetailScreen() {
   const checkinInFlightRef = useRef(false);
 
   const { data: shift, isLoading, error, refetch: refetchShift } = useWorkerShift(id);
+
+  // Opening a shift that was already finished (from a list or a link) shows
+  // its record and conversation with the office, not the live shift screen.
+  // Only on first load: finishing a shift here still shows the submitted
+  // screen, and a shift with documentation still due keeps "Finish
+  // documentation".
+  const openedFinishedRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!shift || openedFinishedRef.current !== null) return;
+    openedFinishedRef.current = isShiftCompletedForList(shift) && !shift.documentation_pending;
+    if (openedFinishedRef.current) router.replace(`/shift/${id}/record` as never);
+  }, [shift, id, router]);
   const sessionId = shift?.session_id ?? undefined;
   const isSessionActive = shift?.visual_state === "session_active" || shift?.visual_state === "clocked_in";
   const checkinStatus = shift?.checkin_status;

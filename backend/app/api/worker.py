@@ -32,12 +32,17 @@ from ..services import (
     travel_expense_service,
 )
 from ..services.compliance_evidence_service import get_evidence_metadata, list_session_evidence_metadata
-from ..services import shift_signature_service
+from ..services import shift_review_service, shift_signature_service
 from ..services.object_storage import upload_evidence_bytes
 from ..services.evidence_access_service import verify_and_download_evidence
 from ..services.compliance_engine import ComplianceBlockedError, run_compliance_check
 from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
-from ..services.notification_service import notify_office_worker_message, notify_password_reset_requested
+from ..services.notification_service import (
+    _user_display_name as _notification_display_name,
+    notify_conversation_message,
+    notify_office_worker_message,
+    notify_password_reset_requested,
+)
 from ..services.settings_service import get_physical_exam_session_types
 from ..services.supabase_client import get_supabase_admin
 
@@ -2409,6 +2414,124 @@ async def reply_to_message(
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=internal_error_detail("Failed to send reply", exc))
+
+
+# ── Shift reviews: finished shifts and the office's review of them ───────────
+
+class ShiftThreadMessageBody(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class SendBackBody(BaseModel):
+    note: Optional[str] = Field(default=None, max_length=2000)
+
+
+async def _notify_office_about_shift(
+    *, notify_id: Optional[str], org_id: str, shift_id: str, worker_id: str, conversation_id: str, text: str
+) -> None:
+    """To whoever asked or coordinates the shift; with nobody named, to the
+    office as a whole."""
+    if notify_id:
+        await notify_conversation_message(
+            recipient_id=str(notify_id),
+            org_id=org_id,
+            conversation_id=conversation_id,
+            shift_id=shift_id,
+            message_preview=text,
+            sender_name=_notification_display_name(worker_id) or "A worker",
+            sender_id=worker_id,
+            worker_id=worker_id,
+            recipient_is_office=True,
+        )
+    else:
+        await notify_office_worker_message(org_id=org_id, shift_id=shift_id, worker_id=worker_id, message=text)
+
+
+@router.get("/shift-reviews")
+async def worker_shift_reviews(
+    include_verified: bool = Query(default=False),
+    current_user: dict = Depends(get_current_user),
+):
+    """The worker's finished shifts and where each stands with the office:
+    changes requested first, then waiting for review. Verified shifts only
+    with include_verified (history)."""
+    _require_worker(current_user)
+    return shift_review_service.list_worker_shift_reviews(
+        get_user_id(current_user), get_user_organization_id(current_user), include_verified=include_verified,
+    )
+
+
+@router.get("/shifts/{shift_id}/review")
+async def worker_shift_review_thread(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """A finished shift's review status and its conversation with the office."""
+    _require_worker(current_user)
+    thread = shift_review_service.get_worker_shift_thread(
+        shift_id, get_user_id(current_user), get_user_organization_id(current_user),
+    )
+    if thread is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return thread
+
+
+@router.post("/shifts/{shift_id}/review/messages", status_code=status.HTTP_201_CREATED)
+async def worker_shift_review_message(
+    shift_id: str,
+    body: ShiftThreadMessageBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """The worker replies to the office about a finished shift."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        result = shift_review_service.post_worker_message(shift_id, worker_id, org_id, body.body)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    await _notify_office_about_shift(
+        notify_id=result.get("notify_id"), org_id=org_id, shift_id=shift_id, worker_id=worker_id,
+        conversation_id=str(result["conversation"]["id"]), text=body.body,
+    )
+    return result["message"]
+
+
+@router.post("/shifts/{shift_id}/review/send-back")
+async def worker_shift_send_back(
+    shift_id: str,
+    body: SendBackBody = SendBackBody(),
+    current_user: dict = Depends(get_current_user),
+):
+    """The worker has made the changes the office asked for: re-check the
+    documentation, close the requests and tell the office."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("worker_id") or "") != str(worker_id) or str(shift.get("organization_id") or "") != str(org_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    try:
+        result = shift_review_service.send_back_for_review(shift_id, worker_id, org_id, body.note)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    # The added notes count: the documentation score is worked out again.
+    compliance = await _run_shift_documentation_compliance_check(shift, current_user, persist=True)
+    await _notify_office_about_shift(
+        notify_id=result.get("notify_id"), org_id=org_id, shift_id=shift_id, worker_id=worker_id,
+        conversation_id=str(result["conversation_id"]), text=(result.get("message") or {}).get("body") or "Changes made",
+    )
+    await audit_service.log_action(
+        action_type="worker.shift.sent_back_for_review",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+    )
+    return {"review_status": "awaiting_review", "compliance": compliance}
 
 
 @router.post("/shifts/{shift_id}/sign")

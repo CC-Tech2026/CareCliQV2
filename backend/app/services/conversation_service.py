@@ -135,12 +135,17 @@ def get_conversation_messages(
     conversation_id: str,
     user_id: str,
     limit: int = 100,
+    *,
+    office_org_id: Optional[str] = None,
 ) -> list[dict[str, Any]]:
+    """The worker and the conversation's coordinator can read it; so can
+    anyone in the office of its organisation (office_org_id), since any
+    coordinator or the managing director may be the one reviewing the shift."""
     try:
         conv = (
             get_supabase_admin()
             .table("conversations")
-            .select("id, worker_id, coordinator_id, status")
+            .select("id, worker_id, coordinator_id, status, organization_id")
             .eq("id", conversation_id)
             .maybe_single()
             .execute()
@@ -148,7 +153,9 @@ def get_conversation_messages(
         if not conv or not conv.data:
             return []
         row = conv.data
-        if str(row.get("worker_id")) != str(user_id) and str(row.get("coordinator_id")) != str(user_id):
+        is_party = str(row.get("worker_id")) == str(user_id) or str(row.get("coordinator_id")) == str(user_id)
+        is_office = office_org_id is not None and str(row.get("organization_id")) == str(office_org_id)
+        if not (is_party or is_office):
             return []
 
         result = (
@@ -236,6 +243,17 @@ def action_conversation_message(message_id: str, user_id: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def reopen_conversation(conversation_id: str) -> None:
+    """A change request on a finished shift needs an answer from the worker."""
+    try:
+        get_supabase_admin().table("conversations").update(
+            {"status": "active", "updated_at": _now_iso()}
+        ).eq("id", conversation_id).eq("status", "read_only").execute()
+    except Exception as exc:
+        if not _is_missing_schema_error(exc):
+            logger.debug("reopen_conversation failed: %s", exc)
 
 
 def set_conversation_read_only_for_shift(shift_id: str) -> None:

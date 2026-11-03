@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   message: vi.fn(),
   search: "",
   preview: null as unknown,
+  conversation: [] as unknown[],
 }));
 vi.mock("wouter", () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
@@ -46,6 +47,7 @@ vi.mock("@/services/coordinatorService", () => ({
   getRecentShiftVerifications: vi.fn(),
   reverseShiftVerification: state.reverse,
   sendShiftMessage: state.message,
+  getShiftConversation: vi.fn(),
 }));
 
 const checks = {
@@ -87,6 +89,7 @@ const queue: ShiftVerificationQueueItem[] = [
     scheduled_start: "2026-09-30T00:00:00Z",
     timezone: "Australia/Adelaide",
     checks,
+    review_state: "changes_requested",
   },
   {
     shift_id: "s3",
@@ -133,7 +136,9 @@ vi.mock("@/hooks/useOrgQuery", () => ({
           ? recent
           : key[0] === "shift-verification-preview"
             ? state.preview
-            : [{ item_code: "01_011_0107_1_1", name: "Personal care", unit: "H", price_national: 70.23 }],
+            : key[0] === "shift-conversation"
+              ? state.conversation
+              : [{ item_code: "01_011_0107_1_1", name: "Personal care", unit: "H", price_national: 70.23 }],
     isLoading: false,
     isFetching: false,
     isError: false,
@@ -148,6 +153,24 @@ afterEach(() => {
   vi.clearAllMocks();
   state.search = "";
   state.preview = null;
+  state.conversation = [];
+});
+
+it("shows which shifts are back with the worker and the conversation about a shift", async () => {
+  state.search = "shiftId=s1";
+  state.conversation = [
+    { id: "m1", sender_id: "office-1", body: "Please add how Liam responded at lunch.", requires_action: true, actioned_at: "2026-09-30T05:00:00Z", created_at: "2026-09-30T04:30:00Z" },
+    { id: "m2", sender_id: "w1", body: "Added. He chose the sandwich himself.", created_at: "2026-09-30T05:00:00Z" },
+  ];
+  state.message.mockResolvedValue({});
+  render(<CoordinatorVerificationPage />);
+  expect(screen.getByText("Changes requested · with the worker")).toBeTruthy();
+  const thread = screen.getByRole("region", { name: "Conversation with Priya Sharma" });
+  expect(thread.textContent).toContain("Changes made");
+  expect(thread.textContent).toContain("He chose the sandwich himself.");
+  fireEvent.change(screen.getByLabelText("Message Priya Sharma about this shift…"), { target: { value: "Thanks, approving now." } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  await waitFor(() => expect(state.message).toHaveBeenCalledWith("s1", "w1", "Thanks, approving now.", "text"));
 });
 
 it("opens the shift named in the link and shows its review detail", () => {

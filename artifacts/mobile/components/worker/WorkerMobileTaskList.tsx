@@ -28,6 +28,9 @@ type Props = {
   onOpenIncidentReport?: (noteId?: string, content?: string) => void;
   /** Participant's branch zone. */
   tz?: string | null;
+  /** A finished shift: notes can be read but not added to, and tasks can't
+   * be ticked. */
+  readOnly?: boolean;
 };
 
 /**
@@ -54,6 +57,7 @@ export function WorkerMobileTaskList({
   onNoteSaved,
   onOpenIncidentReport,
   tz,
+  readOnly = false,
 }: Props) {
   const colors = useColors();
   const active = tasks.filter((t) => !t.marked_na);
@@ -84,7 +88,7 @@ export function WorkerMobileTaskList({
           >
             <View style={styles.row}>
               <Pressable
-                disabled={disabled || isMedication}
+                disabled={disabled || isMedication || readOnly}
                 onPress={() => {
                   if (!done && !canComplete) {
                     onSelectTask(task.task_id);
@@ -156,7 +160,9 @@ export function WorkerMobileTaskList({
                 ) : null}
                 {!expanded && (
                   <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    {isMedication
+                    {readOnly
+                      ? `${taskNotes.length} update${taskNotes.length === 1 ? "" : "s"}`
+                      : isMedication
                       ? "Tap to log doses · completes automatically"
                       : taskNotes.length > 0
                         ? `${taskNotes.length} update${taskNotes.length === 1 ? "" : "s"} · Tap to add more`
@@ -179,7 +185,7 @@ export function WorkerMobileTaskList({
                   </Text>
                 ) : null}
 
-                {isMedication && shiftId && (
+                {isMedication && shiftId && !readOnly && (
                   <View style={[styles.medicationBox, { borderColor: colors.border }]}>
                     <WorkerMobileMedicationChecklist
                       shiftId={shiftId}
@@ -216,6 +222,7 @@ export function WorkerMobileTaskList({
                   </View>
                 )}
 
+                {!readOnly && (
                 <WorkerMobileComposer
                   sessionId={sessionId}
                   taskId={task.task_id}
@@ -227,6 +234,7 @@ export function WorkerMobileTaskList({
                   disabled={disabled || !sessionId}
                   onNoteSaved={onNoteSaved}
                 />
+                )}
               </View>
             )}
           </View>

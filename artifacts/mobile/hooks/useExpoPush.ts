@@ -117,6 +117,12 @@ function navigateFromNotificationData(
       router.push(`/shift/${shiftId}${q}` as never);
       return true;
     }
+    // A message about a shift opens its record and conversation with the
+    // office (the record sends a shift that's still on to the live screen).
+    if (coerceString(data.conversation_id)) {
+      router.push(`/shift/${shiftId}/record` as never);
+      return true;
+    }
     router.push(`/shift/${shiftId}` as never);
     return true;
   }
