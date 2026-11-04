@@ -15,6 +15,7 @@ from .check_in_service import (
     normalize_client_timestamp,
     normalize_client_timestamp_with_location,
     resolve_participant_coordinates,
+    check_in_geofence_bypassed,
     validate_clock_in_window,
     verify_gps_location,
     verify_qr_token_for_shift,
@@ -2530,7 +2531,12 @@ def _apply_verified_check_in(
                 coords[1],
                 accuracy=float(accuracy) if accuracy is not None else None,
             )
-            if not ok:
+            if not ok and check_in_geofence_bypassed():
+                logger.warning(
+                    "CHECK_IN_GEOFENCE_DISABLED: allowing clock-in %dm from participant",
+                    int(verification_distance or 0),
+                )
+            elif not ok:
                 dist_label = int(verification_distance or 0)
                 raise ValueError(
                     f"You are too far from the participant location ({dist_label}m away). "
