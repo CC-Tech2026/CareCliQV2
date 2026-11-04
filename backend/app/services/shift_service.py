@@ -15,6 +15,7 @@ from .check_in_service import (
     normalize_client_timestamp,
     normalize_client_timestamp_with_location,
     resolve_participant_coordinates,
+    check_in_geofence_bypassed,
     validate_clock_in_window,
     verify_gps_location,
     verify_qr_token_for_shift,
@@ -2530,7 +2531,12 @@ def _apply_verified_check_in(
                 coords[1],
                 accuracy=float(accuracy) if accuracy is not None else None,
             )
-            if not ok:
+            if not ok and check_in_geofence_bypassed():
+                logger.warning(
+                    "CHECK_IN_GEOFENCE_DISABLED: allowing clock-in %dm from participant",
+                    int(verification_distance or 0),
+                )
+            elif not ok:
                 dist_label = int(verification_distance or 0)
                 raise ValueError(
                     f"You are too far from the participant location ({dist_label}m away). "
@@ -3547,12 +3553,9 @@ def end_shift(
         **_build_completion_summary(updated, session),
         "validation": validation,
     }
-    try:
-        from .conversation_service import set_conversation_read_only_for_shift
-
-        set_conversation_read_only_for_shift(shift_id)
-    except Exception:
-        pass
+    # The shift's conversation stays open after clock-out: the office may ask
+    # for changes while it's reviewed, and the worker answers there. It closes
+    # when the shift is verified (shift_verification_service.verify_shift).
     try:
         from .shift_signature_service import get_shift_signature
 
@@ -4138,6 +4141,8 @@ def _note_payload_from_row(row: dict[str, Any]) -> dict[str, Any]:
         "file_name": file_name,
         "attachment_urls": [u for u in attachments if isinstance(u, str) and not u.startswith("name:")],
         "validation_result": row.get("validation_result"),
+        "original_content": row.get("original_content"),
+        "original_language": row.get("original_language"),
     }
 
 
@@ -4254,6 +4259,12 @@ async def sync_session_notes(
 
     for item in note_items:
         if not isinstance(item, dict):
+            continue
+        # A note the worker wrote offline in another language is translated by
+        # the app before it syncs. One that still says it needs translation is
+        # the worker's own-language text, which must never become the English
+        # record, so it is left for the app to retry.
+        if item.get("needs_translation"):
             continue
         content = str(item.get("content") or "").strip()
         if not content:
@@ -4384,6 +4395,12 @@ async def sync_session_notes(
                 "created_during_shift": str(session.get("status") or "") not in ("completed", "cancelled"),
                 "validation_result": validation_result,
             }
+            # The worker's own words when they wrote in another language;
+            # content is the English record (migration 250).
+            original_content = str(item.get("original_content") or "").strip()
+            if original_content and original_content != content:
+                insert_payload["original_content"] = original_content[:4000]
+                insert_payload["original_language"] = str(item.get("original_language") or "").strip()[:16] or None
             try:
                 result = get_supabase_admin().table("shift_visit_notes").insert(insert_payload).execute()
             except Exception as exc:
@@ -4391,7 +4408,13 @@ async def sync_session_notes(
                     fallback_payload = {
                         k: v
                         for k, v in insert_payload.items()
-                        if k not in ("is_original", "created_during_shift", "validation_result")
+                        if k not in (
+                            "is_original",
+                            "created_during_shift",
+                            "validation_result",
+                            "original_content",
+                            "original_language",
+                        )
                     }
                     result = get_supabase_admin().table("shift_visit_notes").insert(fallback_payload).execute()
                 else:

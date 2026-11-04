@@ -21,8 +21,28 @@
         "buildType": "apk"
       }
     },
+    "demo": {
+      "distribution": "internal",
+      "autoIncrement": true,
+      "environment": "preview",
+      "env": {
+        "APP_VARIANT": "demo"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "pilot": {
+      "distribution": "internal",
+      "autoIncrement": true,
+      "environment": "production",
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "production": {
       "autoIncrement": true,
+      "environment": "production",
       "android": {
         "buildType": "app-bundle"
       }

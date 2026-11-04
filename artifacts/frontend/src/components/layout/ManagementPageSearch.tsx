@@ -13,7 +13,12 @@ import { Input } from "@/components/ui/input";
 
 type NavigationGroup = {
   label: string;
-  items: ReadonlyArray<{ href: string; label: string; icon: ElementType }>;
+  items: ReadonlyArray<{
+    href: string;
+    label: string;
+    icon: ElementType;
+    tabs?: ReadonlyArray<{ href: string; label: string }>;
+  }>;
 };
 export function ManagementPageSearch({
   groups,
@@ -40,9 +45,15 @@ export function ManagementPageSearch({
     document.addEventListener("keydown", handle);
     return () => document.removeEventListener("keydown", handle);
   }, [open]);
+  // Pages folded into another entry as tabs stay findable by their own name.
   const matches = groups
     .flatMap((group) =>
-      group.items.map((item) => ({ ...item, group: group.label })),
+      group.items.flatMap((item) => [
+        { href: item.href, label: item.label, icon: item.icon, group: group.label },
+        ...(item.tabs ?? [])
+          .filter((tab) => tab.href !== item.href)
+          .map((tab) => ({ href: tab.href, label: tab.label, icon: item.icon, group: `${group.label} · ${item.label}` })),
+      ]),
     )
     .filter((item) =>
       `${item.label} ${item.group}`

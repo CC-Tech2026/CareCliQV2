@@ -77,7 +77,12 @@ function SessionRow({ session }: { session: Session }) {
 
   return (
     <Pressable
-      onPress={() => router.push(`/session/${session.id}`)}
+      // A past shift opens its record (read-only, with the office's review);
+      // only a session with no shift behind it opens the session screen.
+      onPress={() => {
+        const shiftId = (session as { shift_id?: string | null }).shift_id;
+        router.push((shiftId ? `/shift/${shiftId}/record` : `/session/${session.id}`) as never);
+      }}
       style={({ pressed }) => [
         styles.sessionRow,
         {

@@ -1489,6 +1489,21 @@ export function sendShiftMessage(
 }
 
 /** Get messages for a shift */
+/** A message in a shift's conversation between the office and the worker. */
+export type ShiftConversationMessage = {
+  id: string;
+  sender_id: string;
+  body: string;
+  message_type?: string;
+  requires_action?: boolean;
+  actioned_at?: string | null;
+  created_at?: string;
+};
+
+export function getShiftConversation(shiftId: string) {
+  return jsonFetch<ShiftConversationMessage[]>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/messages`);
+}
+
 export function getShiftMessages(shiftId: string) {
   return jsonFetch<ShiftMessage[]>(`/api/coordinator/shifts/${encodeURIComponent(shiftId)}/messages`);
 }
@@ -1851,6 +1866,9 @@ export type ShiftVerificationQueueItem = {
   timezone?: string | null;
   /** NDIS item code recorded when this shift was created, if any — cross-checked against whatever's picked here. */
   expected_price_item_code?: string | null;
+  /** "changes_requested": back with the worker; "sent_back": the worker has
+   * made the changes and it's ready to look at again. */
+  review_state?: "changes_requested" | "sent_back" | null;
 };
 
 export type ShiftPriceItemOption = {

@@ -988,19 +988,28 @@ async def get_session_by_id(
     # worker_shift_history_service.py - merge the actual notes in, with each
     # one's original capture timestamp so this also serves as an audit trail
     # of when things happened, not just what was written.
-    try:
-        vn_resp = (
-            supabase.table("shift_visit_notes")
-            .select("id, content, task_id, category, created_at")
-            .eq("session_id", session_id)
-            .order("created_at")
-            .execute()
-        )
-        visit_note_rows = vn_resp.data or []
-    except Exception as exc:
-        visit_note_rows = []
-        if not _is_missing_column_error(exc):
-            logger.debug("shift_visit_notes lookup failed for session %s: %s", session_id, exc)
+    # original_content/original_language (migration 250) hold the worker's own
+    # words for a note written in another language. Read without them if the
+    # migration hasn't run, so the notes themselves never go missing.
+    visit_note_rows = []
+    for columns in (
+        "id, content, task_id, category, created_at, original_content, original_language",
+        "id, content, task_id, category, created_at",
+    ):
+        try:
+            vn_resp = (
+                supabase.table("shift_visit_notes")
+                .select(columns)
+                .eq("session_id", session_id)
+                .order("created_at")
+                .execute()
+            )
+            visit_note_rows = vn_resp.data or []
+            break
+        except Exception as exc:
+            if not _is_missing_column_error(exc):
+                logger.debug("shift_visit_notes lookup failed for session %s: %s", session_id, exc)
+                break
 
     if visit_note_rows:
         visit_note_lines = []
@@ -1017,6 +1026,8 @@ async def get_session_by_id(
                 "content": content,
                 "category": note_row.get("category"),
                 "created_at": note_row.get("created_at"),
+                "original_content": note_row.get("original_content"),
+                "original_language": note_row.get("original_language"),
             })
         existing_notes = (row.get("notes") or "").strip()
         row["notes"] = "\n\n".join(part for part in (existing_notes, "\n\n".join(visit_note_lines)) if part)

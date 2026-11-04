@@ -46,7 +46,6 @@ import {
 } from "@/components/layout/PageKit";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
-import CoordinatorLivePage from "@/pages/coordinator-live";
 import { MonthGrid } from "@/pages/coordinator-rostering";
 import { RosterBoard } from "@/components/coordinator/RosterBoard";
 import { DayTimeline } from "@/components/coordinator/DayTimeline";
@@ -87,7 +86,7 @@ const DANGER_SOFT = "var(--cc-status-danger-bg)";
 const UNASSIGNED_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
 
 type Bucket = "active" | "scheduled" | "completed" | "cancelled" | "unassigned";
-type ViewMode = "day" | "week" | "month" | "list" | "live";
+type ViewMode = "day" | "week" | "month" | "list";
 type AvailabilityMap = Record<
   string,
   WorkerAvailability & { blackout_dates?: BlackoutDate[] }
@@ -118,7 +117,6 @@ const VIEW_TABS: Array<{ id: ViewMode; label: string }> = [
   { id: "week", label: "Week" },
   { id: "month", label: "Month" },
   { id: "list", label: "List" },
-  { id: "live", label: "Live" },
 ];
 
 const AVATAR_PALETTE = [
@@ -325,7 +323,6 @@ export default function MDSchedulePage() {
       }),
     refetchInterval: LIVE_REFRESH_MS,
     refetchOnWindowFocus: true,
-    enabled: viewMode !== "live",
   });
   const error = isError;
 
@@ -551,13 +548,13 @@ export default function MDSchedulePage() {
           title={
             <span className="inline-flex items-center gap-2">
               Master Schedule
-              <SectionInfo text="Org-wide shift oversight. Reassigning and unassigning shifts is available here; creating new shifts stays with coordinators." />
+              <SectionInfo text="Org-wide shift oversight. Reassign or unassign shifts here; create shifts and follow live ones in the Rostering & live shifts tab." />
             </span>
           }
           description={
             <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
               <span>Every shift across the organisation, by day, week or month.</span>
-              {shifts !== null && !error && viewMode !== "live" && (
+              {shifts !== null && !error && (
                 <span className="inline-flex items-center gap-1.5">
                   <Radio size={12} style={{ color: GREEN }} />
                   <span className="font-semibold" style={{ color: GREEN }}>Live</span>
@@ -579,35 +576,33 @@ export default function MDSchedulePage() {
 
         <div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {viewMode !== "live" && (
-              <div className="relative min-w-0 flex-1 basis-64 sm:max-w-sm">
-                <Search
-                  size={16}
-                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2"
-                  style={{ color: MUTED }}
-                />
-                <input
-                  aria-label="Search schedule"
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search worker or participant..."
-                  className="h-11 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
-                  style={{ color: TEXT }}
-                />
-                {search && (
-                  <button
-                    onClick={() => setSearch("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5"
-                  >
-                    <X size={11} style={{ color: MUTED }} />
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="relative min-w-0 flex-1 basis-64 sm:max-w-sm">
+              <Search
+                size={16}
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2"
+                style={{ color: MUTED }}
+              />
+              <input
+                aria-label="Search schedule"
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search worker or participant..."
+                className="h-11 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
+                style={{ color: TEXT }}
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5"
+                >
+                  <X size={11} style={{ color: MUTED }} />
+                </button>
+              )}
+            </div>
 
             <div className="flex flex-wrap items-center gap-2 ml-auto">
-              {viewMode !== "live" && shifts !== null && shifts.length > 0 && (
+              {shifts !== null && shifts.length > 0 && (
                 <button
                   onClick={() =>
                     downloadWeekCsv(
@@ -625,18 +620,16 @@ export default function MDSchedulePage() {
                 </button>
               )}
 
-              {viewMode !== "live" && (
-                <button
-                  type="button"
-                  disabled={isFetching}
-                  onClick={() => void refetch()}
-                  className={`${ghostClass} h-10 min-h-10`}
-                  aria-label="Refresh the schedule"
-                >
-                  <RefreshCw size={15} className={isFetching ? "animate-spin" : ""} />
-                  <span className="hidden sm:inline">Refresh</span>
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={isFetching}
+                onClick={() => void refetch()}
+                className={`${ghostClass} h-10 min-h-10`}
+                aria-label="Refresh the schedule"
+              >
+                <RefreshCw size={15} className={isFetching ? "animate-spin" : ""} />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
 
               <div
                 className="flex items-center gap-0.5 rounded-full border bg-cc-surface p-1"
@@ -665,53 +658,48 @@ export default function MDSchedulePage() {
                 ))}
               </div>
 
-              {viewMode !== "live" && (
-                <div
-                  className="flex items-center gap-1 rounded-full border bg-cc-surface p-1"
-                  style={{ borderColor: BORDER }}
+              <div
+                className="flex items-center gap-1 rounded-full border bg-cc-surface p-1"
+                style={{ borderColor: BORDER }}
+              >
+                <button
+                  onClick={handlePrev}
+                  className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-cc-soft"
+                  aria-label="Previous period"
                 >
-                  <button
-                    onClick={handlePrev}
-                    className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-cc-soft"
-                    aria-label="Previous period"
-                  >
-                    <ChevronLeft size={14} style={{ color: MUTED }} />
-                  </button>
-                  <span
-                    className="min-w-[120px] px-1 text-center text-sm font-medium truncate"
-                    style={{ color: TEXT }}
-                  >
-                    {periodLabel}
-                  </span>
-                  <button
-                    onClick={handleNext}
-                    className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-cc-soft"
-                    aria-label="Next period"
-                  >
-                    <ChevronRight size={14} style={{ color: MUTED }} />
-                  </button>
-                  <button
-                    onClick={() => {
-                      const today = new Date();
-                      setWeekStart(startOfWeek(today, { weekStartsOn: 1 }));
-                      setCurrentMonth(today);
-                      setSelectedDay(today);
-                    }}
-                    className="h-9 px-3.5 rounded-full text-sm font-medium transition hover:bg-cc-soft"
-                    style={{ color: TEXT }}
-                  >
-                    Today
-                  </button>
-                </div>
-              )}
+                  <ChevronLeft size={14} style={{ color: MUTED }} />
+                </button>
+                <span
+                  className="min-w-[120px] px-1 text-center text-sm font-medium truncate"
+                  style={{ color: TEXT }}
+                >
+                  {periodLabel}
+                </span>
+                <button
+                  onClick={handleNext}
+                  className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-cc-soft"
+                  aria-label="Next period"
+                >
+                  <ChevronRight size={14} style={{ color: MUTED }} />
+                </button>
+                <button
+                  onClick={() => {
+                    const today = new Date();
+                    setWeekStart(startOfWeek(today, { weekStartsOn: 1 }));
+                    setCurrentMonth(today);
+                    setSelectedDay(today);
+                  }}
+                  className="h-9 px-3.5 rounded-full text-sm font-medium transition hover:bg-cc-soft"
+                  style={{ color: TEXT }}
+                >
+                  Today
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        {viewMode === "live" && <CoordinatorLivePage readOnly embedded />}
-
-        {viewMode !== "live" && (
-          <>
+        <>
             {attentionItems.length > 0 && (
               <Notice
                 tone="danger"
@@ -816,7 +804,7 @@ export default function MDSchedulePage() {
               <EmptyState
                 icon={CalendarX2}
                 title={`No shifts ${viewMode === "day" ? "on this day" : "this week"}`}
-                body="Coordinators create shifts in Rostering. Look at another week, or switch to Month to see what's coming up."
+                body="Create shifts in the Rostering & live shifts tab, look at another week, or switch to Month to see what's coming up."
                 action={
                   <div className="flex flex-wrap justify-center gap-2">
                     <button type="button" onClick={handlePrev} className={outlineClass}>
@@ -1280,8 +1268,7 @@ export default function MDSchedulePage() {
                   </div>
                 </div>
               )}
-          </>
-        )}
+        </>
       </div>
 
       <ShiftDetailSheet

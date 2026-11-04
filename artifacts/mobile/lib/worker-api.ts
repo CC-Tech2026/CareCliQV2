@@ -169,6 +169,13 @@ export type SessionNoteRecord = {
   note_type?: SessionNoteType;
   file_name?: string;
   attachment_urls?: string[];
+  /** The worker's own words when the note was written in another language;
+   * content is always the English record. */
+  original_content?: string | null;
+  original_language?: string | null;
+  /** Written offline in another language: content is still the worker's own
+   * words and is translated before it syncs (OfflineContext). */
+  needs_translation?: boolean;
 };
 
 export type GoalProgressNote = {
@@ -1057,5 +1064,89 @@ export function getWorkerComplianceDetail(days: 7 | 30 = 7) {
 export function recordShiftViewed(shiftId: string) {
   return workerFetch<{ ok: boolean }>(`/api/worker/notifications/shifts/${shiftId}/viewed`, {
     method: "POST",
+  });
+}
+
+// ── Shift reviews: finished shifts and the office's review of them ─────────
+
+export type ShiftReviewStatus = "changes_requested" | "awaiting_review" | "verified";
+
+export type ShiftReviewItem = {
+  shift_id: string;
+  session_id?: string | null;
+  participant_id?: string | null;
+  participant_name?: string | null;
+  scheduled_start?: string | null;
+  scheduled_end?: string | null;
+  clocked_in_at?: string | null;
+  clocked_out_at?: string | null;
+  timezone?: string | null;
+  compliance_score?: number | null;
+  review_status: ShiftReviewStatus;
+  open_requests: number;
+  unread_messages: number;
+  conversation_id?: string | null;
+};
+
+export type ShiftReviewList = {
+  shifts: ShiftReviewItem[];
+  counts: Record<ShiftReviewStatus, number>;
+};
+
+export type ShiftThreadMessage = {
+  id: string;
+  sender_id?: string | null;
+  sender_name?: string | null;
+  from_worker: boolean;
+  body: string;
+  attachment_url?: string | null;
+  /** "change_request": the office asked for changes; "during_shift": sent
+   * with Message office while the shift was on. */
+  kind: "message" | "change_request" | "during_shift";
+  resolved?: boolean | null;
+  priority?: string | null;
+  created_at?: string | null;
+};
+
+export type ShiftFeedbackItem = {
+  id: string;
+  strengths?: string | null;
+  areas_to_improve?: string | null;
+  action_items?: string | null;
+  submitted_at?: string | null;
+  acknowledged_at?: string | null;
+};
+
+export type ShiftReviewThread = {
+  shift_id: string;
+  compliance_score?: number | null;
+  review_status: ShiftReviewStatus;
+  open_requests: number;
+  can_add_notes: boolean;
+  can_message: boolean;
+  conversation_id?: string | null;
+  messages: ShiftThreadMessage[];
+  feedback: ShiftFeedbackItem[];
+};
+
+export function getShiftReviews(includeVerified = false) {
+  return workerFetch<ShiftReviewList>(`/api/worker/shift-reviews${includeVerified ? "?include_verified=true" : ""}`);
+}
+
+export function getShiftReviewThread(shiftId: string) {
+  return workerFetch<ShiftReviewThread>(`/api/worker/shifts/${shiftId}/review`);
+}
+
+export function sendShiftReviewMessage(shiftId: string, body: string) {
+  return workerFetch<ShiftThreadMessage>(`/api/worker/shifts/${shiftId}/review/messages`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+
+export function sendShiftBackForReview(shiftId: string, note?: string) {
+  return workerFetch<{ review_status: ShiftReviewStatus }>(`/api/worker/shifts/${shiftId}/review/send-back`, {
+    method: "POST",
+    body: JSON.stringify({ note: note?.trim() || null }),
   });
 }

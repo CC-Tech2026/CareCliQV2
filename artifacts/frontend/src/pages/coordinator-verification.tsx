@@ -21,6 +21,7 @@ import {
   getShiftVerificationQueue,
   getRecentShiftVerifications,
   reverseShiftVerification,
+  getShiftConversation,
   sendShiftMessage,
   type RecentShiftVerification,
   type ShiftVerificationQueueItem,
@@ -242,6 +243,16 @@ export default function CoordinatorVerificationPage() {
                         <span className="mt-0.5 block text-xs text-cc-muted">
                           {[day, timeRange(start, end, item.timezone)].filter(Boolean).join(" · ")}
                         </span>
+                        {item.review_state && !approved[item.shift_id] && (
+                          <span
+                            className={
+                              "mt-1 block text-xs font-semibold " +
+                              (item.review_state === "sent_back" ? "text-cc-plum" : "text-amber-700 dark:text-amber-300")
+                            }
+                          >
+                            {translate(item.review_state === "sent_back" ? "schedule.reviewSentBack" : "schedule.reviewWithWorker")}
+                          </span>
+                        )}
                       </span>
                       <ScheduleStatusPill stage={approved[item.shift_id] ? "approved" : "review"} />
                     </button>
@@ -403,10 +414,33 @@ function ShiftReview({
         variant: "destructive",
       }),
   });
+  // The shift's conversation with the worker: change requests, their
+  // replies and "changes made", so the reviewer sees the whole exchange.
+  const conversation = useOrgQuery(["shift-conversation", item.shift_id], {
+    queryFn: () => getShiftConversation(item.shift_id),
+    enabled: Boolean(item.worker_id),
+    staleTime: 15_000,
+  });
+  const [replyText, setReplyText] = useState("");
+  const reply = useMutation({
+    mutationFn: () => sendShiftMessage(item.shift_id, item.worker_id!, replyText.trim(), "text"),
+    onSuccess: () => {
+      setReplyText("");
+      void conversation.refetch();
+    },
+    onError: (err: unknown) =>
+      toast({
+        title: translate("schedule.messageFailed"),
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      }),
+  });
+
   const requestChanges = useMutation({
     mutationFn: () =>
       sendShiftMessage(item.shift_id, item.worker_id!, changesText.trim(), "action_required"),
     onSuccess: () => {
+      void conversation.refetch();
       setChangesOpen(false);
       setChangesText("");
       toast({
@@ -736,6 +770,73 @@ function ShiftReview({
               <p className="mt-1 text-xs text-cc-muted">{translate("schedule.suggestedCode")}</p>
             )}
           </div>
+        )}
+
+        {item.worker_id && (conversation.data?.length ?? 0) > 0 && (
+          <section aria-label={translateParams("schedule.conversation", { worker: item.worker_name || translate("common.worker") })} className="rounded-xl border border-cc-border p-4">
+            <h3 className="text-sm font-semibold text-cc-text">
+              {translateParams("schedule.conversation", { worker: item.worker_name || translate("common.worker") })}
+            </h3>
+            <ul className="mt-3 space-y-2">
+              {(conversation.data ?? []).map((m) => {
+                const fromWorker = m.sender_id === item.worker_id;
+                return (
+                  <li key={m.id} className={"flex " + (fromWorker ? "justify-start" : "justify-end")}>
+                    <div
+                      className={
+                        "max-w-[85%] rounded-2xl border px-3 py-2 text-sm " +
+                        (m.requires_action
+                          ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950"
+                          : fromWorker
+                            ? "border-cc-border bg-cc-surface"
+                            : "border-transparent bg-cc-soft")
+                      }
+                    >
+                      {m.requires_action && (
+                        <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                          {translate(m.actioned_at ? "schedule.conversationRequestDone" : "schedule.conversationRequest")}
+                        </p>
+                      )}
+                      <p className="whitespace-pre-wrap text-cc-text">{m.body}</p>
+                      <p className="mt-0.5 text-xs text-cc-muted">
+                        {[
+                          fromWorker ? item.worker_name : translate("schedule.conversationYou"),
+                          m.created_at ? formatAppDate(m.created_at, item.timezone, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : null,
+                        ].filter(Boolean).join(" · ")}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            {!approved && (
+              <form
+                className="mt-3 flex items-end gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (replyText.trim()) reply.mutate();
+                }}
+              >
+                <textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  rows={1}
+                  maxLength={2000}
+                  aria-label={translateParams("schedule.conversationReply", { worker: item.worker_name || translate("common.worker") })}
+                  placeholder={translateParams("schedule.conversationReply", { worker: item.worker_name || translate("common.worker") })}
+                  className="min-h-11 flex-1 rounded-lg border border-cc-border bg-cc-surface p-2 text-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={!replyText.trim() || reply.isPending}
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-cc-text px-4 text-sm font-bold text-cc-surface disabled:opacity-50"
+                >
+                  {reply.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />}
+                  {translate("schedule.conversationSend")}
+                </button>
+              </form>
+            )}
+          </section>
         )}
 
         {changesOpen && !approved && (

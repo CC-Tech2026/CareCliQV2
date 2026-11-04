@@ -483,8 +483,77 @@ async def coordinator_dashboard(current_user: dict = Depends(get_current_user)):
     }
 
 
+def _goal_outcomes(org_id: str, participant_ids: set[str]) -> dict:
+    """Participant goal outcomes from the goals themselves (ndis_goals).
+
+    A goal is achieved when a coordinator marks it completed; archived goals
+    are left out. "Supported" counts active goals that had at least one
+    shift note recorded against them in the last 30 days, through the shift
+    task the note was written under. Returns Nones when goals can't be read,
+    so the page shows "not available" rather than a made-up 0%.
+    """
+    empty = {
+        "goals_total": None,
+        "goals_achieved": None,
+        "goals_active": None,
+        "goal_outcome_rate": None,
+        "active_goals_supported_30d": None,
+    }
+    supabase = get_supabase_admin()
+    try:
+        goal_rows = (
+            supabase.table("ndis_goals")
+            .select("id, participant_id, status")
+            .eq("organization_id", org_id)
+            .in_("status", ["active", "completed"])
+            .execute()
+        ).data or []
+    except Exception:
+        return empty
+    goals = [g for g in goal_rows if str(g.get("participant_id") or "") in participant_ids]
+    achieved = sum(1 for g in goals if g.get("status") == "completed")
+    active_ids = {str(g.get("id")) for g in goals if g.get("status") == "active"}
+
+    supported: Optional[int] = None
+    if active_ids:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        seen: set[str] = set()
+        try:
+            # PostgREST returns at most 1000 rows a request. Each round asks
+            # only about goals not seen yet, so it ends once a round comes
+            # back short or every goal has been seen.
+            while active_ids - seen:
+                rows = (
+                    supabase.table("shift_visit_notes")
+                    .select("goal_id")
+                    .eq("organization_id", org_id)
+                    .gte("created_at", cutoff)
+                    .in_("goal_id", sorted(active_ids - seen))
+                    .limit(1000)
+                    .execute()
+                ).data or []
+                found = {str(n.get("goal_id")) for n in rows} - seen
+                seen |= found
+                if len(rows) < 1000 or not found:
+                    break
+            supported = len(active_ids & seen)
+        except Exception:
+            supported = None
+    else:
+        supported = 0
+
+    return {
+        "goals_total": len(goals),
+        "goals_achieved": achieved,
+        "goals_active": len(active_ids),
+        "goal_outcome_rate": round(achieved / len(goals) * 100, 1) if goals else None,
+        "active_goals_supported_30d": supported,
+    }
+
+
 def _goal_achievement_rate(participants: list[dict]) -> float:
-    """Derive goal achievement rate from participant plan status fields."""
+    """Share of participants whose plan status is active. Kept under its old
+    name for the clients that read it; real goal outcomes are _goal_outcomes."""
     if not participants:
         return 0.0
     achieved = sum(
@@ -635,6 +704,7 @@ async def _md_dashboard_payload(
 
     # Goal achievement rate
     goal_rate = _goal_achievement_rate(participants)
+    goal_outcomes = _goal_outcomes(org_id, {str(p.get("id")) for p in participants if p.get("id")})
 
     # Retention rate — query ALL org members (including inactive) for a correct denominator.
     # Cross-check against users scoped to this org so a member whose "home" org is
@@ -768,8 +838,11 @@ async def _md_dashboard_payload(
         "compliance_target": compliance_target,
         "incidents_this_month": incidents_this_month,
         "goal_achievement_rate": goal_rate,
+        **goal_outcomes,
         "workers_at_risk": workers_at_risk[:10],
         "workers_needing_attention": workers_at_risk[:10],
+        # The lists above stop at 10; this is how many there are in total.
+        "workers_at_risk_count": len(workers_at_risk),
         "documentation_summary": {
             "sample_size": len(sessions),
             "scored": sum(1 for s in sessions if s.get("compliance_score") is not None),

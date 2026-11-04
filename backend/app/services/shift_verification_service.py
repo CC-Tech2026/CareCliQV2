@@ -632,6 +632,9 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
         except Exception as exc:
             logger.warning("Could not fetch worker names for verification queue: %s", exc)
 
+    from .shift_review_service import office_review_states
+
+    review_states = office_review_states([str(s.get("id")) for s in pending])
     out: list[dict[str, Any]] = []
     for shift in pending:
         session = _get_session_for_shift(shift)
@@ -661,6 +664,9 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
                 # bills) this shift's times in it, not their own.
                 "timezone": str(participant_timezone(shift, organization_id=shift.get("organization_id"))),
                 "expected_price_item_code": shift.get("expected_price_item_code"),
+                # "changes_requested": back with the worker; "sent_back": the
+                # worker has made the changes and it's ready to look at again.
+                "review_state": review_states.get(str(shift.get("id"))),
             }
         )
     return out
@@ -1115,6 +1121,13 @@ async def verify_shift(
     if "agreement" in checks:
         result["agreement"] = checks["agreement"]
     result["rate_source"] = rate_source
+    # Verified: the shift's conversation with the worker is closed.
+    try:
+        from .conversation_service import set_conversation_read_only_for_shift
+
+        set_conversation_read_only_for_shift(shift_id)
+    except Exception:
+        logger.debug("Could not close the conversation for verified shift %s", shift_id)
     return result
 
 

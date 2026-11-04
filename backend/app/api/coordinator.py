@@ -4847,6 +4847,8 @@ async def send_shift_message(
         raise HTTPException(status_code=500, detail="Could not open conversation")
 
     requires_action = body.message_type == "action_required"
+    if requires_action:
+        conversation_service.reopen_conversation(str(conv["id"]))
     try:
         msg = conversation_service.send_conversation_message(
             conversation_id=str(conv["id"]),
@@ -4893,7 +4895,7 @@ async def get_shift_messages(
         if not conv.data:
             return []
         conv_id = conv.data[0]["id"]
-        return conversation_service.get_conversation_messages(str(conv_id), user_id)
+        return conversation_service.get_conversation_messages(str(conv_id), user_id, office_org_id=org_id)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=internal_error_detail("Messages fetch failed", exc)) from exc
 

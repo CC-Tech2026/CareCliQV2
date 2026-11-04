@@ -1173,6 +1173,70 @@ async def test_sync_session_notes_upserts_by_client_id(mock_admin, mock_shift_fo
     notes_table.insert.assert_called_once()
 
 
+def _notes_sync_mocks(mock_admin, mock_shift_for_session, mock_validate):
+    mock_validate.return_value = {
+        "relevant_to_participant": True,
+        "fits_task_category": True,
+        "inappropriate_content": False,
+        "warning_message": None,
+    }
+    session = {"id": "sess-1", "shift_id": "shift-1", "worker_id": "worker-1", "organization_id": "org-1"}
+    mock_shift_for_session.return_value = _sample_shift(id="shift-1", session_id="sess-1", tasks=[])
+    sessions_table = MagicMock()
+    notes_table = MagicMock()
+    mock_admin.return_value.table.side_effect = lambda name: sessions_table if name == "sessions" else notes_table
+    sessions_table.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[session])
+    notes_table.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+    notes_table.insert.side_effect = lambda payload: MagicMock(
+        execute=MagicMock(return_value=MagicMock(data=[{"id": "note-db-1", **payload}]))
+    )
+    return notes_table
+
+
+@pytest.mark.asyncio
+@patch("backend.app.services.shift_service._run_note_validation", new_callable=AsyncMock)
+@patch("backend.app.services.shift_service.get_shift_for_session")
+@patch("backend.app.services.shift_service.get_supabase_admin")
+async def test_sync_session_notes_keeps_the_workers_own_words(mock_admin, mock_shift_for_session, mock_validate):
+    notes_table = _notes_sync_mocks(mock_admin, mock_shift_for_session, mock_validate)
+
+    result = await shift_service.sync_session_notes(
+        "sess-1",
+        "worker-1",
+        "org-1",
+        [{
+            "note_id": "client-1",
+            "content": "Benjamin chose his own clothes and dressed himself.",
+            "original_content": "Benjamin tự chọn quần áo và tự mặc đồ.",
+            "original_language": "vi",
+        }],
+    )
+
+    inserted = notes_table.insert.call_args[0][0]
+    assert inserted["content"] == "Benjamin chose his own clothes and dressed himself."
+    assert inserted["original_content"] == "Benjamin tự chọn quần áo và tự mặc đồ."
+    assert inserted["original_language"] == "vi"
+    assert result["notes"][0]["original_language"] == "vi"
+
+
+@pytest.mark.asyncio
+@patch("backend.app.services.shift_service._run_note_validation", new_callable=AsyncMock)
+@patch("backend.app.services.shift_service.get_shift_for_session")
+@patch("backend.app.services.shift_service.get_supabase_admin")
+async def test_sync_session_notes_never_saves_an_untranslated_note(mock_admin, mock_shift_for_session, mock_validate):
+    notes_table = _notes_sync_mocks(mock_admin, mock_shift_for_session, mock_validate)
+
+    result = await shift_service.sync_session_notes(
+        "sess-1",
+        "worker-1",
+        "org-1",
+        [{"note_id": "client-2", "content": "Benjamin tự mặc đồ.", "original_language": "vi", "needs_translation": True}],
+    )
+
+    notes_table.insert.assert_not_called()
+    assert result["notes"] == []
+
+
 def test_get_shift_detail_denies_wrong_worker():
     shift = _sample_shift(worker_id="worker-1")
     with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):

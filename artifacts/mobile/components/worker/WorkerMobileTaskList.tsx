@@ -28,6 +28,9 @@ type Props = {
   onOpenIncidentReport?: (noteId?: string, content?: string) => void;
   /** Participant's branch zone. */
   tz?: string | null;
+  /** A finished shift: notes can be read but not added to, and tasks can't
+   * be ticked. */
+  readOnly?: boolean;
 };
 
 /**
@@ -54,6 +57,7 @@ export function WorkerMobileTaskList({
   onNoteSaved,
   onOpenIncidentReport,
   tz,
+  readOnly = false,
 }: Props) {
   const colors = useColors();
   const active = tasks.filter((t) => !t.marked_na);
@@ -84,7 +88,7 @@ export function WorkerMobileTaskList({
           >
             <View style={styles.row}>
               <Pressable
-                disabled={disabled || isMedication}
+                disabled={disabled || isMedication || readOnly}
                 onPress={() => {
                   if (!done && !canComplete) {
                     onSelectTask(task.task_id);
@@ -156,7 +160,9 @@ export function WorkerMobileTaskList({
                 ) : null}
                 {!expanded && (
                   <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    {isMedication
+                    {readOnly
+                      ? `${taskNotes.length} update${taskNotes.length === 1 ? "" : "s"}`
+                      : isMedication
                       ? "Tap to log doses · completes automatically"
                       : taskNotes.length > 0
                         ? `${taskNotes.length} update${taskNotes.length === 1 ? "" : "s"} · Tap to add more`
@@ -179,7 +185,7 @@ export function WorkerMobileTaskList({
                   </Text>
                 ) : null}
 
-                {isMedication && shiftId && (
+                {isMedication && shiftId && !readOnly && (
                   <View style={[styles.medicationBox, { borderColor: colors.border }]}>
                     <WorkerMobileMedicationChecklist
                       shiftId={shiftId}
@@ -195,49 +201,40 @@ export function WorkerMobileTaskList({
                   </View>
                 )}
 
-                <View style={[styles.thread, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                  {taskNotes.length === 0 ? (
-                    <View style={styles.emptyThread}>
-                      <View style={[styles.emptyIcon, { backgroundColor: colors.primary + "15" }]}>
-                        <Feather name="message-circle" size={18} color={colors.primary} />
-                      </View>
-                      <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                        No updates yet.
-                      </Text>
-                      <Text style={[styles.emptyBody, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-                        Type a note, take a photo, or record your voice below.
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={styles.threadNotes}>
-                      {taskNotes.map((note) => (
-                        <WorkerMobileNoteBubble
-                          key={note.note_id}
-                          note={note}
-                          participantName={participantName}
-                          goalTitle={task.goal_title ?? undefined}
-                          flag={compliance.noteFlags.find((f) => f.noteId === note.note_id)}
-                          onIncidentReport={
-                            compliance.noteFlags.find((f) => f.noteId === note.note_id)?.severity === "fail"
-                              ? onOpenIncidentReport
-                              : undefined
-                          }
-                          tz={tz}
-                        />
-                      ))}
-                    </View>
-                  )}
-                </View>
+                {taskNotes.length > 0 && (
+                  <View style={styles.threadNotes}>
+                    {taskNotes.map((note) => (
+                      <WorkerMobileNoteBubble
+                        key={note.note_id}
+                        variant="chat"
+                        note={note}
+                        participantName={participantName}
+                        goalTitle={task.goal_title ?? undefined}
+                        flag={compliance.noteFlags.find((f) => f.noteId === note.note_id)}
+                        onIncidentReport={
+                          compliance.noteFlags.find((f) => f.noteId === note.note_id)?.severity === "fail"
+                            ? onOpenIncidentReport
+                            : undefined
+                        }
+                        tz={tz}
+                      />
+                    ))}
+                  </View>
+                )}
 
+                {!readOnly && (
                 <WorkerMobileComposer
                   sessionId={sessionId}
                   taskId={task.task_id}
                   taskLabel={task.label}
+                  goalTitle={task.goal_title ?? undefined}
+                  taskNotesText={taskNotes.filter((n) => !n.needs_translation).map((n) => n.content).join("\n")}
                   participantName={participantName}
                   participantId={participantId}
                   disabled={disabled || !sessionId}
                   onNoteSaved={onNoteSaved}
                 />
+                )}
               </View>
             )}
           </View>
@@ -308,8 +305,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   expanded: {
-    paddingHorizontal: 14,
-    paddingBottom: 14,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
     gap: 10,
   },
   description: {
@@ -326,38 +323,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
   },
-  thread: {
-    minHeight: 110,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderRadius: 12,
-    padding: 12,
-  },
-  emptyThread: {
-    flex: 1,
-    minHeight: 86,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-  },
-  emptyIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
-  emptyTitle: {
-    fontSize: 12,
-  },
-  emptyBody: {
-    fontSize: 11,
-    lineHeight: 16,
-    textAlign: "center",
-    maxWidth: 220,
-  },
   threadNotes: {
-    gap: 8,
+    gap: 6,
   },
 });

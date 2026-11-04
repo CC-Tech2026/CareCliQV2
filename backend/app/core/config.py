@@ -177,6 +177,13 @@ class Settings(BaseSettings):
         os.environ.get("PRICE_GRACE_PERIOD_AUTO_ADOPT_ENABLED", "false").lower() == "true"
     )
 
+    # Local testing only: skip the GPS distance check on clock-in so a worker
+    # can clock in from anywhere. Ignored unless SUPABASE_URL is a local
+    # (127.0.0.1/localhost) database — see check_in_geofence_bypassed().
+    check_in_geofence_disabled: bool = (
+        os.environ.get("CHECK_IN_GEOFENCE_DISABLED", "false").lower() == "true"
+    )
+
     class Config:
         # Mirrors the `if "pytest" not in sys.modules` guard above. Without this,
         # pydantic-settings' own env_file loading — a separate mechanism from the

@@ -295,11 +295,80 @@ export type DraftNoteHint = {
   id: string;
   severity: DraftNoteHintSeverity;
   message: string;
-  /** Raw detected phrase for "restrictive-practice" hints - lets a caller
-   * localize the surrounding message while still interpolating the actual
-   * (untranslated) phrase found in the note. Undefined for every other hint. */
+  /** Raw detected phrase for "restrictive-practice", "person-first" and
+   * "subjective-language" hints - lets a caller localize the surrounding
+   * message while still interpolating the actual phrase found in the note. */
   phrase?: string;
+  /** Suggested wording, for "person-first" hints. */
+  suggestion?: string;
 };
+
+// Mirrors of the server's R6, R7 and R12 checks (backend/app/services/
+// compliance_engine.py), so the worker sees the same issues while typing that
+// the scored check will raise afterwards. English only: callers skip these
+// hints for a note being written in another language.
+const PERSON_FIRST_VIOLATIONS: Array<[RegExp, string]> = [
+  [/\bautistic\s+(?:person|child|adult|individual|client|man|woman|boy|girl)\b/i, "person with autism"],
+  [/\bwheelchair[- ]?bound\b/i, "person who uses a wheelchair"],
+  [/\bconfined\s+to\s+(?:a\s+)?wheelchair\b/i, "person who uses a wheelchair"],
+  [/\bsuffers?\s+from\b/i, "has a diagnosis of"],
+  [/\bthe\s+disabled\b/i, "person with disability"],
+  [/\bspecial\s+needs\b/i, "support needs"],
+  [/\bmental(?:ly)?\s+retard\w*\b/i, "person with intellectual disability"],
+  [/\bblind\s+(?:person|people|client)\b/i, "person who is blind"],
+  [/\bdeaf\s+(?:person|people|client)\b/i, "person who is deaf"],
+  [/\bepilept(?:ic|ics)\b/i, "person with epilepsy"],
+];
+
+const SUBJECTIVE_PHRASES: RegExp[] = [
+  /\bI\s+think\b/i,
+  /\bI\s+believe\b/i,
+  /\bI\s+feel\b/i,
+  /\bI\s+suspect\b/i,
+  /\bI\s+reckon\b/i,
+  /\bI\s+guess\b/i,
+  /\bseems\s+like\b/i,
+  /\bseems\s+to\s+be\b/i,
+  /\bprobably\s+(?:has|have|is|are|was|were)\b/i,
+  /\bmight\s+be\s+(?:due|caused|because)\b/i,
+];
+
+const PARTICIPANT_RESPONSE =
+  /\b(report(?:ed|s)?|demonstrat(?:ed|es|ing)?|engag(?:ed|es|ing)?|declin(?:ed|es|ing)?|express(?:ed|es|ing)?|stat(?:ed|es|ing)?|indicated|respond(?:ed|s)?|participat(?:ed|es|ing)?|communicat(?:ed|es|ing)?|verbali[sz]ed|appear(?:ed|s)?|observ(?:ed|es|ing)?|comment(?:ed|s)?|said|smiled|laughed|chose|asked|enjoyed|refused)\b/i;
+
+// The server's R5 goal language, plus everyday ways a worker says it.
+const GOAL_PROGRESS =
+  /\b(goal|objective|aim(?:ed|s)?|target|milestone|worked\s+(?:on|toward)|toward|towards|progress\w*|achiev\w+|independen\w+|skill\w*|develop\w+|improv\w+|practi[sc]\w+|by (?:him|her|them)sel(?:f|ves))\b/i;
+
+const CONCERN_RECORDED =
+  /\b(concern\w*|noticed|worr\w+|incident|unwell|pain|injur\w+|upset|distress\w*|fall|fell|refus\w+|no (?:concerns|issues|incidents)|nothing to report|all (?:good|well))\b/i;
+
+export type NotePromptId = "did" | "response" | "goal" | "concern";
+
+/**
+ * The next thing a task's notes don't cover yet, for the worker app's note
+ * guide: what was supported, how the participant responded (R12), progress
+ * toward the task's goal (R5), and anything of concern. Reads the English
+ * record, so it works whatever language the worker wrote in. Null once
+ * everything is covered or skipped.
+ */
+export function nextNotePrompt(
+  notesText: string,
+  options: { hasGoal?: boolean; skipped?: ReadonlyArray<NotePromptId> } = {},
+): NotePromptId | null {
+  const text = notesText.trim();
+  const skipped = new Set(options.skipped ?? []);
+  const order: Array<[NotePromptId, boolean]> = [
+    ["did", text.length > 0],
+    ["response", PARTICIPANT_RESPONSE.test(text)],
+    ["goal", !options.hasGoal || GOAL_PROGRESS.test(text)],
+    ["concern", CONCERN_RECORDED.test(text)],
+  ];
+  for (const [id, covered] of order) {
+    if (!covered && !skipped.has(id)) return id;
+  }
+  return null;
+}
 
 /**
  * Live, single-note hints for a note still being typed/recorded - a
@@ -325,6 +394,30 @@ export function checkDraftNoteHints(text: string, participantFirstName?: string)
       severity: "fail",
       message: `This may describe a restrictive practice ("${rp.phrase}"). An incident report may be required.`,
       phrase: rp.phrase,
+    });
+  }
+
+  for (const [pattern, suggestion] of PERSON_FIRST_VIOLATIONS) {
+    const match = trimmed.match(pattern);
+    if (match) {
+      hints.push({
+        id: "person-first",
+        severity: "info",
+        message: `Use person-first language: try "${suggestion}" instead of "${match[0]}".`,
+        phrase: match[0],
+        suggestion,
+      });
+      break;
+    }
+  }
+
+  const subjective = SUBJECTIVE_PHRASES.map((p) => trimmed.match(p)).find(Boolean);
+  if (subjective) {
+    hints.push({
+      id: "subjective-language",
+      severity: "info",
+      message: `Describe what you saw or heard rather than "${subjective[0]}".`,
+      phrase: subjective[0],
     });
   }
 
@@ -355,6 +448,14 @@ export function checkDraftNoteHints(text: string, participantFirstName?: string)
         id: "participant-reference",
         severity: "info",
         message: "Consider referencing the participant by name or pronoun.",
+      });
+    }
+
+    if (words >= 20 && !PARTICIPANT_RESPONSE.test(trimmed)) {
+      hints.push({
+        id: "participant-response",
+        severity: "info",
+        message: "Add how the participant responded: what they said, did or chose.",
       });
     }
   }

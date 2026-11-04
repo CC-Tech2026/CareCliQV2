@@ -88,6 +88,14 @@ def haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> floa
     return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+def check_in_geofence_bypassed() -> bool:
+    """CHECK_IN_GEOFENCE_DISABLED, honoured only against a local database."""
+    if not settings.check_in_geofence_disabled:
+        return False
+    url = (settings.supabase_url or "").lower()
+    return "127.0.0.1" in url or "localhost" in url
+
+
 def verify_gps_location(
     worker_lat: float,
     worker_lng: float,

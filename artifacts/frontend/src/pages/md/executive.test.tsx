@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render as rtlRender, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render as rtlRender, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import MDCompliancePage from "./compliance";
@@ -64,7 +64,7 @@ it("keeps the overview available when only the trend fails", async () => {
   expect(screen.getByText("Compliance trend unavailable")).toBeTruthy();
   expect(
     screen.getAllByRole("link", { name: /Review shift notes/ })[0].getAttribute("href"),
-  ).toBe("/md/compliance?view=shifts");
+  ).toBe("/sessions");
   expect(screen.queryByText("Building your performance trend")).toBeNull();
 });
 it("retries a failed overview without a page reload", async () => {
@@ -118,4 +118,62 @@ it("offers retry when compliance records fail to load", async () => {
   render(<MDCompliancePage />);
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+});
+
+it("separates documentation, staff files and participant files", async () => {
+  const checklist = {
+    summary: {
+      applicable: 20,
+      readiness_percent: 70,
+      counts: { current: 12, due_soon: 2, awaiting_review: 0, overdue: 2, missing: 4, not_applicable: 0 },
+      critical_gaps: 1,
+      by_area: [
+        { area: "staff", label: "Staff and key personnel", total: 10, ready: 8, gaps: 2 },
+        { area: "participant", label: "Participant files", total: 8, ready: 4, gaps: 4 },
+      ],
+    },
+    items: [],
+  };
+  mocks.api.mockImplementation((url: string) =>
+    Promise.resolve({
+      ok: true,
+      json: async () =>
+        url.endsWith("compliance-trend")
+          ? { trend: [] }
+          : url.endsWith("/checklist")
+            ? checklist
+            : { ...data, workers_at_risk_count: 3 },
+    }),
+  );
+  render(<MDCompliancePage />);
+  const measures = await screen.findByRole("heading", { name: "What each score measures" });
+  const section = measures.closest("section") as HTMLElement;
+  expect(await within(section).findByText("90%")).toBeTruthy();
+  expect(within(section).getByText("3")).toBeTruthy();
+  expect(await within(section).findByText(/8 of 10 requirements have current evidence, 2 missing or overdue/)).toBeTruthy();
+  expect(within(section).getByText(/4 of 8 requirements have current evidence, 4 missing or overdue/)).toBeTruthy();
+  expect(within(section).getByText("70%")).toBeTruthy();
+  expect(within(section).getByRole("link", { name: /Participant files/ }).getAttribute("href")).toBe(
+    "/md/compliance?view=checklist&area=participant",
+  );
+  expect(screen.getByRole("heading", { name: "How a shift note is scored" })).toBeTruthy();
+});
+
+it("shows goal outcomes from the goals themselves", async () => {
+  mocks.alerts.mockResolvedValue([]);
+  mocks.api.mockImplementation((url: string) =>
+    Promise.resolve({
+      ok: true,
+      json: async () =>
+        url.endsWith("compliance-trend")
+          ? { trend: [] }
+          : { ...data, goals_total: 8, goals_achieved: 2, goals_active: 6, goal_outcome_rate: 25, active_goals_supported_30d: 4 },
+    }),
+  );
+  render(<MDExecutivePage />);
+  expect(await screen.findByText("Participant goals achieved")).toBeTruthy();
+  expect(screen.getByText("2 of 8 goals")).toBeTruthy();
+  expect(screen.getByText("Active goals supported in the last 30 days")).toBeTruthy();
+  expect(screen.getByText("4 of 6 goals")).toBeTruthy();
+  expect(screen.getByText("2 with no shift notes against them")).toBeTruthy();
 });

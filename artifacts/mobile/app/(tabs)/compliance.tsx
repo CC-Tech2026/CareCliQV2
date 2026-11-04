@@ -5,7 +5,6 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import {
@@ -23,21 +22,19 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { IncidentsPanel } from "@/components/worker/incidents/IncidentsPanel";
 import { ComplianceScoreRing } from "@/components/worker/compliance/ComplianceScoreRing";
-import { ComplianceSessionHistoryItem } from "@/components/worker/compliance/ComplianceSessionHistoryItem";
+import { ShiftReviewItem } from "@/components/worker/review/ShiftReviewItem";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { useT } from "@/context/PreferencesContext";
-import {
-  useWorkerCompliance,
-  useWorkerComplianceSessionsInfinite,
-} from "@/hooks/worker/useWorkerCompliance";
+import { useWorkerCompliance } from "@/hooks/worker/useWorkerCompliance";
+import { useShiftReviews } from "@/hooks/worker/useShiftReviews";
 import { useWorkerComplianceDetail } from "@/hooks/worker/useWorkerComplianceDetail";
 import { useColors } from "@/hooks/useColors";
 import type {
+  ShiftReviewItem as ShiftReview,
   WorkerCompliance,
   WorkerComplianceRuleResult,
-  WorkerComplianceSession,
 } from "@/lib/worker-api";
 
 type Segment = "overview" | "incidents";
@@ -263,7 +260,6 @@ export default function ComplianceTabScreen() {
   const insets = useSafeAreaInsets();
   const t = useT();
   const router = useRouter();
-  const loadingMoreRef = useRef(false);
   const params = useLocalSearchParams<{ segment?: string }>();
   const [segment, setSegment] = useState<Segment>(
     params.segment === "incidents" ? "incidents" : "overview",
@@ -285,23 +281,23 @@ export default function ComplianceTabScreen() {
     isLoading: detailLoading,
     refetch: detailRefetch,
   } = useWorkerComplianceDetail(7);
+  // Only shifts still with the office: changes requested, then waiting for
+  // review. Verified shifts move to Past shifts.
   const {
-    data: sessionsData,
-    isLoading: sessionsLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    refetch: refetchSessions,
-  } = useWorkerComplianceSessionsInfinite();
+    data: reviewsData,
+    isLoading: reviewsLoading,
+    refetch: refetchReviews,
+  } = useShiftReviews();
+  const reviews = reviewsData?.shifts ?? [];
+  const counts = reviewsData?.counts;
 
-  const sessions = useMemo(
-    () => sessionsData?.pages.flatMap((page) => page.sessions ?? []) ?? [],
-    [sessionsData],
-  );
-
-  const loading =
-    isLoading || detailLoading || (sessionsLoading && sessions.length === 0);
-  const latest = overview?.latest_session ?? sessions[0];
+  const loading = isLoading || detailLoading || (reviewsLoading && !reviewsData);
+  const latest = overview?.latest_session ?? null;
+  // The latest result opens that shift's record, never the live session.
+  const latestShiftId = useMemo(() => {
+    if (!latest?.id) return null;
+    return reviewsData?.shifts.find((s) => s.session_id === latest.id)?.shift_id ?? null;
+  }, [latest?.id, reviewsData]);
   const trend = detail?.trend ?? [];
   const rules = detail?.rules ?? [];
   const failedRules = detail?.failed_rules ?? [];
@@ -321,22 +317,12 @@ export default function ComplianceTabScreen() {
 
   const handleRefresh = useCallback(() => {
     void refetch();
-    void refetchSessions();
+    void refetchReviews();
     void detailRefetch();
-  }, [refetch, refetchSessions, detailRefetch]);
+  }, [refetch, refetchReviews, detailRefetch]);
 
-  const handleLoadMore = useCallback(() => {
-    if (!hasNextPage || isFetchingNextPage || loadingMoreRef.current) return;
-    loadingMoreRef.current = true;
-    void fetchNextPage().finally(() => {
-      loadingMoreRef.current = false;
-    });
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
-
-  const renderSession = useCallback(
-    ({ item }: { item: WorkerComplianceSession }) => (
-      <ComplianceSessionHistoryItem session={item} />
-    ),
+  const renderReview = useCallback(
+    ({ item }: { item: ShiftReview }) => <ShiftReviewItem item={item} />,
     [],
   );
 
@@ -344,8 +330,8 @@ export default function ComplianceTabScreen() {
     <View style={styles.headerContent}>
       <Pressable
         accessibilityRole="button"
-        disabled={!latest?.id}
-        onPress={() => latest?.id && router.push(`/session/${latest.id}`)}
+        disabled={!latestShiftId}
+        onPress={() => latestShiftId && router.push(`/shift/${latestShiftId}/record` as never)}
         style={[
           styles.latestCard,
           { backgroundColor: colors.card, borderColor: colors.border },
@@ -380,7 +366,7 @@ export default function ComplianceTabScreen() {
             {statusLabel(latestStatus, t)}
           </Text>
         </View>
-        {latest?.id ? (
+        {latestShiftId ? (
           <Feather
             name="chevron-right"
             size={18}
@@ -537,17 +523,36 @@ export default function ComplianceTabScreen() {
           },
         ]}
       >
-        {t("compliance.sessionHistory")}
+        {t("review.overview.title")}
+        {counts && counts.changes_requested + counts.awaiting_review > 0
+          ? `  ·  ${counts.changes_requested + counts.awaiting_review}`
+          : ""}
       </Text>
+      {counts && counts.changes_requested > 0 ? (
+        <Text style={[styles.reviewHint, { color: colors.warning, fontFamily: FontFamily.interSemiBold }]}>
+          {t("review.overview.needsYou", { count: String(counts.changes_requested) })}
+        </Text>
+      ) : null}
     </View>
   );
 
-  const listFooter = isFetchingNextPage ? (
-    <View style={styles.listFooter}>
-      <ActivityIndicator color={colors.primary} size="small" />
-    </View>
-  ) : (
-    <View style={styles.listFooter} />
+  const listFooter = (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push("/worker/past-shifts" as never)}
+      style={[styles.pastLink, { backgroundColor: colors.card, borderColor: colors.border }]}
+    >
+      <Feather name="archive" size={16} color={colors.primary} />
+      <Text style={[styles.pastLinkText, { color: colors.foreground, fontFamily: FontFamily.interSemiBold }]}>
+        {t("review.overview.pastShifts")}
+      </Text>
+      {counts && counts.verified > 0 ? (
+        <Text style={[styles.pastLinkCount, { color: colors.mutedForeground, fontFamily: FontFamily.body }]}>
+          {t("review.overview.verifiedCount", { count: String(counts.verified) })}
+        </Text>
+      ) : null}
+      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+    </Pressable>
   );
 
   return (
@@ -637,26 +642,24 @@ export default function ComplianceTabScreen() {
         </View>
       ) : (
         <FlatList
-          data={sessions}
-          keyExtractor={(item) => item.id}
-          renderItem={renderSession}
+          data={reviews}
+          keyExtractor={(item) => item.shift_id}
+          renderItem={renderReview}
           ListHeaderComponent={listHeader}
           ListFooterComponent={listFooter}
           contentContainerStyle={[
             styles.list,
-            sessions.length === 0 && styles.listEmpty,
+            reviews.length === 0 && styles.listEmpty,
             { paddingBottom: bottomPad },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching && !isFetchingNextPage}
+              refreshing={isRefetching}
               onRefresh={handleRefresh}
               tintColor={colors.primary}
             />
           }
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.35}
           initialNumToRender={10}
           maxToRenderPerBatch={10}
           windowSize={7}
@@ -671,7 +674,7 @@ export default function ComplianceTabScreen() {
                 },
               ]}
             >
-              {t("compliance.reviewedSessions", { count: 0 })}
+              {t("review.overview.empty")}
             </Text>
           }
         />
@@ -681,6 +684,28 @@ export default function ComplianceTabScreen() {
 }
 
 const styles = StyleSheet.create({
+  reviewHint: {
+    fontSize: 12,
+    marginTop: -4,
+    marginBottom: 8,
+  },
+  pastLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 52,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    marginTop: 8,
+  },
+  pastLinkText: {
+    fontSize: 14,
+    flex: 1,
+  },
+  pastLinkCount: {
+    fontSize: 12,
+  },
   container: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   error: { fontSize: 14, padding: 24, textAlign: "center" },

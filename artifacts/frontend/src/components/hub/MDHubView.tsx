@@ -66,6 +66,8 @@ interface MDData {
   compliance_target: number;
   incidents_this_month: number;
   goal_achievement_rate: number;
+  goals_active?: number | null;
+  active_goals_supported_30d?: number | null;
   team_compliance_breakdown: { compliant: number; at_risk: number; non_compliant: number };
 
   workers_at_risk: Array<{
@@ -328,7 +330,7 @@ function ExecutiveMetric({
       style={{ borderColor: BORDER, background: SURFACE }}
     >
       {content}
-      <span className="flex w-full items-center justify-between gap-2 border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-text">{label === "Support visits" ? "Review the schedule" : "Review participant outcomes"}<ArrowRight size={14} /></span>
+      <span className="flex w-full items-center justify-between gap-2 border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-text">{label === "Support visits" ? "Review the schedule" : "Review participants"}<ArrowRight size={14} /></span>
     </button>
   );
 }
@@ -1346,13 +1348,22 @@ export function MDHubView() {
 
           />
 
-          <ExecutiveMetric
-            label="Goal achievement"
-            value={`${data.goal_achievement_rate}%`}
-            detail="Participant goals"
-            onClick={() => navigate("/md/service-delivery")}
-            achievementPct={data.goal_achievement_rate}
-          />
+          {(() => {
+            // Active goals with at least one shift note against them in the
+            // last 30 days (dashboards.py _goal_outcomes).
+            const active = data.goals_active ?? null;
+            const supported = data.active_goals_supported_30d ?? null;
+            const pct = active && supported != null ? Math.round((supported / active) * 100) : null;
+            return (
+              <ExecutiveMetric
+                label="Goals supported"
+                value={pct == null ? "N/A" : `${pct}%`}
+                detail={active ? `${supported} of ${active} active goals, last 30 days` : "No active goals yet"}
+                onClick={() => navigate("/onboard-participant/active")}
+                achievementPct={pct ?? 0}
+              />
+            );
+          })()}
         </div>
 
       </div>

@@ -118,7 +118,7 @@ const STAFF_COLUMNS: { label: string; key?: SortKey; className?: string }[] = [
   { label: "Participants", key: "participants" },
   { label: "This week", key: "thisWeek", className: "hidden xl:flex" },
   { label: "Notes", key: "notes", className: "hidden xl:flex" },
-  { label: "Compliance", key: "compliance" },
+  { label: "Note score", key: "compliance" },
   { label: "Status", key: "lastActive" },
   { label: "" },
 ];
@@ -207,20 +207,21 @@ function toneColor(tone: Tone) {
   return MUTED;
 }
 
+// A worker's score is the average documentation score of their own shift
+// notes, so it uses the same bands as a single note: 85+ on target, 60 to 84
+// needs review, under 60 priority review. Credentials are tracked separately.
 function getScoreColor(score: number) {
   if (score <= 0) return MUTED;
-  if (score >= 90) return GREEN;
-  if (score >= 85) return INFO;
-  if (score >= 70) return AMBER;
+  if (score >= 85) return GREEN;
+  if (score >= 60) return AMBER;
   return RED;
 }
 
 function getScoreLabel(score: number, translate: (key: string) => string) {
   if (score <= 0) return translate("md.staff.noData");
-  if (score >= 90) return translate("md.staff.strongPerformer");
-  if (score >= 85) return translate("md.staff.onTrack");
-  if (score >= 70) return translate("md.staff.needsAttention");
-  return translate("md.staff.retentionRisk");
+  if (score >= 85) return "Notes on target";
+  if (score >= 60) return "Notes need review";
+  return "Notes need priority review";
 }
 
 export default function MDStaffPage() {
@@ -436,7 +437,7 @@ export default function MDStaffPage() {
       (worker) => worker.compliance_score > 0 && worker.compliance_score < 85,
     );
 
-    const strong = allStaff.filter((worker) => worker.compliance_score >= 90);
+    const strong = allStaff.filter((worker) => worker.compliance_score >= 85);
 
     const average =
       active.length > 0
@@ -457,27 +458,22 @@ export default function MDStaffPage() {
   }, [allStaff]);
 
   const distribution = useMemo(() => {
-    const strong = allStaff.filter(
-      (worker) => worker.compliance_score >= 90,
+    const onTarget = allStaff.filter(
+      (worker) => worker.compliance_score >= 85,
     ).length;
 
-    const onTrack = allStaff.filter(
-      (worker) => worker.compliance_score >= 85 && worker.compliance_score < 90,
+    const review = allStaff.filter(
+      (worker) => worker.compliance_score >= 60 && worker.compliance_score < 85,
     ).length;
 
-    const attention = allStaff.filter(
-      (worker) => worker.compliance_score >= 70 && worker.compliance_score < 85,
-    ).length;
-
-    const risk = allStaff.filter(
-      (worker) => worker.compliance_score > 0 && worker.compliance_score < 70,
+    const priority = allStaff.filter(
+      (worker) => worker.compliance_score > 0 && worker.compliance_score < 60,
     ).length;
 
     return {
-      strong,
-      onTrack,
-      attention,
-      risk,
+      onTarget,
+      review,
+      priority,
     };
   }, [allStaff]);
 
@@ -556,7 +552,7 @@ export default function MDStaffPage() {
         (filter === "at_risk" &&
           worker.compliance_score > 0 &&
           worker.compliance_score < 85) ||
-        (filter === "strong" && worker.compliance_score >= 90) ||
+        (filter === "strong" && worker.compliance_score >= 85) ||
         (filter === "credentials" && hasCredentialIssue(worker));
 
       const matchesRole =
@@ -741,7 +737,7 @@ export default function MDStaffPage() {
                   onClick: () => showDirectory("all"),
                 },
                 {
-                  label: "average compliance",
+                  label: "average note score",
                   value: `${stats.average}%`,
                   color: getScoreColor(stats.average),
                   onClick: () => showDirectory("all", "compliance"),
@@ -869,7 +865,7 @@ export default function MDStaffPage() {
                       style={{ color: TEXT }}
                     >
                       <option value="name">Sort by name</option>
-                      <option value="compliance">Sort by compliance</option>
+                      <option value="compliance">Sort by note score</option>
                       <option value="participants">Sort by participants</option>
                       <option value="sessions">Sort by sessions</option>
                       <option value="lastActive">Sort by last active</option>
@@ -895,7 +891,7 @@ export default function MDStaffPage() {
                   [
                     ["all", "Everyone", allStaff.length],
                     ["at_risk", "Needs attention", stats.atRisk.length],
-                    ["strong", "Strong performers", stats.strong.length],
+                    ["strong", "Notes on target", stats.strong.length],
                     ["credentials", "Credential issues", credentialIssueCount],
                   ] as [Filter, string, number][]
                 ).map(([item, label, count]) => (
@@ -1141,23 +1137,21 @@ export default function MDStaffPage() {
             <div className="grid gap-10 border-t pt-8 lg:grid-cols-2" style={{ borderColor: BORDER }}>
               <section>
                 <h2 className="flex items-center gap-1.5 text-lg font-semibold" style={{ color: TEXT }}>
-                  How the team is tracking
-                  <SectionInfo text="How compliance scores are spread across your team, from strong performers to staff who need support. Staff with no sessions yet aren't counted." />
+                  How the team's shift notes score
+                  <SectionInfo text="Each person's score is the average documentation score of their own shift notes, in the same bands as a single note: 85% and above on target, 60% to 84% needs review, under 60% priority review. Staff with no scored notes yet aren't counted. Credentials and screening are shown separately." />
                 </h2>
 
                 <div className="mt-4 flex h-2.5 overflow-hidden rounded-full" style={{ background: SOFT }}>
-                  {distribution.strong > 0 && <div style={{ flex: distribution.strong, background: GREEN }} />}
-                  {distribution.onTrack > 0 && <div style={{ flex: distribution.onTrack, background: INFO }} />}
-                  {distribution.attention > 0 && <div style={{ flex: distribution.attention, background: AMBER }} />}
-                  {distribution.risk > 0 && <div style={{ flex: distribution.risk, background: RED }} />}
+                  {distribution.onTarget > 0 && <div style={{ flex: distribution.onTarget, background: GREEN }} />}
+                  {distribution.review > 0 && <div style={{ flex: distribution.review, background: AMBER }} />}
+                  {distribution.priority > 0 && <div style={{ flex: distribution.priority, background: RED }} />}
                 </div>
 
                 <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm" style={{ color: TEXT }}>
                   {[
-                    { label: "strong", count: distribution.strong, color: GREEN },
-                    { label: "on track", count: distribution.onTrack, color: INFO },
-                    { label: "need attention", count: distribution.attention, color: AMBER },
-                    { label: "at risk", count: distribution.risk, color: RED },
+                    { label: "on target", count: distribution.onTarget, color: GREEN },
+                    { label: "need review", count: distribution.review, color: AMBER },
+                    { label: "need priority review", count: distribution.priority, color: RED },
                   ].map((item) => (
                     <li key={item.label} className="flex items-center gap-2">
                       <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: item.color }} />

@@ -22,12 +22,10 @@ import {
   ShieldCheck,
   FolderLock,
   AlertTriangle,
-  Mail,
   DollarSign,
   BarChart3,
   ClipboardCheck,
   GraduationCap,
-  MessageSquareWarning,
   Tags,
   Menu,
   X,
@@ -35,14 +33,11 @@ import {
   Search,
   PanelLeftClose,
   PanelLeftOpen,
-  Radio,
   NotebookPen,
-  Activity,
-  FileSearch,
-  ClipboardList,
   BadgeCheck,
   Car,
-  Contact,
+  Receipt,
+  type LucideIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -88,7 +83,24 @@ function NavCountDot({ count }: { count: number }) {
   );
 }
 
-const MD_NAV_GROUPS = [
+type NavTab = { href: string; label: string };
+type NavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  /** Pages that are different views of the same job. They share one nav
+   *  entry and show as tabs above the page instead of separate entries. */
+  tabs?: readonly NavTab[];
+  /** Other routes that belong to this entry (detail and edit pages). */
+  match?: readonly string[];
+  /** Same as match, but only the exact path, not anything under it. */
+  exact?: readonly string[];
+};
+
+// One entry per job. Coordinator pages the MD also uses (Rostering, Team,
+// Shift note review...) sit under the MD entry they belong to rather than
+// beside it, which is where the duplicates came from.
+const MD_NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
   {
     label: "Governance & Strategy",
     items: [
@@ -99,33 +111,54 @@ const MD_NAV_GROUPS = [
   {
     label: "Operations & Care",
     items: [
-      { href: "/md/schedule", label: "Master Schedule", icon: CalendarDays },
-      { href: "/coordinator/rostering", label: "Rostering & live shifts", icon: Radio },
       {
-        href: "/md/service-delivery",
-        label: "Delivery Quality",
-        icon: ClipboardCheck,
+        href: "/md/schedule",
+        label: "Schedule & rostering",
+        icon: CalendarDays,
+        tabs: [
+          { href: "/md/schedule", label: "Schedule" },
+          { href: "/coordinator/rostering", label: "Rostering & live shifts" },
+          { href: "/coordinator/monitor", label: "Long shifts" },
+        ],
+        match: ["/coordinator/live"],
       },
       {
         href: "/onboard-participant/active",
         label: "Participants",
         icon: HeartHandshake,
+        match: ["/patients", "/participants"],
       },
-      { href: "/sessions", label: "Shift notes", icon: NotebookPen },
-      { href: "/coordinator/monitor", label: "Long-shift monitor", icon: Activity },
+      {
+        href: "/sessions",
+        label: "Shift notes",
+        icon: NotebookPen,
+        tabs: [
+          { href: "/sessions", label: "All shift notes" },
+          { href: "/session-review", label: "Awaiting review" },
+        ],
+      },
+      { href: "/md/service-delivery", label: "Delivery Quality", icon: ClipboardCheck },
     ],
   },
   {
     label: "Workforce & People",
     items: [
-      { href: "/md/staff", label: "Staff", icon: Users },
-      { href: "/team", label: "Workers", icon: Contact },
-      { href: "/md/staff-onboarding", label: "Onboarding", icon: UserPlus },
       {
-        href: "/md/onboarding/training",
-        label: "Competency & Training",
-        icon: GraduationCap,
+        href: "/md/staff",
+        label: "Staff",
+        icon: Users,
+        tabs: [
+          { href: "/md/staff", label: "Overview" },
+          { href: "/team", label: "Team & invites" },
+        ],
       },
+      {
+        href: "/md/staff-onboarding",
+        label: "Onboarding",
+        icon: UserPlus,
+        exact: ["/onboard-participant"],
+      },
+      { href: "/md/onboarding/training", label: "Competency & Training", icon: GraduationCap },
       { href: "/md/tags", label: "Matching Tags", icon: Tags },
     ],
   },
@@ -136,37 +169,84 @@ const MD_NAV_GROUPS = [
         href: "/md/compliance",
         label: "Audit & Compliance",
         icon: ShieldCheck,
+        match: ["/audit-pack", "/md/audit-readiness"],
       },
       { href: "/md/vault", label: "Documents & Audit Vault", icon: FolderLock },
-      { href: "/session-review", label: "Shift note review", icon: FileSearch },
-      { href: "/audit-pack", label: "Audit pack", icon: ClipboardList },
-      { href: "/incidents", label: "Incident reporting", icon: AlertTriangle },
       {
-        href: "/onboard-participant/complaints",
-        label: "Participant Complaints",
-        icon: Mail,
-      },
-      {
-        href: "/feedback-reports",
-        label: "Feedback & Reports",
-        icon: MessageSquareWarning,
+        href: "/incidents",
+        label: "Incidents & complaints",
+        icon: AlertTriangle,
+        tabs: [
+          { href: "/incidents", label: "Incidents" },
+          { href: "/onboard-participant/complaints", label: "Participant complaints" },
+          { href: "/feedback-reports", label: "Staff feedback" },
+        ],
       },
     ],
   },
   {
     label: "Finance",
     items: [
-      {
-        href: "/md/financial",
-        label: "Financial Governance",
-        icon: DollarSign,
-      },
-      { href: "/billing", label: "NDIS invoices", icon: DollarSign },
+      { href: "/md/financial", label: "Financial Governance", icon: DollarSign },
+      { href: "/billing", label: "Billing & claims", icon: Receipt },
       { href: "/coordinator/verification", label: "Shift verification", icon: BadgeCheck },
       { href: "/coordinator/travel", label: "Travel claims", icon: Car },
     ],
   },
-] as const;
+];
+
+const NAV_ITEMS = MD_NAV_GROUPS.flatMap((group) => group.items);
+
+function isNavItemActive(location: string, item: NavItem) {
+  return (
+    [item.href, ...(item.tabs ?? []).map((t) => t.href), ...(item.match ?? [])].some((href) =>
+      isRouteActive(location, href),
+    ) || (item.exact ?? []).includes(location)
+  );
+}
+
+function isHrefActive(location: string, href: string) {
+  const item = NAV_ITEMS.find((i) => i.href === href);
+  return item ? isNavItemActive(location, item) : isRouteActive(location, href);
+}
+
+/** The entry whose tabs include this exact page, if it has tabs. Detail
+ *  pages (/sessions/:id) don't get the tab bar; they have their own back links. */
+function workspaceFor(location: string) {
+  for (const group of MD_NAV_GROUPS) {
+    for (const item of group.items) {
+      if (item.tabs?.some((t) => t.href === location)) return item;
+    }
+  }
+  return null;
+}
+
+function WorkspaceTabs({ item, location }: { item: NavItem; location: string }) {
+  return (
+    <nav
+      aria-label={`${item.label} pages`}
+      className="mb-5 flex gap-1 overflow-x-auto border-b border-[var(--cc-border)]"
+    >
+      {item.tabs!.map((tab) => {
+        const active = tab.href === location;
+        return (
+          <Link
+            key={tab.href}
+            href={tab.href}
+            aria-current={active ? "page" : undefined}
+            className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap border-b-2 px-3 text-sm font-semibold transition-colors ${
+              active
+                ? "border-[var(--cc-plum)] text-[var(--cc-plum)]"
+                : "border-transparent text-[var(--cc-muted)] hover:text-[var(--cc-text)]"
+            }`}
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
 
 function getInitials(name: string) {
   return name
@@ -201,6 +281,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   const isMD = user?.role === "managing_director";
+  const workspace = isMD ? workspaceFor(location) : null;
 
   // Nav badge counts, keyed by href: open participant complaints, from the
   // same cached query as the complaints page, so addressing one updates it.
@@ -211,7 +292,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
     staleTime: 60_000,
   });
   const NAV_BADGE_COUNTS: Record<string, number> = {
-    "/onboard-participant/complaints": (complaintsQuery.data ?? []).filter((c) => c.status === "open").length,
+    "/incidents": (complaintsQuery.data ?? []).filter((c) => c.status === "open").length,
   };
   const sidebarMode = isMD && prefs?.nav_layout === "sidebar";
   const bottombarMode = isMD && prefs?.nav_layout === "bottombar";
@@ -609,7 +690,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               </div>
             )}
 
-            {isMD && <ManagementNavigationDrawer groups={MD_NAV_GROUPS} location={location} isActive={href => isRouteActive(location, href)} />}
+            {isMD && <ManagementNavigationDrawer groups={MD_NAV_GROUPS} location={location} isActive={href => isHrefActive(location, href)} />}
 
           </div>
         </div>
@@ -634,7 +715,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             <nav className="flex items-center gap-1.5 relative">
               {MD_NAV_GROUPS.map((group) => {
                 const hasActiveRoute = group.items.some((item) =>
-                  isRouteActive(location, item.href),
+                  isNavItemActive(location, item),
                 );
 
                 return (
@@ -683,7 +764,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         </div>
                         <div className="space-y-0.5">
                           {group.items.map((item) => {
-                            const active = isRouteActive(location, item.href);
+                            const active = isNavItemActive(location, item);
                             const Icon = item.icon;
                             return (
                               <Link
@@ -734,7 +815,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             <nav className="flex items-center gap-1.5 relative">
               {MD_NAV_GROUPS.map((group) => {
                 const hasActiveRoute = group.items.some((item) =>
-                  isRouteActive(location, item.href),
+                  isNavItemActive(location, item),
                 );
 
                 return (
@@ -783,7 +864,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         </div>
                         <div className="space-y-0.5">
                           {group.items.map((item) => {
-                            const active = isRouteActive(location, item.href);
+                            const active = isNavItemActive(location, item);
                             const Icon = item.icon;
                             return (
                               <Link
@@ -910,7 +991,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                           }
                         >
                           {group.items.map((item) => {
-                            const active = isRouteActive(location, item.href);
+                            const active = isNavItemActive(location, item);
                             const Icon = item.icon;
 
                             return (
@@ -962,6 +1043,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           <main id="management-main" tabIndex={-1}
             className={`min-w-0 flex-1 px-0 py-2 ${isMD || location === "/billing" ? "xl:pl-3" : "lg:px-6"}`}
           >
+            {workspace && <WorkspaceTabs item={workspace} location={location} />}
             <PageErrorBoundary>{children}</PageErrorBoundary>
           </main>
         </div>
@@ -969,6 +1051,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
         <main id="management-main" tabIndex={-1}
           className={`mx-auto ${isMD ? "w-full px-3 py-2 sm:px-4" : location === "/billing" ? "w-full px-3 py-4 sm:px-4" : "max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8"} ${bottombarMode ? "xl:pb-32" : ""}`}
         >
+          {workspace && <WorkspaceTabs item={workspace} location={location} />}
           <PageErrorBoundary>{children}</PageErrorBoundary>
         </main>
       )}
