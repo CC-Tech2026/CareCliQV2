@@ -27,8 +27,8 @@ Steps marked **(you)** need your accounts; the rest are run from this repo.
    Add the **dev** project's Session pooler URL to `.env` as `DEV_DATABASE_URL=...`.
 5. Start Docker Desktop, then:
    ```
-   .venv/Scripts/python -m backend.scripts.bootstrap_production_db           # checks only
-   .venv/Scripts/python -m backend.scripts.bootstrap_production_db --apply
+   .venv/Scripts/python -m backend.scripts.bootstrap_database           # checks only
+   .venv/Scripts/python -m backend.scripts.bootstrap_database --apply
    ```
    This copies the dev schema (structure only), storage buckets and shared reference data (NDIS price catalogue, public holidays, SCHADS award tables, compliance rules, help content), then marks every current migration as applied. No organisation, user or participant data is copied. It refuses to run against a database that already has organisations.
 
