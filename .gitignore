@@ -63,3 +63,6 @@ backend/app/__pycache__/*
 **/__pycache__/*
 .pnpm-store/*
 artifacts/mobile/build-1784104731243.apk
+# Scratch output from local checks and reviews. Files the team keeps here
+# are tracked explicitly; new ones stay local unless added with -f.
+temp/
