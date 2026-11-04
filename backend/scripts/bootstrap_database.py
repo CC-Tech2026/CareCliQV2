@@ -1,4 +1,4 @@
-"""Build the production database's schema from the dev database.
+"""Build an empty database (production or a practice copy) from an existing one.
 
 The migrations folder can't rebuild today's schema from scratch (duplicate
 numbers, the original `patients` table, tables first made by hand), so a
@@ -10,11 +10,14 @@ Runs the official Postgres tools in Docker (postgres:17), so nothing needs
 installing. Connection strings come from git-ignored files and are passed to
 the container as environment variables, never on a command line:
 
-  .env              DEV_DATABASE_URL   dev Supabase, Session pooler URL
-  .env.production   DATABASE_URL       new production Supabase, Session pooler URL
+  .env              DEV_DATABASE_URL   the existing project to copy from (Session pooler URL)
+  .env.production   DATABASE_URL       the new, empty project to build (Session pooler URL)
 
-    .venv/Scripts/python -m backend.scripts.bootstrap_production_db           # checks only
-    .venv/Scripts/python -m backend.scripts.bootstrap_production_db --apply
+    .venv/Scripts/python -m backend.scripts.bootstrap_database           # checks only
+    .venv/Scripts/python -m backend.scripts.bootstrap_database --apply
+
+--target-env .env.test builds a different empty project from the same
+source, e.g. a separate test database.
 
 Apply the dev catch-up SQL first, so the copied schema is complete.
 
@@ -55,17 +58,22 @@ REFERENCE_TABLES = [
 
 
 def _urls() -> tuple[str, str]:
+    target_file = sys.argv[sys.argv.index("--target-env") + 1] if "--target-env" in sys.argv else ".env.production"
     dev = dotenv_values(ROOT / ".env").get("DEV_DATABASE_URL") or os.environ.get("DEV_DATABASE_URL", "")
-    prod = dotenv_values(ROOT / ".env.production").get("DATABASE_URL") or ""
+    prod = dotenv_values(ROOT / target_file).get("DATABASE_URL") or ""
     if not dev or not prod:
-        sys.exit("Set DEV_DATABASE_URL in .env and DATABASE_URL in .env.production (Session pooler URLs).")
-    if dev == prod:
-        sys.exit("DEV_DATABASE_URL and the production DATABASE_URL are the same database. Stopping.")
+        sys.exit(f"Set DEV_DATABASE_URL in .env and DATABASE_URL in {target_file} (Session pooler URLs).")
+    if dev.split("@")[0] == prod.split("@")[0]:
+        sys.exit(f"DEV_DATABASE_URL and {target_file}'s DATABASE_URL are the same database. Stopping.")
+    print(f"Target: {target_file}")
     return dev, prod
 
 
 def _run(url: str, command: str, stdin: str | None = None) -> str:
-    """Run a shell command in the postgres image with $DBURL set."""
+    """Run a shell command in the postgres image with $DBURL set. Inside the
+    container "localhost" is the container itself, so a local database (e.g.
+    Supabase running in Docker) is reached as host.docker.internal."""
+    url = url.replace("@localhost:", "@host.docker.internal:").replace("@127.0.0.1:", "@host.docker.internal:")
     result = subprocess.run(
         ["docker", "run", "--rm", "-i", "-e", "DBURL", IMAGE, "sh", "-c", command],
         input=stdin, capture_output=True, text=True, encoding="utf-8",
@@ -169,7 +177,7 @@ def main() -> None:
     print(f"     prod now has {built} tables (dev has {dev_tables})")
     if built < dev_tables:
         sys.exit("Fewer tables than dev: check the output above before going live.")
-    print("Production database is ready.")
+    print("Database is ready.")
 
 
 if __name__ == "__main__":

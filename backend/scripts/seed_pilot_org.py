@@ -44,7 +44,23 @@ import sys
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from dotenv import load_dotenv
+import re
+from pathlib import Path
+
+from dotenv import dotenv_values, load_dotenv
+
+# --demo seeds a local practice database (Supabase running in Docker), never
+# a hosted project. Its settings come from --env-file (default .env.local)
+# and must point at localhost; email is switched off.
+DEMO = "--demo" in sys.argv
+if DEMO:
+    _env_file = Path(sys.argv[sys.argv.index("--env-file") + 1]) if "--env-file" in sys.argv else Path(".env.local")
+    if not _env_file.exists():
+        sys.exit(f"{_env_file} not found.")
+    os.environ.update({k: v for k, v in dotenv_values(_env_file).items() if v is not None})
+    os.environ["EMAIL_ENABLED"] = "false"
+    if not re.match(r"https?://(127\.0\.0\.1|localhost|host\.docker\.internal)[:/]", os.environ.get("SUPABASE_URL", "")):
+        sys.exit("--demo only seeds a local practice database; SUPABASE_URL isn't local. Stopping.")
 
 load_dotenv()
 
@@ -60,7 +76,7 @@ from backend.app.services.supabase_client import get_supabase_admin  # noqa: E40
 ORG_NAME = "Provider Support SA (Pilot)"
 ORG_ABBREV = "PSSA"
 DIRECTOR_EMAIL = "bonny@providersupportsa.com.au"
-PILOT_URL = "https://carecliq-dev.pages.dev"
+PILOT_URL = "https://app.carecliq.com.au"
 PASSWORD = os.environ.get("PILOT_DEMO_PASSWORD", "")
 TZ = ZoneInfo("Australia/Adelaide")
 
@@ -70,6 +86,14 @@ WORKERS = [
     {"key": "tom", "email": "pssa.worker.tom@example.com", "full_name": "Tom Walsh", "role": "support_worker", "account_type": "independent_worker"},
     {"key": "grace", "email": "pssa.worker.grace@example.com", "full_name": "Grace Kim", "role": "support_worker", "account_type": "independent_worker"},
 ]
+DIRECTOR = None  # the real pilot director is invited by email instead
+if DEMO:
+    ORG_NAME = "CareCliQ Demo Provider"
+    ORG_ABBREV = "DEMO"
+    DIRECTOR_EMAIL = "pssa.director@example.com"
+    DIRECTOR = {"key": "director", "email": DIRECTOR_EMAIL, "full_name": "Morgan Hayes",
+                "role": "managing_director", "account_type": "managing_director"}
+
 PORTAL_LOGINS = [
     {"email": "pssa.participant.liam@example.com", "full_name": "Liam Carter", "participant": "Liam Carter", "relationship": "self", "notes": None},
     {"email": "pssa.family.mitchell@example.com", "full_name": "Karen Mitchell", "participant": "Zoe Mitchell", "relationship": "parent", "notes": "Mother and primary carer of Zoe (12)."},
@@ -496,6 +520,9 @@ async def main() -> None:
     db = get_supabase_admin()
     org_id = find_or_create_org(db)
     print("Logins (all use the PILOT_DEMO_PASSWORD password):")
+    if DIRECTOR:
+        director_id = await ensure_staff(db, org_id, DIRECTOR, None)
+        db.table("organizations").update({"owner_user_id": director_id}).eq("organization_id", org_id).execute()
     staff = {"coordinator": await ensure_staff(db, org_id, COORDINATOR, None)}
     for worker in WORKERS:
         staff[worker["key"]] = await ensure_staff(db, org_id, worker, staff["coordinator"])
@@ -516,7 +543,7 @@ async def main() -> None:
             ensure_portal_login(db, org_id, login, participants[login["participant"]])
     sync_plan_agreement_status(db, org_id)
 
-    if "--invite" in sys.argv:
+    if "--invite" in sys.argv and not DEMO:
         invite_director(db, org_id)
     print(f"Done. Organisation id {org_id}")
 
