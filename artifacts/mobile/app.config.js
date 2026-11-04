@@ -8,10 +8,26 @@ const { syncLanIpEnv } = require("./scripts/sync-lan-ip.cjs");
 // APP_VARIANT=demo (the "demo" EAS profile) builds "CareCliQ Demo": its own
 // app ID, so it installs beside the real app, pointed at the demo server and
 // its Harbourside data rather than at customers' production data.
+// APP_VARIANT=development (the "development" EAS profile) builds "CareCliQ Dev",
+// the dev client that loads JS live from `expo start --dev-client`, beside the
+// real app. Firebase only knows care.cliq2026, so it builds without
+// google-services and push notifications don't arrive in it.
 const DEMO_ID = "care.cliq2026.demo";
+const DEV_ID = "care.cliq2026.dev";
 
 module.exports = ({ config }) => {
   syncLanIpEnv();
+  if (process.env.APP_VARIANT === "development") {
+    const { googleServicesFile: _android, ...android } = config.android;
+    const { googleServicesFile: _ios, ...ios } = config.ios;
+    return {
+      ...config,
+      name: "CareCliQ Dev",
+      scheme: "carecliq-dev",
+      ios: { ...ios, bundleIdentifier: DEV_ID },
+      android: { ...android, package: DEV_ID },
+    };
+  }
   if (process.env.APP_VARIANT !== "demo") return config;
   return {
     ...config,
