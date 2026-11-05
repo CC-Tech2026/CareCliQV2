@@ -1,5 +1,14 @@
-import React from "react";
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import React, { useCallback } from "react";
+import { useFocusEffect } from "expo-router";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { ShiftReviewItem } from "@/components/worker/review/ShiftReviewItem";
 import { WorkerStackScreen } from "@/components/worker/WorkerStackScreen";
@@ -12,14 +21,40 @@ import { useShiftReviews } from "@/hooks/worker/useShiftReviews";
 export default function PastShiftsScreen() {
   const colors = useColors();
   const t = useT();
-  const { data, isLoading, isRefetching, refetch } = useShiftReviews(true);
+  const { data, isLoading, isRefetching, error, refetch } =
+    useShiftReviews(true);
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch]),
+  );
   const shifts = data?.shifts ?? [];
 
   return (
-    <WorkerStackScreen headerTitle="" pageTitle={t("review.history.title")} subtitle={t("review.history.subtitle")} minimalHeader showBack cardsOnBackground>
+    <WorkerStackScreen
+      headerTitle=""
+      pageTitle={t("review.history.title")}
+      subtitle={t("review.history.subtitle")}
+      minimalHeader
+      showBack
+      cardsOnBackground
+    >
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={{ color: colors.foreground }}>
+            Past shifts could not be loaded.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void refetch()}
+            style={{ minHeight: 48, justifyContent: "center" }}
+          >
+            <Text style={{ color: colors.primary }}>Try again</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
@@ -27,9 +62,22 @@ export default function PastShiftsScreen() {
           keyExtractor={(item) => item.shift_id}
           renderItem={({ item }) => <ShiftReviewItem item={item} />}
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={() => void refetch()}
+            />
+          }
           ListEmptyComponent={
-            <Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            <Text
+              style={[
+                styles.empty,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
+            >
               {t("review.history.empty")}
             </Text>
           }

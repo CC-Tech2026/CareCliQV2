@@ -22,7 +22,7 @@ import { pageLabelForPath } from "@/lib/i18n/nav-labels";
 const PARENT_MAP: Array<{ prefix: string; parentHref: string; parentKey: string }> = [
   // Session detail/workflow pages — contextually live under Participants
   { prefix: "/session-new",            parentHref: "/patients",               parentKey: "nav.participants"      },
-  { prefix: "/session-review",         parentHref: "/patients",               parentKey: "nav.participants"      },
+  { prefix: "/session-review",         parentHref: "/sessions",               parentKey: "nav.sessions"      },
   { prefix: "/sessions/",              parentHref: "/patients",               parentKey: "nav.participants"      },
 
   // Quality & Compliance children

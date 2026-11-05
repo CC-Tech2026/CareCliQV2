@@ -1,17 +1,14 @@
 import { Feather } from "@expo/vector-icons";
 import {
-  useCreateSession,
   useGetParticipant,
   useGetParticipantSessions,
   type Session,
 } from "@workspace/api-client-react";
-import * as Haptics from "@/lib/haptics";
 import { shiftNoteSubtitle, type ShiftNoteLike } from "@/lib/shift-note-title";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React from "react";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -34,7 +31,7 @@ function formatDate(dateStr: string | null | undefined): string {
 
 function sessionStatusColor(
   status: string,
-  colors: ReturnType<typeof useColors>
+  colors: ReturnType<typeof useColors>,
 ): string {
   switch (status) {
     case "in_progress":
@@ -81,7 +78,11 @@ function SessionRow({ session }: { session: Session }) {
       // only a session with no shift behind it opens the session screen.
       onPress={() => {
         const shiftId = (session as { shift_id?: string | null }).shift_id;
-        router.push((shiftId ? `/shift/${shiftId}/record` : `/session/${session.id}`) as never);
+        router.push(
+          (shiftId
+            ? `/shift/${shiftId}/record`
+            : `/session/${session.id}`) as never,
+        );
       }}
       style={({ pressed }) => [
         styles.sessionRow,
@@ -107,7 +108,8 @@ function SessionRow({ session }: { session: Session }) {
             { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
           ]}
         >
-          {shiftNoteSubtitle(session as ShiftNoteLike, { worker: false }) || "Shift note"}
+          {shiftNoteSubtitle(session as ShiftNoteLike, { worker: false }) ||
+            "Shift note"}
         </Text>
       </View>
       <View style={styles.sessionRowRight}>
@@ -120,8 +122,8 @@ function SessionRow({ session }: { session: Session }) {
                   session.compliance_score >= 85
                     ? "#22C55E"
                     : session.compliance_score >= 60
-                    ? colors.warning
-                    : colors.destructive,
+                      ? colors.warning
+                      : colors.destructive,
                 fontFamily: "Inter_600SemiBold",
               },
             ]}
@@ -130,10 +132,7 @@ function SessionRow({ session }: { session: Session }) {
           </Text>
         )}
         <View
-          style={[
-            styles.sessionStatusDot,
-            { backgroundColor: statusColor },
-          ]}
+          style={[styles.sessionStatusDot, { backgroundColor: statusColor }]}
         />
       </View>
     </Pressable>
@@ -145,42 +144,21 @@ export default function ParticipantDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [isStarting, setIsStarting] = useState(false);
 
   const { data: participant, isLoading: pLoading } = useGetParticipant(id);
   const { data: sessions, isLoading: sLoading } = useGetParticipantSessions(id);
-  const createSession = useCreateSession();
-
-  const handleStartSession = async () => {
-    if (!participant) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setIsStarting(true);
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const newSession = await createSession.mutateAsync({
-        data: {
-          participant_id: participant.id,
-          session_date: today,
-          duration_minutes: 60,
-          session_type: "Support Session",
-          status: "in_progress",
-        },
-      });
-      router.push(`/session/${newSession.id}`);
-    } catch {
-      Alert.alert("Error", "Could not start session. Please try again.");
-    } finally {
-      setIsStarting(false);
-    }
-  };
-
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const goals = (participant?.goals ?? []).slice(0, 5);
   const recentSessions = (sessions ?? []).slice(0, 8);
 
   if (pLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
         <ActivityIndicator color={colors.primary} size="large" />
       </View>
     );
@@ -188,12 +166,30 @@ export default function ParticipantDetailScreen() {
 
   if (!participant) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <Text style={[styles.errorText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <Text
+          style={[
+            styles.errorText,
+            { color: colors.mutedForeground, fontFamily: "Inter_500Medium" },
+          ]}
+        >
           Participant not found
         </Text>
-        <Pressable onPress={() => router.back()} style={[styles.backTextBtn, { backgroundColor: colors.muted }]}>
-          <Text style={[styles.backTextLabel, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+        <Pressable
+          onPress={() => router.back()}
+          style={[styles.backTextBtn, { backgroundColor: colors.muted }]}
+        >
+          <Text
+            style={[
+              styles.backTextLabel,
+              { color: colors.foreground, fontFamily: "Inter_500Medium" },
+            ]}
+          >
             Go Back
           </Text>
         </Pressable>
@@ -213,10 +209,18 @@ export default function ParticipantDetailScreen() {
       <View
         style={[
           styles.navHeader,
-          { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border },
+          {
+            paddingTop: topPad + 8,
+            backgroundColor: colors.card,
+            borderBottomColor: colors.border,
+          },
         ]}
       >
-        <Pressable onPress={() => router.back()} style={styles.backBtn} testID="participant-back">
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          testID="participant-back"
+        >
           <Feather name="chevron-left" size={24} color={colors.foreground} />
         </Pressable>
         <Text
@@ -238,14 +242,12 @@ export default function ParticipantDetailScreen() {
           { paddingBottom: insets.bottom + 120 },
         ]}
       >
-        <View
-          style={[
-            styles.heroSection,
-            { backgroundColor: colors.navy },
-          ]}
-        >
+        <View style={[styles.heroSection, { backgroundColor: colors.navy }]}>
           <View
-            style={[styles.heroAvatar, { backgroundColor: colors.primary + "40" }]}
+            style={[
+              styles.heroAvatar,
+              { backgroundColor: colors.primary + "40" },
+            ]}
           >
             <Text
               style={[styles.heroInitials, { fontFamily: "Inter_700Bold" }]}
@@ -253,9 +255,7 @@ export default function ParticipantDetailScreen() {
               {initials}
             </Text>
           </View>
-          <Text
-            style={[styles.heroName, { fontFamily: "Inter_700Bold" }]}
-          >
+          <Text style={[styles.heroName, { fontFamily: "Inter_700Bold" }]}>
             {participant.full_name}
           </Text>
           <Text style={[styles.heroNdis, { fontFamily: "Inter_400Regular" }]}>
@@ -263,7 +263,12 @@ export default function ParticipantDetailScreen() {
           </Text>
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <Text
             style={[
               styles.cardTitle,
@@ -273,14 +278,26 @@ export default function ParticipantDetailScreen() {
             Details
           </Text>
           {participant.primary_disability && (
-            <InfoRow label="Primary Disability" value={participant.primary_disability} />
+            <InfoRow
+              label="Primary Disability"
+              value={participant.primary_disability}
+            />
           )}
-          {participant.email && <InfoRow label="Email" value={participant.email} />}
-          {participant.phone && <InfoRow label="Phone" value={participant.phone} />}
+          {participant.email && (
+            <InfoRow label="Email" value={participant.email} />
+          )}
+          {participant.phone && (
+            <InfoRow label="Phone" value={participant.phone} />
+          )}
         </View>
 
         {goals.length > 0 && (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Text
               style={[
                 styles.cardTitle,
@@ -291,15 +308,28 @@ export default function ParticipantDetailScreen() {
             </Text>
             <View style={styles.goalsList}>
               {goals.map((goal, i) => {
-                const goalText = "text" in goal ? goal.text : ("title" in goal ? goal.title : "Goal");
-                const goalProgress = "progress" in goal ? goal.progress : ("progress_percentage" in goal ? (goal.progress_percentage ?? 0) : 0);
+                const goalText =
+                  "text" in goal
+                    ? goal.text
+                    : "title" in goal
+                      ? goal.title
+                      : "Goal";
+                const goalProgress =
+                  "progress" in goal
+                    ? goal.progress
+                    : "progress_percentage" in goal
+                      ? (goal.progress_percentage ?? 0)
+                      : 0;
                 return (
                   <View key={i} style={styles.goalItem}>
                     <View style={styles.goalHeader}>
                       <Text
                         style={[
                           styles.goalText,
-                          { color: colors.foreground, fontFamily: "Inter_400Regular" },
+                          {
+                            color: colors.foreground,
+                            fontFamily: "Inter_400Regular",
+                          },
                         ]}
                         numberOfLines={2}
                       >
@@ -308,13 +338,21 @@ export default function ParticipantDetailScreen() {
                       <Text
                         style={[
                           styles.goalProgress,
-                          { color: colors.primary, fontFamily: "Inter_600SemiBold" },
+                          {
+                            color: colors.primary,
+                            fontFamily: "Inter_600SemiBold",
+                          },
                         ]}
                       >
                         {goalProgress}%
                       </Text>
                     </View>
-                    <View style={[styles.goalBar, { backgroundColor: colors.muted }]}>
+                    <View
+                      style={[
+                        styles.goalBar,
+                        { backgroundColor: colors.muted },
+                      ]}
+                    >
                       <View
                         style={[
                           styles.goalFill,
@@ -332,7 +370,12 @@ export default function ParticipantDetailScreen() {
           </View>
         )}
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <Text
             style={[
               styles.cardTitle,
@@ -347,7 +390,10 @@ export default function ParticipantDetailScreen() {
             <Text
               style={[
                 styles.emptyText,
-                { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: "Inter_400Regular",
+                },
               ]}
             >
               No sessions yet
@@ -373,29 +419,19 @@ export default function ParticipantDetailScreen() {
         ]}
       >
         <Pressable
-          onPress={handleStartSession}
-          disabled={isStarting}
+          accessibilityRole="button"
+          onPress={() => router.push("/(tabs)/shifts" as never)}
           style={[
             styles.startSessionBtn,
-            { backgroundColor: colors.primary, opacity: isStarting ? 0.7 : 1 },
+            { backgroundColor: colors.primary, opacity: 1 },
           ]}
-          testID="start-session-btn"
+          testID="go-to-shifts-btn"
         >
-          {isStarting ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
-          ) : (
-            <>
-              <Feather name="play" size={20} color="#FFFFFF" />
-              <Text
-                style={[
-                  styles.startSessionText,
-                  { fontFamily: "Inter_700Bold" },
-                ]}
-              >
-                Start Session
-              </Text>
-            </>
-          )}
+          <Text
+            style={[styles.startSessionText, { fontFamily: "Inter_700Bold" }]}
+          >
+            Go to my shifts
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -403,7 +439,12 @@ export default function ParticipantDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+  },
   errorText: { fontSize: 16 },
   backTextBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
   backTextLabel: { fontSize: 15 },

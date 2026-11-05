@@ -1,3 +1,5 @@
+import { PersonDetailsButton, usePersonContact } from "./PersonDetails";
+import { Portal as HoverCardPortal } from "@radix-ui/react-hover-card";
 import type { ReactNode } from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { formatAppDate, formatAppTime } from "@/lib/datetime";
@@ -30,7 +32,7 @@ export function ShiftStatusBadge({ status }: { status: ShiftLiveStatus }) {
   const s = LIVE_STATUS[status];
   return (
     <span
-      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
       style={{ color: s.fg, background: s.bg }}
     >
       {s.label}
@@ -42,17 +44,19 @@ function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-[10px] font-medium" style={{ color: "var(--cc-muted)" }}>{label}</p>
-      <p className="text-[13px] font-bold" style={{ color: "var(--cc-text)" }}>{value}</p>
+      <p className="text-xs font-bold" style={{ color: "var(--cc-text)" }}>{value}</p>
     </div>
   );
 }
 
 export function ShiftHoverDetails({ shift }: { shift: CoordinatorShiftRecord }) {
+  const workerContact = usePersonContact({ id: shift.worker_id || "", name: shift.worker_name || "Worker", kind: "worker" }, Boolean(shift.worker_id && shift.worker_id !== UNASSIGNED_PLACEHOLDER_ID));
+  const participantContact = usePersonContact({ id: shift.participant_id || "", name: shift.participant_name || "Participant", kind: "participant" }, Boolean(shift.participant_id));
   const status = shiftLiveStatus(shift);
   const tz = shift.timezone;
   const time = (iso?: string | null) => (iso ? formatAppTime(iso, tz) : "—");
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-[13px] font-bold" style={{ color: "var(--cc-text)" }}>
@@ -66,6 +70,13 @@ export function ShiftHoverDetails({ shift }: { shift: CoordinatorShiftRecord }) 
           </p>
         </div>
         <ShiftStatusBadge status={status} />
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-2 border-t border-cc-border pt-2 text-xs font-semibold text-cc-plum">
+        {shift.worker_id && shift.worker_id !== UNASSIGNED_PLACEHOLDER_ID ? <PersonDetailsButton person={{ id: shift.worker_id, name: shift.worker_name || "Worker", kind: "worker", worker: workerContact.worker }}>Worker details</PersonDetailsButton> : null}
+        {shift.participant_id ? <PersonDetailsButton person={{ id: shift.participant_id, name: shift.participant_name || "Participant", kind: "participant" }}>Participant details</PersonDetailsButton> : null}
+      </div>
+      <div className="space-y-1 text-xs">
+        {[{label: "Worker", data: workerContact}, {label: "Participant", data: participantContact}].map(({label, data}) => data.contact?.phone || data.contact?.email ? <div key={label} className="space-y-0.5"><p className="text-[10px] text-cc-muted">{label}</p>{data.contact.phone ? <a className="block text-cc-plum underline" href={"tel:" + data.contact.phone.replace(/[^+0-9]/g, "")}>{data.contact.phone}</a> : null}{data.contact.email ? <a className="block break-all text-cc-plum underline" href={"mailto:" + data.contact.email}>{data.contact.email}</a> : null}</div> : null)}
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-2">
         <Field label="Scheduled start" value={time(shift.scheduled_start)} />
@@ -82,9 +93,9 @@ export function ShiftHoverCard({ shift, children }: { shift: CoordinatorShiftRec
   return (
     <HoverCard openDelay={250} closeDelay={80}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
-      <HoverCardContent side="right" align="start" className="w-72 rounded-2xl p-4">
+      <HoverCardPortal><HoverCardContent side="right" align="start" className="w-64 rounded-lg p-3">
         <ShiftHoverDetails shift={shift} />
-      </HoverCardContent>
+      </HoverCardContent></HoverCardPortal>
     </HoverCard>
   );
 }

@@ -1,3 +1,4 @@
+import { PageHeader, outlineClass } from "@/components/layout/PageKit";
 import {
   ScheduleLiveCard,
   shiftStage,
@@ -66,7 +67,11 @@ import {
 import { getShiftMessages } from "@/services/coordinatorService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useLiveShiftsRealtime } from "@/hooks/useCoordinatorLiveRealtime";
-import { formatAppTime, formatAppTimeWithZone } from "@/lib/datetime";
+import {
+  getAppTimezone,
+  formatAppTime,
+  formatAppTimeWithZone,
+} from "@/lib/datetime";
 
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
@@ -1182,8 +1187,9 @@ function EmergencyModal({
 export default function CoordinatorLivePage({
   embedded = false,
   externalSearch,
+  onSearchChange,
   readOnly = false,
-}: { embedded?: boolean; externalSearch?: string; readOnly?: boolean } = {}) {
+}: { embedded?: boolean; externalSearch?: string; onSearchChange?: (value: string) => void; readOnly?: boolean } = {}) {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const previousClockIns = useRef<{
@@ -1193,9 +1199,12 @@ export default function CoordinatorLivePage({
   const [recentClockIns, setRecentClockIns] = useState<string[]>([]);
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
-  const [filter, setFilter] = useState<"all" | "green" | "yellow" | "red">(
-    "all",
-  );
+  const [filter, setFilter] = useState<
+    "all" | "green" | "yellow" | "red" | "attention"
+  >("all");
+  const [stageFilter, setStageFilter] = useState<
+    "all" | "active" | "late" | "scheduled" | "completed"
+  >("all");
   const [search, setSearch] = useState("");
   const [durationFilter, setDurationFilter] = useState<
     "all" | "short" | "long"
@@ -1216,6 +1225,7 @@ export default function CoordinatorLivePage({
     isLoading,
     isError,
     dataUpdatedAt,
+    isFetching,
     refetch,
   } = useOrgQuery<LiveShift[]>(["live-shifts", orgId], {
     queryFn: getLiveShifts,
@@ -1255,7 +1265,9 @@ export default function CoordinatorLivePage({
             }),
             description: [
               s.participant_name,
-              s.clocked_in_at ? formatAppTime(s.clocked_in_at, s.timezone) : null,
+              s.clocked_in_at
+                ? formatAppTime(s.clocked_in_at, s.timezone)
+                : null,
               s.clock_in_verified && s.clock_in_method === "gps"
                 ? translate("schedule.gpsVerified")
                 : null,
@@ -1280,10 +1292,17 @@ export default function CoordinatorLivePage({
   // Derive time-of-day from scheduled_start (6–12 morning, 12–17 afternoon, 17–22 evening, else night)
   const getTimeSlot = (
     iso?: string | null,
+    timezone?: string | null,
   ): "morning" | "afternoon" | "evening" | "night" | null => {
     if (!iso) return null;
     try {
-      const h = new Date(iso).getHours();
+      const h = Number(
+        new Intl.DateTimeFormat("en-AU", {
+          hour: "numeric",
+          hourCycle: "h23",
+          timeZone: timezone || getAppTimezone(),
+        }).format(new Date(iso)),
+      );
       if (h >= 6 && h < 12) return "morning";
       if (h >= 12 && h < 17) return "afternoon";
       if (h >= 17 && h < 22) return "evening";
@@ -1297,7 +1316,7 @@ export default function CoordinatorLivePage({
   const availableTimeSlots = useMemo(() => {
     const slots = new Set(
       shifts
-        .map((s) => getTimeSlot(s.scheduled_start))
+        .map((s) => getTimeSlot(s.scheduled_start, s.timezone))
         .filter(Boolean) as string[],
     );
     const order = ["morning", "afternoon", "evening", "night"];
@@ -1319,10 +1338,17 @@ export default function CoordinatorLivePage({
   };
 
   const filtered = (() => {
-    let result =
-      filter === "all"
-        ? shifts
-        : shifts.filter((s) => s.live_status === filter);
+    let result = shifts.filter(
+      (s) =>
+        filter === "all" ||
+        (filter === "attention"
+          ? s.live_status === "red" ||
+            s.live_status === "yellow" ||
+            shiftStage(s) === "late"
+          : s.live_status === filter),
+    );
+    if (stageFilter !== "all")
+      result = result.filter((s) => shiftStage(s) === stageFilter);
     if (durationFilter === "short")
       result = result.filter((s) => !isLongShift(s));
     if (durationFilter === "long")
@@ -1332,9 +1358,16 @@ export default function CoordinatorLivePage({
         (s) => getTimeSlot(s.scheduled_start) === timeOfDayFilter,
       );
     if (clockInFilter === "clocked_in")
-      result = result.filter((s) => !!s.clocked_in_at);
+      result = result.filter(
+        (s) =>
+          !!s.clocked_in_at &&
+          !s.clocked_out_at &&
+          shiftStage(s) !== "completed",
+      );
     if (clockInFilter === "not_clocked_in")
-      result = result.filter((s) => !s.clocked_in_at);
+      result = result.filter(
+        (s) => !s.clocked_in_at && shiftStage(s) !== "completed",
+      );
     const activeSearch = externalSearch ?? search;
     if (activeSearch.trim()) {
       const q = activeSearch.toLowerCase();
@@ -1344,301 +1377,224 @@ export default function CoordinatorLivePage({
           s.participant_name?.toLowerCase().includes(q),
       );
     }
-    return result;
+    return result.slice().sort((a, b) => {
+      const priority = (s: LiveShift) =>
+        shiftStage(s) === "completed"
+          ? 4
+          : s.live_status === "red"
+            ? 0
+            : shiftStage(s) === "late"
+              ? 1
+              : s.live_status === "yellow"
+                ? 2
+                : 3;
+      return (
+        priority(a) - priority(b) ||
+        (a.scheduled_start || "").localeCompare(b.scheduled_start || "")
+      );
+    });
   })();
-
-  const clockedInCount = shifts.filter((s) => !!s.clocked_in_at).length;
-  const notClockedInCount = shifts.filter((s) => !s.clocked_in_at).length;
-
-  const counts = {
-    all: shifts.length,
-    green: shifts.filter((s) => s.live_status === "green").length,
-    yellow: shifts.filter((s) => s.live_status === "yellow").length,
-    red: shifts.filter((s) => s.live_status === "red").length,
-  };
-
-  const lastRefresh = dataUpdatedAt
-    ? new Date(dataUpdatedAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      })
-    : translate("common.emDash");
 
   const lastUpdated = dataUpdatedAt
     ? formatAppTime(new Date(dataUpdatedAt).toISOString())
     : translate("common.emDash");
 
   return (
-    <div className="pb-10">
-      {/* Header — full when standalone, compact toolbar when embedded */}
-      {/* When embedded the parent (rostering page) owns search + refresh — just show refresh timestamp */}
-      {embedded ? (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-cc-muted">
-            {translate("schedule.todaysShifts")}
-          </h2>
-          <p className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-            <span aria-hidden className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:hidden" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-            </span>
-            {translateParams("schedule.liveUpdated", { time: lastUpdated })}
-          </p>
-        </div>
-      ) : (
-        <div className="flex items-center mb-5 flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-2xl flex items-center justify-center"
-              style={{ background: "var(--cc-text)" }}
-            >
-              <Radio size={20} className="text-white" />
-            </div>
-            <div>
-              <p
-                className="text-[11px] font-black uppercase tracking-[0.2em]"
-                style={{ color: "var(--cc-coral)" }}
-              >
-                {translate("coordinator.live.eyebrow")}
-              </p>
-              <h1
-                className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight"
-                style={{ color: TEXT }}
-              >
-                {translate("coordinator.live.title")}
-                <SectionInfo text="Workers currently on shift, right now: who's clocked in, what stage they're at, and anything that needs attention." />
-              </h1>
-              <p className="mt-1 text-[12px]" style={{ color: MUTED }}>
-                {translateParams("coordinator.live.subtitle", {
-                  time: lastRefresh,
-                })}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 ml-auto flex-wrap">
-            <div className="relative hidden sm:block">
-              <Search
-                size={13}
-                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                style={{ color: MUTED }}
-              />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search worker or participant…"
-                className="h-8 pl-8 pr-3 rounded-xl border text-[12px] outline-none w-52 transition-all focus:w-64"
-                style={{
-                  borderColor: BORDER,
-                  color: TEXT,
-                  background: "var(--cc-bg)",
-                }}
-              />
-            </div>
-            {counts.red > 0 && (
-              <span
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-black"
-                style={{ background: "#FEF2F2", color: CORAL }}
-              >
-                <AlertTriangle size={13} />{" "}
-                {counts.red === 1
-                  ? translateParams("coordinator.live.alertCount", {
-                      count: String(counts.red),
-                    })
-                  : translateParams("coordinator.live.alertCountPlural", {
-                      count: String(counts.red),
-                    })}
+    <div className="min-w-0 space-y-4 pb-10">
+      {!embedded ? (
+        <PageHeader
+          eyebrow="Operations & Care"
+          title="Live monitor"
+          actions={
+            <>
+              <span role="status" className="px-2 text-xs text-cc-muted">
+                {isError
+                  ? "Update failed"
+                  : isFetching
+                    ? "Updating..."
+                    : "Updated " + lastUpdated}
               </span>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-xl gap-1.5"
-              style={{ borderColor: BORDER }}
-              onClick={() => refetch()}
-            >
-              <RefreshCw size={13} /> {translate("coordinator.live.refresh")}
-            </Button>
-          </div>
-        </div>
+              <button
+                type="button"
+                disabled={isFetching}
+                onClick={() => void refetch()}
+                className={outlineClass}
+              >
+                <RefreshCw
+                  size={14}
+                  className={isFetching ? "animate-spin" : ""}
+                />
+                Refresh
+              </button>
+            </>
+          }
+        />
+      ) : (
+        <p role="status" className="text-xs text-cc-muted">
+          {isError
+            ? "Update failed"
+            : isFetching
+              ? "Updating..."
+              : "Updated " + lastUpdated}
+        </p>
       )}
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        {(["active", "late", "scheduled", "completed"] as const).map(
-          (stage) => {
-            const count = shifts.filter((s) => shiftStage(s) === stage).length;
-            return (
-              <div
-                key={stage}
-                className={
-                  "rounded-2xl border bg-cc-surface p-4 shadow-sm " +
-                  (stage === "late" && count
-                    ? "border-red-400"
-                    : "border-cc-border")
-                }
-              >
-                <p className="flex items-center gap-1.5 text-xs font-semibold text-cc-muted">
-                  <span
-                    aria-hidden
-                    className={
-                      "h-2 w-2 rounded-full " +
-                      {
-                        active: "bg-emerald-500",
-                        late: "bg-red-500",
-                        scheduled: "bg-pink-500",
-                        completed: "bg-blue-500",
-                      }[stage]
-                    }
-                  />
-                  {translate("schedule.status." + stage)}
-                </p>
-                <p
-                  className={
-                    "mt-2 text-3xl font-bold tabular-nums " +
-                    (stage === "late" && count
-                      ? "text-red-600 dark:text-red-300"
-                      : "text-cc-text")
-                  }
-                >
-                  {count}
-                </p>
-              </div>
-            );
-          },
-        )}
-      </div>
-      {/* ── Filter bar — segmented controls, no outer card ── */}
       <div
-        className="flex flex-wrap items-center gap-x-4 gap-y-2.5 mb-5 pb-4"
-        style={{ borderBottom: `1px solid ${BORDER}` }}
+        className="mt-4 flex flex-wrap items-center gap-1 border-b border-cc-border pb-2"
+        aria-label="Live shift status"
       >
-        {/* Clock-in status */}
-        <div
-          className="flex items-center gap-0.5 rounded-xl p-0.5"
-          style={{ background: SOFT }}
+        {(
+          [
+            { key: "all", label: "All shifts" },
+            { key: "active", label: "On shift" },
+            { key: "late", label: "Late clock-in" },
+            { key: "scheduled", label: "Scheduled" },
+            { key: "completed", label: "Completed" },
+          ] as const
+        ).map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            aria-pressed={stageFilter === option.key}
+            onClick={() => setStageFilter(option.key)}
+            className={
+              "inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-xs " +
+              (stageFilter === option.key
+                ? "bg-cc-soft font-semibold text-cc-text"
+                : "text-cc-muted hover:bg-cc-soft")
+            }
+          >
+            <span>{option.label}</span>
+            <span className="tabular-nums">
+              {isLoading || (isError && !dataUpdatedAt)
+                ? "-"
+                : option.key === "all"
+                  ? shifts.length
+                  : shifts.filter((s) => shiftStage(s) === option.key).length}
+            </span>
+          </button>
+        ))}
+        <button
+          type="button"
+          aria-pressed={filter === "attention"}
+          onClick={() =>
+            setFilter(filter === "attention" ? "all" : "attention")
+          }
+          className={
+            "ml-auto min-h-9 rounded-md px-3 text-xs font-medium " +
+            (filter === "attention"
+              ? "bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+              : "text-cc-muted hover:bg-cc-soft")
+          }
         >
-          {(
-            [
-              { id: "all", label: "All", count: shifts.length },
-              {
-                id: "clocked_in",
-                label: "Clocked in",
-                count: clockedInCount,
-                icon: LogIn,
-              },
-              {
-                id: "not_clocked_in",
-                label: "Not clocked in",
-                count: notClockedInCount,
-                icon: Clock3,
-              },
-            ] as const
-          ).map((opt) => {
-            const Icon =
-              opt.id !== "all"
-                ? (opt as { icon: React.ElementType }).icon
-                : null;
-            const active = clockInFilter === opt.id;
-            return (
-              <button
-                key={opt.id}
-                onClick={() => setClockInFilter(opt.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all duration-150"
-                style={{
-                  background: active ? CORAL : "transparent",
-                  color: active ? "#fff" : MUTED,
-                  boxShadow: active ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
-                }}
-              >
-                {Icon && <Icon size={10} />}
-                {opt.label}
-                <span
-                  className="text-[9px] font-black px-1 rounded-full"
-                  style={{
-                    background: active
-                      ? "rgba(255,255,255,0.22)"
-                      : "rgba(0,0,0,0.08)",
-                    color: active ? "#fff" : MUTED,
-                  }}
-                >
-                  {opt.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="h-5 w-px shrink-0" style={{ background: BORDER }} />
-
-        {/* Duration */}
-        <div
-          className="flex items-center gap-0.5 rounded-xl p-0.5"
-          style={{ background: SOFT }}
-        >
-          {(["all", "short", "long"] as const).map((d) => (
-            <button
-              key={d}
-              onClick={() => setDurationFilter(d)}
-              className="px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all duration-150"
-              style={{
-                background: durationFilter === d ? CORAL : "transparent",
-                color: durationFilter === d ? "#fff" : MUTED,
-                boxShadow:
-                  durationFilter === d ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
-              }}
-            >
-              {d === "all"
-                ? "Any duration"
-                : d === "short"
-                  ? "Regular"
-                  : "Long shift"}
-            </button>
-          ))}
-        </div>
-
-        {/* Time of day — only shown if data covers multiple time slots */}
-        {availableTimeSlots.length > 0 && (
-          <>
-            <div className="h-5 w-px shrink-0" style={{ background: BORDER }} />
-            <div
-              className="flex items-center gap-0.5 rounded-xl p-0.5"
-              style={{ background: SOFT }}
-            >
-              <button
-                onClick={() => setTimeOfDayFilter("all")}
-                className="px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all duration-150"
-                style={{
-                  background: timeOfDayFilter === "all" ? CORAL : "transparent",
-                  color: timeOfDayFilter === "all" ? "#fff" : MUTED,
-                  boxShadow:
-                    timeOfDayFilter === "all"
-                      ? "0 1px 3px rgba(0,0,0,0.12)"
-                      : "none",
-                }}
-              >
-                All times
-              </button>
-              {availableTimeSlots.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTimeOfDayFilter(t)}
-                  className="px-3 py-1.5 rounded-[10px] text-[11px] font-semibold transition-all duration-150 capitalize"
-                  style={{
-                    background: timeOfDayFilter === t ? CORAL : "transparent",
-                    color: timeOfDayFilter === t ? "#fff" : MUTED,
-                    boxShadow:
-                      timeOfDayFilter === t
-                        ? "0 1px 3px rgba(0,0,0,0.12)"
-                        : "none",
-                  }}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
+          Needs attention{" "}
+          {isLoading || (isError && !dataUpdatedAt)
+            ? "-"
+            : shifts.filter(
+                (s) =>
+                  s.live_status === "red" ||
+                  s.live_status === "yellow" ||
+                  shiftStage(s) === "late",
+              ).length}
+        </button>
       </div>
+      <div className="my-3 flex flex-wrap items-center gap-2">
+        {externalSearch === undefined ? (
+          <label className="relative min-w-48 flex-1 sm:max-w-xs">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-cc-muted"
+            />
+            <input
+              aria-label="Search live shifts"
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search worker or participant"
+              className="h-9 w-full rounded-md border border-cc-border bg-cc-surface pl-9 pr-3 text-sm text-cc-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
+            />
+          </label>
+        ) : null}
+        <select
+          aria-label="Clock-in status"
+          value={clockInFilter}
+          onChange={(e) =>
+            setClockInFilter(e.target.value as typeof clockInFilter)
+          }
+          className="h-9 rounded-md border border-cc-border bg-cc-surface px-2 text-xs text-cc-text"
+        >
+          <option value="all">Any clock-in status</option>
+          <option value="clocked_in">Clocked in</option>
+          <option value="not_clocked_in">Not clocked in</option>
+        </select>
+        <select
+          aria-label="Shift duration"
+          value={durationFilter}
+          onChange={(e) =>
+            setDurationFilter(e.target.value as typeof durationFilter)
+          }
+          className="h-9 rounded-md border border-cc-border bg-cc-surface px-2 text-xs text-cc-text"
+        >
+          <option value="all">Any duration</option>
+          <option value="short">Regular shifts</option>
+          <option value="long">Long shifts (6h+)</option>
+        </select>
+        {availableTimeSlots.length > 0 ? (
+          <select
+            aria-label="Time of day"
+            value={timeOfDayFilter}
+            onChange={(e) =>
+              setTimeOfDayFilter(e.target.value as typeof timeOfDayFilter)
+            }
+            className="h-9 rounded-md border border-cc-border bg-cc-surface px-2 text-xs capitalize text-cc-text"
+          >
+            <option value="all">Any time</option>
+            {availableTimeSlots.map((time) => (
+              <option key={time} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        <button
+          type="button"
+          className="min-h-9 px-2 text-xs font-medium text-cc-plum hover:underline"
+          onClick={() => {
+            setStageFilter("all");
+            setFilter("all");
+            setDurationFilter("all");
+            setClockInFilter("all");
+            setTimeOfDayFilter("all");
+            setSearch("");
+            onSearchChange?.("");
+          }}
+        >
+          Clear filters
+        </button>
+        <span className="ml-auto text-xs text-cc-muted" role="status">
+          {isLoading || (isError && !dataUpdatedAt)
+            ? isError
+              ? "Shifts unavailable"
+              : "Loading shifts"
+            : filtered.length + " of " + shifts.length + " shifts"}
+        </span>
+      </div>
+      {isError ? (
+        <div
+          role="alert"
+          className="mb-3 rounded-lg border border-cc-border bg-cc-surface p-3 text-sm text-cc-text"
+        >
+          {dataUpdatedAt
+            ? "Could not refresh. Showing the last loaded shifts."
+            : "Live shifts could not be loaded."}{" "}
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="font-medium text-cc-plum underline"
+          >
+            Try again
+          </button>
+        </div>
+      ) : null}
 
       {/* Grid */}
       {isLoading && (
@@ -1661,14 +1617,9 @@ export default function CoordinatorLivePage({
             style={{ color: BORDER }}
           />
           <p className="font-black text-[16px] mb-1" style={{ color: TEXT }}>
-            {filter === "all"
-              ? translate("coordinator.live.emptyAll")
-              : translateParams("coordinator.live.emptyFiltered", {
-                  status: liveStatusLabel(
-                    filter as "green" | "yellow" | "red",
-                    translate,
-                  ).label.toLowerCase(),
-                })}
+            {shifts.length
+              ? "No shifts match these filters"
+              : "No shifts to monitor"}
           </p>
           <p className="text-[13px]" style={{ color: MUTED }}>
             {translate("coordinator.live.emptyHint")}
@@ -1676,7 +1627,7 @@ export default function CoordinatorLivePage({
         </div>
       )}
 
-      {!isLoading && !isError && filtered.length > 0 && (
+      {!isLoading && filtered.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
           {filtered.map((shift) => (
             <ScheduleLiveCard
@@ -1689,15 +1640,6 @@ export default function CoordinatorLivePage({
           ))}
         </div>
       )}
-      {isError && (
-        <div role="alert" className="rounded-xl border border-red-200 p-4">
-          <p>{translate("schedule.loadFailed")}</p>
-          <Button variant="outline" onClick={() => refetch()}>
-            {translate("coordinator.live.refresh")}
-          </Button>
-        </div>
-      )}
-
       {/* Modals */}
       {msgShift && (
         <MessageModal

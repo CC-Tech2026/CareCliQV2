@@ -1279,3 +1279,13 @@ def test_clock_in_raises_when_already_clocked():
         with pytest.raises(shift_service.ShiftAlreadyClockedIn):
             shift_service.clock_in_shift("shift-1", "worker-1", "org-1", method="gps")
 
+
+
+def test_clocked_out_shift_never_has_live_session_state():
+    shift = _sample_shift(
+        status="in_progress",
+        clocked_in_at="2026-11-03T01:00:00+00:00",
+        clocked_out_at="2026-11-03T05:00:00+00:00",
+    )
+    payload = shift_service._shift_card_payload(shift, {"id": "sess-1", "status": "draft"})
+    assert payload["visual_state"] == "completed"

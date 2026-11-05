@@ -407,7 +407,7 @@ function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
             const scoreBg    = cs == null ? "#F3F4F6" : cs >= 85 ? "rgba(16,185,129,0.10)" : cs >= 60 ? "rgba(245,158,11,0.10)" : "rgba(239,68,68,0.10)";
             const scoreColor = cs == null ? MUTED      : cs >= 85 ? "#059669"                : cs >= 60 ? "#D97706"                  : "#DC2626";
             return (
-              <Link key={s.id} href="/session-review">
+              <Link key={s.id} href="/coordinator/verification">
                 <div className="flex items-center gap-3 py-2.5 hover:bg-[#ECECEC] rounded-lg px-2 -mx-2 transition cursor-pointer">
                   <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-black text-white" style={{ background: "var(--cc-text)" }}>
                     {initials(s.participant_name)}
@@ -431,7 +431,7 @@ function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
           })}
         </div>
         {sessions.length > 7 && (
-          <Link href="/session-review">
+          <Link href="/coordinator/verification">
             <p className="text-center text-xs font-black pt-3 pb-1 hover:opacity-75 transition" style={{ color: PLUM }}>
               View all {sessions.length} flagged sessions ?
             </p>
@@ -463,7 +463,7 @@ function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
             </div>
           </div>
         )}
-        <Link href="/session-review">
+        <Link href="/coordinator/verification">
           <span className="inline-flex items-center gap-1 text-[12px] font-black hover:opacity-75 transition" style={{ color: PLUM }}>
             Open session review <ArrowRight size={12} />
           </span>

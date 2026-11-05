@@ -1,3 +1,4 @@
+import { SafetyCard } from "@/components/worker/client/ClientOverviewContent";
 import { Feather } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import {
@@ -265,7 +266,6 @@ export default function LiveSessionScreen() {
   const p = participant as Record<string, unknown> | undefined;
   const goals = (p?.goals as Array<{ goal_text: string; progress: number }>) ?? [];
   const participantAddress = (p?.address ?? p?.participant_address) as string | undefined;
-  const hasHealthInfo = !!(p?.primary_disability || p?.health_alerts || p?.allergies || p?.restrictions);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -354,34 +354,55 @@ export default function LiveSessionScreen() {
           </Pressable>
         </View>
 
-        {/* HEALTH & RESTRICTIONS — prominent red block */}
-        {hasHealthInfo && (
-          <View style={styles.restrictionBlock}>
-            <Text style={[styles.restrictionTitle, { fontFamily: "Inter_700Bold" }]}>
-              ⚠ HEALTH & RESTRICTIONS
-            </Text>
-            {p?.primary_disability ? (
-              <Text style={[styles.restrictionBody, { fontFamily: "Inter_500Medium" }]}>
-                {p.primary_disability as string}
-              </Text>
-            ) : null}
-            {p?.allergies ? (
-              <Text style={[styles.restrictionBody, { fontFamily: "Inter_500Medium" }]}>
-                Allergies: {p.allergies as string}
-              </Text>
-            ) : null}
-            {p?.restrictions ? (
-              <Text style={[styles.restrictionBody, { fontFamily: "Inter_500Medium" }]}>
-                {p.restrictions as string}
-              </Text>
-            ) : null}
-            {p?.health_alerts ? (
-              <Text style={[styles.restrictionBody, { fontFamily: "Inter_500Medium" }]}>
-                {p.health_alerts as string}
-              </Text>
-            ) : null}
-          </View>
-        )}
+        {/* Keep safety guidance visible throughout the session. */}
+        <View style={{ gap: 12, padding: 16 }}>
+          <Text
+            accessibilityRole="header"
+            style={[
+              styles.sectionLabel,
+              { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+            ]}
+          >
+            SAFETY & SUPPORT
+          </Text>
+          <SafetyCard
+            title="Allergies & sensitivities"
+            label={p?.allergies ? "Check exposure risks" : "Needs confirmation"}
+            icon="alert-triangle"
+            danger={!!p?.allergies}
+            value={
+              p?.allergies
+                ? String(p.allergies)
+                : "Allergy information is not recorded. Confirm with your coordinator before support if you are unsure."
+            }
+          />
+          {p?.restrictions ? (
+            <SafetyCard
+              title="Restrictions"
+              label="What to avoid / follow"
+              icon="slash"
+              danger
+              value={String(p.restrictions)}
+            />
+          ) : null}
+          {p?.health_alerts ? (
+            <SafetyCard
+              title="Health alerts"
+              label="Know during this shift"
+              icon="alert-circle"
+              danger
+              value={String(p.health_alerts)}
+            />
+          ) : null}
+          {p?.primary_disability ? (
+            <SafetyCard
+              title="Primary disability"
+              label="Participant context"
+              icon="user"
+              value={String(p.primary_disability)}
+            />
+          ) : null}
+        </View>
 
         {/* GOALS */}
         {goals.length > 0 && (

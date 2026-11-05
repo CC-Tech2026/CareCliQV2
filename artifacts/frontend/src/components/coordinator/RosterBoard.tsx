@@ -40,6 +40,7 @@ import { useToast } from "@/hooks/use-toast";
 import { UnassignedShiftPanel } from "@/components/coordinator/UnassignedShiftPanel";
 import { ConflictModal, type PendingDrop } from "@/components/coordinator/ConflictModal";
 import { ZoneLabel } from "@/components/branches/ZoneLabel";
+import { PersonPreview } from "./PersonPreview";
 import { ShiftHoverCard, shiftLiveStatus } from "./ShiftHoverCard";
 import { appLocalDateKey, formatAppTime } from "@/lib/datetime";
 
@@ -134,6 +135,7 @@ function ShiftCard({
           {...listeners}
           {...attributes}
           onClick={onClick}
+      onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); onClick?.(); } else { listeners?.onKeyDown?.(event); } }}
           className="select-none rounded-lg px-2.5 py-2 transition-shadow hover:shadow-md"
         >
           <p
@@ -167,6 +169,7 @@ function ShiftCard({
       {...listeners}
       {...attributes}
       onClick={onClick}
+      onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); onClick?.(); } else { listeners?.onKeyDown?.(event); } }}
       className="group flex items-start gap-1 rounded-lg border-l-[3px] px-2 py-1.5 select-none shadow-sm transition-shadow hover:shadow-md"
     >
       <GripVertical size={10} className="mt-0.5 shrink-0 opacity-40 group-hover:opacity-80" style={{ color: clrs.color }} />
@@ -574,7 +577,7 @@ export function RosterBoard({
                           {initials(worker.full_name)}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-[12px] font-bold leading-tight" style={{ color: TEXT }}>{worker.full_name}</p>
+                          <PersonPreview id={worker.id} name={worker.full_name} kind="worker" worker={worker} scheduledHours={weekHrs} maxHours={maxHrs} className="truncate text-[12px] font-bold leading-tight text-cc-text" />
                           <div className="flex items-center gap-2 mt-0.5">
                             {worker.avg_compliance != null && (
                               <span className="text-[10px] font-semibold" style={{ color: worker.avg_compliance >= 85 ? "#16A34A" : worker.avg_compliance >= 60 ? "#D97706" : "#DC2626" }}>

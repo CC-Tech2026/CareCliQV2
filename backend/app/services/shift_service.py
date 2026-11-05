@@ -947,7 +947,7 @@ def _shift_card_payload(
     session_status = (session or {}).get("status")
     session_active = _session_counts_as_active(session)
 
-    if status == "completed":
+    if status == "completed" or shift.get("clocked_out_at"):
         visual_state = "completed"
     elif status == "in_progress" and clocked_in and session_active:
         visual_state = "session_active"
@@ -1893,6 +1893,11 @@ def get_shift_detail_for_worker(
         raise ShiftAccessDenied("You do not have access to this shift.")
     if str(shift.get("organization_id") or "") != str(organization_id):
         raise ShiftAccessDenied("Shift does not belong to your organisation.")
+    from .shift_review_service import require_worker_reopen_access
+    try:
+        require_worker_reopen_access(shift, worker_id)
+    except PermissionError as exc:
+        raise ShiftAccessDenied(str(exc)) from exc
     session = _get_session_for_shift(shift)
     payload = _shift_card_payload(shift, session)
     participant_id = str(shift.get("participant_id") or "")

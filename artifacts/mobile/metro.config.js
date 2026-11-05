@@ -156,7 +156,20 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     }
   }
 
-  return context.resolveRequest(context, moduleName, platform);
+  const resolved = context.resolveRequest(context, moduleName, platform);
+  // SDK 54's Android dev wrapper does not catch keep-awake activation failures.
+  // Keep iOS/web and the production entry points on Expo's original implementation.
+  if (
+    platform === "android" &&
+    resolved.type === "sourceFile" &&
+    normalize(resolved.filePath).endsWith("/expo/src/launch/withDevTools.tsx")
+  ) {
+    return {
+      type: "sourceFile",
+      filePath: path.resolve(projectRoot, "lib/with-dev-tools.android.tsx"),
+    };
+  }
+  return resolved;
 };
 
 module.exports = config;

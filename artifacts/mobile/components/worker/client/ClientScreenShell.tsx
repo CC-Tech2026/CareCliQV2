@@ -1,3 +1,4 @@
+import { FontFamily } from "@/constants/typography";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -19,6 +20,10 @@ type Props = {
   children: React.ReactNode;
 };
 
+/**
+ * Shared mobile shell: a compact, left-aligned header and the existing worker
+ * bottom navigation. Children retain ownership of their own scrolling.
+ */
 export function ClientScreenShell({
   title,
   subtitle,
@@ -55,15 +60,19 @@ export function ClientScreenShell({
           onPress={handleBack}
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          style={[styles.backBtn, { borderColor: colors.border }]}
+          hitSlop={6}
+          style={({ pressed }) => [
+            styles.backButton,
+            { backgroundColor: pressed ? colors.activeBg : colors.soft },
+          ]}
         >
-          <Feather name="arrow-left" size={18} color={colors.foreground} />
+          <Feather name="arrow-left" size={19} color={colors.foreground} />
         </Pressable>
-        <View style={styles.headerText}>
+        <View style={styles.heading}>
           <Text
             style={[
-              styles.headerTitle,
-              { color: colors.foreground, fontFamily: "Inter_700Bold" },
+              styles.title,
+              { color: colors.foreground, fontFamily: FontFamily.interBold },
             ]}
             numberOfLines={1}
           >
@@ -72,10 +81,10 @@ export function ClientScreenShell({
           {subtitle ? (
             <Text
               style={[
-                styles.headerSubtitle,
+                styles.subtitle,
                 {
                   color: colors.mutedForeground,
-                  fontFamily: "Inter_400Regular",
+                  fontFamily: FontFamily.interRegular,
                 },
               ]}
               numberOfLines={1}
@@ -84,7 +93,6 @@ export function ClientScreenShell({
             </Text>
           ) : null}
         </View>
-        <View style={styles.backBtn} />
       </View>
       <View style={[styles.body, { paddingBottom: navPad }]}>{children}</View>
       <View style={styles.bottomNav}>
@@ -99,22 +107,21 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingBottom: 16,
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  backBtn: {
-    width: 44,
+  backButton: {
     height: 44,
-    borderRadius: 18,
-    borderWidth: 1,
+    width: 44,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  headerText: { flex: 1, alignItems: "center" },
-  headerTitle: { fontSize: 17, textAlign: "center" },
-  headerSubtitle: { fontSize: 12, textAlign: "center", marginTop: 2 },
-  body: { flex: 1, paddingTop: 16 },
+  heading: { flex: 1, justifyContent: "center", minHeight: 44 },
+  title: { fontSize: 18, lineHeight: 24 },
+  subtitle: { fontSize: 12, lineHeight: 17, marginTop: 2 },
+  body: { flex: 1, paddingTop: 12 },
   bottomNav: { position: "absolute", left: 0, right: 0, bottom: 0 },
 });

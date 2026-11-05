@@ -1,333 +1,434 @@
-import { FontFamily } from "@/constants/typography";
 import { Feather } from "@expo/vector-icons";
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
-
+import { FontFamily } from "@/constants/typography";
+import { useColors } from "@/hooks/useColors";
 import { activeGoals } from "@/lib/client-utils";
 import type { WorkerClient } from "@/lib/worker-api";
-import { useColors } from "@/hooks/useColors";
+import React, { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-function Section({
+function SupportCard({
   title,
-  icon,
+  subtitle,
   children,
 }: {
   title: string;
-  icon: keyof typeof Feather.glyphMap;
+  subtitle: string;
   children: React.ReactNode;
 }) {
-  const colors = useColors();
+  const c = useColors();
   return (
-    <View
-      style={[
-        styles.section,
-        { backgroundColor: colors.card, borderColor: colors.border },
-      ]}
-    >
-      <View
-        style={[styles.sectionHeader, { borderBottomColor: colors.border }]}
-      >
-        <Feather name={icon} size={14} color={colors.mutedForeground} />
-        <Text
-          style={[
-            styles.sectionTitle,
-            { color: colors.mutedForeground, fontFamily: FontFamily.interBold },
-          ]}
-        >
-          {title}
-        </Text>
+    <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+      <View style={s.headingRow}>
+        <View style={s.flex}>
+          <Text
+            accessibilityRole="header"
+            style={[s.heading, { color: c.foreground }]}
+          >
+            {title}
+          </Text>
+          <Text style={[s.caption, { color: c.mutedForeground }]}>
+            {subtitle}
+          </Text>
+        </View>
       </View>
       {children}
     </View>
   );
 }
 
-function AlertCard({
+/** Preserve recorded wording; split only explicit line breaks. */
+function GuidanceRows({
+  value,
+  danger = false,
+}: {
+  value: string;
+  danger?: boolean;
+}) {
+  const c = useColors();
+  const items = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return (
+    <View>
+      {items.map((item, index) => (
+        <View
+          key={index}
+          style={[
+            s.guidanceRow,
+            { borderTopColor: danger ? c.dangerBorder : c.border },
+          ]}
+        >
+          <Text
+            style={[
+              s.rowMarker,
+              { color: danger ? c.dangerText : c.mutedForeground },
+            ]}
+          >
+            {String(index + 1).padStart(2, "0")}
+          </Text>
+          <Text
+            selectable
+            style={[
+              s.body,
+              s.flex,
+              { color: danger ? c.dangerText : c.foreground },
+            ]}
+          >
+            {item}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function SafetyCard({
   title,
-  text,
+  label,
   icon,
+  value,
+  danger = false,
 }: {
   title: string;
-  text: string;
-  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  icon: React.ComponentProps<typeof Feather>["name"];
+  value: string;
+  danger?: boolean;
 }) {
-  const colors = useColors();
+  const c = useColors();
   return (
     <View
       style={[
-        styles.alertCard,
-        { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder },
+        s.card,
+        danger && s.safetyAccent,
+        {
+          backgroundColor: danger ? c.dangerBg : c.card,
+          borderColor: danger ? c.dangerBorder : c.border,
+        },
       ]}
     >
-      <View style={styles.alertHeader}>
-        <Feather name={icon} size={16} color={colors.dangerText} />
-        <Text
-          style={[
-            styles.alertTitle,
-            { color: colors.dangerText, fontFamily: FontFamily.interBold },
-          ]}
-        >
-          {title}
-        </Text>
-      </View>
-      <Text
-        style={[
-          styles.alertText,
-          { color: colors.dangerText, fontFamily: FontFamily.interSemiBold },
-        ]}
-      >
-        {text}
-      </Text>
-    </View>
-  );
-}
-
-export function ClientOverviewContent({ client }: { client: WorkerClient }) {
-  const colors = useColors();
-  const goals = activeGoals(client.goals);
-  const confidenceItems = [
-    { label: "NDIS goals", ready: goals.length > 0 },
-    { label: "Allergy information", ready: Boolean(client.allergies?.trim()) },
-    {
-      label: "Support preferences",
-      ready: Boolean(client.communication_preferences?.trim()),
-    },
-    {
-      label: "Behaviour support",
-      ready: Boolean(
-        client.behaviour_support_plan?.trim() ||
-        client.restricted_behavioural_notes?.trim(),
-      ),
-    },
-  ];
-  const readyCount = confidenceItems.filter((item) => item.ready).length;
-
-  return (
-    <View style={styles.wrap}>
-      {client.allergies?.trim() ? (
-        <AlertCard
-          title="Allergies"
-          text={client.allergies}
-          icon="alert-triangle"
-        />
-      ) : null}
-      {client.primary_disability?.trim() ? (
-        <Section title="Support needs" icon="user">
-          <Text
-            style={[
-              styles.bodyText,
-              { color: colors.foreground, fontFamily: FontFamily.interRegular },
-            ]}
-          >
-            {client.primary_disability}
-          </Text>
-        </Section>
-      ) : null}
-
-      {client.communication_preferences?.trim() ? (
-        <Section title="Support preferences" icon="message-circle">
-          <Text
-            style={[
-              styles.bodyText,
-              { color: colors.foreground, fontFamily: FontFamily.interRegular },
-            ]}
-          >
-            {client.communication_preferences}
-          </Text>
-        </Section>
-      ) : null}
-
-      {client.behaviour_support_plan?.trim() ||
-      client.restricted_behavioural_notes?.trim() ? (
-        <Section title="Behaviour support" icon="shield">
-          <View style={styles.stack}>
-            {client.behaviour_support_plan?.trim() ? (
-              <View
-                style={[styles.softCard, { backgroundColor: colors.activeBg }]}
-              >
-                <Text
-                  style={[
-                    styles.softLabel,
-                    {
-                      color: colors.mutedForeground,
-                      fontFamily: FontFamily.interBold,
-                    },
-                  ]}
-                >
-                  Behaviour support plan
-                </Text>
-                <Text
-                  style={[
-                    styles.bodyText,
-                    {
-                      color: colors.foreground,
-                      fontFamily: FontFamily.interRegular,
-                    },
-                  ]}
-                >
-                  {client.behaviour_support_plan}
-                </Text>
-              </View>
-            ) : null}
-            {client.restricted_behavioural_notes?.trim() ? (
-              <View
-                style={[styles.softCard, { backgroundColor: colors.activeBg }]}
-              >
-                <Text
-                  style={[
-                    styles.softLabel,
-                    {
-                      color: colors.mutedForeground,
-                      fontFamily: FontFamily.interBold,
-                    },
-                  ]}
-                >
-                  Behavioural notes
-                </Text>
-                <Text
-                  style={[
-                    styles.bodyText,
-                    {
-                      color: colors.foreground,
-                      fontFamily: FontFamily.interRegular,
-                    },
-                  ]}
-                >
-                  {client.restricted_behavioural_notes}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        </Section>
-      ) : null}
-
-      {goals.length > 0 ? (
-        <Section title="Active goals" icon="target">
-          <View style={styles.stack}>
-            {goals.map((goal, index) => (
-              <View
-                key={goal.id || String(index)}
-                style={[
-                  styles.goalRow,
-                  { borderColor: colors.border, backgroundColor: colors.card },
-                ]}
-              >
-                <View
-                  style={[styles.goalDot, { backgroundColor: "#34D399" }]}
-                />
-                <View style={styles.goalContent}>
-                  <Text
-                    style={[
-                      styles.goalTitle,
-                      {
-                        color: colors.foreground,
-                        fontFamily: FontFamily.interBold,
-                      },
-                    ]}
-                  >
-                    {goal.title || goal.description || `Goal ${index + 1}`}
-                  </Text>
-                  {goal.description && goal.title ? (
-                    <Text
-                      style={[
-                        styles.goalDesc,
-                        {
-                          color: colors.mutedForeground,
-                          fontFamily: FontFamily.interRegular,
-                        },
-                      ]}
-                    >
-                      {goal.description}
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
-            ))}
-          </View>
-        </Section>
-      ) : null}
-
-      <Section title="Available information" icon="check-circle">
-        <Text
-          style={[
-            styles.confidenceSummary,
-            {
-              color: colors.mutedForeground,
-              fontFamily: FontFamily.interMedium,
-            },
-          ]}
-        >
-          {readyCount} of {confidenceItems.length} sections recorded
-        </Text>
-        <View style={styles.stack}>
-          {confidenceItems.map((item) => (
-            <View key={item.label} style={styles.confidenceRow}>
-              <Feather
-                name={item.ready ? "check-circle" : "circle"}
-                size={18}
-                color={item.ready ? "#34D399" : colors.border}
-              />
-              <Text
-                style={[
-                  styles.confidenceLabel,
-                  {
-                    color: item.ready
-                      ? colors.foreground
-                      : colors.mutedForeground,
-                    fontFamily: FontFamily.interSemiBold,
-                  },
-                ]}
-              >
-                {item.label}
-                {item.ready ? " - Recorded" : " - Not recorded"}
-              </Text>
-            </View>
-          ))}
+      <View style={s.headingRow}>
+        <View style={[s.iconTile, { backgroundColor: c.soft }]}>
+          <Feather
+            name={icon}
+            size={20}
+            color={danger ? c.dangerText : c.primary}
+          />
         </View>
-      </Section>
+        <View style={s.flex}>
+          <Text
+            style={[
+              s.eyebrow,
+              { color: danger ? c.dangerText : c.mutedForeground },
+            ]}
+          >
+            {label}
+          </Text>
+          <Text
+            accessibilityRole="header"
+            style={[s.heading, { color: danger ? c.dangerText : c.foreground }]}
+          >
+            {title}
+          </Text>
+        </View>
+      </View>
+      <GuidanceRows value={value} danger={danger} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { gap: 16 },
-  section: { gap: 12, padding: 18, borderRadius: 22, borderWidth: 1 },
-  sectionHeader: {
+function GoalItem({
+  number,
+  title,
+  description,
+}: {
+  number: number;
+  title: string;
+  description?: string | null;
+}) {
+  const c = useColors();
+  const [expanded, setExpanded] = useState(false);
+  const extra =
+    description?.trim() && description.trim() !== title.trim()
+      ? description.trim()
+      : null;
+  return (
+    <View style={[s.goal, { borderColor: c.border }]}>
+      <View style={s.goalTop}>
+        <View style={s.goalNumber}>
+          <Text style={[s.label, { color: c.mutedForeground }]}>
+            {String(number).padStart(2, "0")}
+          </Text>
+        </View>
+        <Text style={[s.goalTitle, { color: c.foreground }]}>{title}</Text>
+      </View>
+      {extra ? (
+        <>
+          {expanded ? (
+            <Text selectable style={[s.body, { color: c.mutedForeground }]}>
+              {extra}
+            </Text>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded }}
+            accessibilityLabel={
+              (expanded ? "Hide details for goal " : "Show details for goal ") +
+              number
+            }
+            onPress={() => setExpanded((v) => !v)}
+            style={({ pressed }) => [
+              s.goalAction,
+              { opacity: pressed ? 0.6 : 1 },
+            ]}
+          >
+            <Text style={[s.actionText, { color: c.primary }]}>
+              {expanded ? "Hide goal details" : "See goal details"}
+            </Text>
+          </Pressable>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+/** Parent owns scrolling; safety and behaviour guidance are always expanded. */
+export function ClientOverviewContent({
+  client,
+  section = "all",
+}: {
+  client: WorkerClient;
+  section?: "all" | "support" | "goals";
+}) {
+  const c = useColors();
+  const [showAllGoals, setShowAllGoals] = useState(false);
+  const allergies = client.allergies?.trim();
+  const communication = client.communication_preferences?.trim();
+  const disability = client.primary_disability?.trim();
+  const plan = client.behaviour_support_plan?.trim();
+  const notes = client.restricted_behavioural_notes?.trim();
+  const goals = activeGoals(client.goals);
+  return (
+    <View style={s.container}>
+      {section !== "goals" ? (
+        <>
+          <View>
+            <Text
+              accessibilityRole="header"
+              style={[s.heading, { color: c.foreground }]}
+            >
+              Safety & support
+            </Text>
+            <Text style={[s.caption, { color: c.mutedForeground }]}>
+              Check before support and refer back during your shift
+            </Text>
+          </View>
+          <SafetyCard
+            title="Allergies & sensitivities"
+            label={allergies ? "Check exposure risks" : "Needs confirmation"}
+            icon="alert-triangle"
+            danger={!!allergies}
+            value={
+              allergies ||
+              "Allergy information is not recorded. Confirm with your coordinator before support if you are unsure."
+            }
+          />
+          {plan ? (
+            <SafetyCard
+              title="Behaviour support plan"
+              label="Follow during support"
+              icon="shield"
+              value={plan}
+            />
+          ) : null}
+          {notes ? (
+            <SafetyCard
+              title="Behaviour support notes"
+              label="Know before you act"
+              icon="alert-circle"
+              value={notes}
+            />
+          ) : null}
+          {communication ? (
+            <SafetyCard
+              title="Communication"
+              label="How to communicate"
+              icon="message-circle"
+              value={communication}
+            />
+          ) : null}
+          {disability ? (
+            <SafetyCard
+              title="Primary disability"
+              label="Participant context"
+              icon="user"
+              value={disability}
+            />
+          ) : null}
+        </>
+      ) : null}
+
+      {section !== "support" && goals.length > 0 ? (
+        <SupportCard
+          title="Active goals"
+          subtitle={
+            goals.length +
+            (goals.length === 1 ? " active goal" : " active goals") +
+            ""
+          }
+        >
+          {(showAllGoals ? goals : goals.slice(0, 2)).map((goal, index) => (
+            <GoalItem
+              key={client.id + ":" + (goal.id || index)}
+              number={index + 1}
+              title={goal.title || goal.description || "Goal " + (index + 1)}
+              description={goal.title ? goal.description : null}
+            />
+          ))}
+          {goals.length > 2 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showAllGoals }}
+              onPress={() => setShowAllGoals((v) => !v)}
+              style={({ pressed }) => [
+                s.allGoals,
+                { backgroundColor: c.secondary, opacity: pressed ? 0.6 : 1 },
+              ]}
+            >
+              <Text style={[s.actionText, { color: c.secondaryForeground }]}>
+                {showAllGoals
+                  ? "Show fewer goals"
+                  : "View all " + goals.length + " goals"}
+              </Text>
+            </Pressable>
+          ) : null}
+        </SupportCard>
+      ) : null}
+
+      {(section === "goals" && !goals.length) ||
+      (section !== "goals" &&
+        !communication &&
+        !disability &&
+        !plan &&
+        !notes &&
+        (section === "support" || !goals.length)) ? (
+        <SupportCard
+          title={
+            section === "goals" ? "No active goals yet" : "More to get to know"
+          }
+          subtitle={
+            section === "goals"
+              ? "Goals will appear here when recorded"
+              : "Support details haven't been added yet"
+          }
+        >
+          <Text style={[s.body, { color: c.mutedForeground }]}>
+            Your coordinator can help you understand this participant's
+            preferences and support needs before your visit.
+          </Text>
+        </SupportCard>
+      ) : null}
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  container: { gap: 16 },
+  flex: { flex: 1, minWidth: 0 },
+  card: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 18,
+    gap: 18,
+  },
+  headingRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  heading: {
+    fontFamily: FontFamily.interBold,
+    fontSize: 18,
+    lineHeight: 25,
+    letterSpacing: -0.4,
+  },
+  caption: {
+    fontFamily: FontFamily.interRegular,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 3,
+  },
+  label: { fontFamily: FontFamily.interSemiBold, fontSize: 13, lineHeight: 20 },
+  body: { fontFamily: FontFamily.interRegular, fontSize: 15, lineHeight: 24 },
+  safetyAccent: { borderLeftWidth: 4 },
+  eyebrow: {
+    fontFamily: FontFamily.interSemiBold,
+    fontSize: 11,
+    lineHeight: 17,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    marginBottom: 3,
+  },
+  iconTile: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  guidanceRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  rowMarker: {
+    minWidth: 22,
+    fontFamily: FontFamily.interSemiBold,
+    fontSize: 12,
+    lineHeight: 24,
+  },
+  goal: {
+    paddingTop: 16,
+    paddingBottom: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 10,
+  },
+  goalTop: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
+  goalNumber: {
+    minWidth: 32,
+    minHeight: 32,
+    paddingVertical: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  goalTitle: {
+    flex: 1,
+    fontFamily: FontFamily.interSemiBold,
+    fontSize: 15,
+    lineHeight: 23,
+    paddingTop: 4,
+    paddingBottom: 6,
+  },
+  goalAction: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  sectionTitle: { fontSize: 16, flex: 1 },
-  bodyText: { fontSize: 14, lineHeight: 22 },
-  alertCard: {
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "#FECACA",
-    backgroundColor: "#FEF2F2",
-    padding: 16,
+    justifyContent: "space-between",
     gap: 8,
   },
-  alertHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  alertTitle: { fontSize: 16, color: "#B91C1C" },
-  alertText: { fontSize: 14, lineHeight: 22, color: "#991B1B" },
-  stack: { gap: 10 },
-  softCard: { borderRadius: 10, padding: 12, gap: 6 },
-  softLabel: { fontSize: 11, letterSpacing: 0.6, textTransform: "uppercase" },
-  goalRow: {
+  actionText: {
+    flexShrink: 1,
+    fontFamily: FontFamily.interSemiBold,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  allGoals: {
+    minHeight: 48,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
-    alignItems: "flex-start",
   },
-  goalDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
-  goalContent: { flex: 1, gap: 4 },
-  goalTitle: { fontSize: 14, lineHeight: 20 },
-  goalDesc: { fontSize: 13, lineHeight: 19 },
-  confidenceSummary: { fontSize: 13, marginBottom: 4 },
-  confidenceRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  confidenceLabel: { fontSize: 14, flex: 1 },
 });

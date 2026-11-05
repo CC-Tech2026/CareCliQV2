@@ -9,21 +9,51 @@ type Props = {
   planLabel?: string;
 };
 
-export function WorkerMobileParticipantStrip({ participantName, planLabel = "Plan · review" }: Props) {
+export function WorkerMobileParticipantStrip({
+  participantName,
+  planLabel,
+}: Props) {
   const colors = useColors();
 
   return (
-    <View style={[styles.wrap, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+    <View
+      style={[
+        styles.wrap,
+        { backgroundColor: colors.card, borderBottomColor: colors.border },
+      ]}
+    >
       <View style={[styles.avatar, { backgroundColor: colors.activeBg }]}>
         <Feather name="user" size={16} color={colors.primary} />
       </View>
-      <Text style={[styles.name, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
+      <Text
+        style={[
+          styles.name,
+          { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+        ]}
+        numberOfLines={1}
+      >
         {participantName}
       </Text>
-      <View style={[styles.pill, { backgroundColor: colors.activeBg, borderColor: colors.primary + "40" }]}>
-        <Text style={[styles.pillText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>{planLabel}</Text>
-        <Feather name="chevron-down" size={12} color={colors.primary} />
-      </View>
+      {planLabel ? (
+        <View
+          style={[
+            styles.pill,
+            {
+              backgroundColor: colors.activeBg,
+              borderColor: colors.primary + "40",
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.pillText,
+              { color: colors.primary, fontFamily: "Inter_600SemiBold" },
+            ]}
+          >
+            {planLabel}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }

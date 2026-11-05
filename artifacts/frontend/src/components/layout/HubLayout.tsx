@@ -116,11 +116,11 @@ const MD_NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
         label: "Schedule & rostering",
         icon: CalendarDays,
         tabs: [
-          { href: "/md/schedule", label: "Schedule" },
-          { href: "/coordinator/rostering", label: "Rostering & live shifts" },
-          { href: "/coordinator/monitor", label: "Long shifts" },
+          { href: "/md/schedule", label: "Calendar" },
+          { href: "/coordinator/rostering", label: "Roster" },
+          { href: "/coordinator/live", label: "Live" },
         ],
-        match: ["/coordinator/live"],
+        match: ["/coordinator/monitor"],
       },
       {
         href: "/onboard-participant/active",
@@ -134,7 +134,7 @@ const MD_NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
         icon: NotebookPen,
         tabs: [
           { href: "/sessions", label: "All shift notes" },
-          { href: "/session-review", label: "Awaiting review" },
+          { href: "/coordinator/verification", label: "Shift verification" },
         ],
       },
       { href: "/md/service-delivery", label: "Delivery Quality", icon: ClipboardCheck },
@@ -189,7 +189,6 @@ const MD_NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
     items: [
       { href: "/md/financial", label: "Financial Governance", icon: DollarSign },
       { href: "/billing", label: "Billing & claims", icon: Receipt },
-      { href: "/coordinator/verification", label: "Shift verification", icon: BadgeCheck },
       { href: "/coordinator/travel", label: "Travel claims", icon: Car },
     ],
   },
@@ -281,6 +280,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   const isMD = user?.role === "managing_director";
+  const calendarWorkspace = ["/md/schedule", "/coordinator/rostering", "/coordinator/live", "/coordinator/monitor"].includes(location);
   const workspace = isMD ? workspaceFor(location) : null;
 
   // Nav badge counts, keyed by href: open participant complaints, from the
@@ -699,9 +699,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       {/* Command Deck Executive Navigation (Floating Dock) */}
       {isMD && !sidebarMode && !bottombarMode && (
         <div
-          className={`sticky top-[75px] z-30 hidden xl:block py-2 px-3 pointer-events-none transition-transform duration-300 ease-out ${
-            navAutoHidden ? "-translate-y-[calc(100%+2rem)]" : "translate-y-0"
-          }`}
+          className={calendarWorkspace ? "relative z-30 hidden xl:block px-3 py-2" : `sticky top-[75px] z-30 hidden xl:block py-2 px-3 pointer-events-none transition-transform duration-300 ease-out ${navAutoHidden ? "-translate-y-[calc(100%+2rem)]" : "translate-y-0"}`}
         >
           <div
             ref={navRef}

@@ -1,3 +1,4 @@
+import { PersonDetailsProvider } from "@/components/coordinator/PersonDetails";
 import CoordinatorVerificationPage from "@/pages/coordinator-verification";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -52,7 +53,7 @@ import CoordinatorLivePage from "@/pages/coordinator-live";
 import CoordinatorMonitorPage from "@/pages/coordinator-monitor";
 import AuditPack from "@/pages/audit-pack";
 import DesignSystem from "@/pages/design-system";
-import SessionReview from "@/pages/session-review";
+import LegacySessionReviewRedirect from "@/pages/session-review";
 import Toolkit from "@/pages/toolkit";
 import VerifyEmail from "@/pages/verify-email";
 import AccountDeactivated from "@/pages/account-deactivated";
@@ -705,7 +706,7 @@ function Router() {
 
       <Route path="/session-review">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
-          <RoleAwareShell><SessionReview /></RoleAwareShell>
+          <LegacySessionReviewRedirect />
         </ProtectedRoute>
       </Route>
 
@@ -877,7 +878,7 @@ function App() {
                 <WelcomeScreenGate />
                 <OnboardingCompleteGate />
                 <SubscriptionBanner />
-                <Router />
+                <PersonDetailsProvider><Router /></PersonDetailsProvider>
               </WouterRouter>
             </OfflineSyncProvider>
             <Toaster />
