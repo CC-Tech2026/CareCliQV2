@@ -531,6 +531,8 @@ export default function Sessions() {
             {isLoading ? translate("sessions.subtitleLoading") : translateParams("sessions.subtitleCount", { total: String(sessions.length), filtered: String(filtered.length) })}
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <Link href="/coordinator/verification" className="inline-flex min-h-10 items-center rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text hover:bg-cc-soft">Shift verification</Link>
         <Link href="/sessions/new">
           <button
             className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]"
@@ -540,6 +542,7 @@ export default function Sessions() {
             {translate("sessions.newSession")}
           </button>
         </Link>
+        </div>
       </div>
 
       {/* Stat cards — matches Dashboard grid */}

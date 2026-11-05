@@ -75,7 +75,7 @@ export default function CoordinatorVerificationPage() {
   const initial = new URLSearchParams(useSearch()).get("shiftId");
   const [selectedId, setSelectedId] = useState<string | null>(initial);
   const [statusFilter, setStatusFilter] = useState<"review" | "all" | "verified">("review");
-  const [workerFilter, setWorkerFilter] = useState("all");
+  const [workerFilter, setWorkerFilter] = useState(new URLSearchParams(useSearch()).get("workerId") || "all");
   const [approved, setApproved] = useState<Record<string, Approved>>({});
   const [selectedVerifiedId, setSelectedVerifiedId] = useState<string | null>(null);
   const query = useOrgQuery(["shift-verification-queue"], {

@@ -1,3 +1,4 @@
+import { PersonPreview } from "./PersonPreview";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -202,6 +203,10 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
               {shift?.shift_type ? ` · ${shift.shift_type.replace(/_/g, " ")}` : ""}
             </SheetDescription>
           </SheetHeader>
+          {shift ? <div className="mt-4 space-y-3 rounded-xl border border-cc-border p-3">
+            <div><p className="text-xs text-cc-muted">Participant</p><PersonPreview id={shift.participant_id} name={shift.participant_name || "Participant"} kind="participant" className="text-sm font-semibold" /></div>
+            <div><p className="text-xs text-cc-muted">Assigned worker</p><PersonPreview id={shift.worker_id} name={shift.worker_name || workers.find(w => w.id === shift.worker_id)?.full_name || "Unassigned"} kind="worker" worker={workers.find(w => w.id === shift.worker_id)} className="text-sm font-semibold" /></div>
+          </div> : null}
 
           {/* Reschedule / cancel - the only edit actions this shift has, since
               it's still unassigned (no worker to conflict-check against). */}

@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import React from "react";
+import React, { useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
@@ -60,6 +60,7 @@ export function WorkerMobileTaskList({
   readOnly = false,
 }: Props) {
   const colors = useColors();
+  const drafts = useRef(new Map<string, string>());
   const active = tasks.filter((t) => !t.marked_na);
 
   return (
@@ -70,7 +71,9 @@ export function WorkerMobileTaskList({
         const isMedication = task.category === "medication";
         const canComplete = taskCanComplete?.(task) ?? true;
         const required = isMandatoryTask(task);
-        const taskNotes = sessionNotes.filter((n) => n.task_id === task.task_id);
+        const taskNotes = sessionNotes.filter(
+          (n) => n.task_id === task.task_id,
+        );
 
         return (
           <View
@@ -80,7 +83,11 @@ export function WorkerMobileTaskList({
               {
                 borderTopWidth: index > 0 ? StyleSheet.hairlineWidth : 0,
                 borderTopColor: colors.border,
-                backgroundColor: done ? colors.success + "10" : expanded ? colors.primary + "12" : "transparent",
+                backgroundColor: done
+                  ? colors.success + "10"
+                  : expanded
+                    ? colors.primary + "12"
+                    : "transparent",
                 borderLeftWidth: done || expanded ? 3 : 0,
                 borderLeftColor: done ? colors.success : colors.primary,
               },
@@ -118,7 +125,13 @@ export function WorkerMobileTaskList({
                   <Text
                     style={[
                       styles.label,
-                      { color: done ? colors.mutedForeground : colors.foreground, fontFamily: "Inter_600SemiBold", flex: 1 },
+                      {
+                        color: done
+                          ? colors.mutedForeground
+                          : colors.foreground,
+                        fontFamily: "Inter_600SemiBold",
+                        flex: 1,
+                      },
                       done && styles.strikethrough,
                     ]}
                   >
@@ -152,21 +165,42 @@ export function WorkerMobileTaskList({
                   />
                 </View>
                 {task.goal_title ? (
-                  <View style={[styles.goalBadge, { backgroundColor: colors.primary + "15" }]}>
-                    <Text style={[styles.goalText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                  <View
+                    style={[
+                      styles.goalBadge,
+                      { backgroundColor: colors.primary + "15" },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.goalText,
+                        {
+                          color: colors.primary,
+                          fontFamily: "Inter_600SemiBold",
+                        },
+                      ]}
+                    >
                       {task.goal_title}
                     </Text>
                   </View>
                 ) : null}
                 {!expanded && (
-                  <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  <Text
+                    style={[
+                      styles.hint,
+                      {
+                        color: colors.mutedForeground,
+                        fontFamily: "Inter_400Regular",
+                      },
+                    ]}
+                  >
                     {readOnly
                       ? `${taskNotes.length} update${taskNotes.length === 1 ? "" : "s"}`
                       : isMedication
-                      ? "Tap to log doses · completes automatically"
-                      : taskNotes.length > 0
-                        ? `${taskNotes.length} update${taskNotes.length === 1 ? "" : "s"} · Tap to add more`
-                        : "Tap to add updates"}
+                        ? "Tap to log doses · completes automatically"
+                        : taskNotes.length > 0
+                          ? `${taskNotes.length} update${taskNotes.length === 1 ? "" : "s"} · Tap to add more`
+                          : "Tap to add updates"}
                   </Text>
                 )}
               </Pressable>
@@ -175,18 +209,40 @@ export function WorkerMobileTaskList({
             {expanded && (
               <View style={styles.expanded}>
                 {task.description ? (
-                  <Text style={[styles.description, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+                  <Text
+                    style={[
+                      styles.description,
+                      {
+                        color: colors.mutedForeground,
+                        fontFamily: "Inter_500Medium",
+                      },
+                    ]}
+                  >
                     {task.description}
                   </Text>
                 ) : null}
                 {task.evidence_required && task.evidence_required !== "none" ? (
-                  <Text style={[styles.evidenceHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    Evidence: {String(task.evidence_required).replace(/_/g, " ")}
+                  <Text
+                    style={[
+                      styles.evidenceHint,
+                      {
+                        color: colors.mutedForeground,
+                        fontFamily: "Inter_400Regular",
+                      },
+                    ]}
+                  >
+                    Evidence:{" "}
+                    {String(task.evidence_required).replace(/_/g, " ")}
                   </Text>
                 ) : null}
 
                 {isMedication && shiftId && !readOnly && (
-                  <View style={[styles.medicationBox, { borderColor: colors.border }]}>
+                  <View
+                    style={[
+                      styles.medicationBox,
+                      { borderColor: colors.border },
+                    ]}
+                  >
                     <WorkerMobileMedicationChecklist
                       shiftId={shiftId}
                       disabled={disabled}
@@ -197,7 +253,11 @@ export function WorkerMobileTaskList({
                       }}
                       tz={tz}
                     />
-                    <WorkerMobilePrnMedications shiftId={shiftId} sessionId={sessionId} disabled={disabled} />
+                    <WorkerMobilePrnMedications
+                      shiftId={shiftId}
+                      sessionId={sessionId}
+                      disabled={disabled}
+                    />
                   </View>
                 )}
 
@@ -210,9 +270,13 @@ export function WorkerMobileTaskList({
                         note={note}
                         participantName={participantName}
                         goalTitle={task.goal_title ?? undefined}
-                        flag={compliance.noteFlags.find((f) => f.noteId === note.note_id)}
+                        flag={compliance.noteFlags.find(
+                          (f) => f.noteId === note.note_id,
+                        )}
                         onIncidentReport={
-                          compliance.noteFlags.find((f) => f.noteId === note.note_id)?.severity === "fail"
+                          compliance.noteFlags.find(
+                            (f) => f.noteId === note.note_id,
+                          )?.severity === "fail"
                             ? onOpenIncidentReport
                             : undefined
                         }
@@ -223,17 +287,26 @@ export function WorkerMobileTaskList({
                 )}
 
                 {!readOnly && (
-                <WorkerMobileComposer
-                  sessionId={sessionId}
-                  taskId={task.task_id}
-                  taskLabel={task.label}
-                  goalTitle={task.goal_title ?? undefined}
-                  taskNotesText={taskNotes.filter((n) => !n.needs_translation).map((n) => n.content).join("\n")}
-                  participantName={participantName}
-                  participantId={participantId}
-                  disabled={disabled || !sessionId}
-                  onNoteSaved={onNoteSaved}
-                />
+                  <WorkerMobileComposer
+                    initialDraft={
+                      drafts.current.get(`${sessionId}:${task.task_id}`) || ""
+                    }
+                    onDraftChange={(text) => {
+                      drafts.current.set(`${sessionId}:${task.task_id}`, text);
+                    }}
+                    sessionId={sessionId}
+                    taskId={task.task_id}
+                    taskLabel={task.label}
+                    goalTitle={task.goal_title ?? undefined}
+                    taskNotesText={taskNotes
+                      .filter((n) => !n.needs_translation)
+                      .map((n) => n.content)
+                      .join("\n")}
+                    participantName={participantName}
+                    participantId={participantId}
+                    disabled={disabled || !sessionId}
+                    onNoteSaved={onNoteSaved}
+                  />
                 )}
               </View>
             )}

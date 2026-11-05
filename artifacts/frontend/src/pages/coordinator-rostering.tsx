@@ -1,3 +1,5 @@
+import { PageHeader } from "@/components/layout/PageKit";
+import { PersonPreview } from "@/components/coordinator/PersonPreview";
 import { Link } from "wouter";
 import { useMemo, useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -259,10 +261,10 @@ function DayPanel({
                     {durH ? ` · ${durH}h` : ""}
                   </span>
                 </div>
-                <p className="text-[14px] font-black" style={{ color: TEXT }}>{shift.participant_name || translate("common.participant")}</p>
+                <PersonPreview id={shift.participant_id} name={shift.participant_name || translate("common.participant")} kind="participant" className="text-[14px] font-semibold text-cc-text" />
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <span className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
-                    <User2 size={11} /> {shift.worker_name || workers.find((w) => w.id === shift.worker_id)?.full_name || translate("common.worker")}
+                    <PersonPreview id={shift.worker_id} name={shift.worker_name || workers.find((w) => w.id === shift.worker_id)?.full_name || translate("common.worker")} kind="worker" worker={workers.find(w => w.id === shift.worker_id)} />
                   </span>
                   {shift.shift_type && (
                     <span className="rounded px-1.5 py-0.5 text-[9px] font-black uppercase" style={{ background: SOFT, color: MUTED }}>
@@ -289,6 +291,7 @@ function DayPanel({
 export default function CoordinatorRosteringPage() {
   const { translate, translateParams } = useAccessibility();
   const { user: currentUser } = useAuth();
+  const directorView = currentUser?.role === "managing_director";
   const queryClient = useQueryClient();
   const liveOrgId = currentUser?.organizationId ?? "__no_org__";
   const [newShiftId, setNewShiftId] = useState<string | null>(null);
@@ -434,16 +437,10 @@ export default function CoordinatorRosteringPage() {
   const pendingValue = <span aria-label={translate("common.loading")} className="inline-block h-5 w-8 animate-pulse rounded bg-muted" />;
 
   return (
-    <div className="min-w-0 space-y-4 pb-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight" style={{ color: TEXT }}>
-            {translate("nav.schedule")}
-            <SectionInfo text="Build and adjust the shift roster for your team, week by week or month by month." />
-          </h1>
-        </div>
+    <div className="min-w-0 space-y-4 pb-12">
+      <PageHeader eyebrow="Operations & Care" title={pageTab === "live" ? "Live shifts" : "Roster"} actions={<>
         {pageTab === "roster" ? (
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:items-center">
           <Button
             onClick={() => setTeamPanelOpen(true)}
             variant="outline"
@@ -462,7 +459,7 @@ export default function CoordinatorRosteringPage() {
           </Button>
           <Button
             onClick={() => setAssignOpen(true)}
-            className="col-span-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-white"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-white"
             style={{ background: "var(--cc-cta)" }}
           >
             <Plus size={15} /> {translate("coordinator.rostering.createShift")}
@@ -491,10 +488,10 @@ export default function CoordinatorRosteringPage() {
           </Button>
         </div>
         ) : null}
-      </div>
+      </>} />
 
       <div className="min-w-0 space-y-4">
-        <nav aria-label={translate("nav.schedule")} className="grid grid-cols-3 items-stretch gap-1 border-b border-cc-border sm:flex">
+        {!directorView && <nav aria-label={translate("nav.schedule")} className="grid grid-cols-3 items-stretch gap-1 border-b border-cc-border sm:flex">
           {SCHEDULE_TABS.map((tab) => {
             const active = pageTab === tab.id;
             const Icon = tab.icon;
@@ -510,14 +507,15 @@ export default function CoordinatorRosteringPage() {
             <ClipboardCheck size={16} aria-hidden="true" className="hidden shrink-0 sm:block" />
             {translate("schedule.verification")}
           </Link>
-        </nav>
-        <div className="flex min-w-0 flex-col gap-4">
+        </nav>}
+        <div className="flex min-w-0 flex-col gap-3">
 
-      {pageTab === "live" && <CoordinatorLivePage embedded externalSearch={liveSearch} />}
+      {pageTab === "live" && <CoordinatorLivePage embedded externalSearch={liveSearch} onSearchChange={setLiveSearch} />}
 
       {pageTab === "roster" && (
       <>
       {/* Flat inline stat strip, not a repeated card grid */}
+      <details className="order-last border-t border-cc-border pt-3"><summary className="cursor-pointer text-xs font-medium text-cc-muted">Roster summary</summary>
       <StatCardGroup fill className="grid grid-cols-2 gap-3 sm:flex [&>div]:min-w-0">
         <StatCard label={translate("coordinator.rostering.today")} value={shiftsQuery.isLoading ? pendingValue : shiftsQuery.isError ? "?" : shiftsToday.length} icon={<CalendarDays size={16} />} />
         <StatCard label={translate("coordinator.rostering.activeNow")} value={shiftsQuery.isLoading ? pendingValue : shiftsQuery.isError ? "?" : activeShifts.length} tone="info" icon={<Activity size={16} />} onClick={() => setPageTab("live")} />
@@ -544,8 +542,9 @@ export default function CoordinatorRosteringPage() {
           />
         )}
       </StatCardGroup>
+      </details>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-white px-4 py-3" style={{ borderColor: BORDER }}>
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-cc-surface px-3 py-2" style={{ borderColor: BORDER }}>
         <div className="flex overflow-hidden rounded-xl border" style={{ borderColor: BORDER }}>
           {(["roster", "month"] as ViewMode[]).map((mode) => (
             <button

@@ -14,6 +14,7 @@ import {
   Alert,
   Animated,
   Modal,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -28,7 +29,11 @@ import { useOffline } from "@/context/OfflineContext";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
-import { translate, type AppLanguage, type TranslationKey } from "@/lib/i18n/translations";
+import {
+  translate,
+  type AppLanguage,
+  type TranslationKey,
+} from "@/lib/i18n/translations";
 import {
   NOTE_LANGUAGES,
   loadNoteLanguage,
@@ -46,10 +51,22 @@ import {
   transcribeSessionAudio,
   uploadSessionAttachment,
 } from "@/lib/worker-api";
-import { buildAttachmentFileName, newClientNoteId, SESSION_NOTE_MAX } from "@/lib/shift-utils";
-import { checkDraftNoteHints, nextNotePrompt, type DraftNoteHint, type NotePromptId } from "@workspace/worker-compliance";
+import {
+  buildAttachmentFileName,
+  newClientNoteId,
+  SESSION_NOTE_MAX,
+} from "@/lib/shift-utils";
+import {
+  checkDraftNoteHints,
+  nextNotePrompt,
+  type DraftNoteHint,
+  type NotePromptId,
+} from "@workspace/worker-compliance";
 
-type Translator = (key: TranslationKey, params?: Record<string, string | number>) => string;
+type Translator = (
+  key: TranslationKey,
+  params?: Record<string, string | number>,
+) => string;
 
 const HINT_TRANSLATION_KEYS: Partial<Record<string, TranslationKey>> = {
   "word-count": "composer.hint.wordCount",
@@ -69,10 +86,15 @@ const HINT_TRANSLATION_KEYS: Partial<Record<string, TranslationKey>> = {
  */
 function localizeHint(hint: DraftNoteHint, t: Translator): string {
   if (hint.id === "restrictive-practice") {
-    return t("composer.hint.restrictivePractice", { phrase: hint.phrase ?? "" });
+    return t("composer.hint.restrictivePractice", {
+      phrase: hint.phrase ?? "",
+    });
   }
   if (hint.id === "person-first") {
-    return t("composer.hint.personFirst", { phrase: hint.phrase ?? "", suggestion: hint.suggestion ?? "" });
+    return t("composer.hint.personFirst", {
+      phrase: hint.phrase ?? "",
+      suggestion: hint.suggestion ?? "",
+    });
   }
   if (hint.id === "subjective-language") {
     return t("composer.hint.subjective", { phrase: hint.phrase ?? "" });
@@ -88,13 +110,31 @@ const APP_LANGUAGES: readonly AppLanguage[] = ["en", "vi", "zh", "ar"];
  * puts in the box for each. */
 // The rounded box already shows focus; the browser's outline (web preview
 // only) would draw a second rectangle inside it.
-const NO_WEB_OUTLINE = Platform.OS === "web" ? ({ outlineStyle: "none", outlineWidth: 0 } as object) : null;
+const NO_WEB_OUTLINE =
+  Platform.OS === "web"
+    ? ({ outlineStyle: "none", outlineWidth: 0 } as object)
+    : null;
 
-const GUIDE_QUESTIONS: Record<NotePromptId, { question: TranslationKey; starter: TranslationKey }> = {
-  did: { question: "composer.guide.did", starter: "composer.prompt.didStarter" },
-  response: { question: "composer.guide.response", starter: "composer.prompt.responseStarter" },
-  goal: { question: "composer.guide.goal", starter: "composer.prompt.goalStarter" },
-  concern: { question: "composer.guide.concern", starter: "composer.prompt.concernStarter" },
+const GUIDE_QUESTIONS: Record<
+  NotePromptId,
+  { question: TranslationKey; starter: TranslationKey }
+> = {
+  did: {
+    question: "composer.guide.did",
+    starter: "composer.prompt.didStarter",
+  },
+  response: {
+    question: "composer.guide.response",
+    starter: "composer.prompt.responseStarter",
+  },
+  goal: {
+    question: "composer.guide.goal",
+    starter: "composer.prompt.goalStarter",
+  },
+  concern: {
+    question: "composer.guide.concern",
+    starter: "composer.prompt.concernStarter",
+  },
 };
 
 function formatDuration(secs: number): string {
@@ -193,7 +233,9 @@ export function ActiveVoiceRecording({
     }
   };
 
-  const finishRef = useRef<(save: boolean) => Promise<void>>(async () => undefined);
+  const finishRef = useRef<(save: boolean) => Promise<void>>(
+    async () => undefined,
+  );
   finishRef.current = async (save: boolean) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
@@ -206,7 +248,10 @@ export function ActiveVoiceRecording({
       /* already released / already stopped */
     }
     try {
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+      });
     } catch {
       /* ignore */
     }
@@ -237,7 +282,11 @@ export function ActiveVoiceRecording({
         // recording is silently torn down the moment the screen locks or the
         // worker briefly switches apps (both routine mid-shift interruptions) -
         // the single biggest real-world cause of a recording getting cut off.
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true });
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
+          allowsBackgroundRecording: true,
+        });
         if (cancelled) return;
         await audioRecorder.prepareToRecordAsync();
         if (cancelled || finishedRef.current) return;
@@ -266,7 +315,10 @@ export function ActiveVoiceRecording({
         } catch {
           /* released on unmount */
         }
-        void setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+        void setAudioModeAsync({
+          allowsRecording: false,
+          playsInSilentMode: true,
+        }).catch(() => {});
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -286,7 +338,8 @@ export function ActiveVoiceRecording({
     // otherwise look identical to a genuine interruption.
     if (recorderState.isRecording) sawRecordingRef.current = true;
     if (!sawRecordingRef.current) return;
-    const interrupted = recorderState.mediaServicesDidReset || !recorderState.isRecording;
+    const interrupted =
+      recorderState.mediaServicesDidReset || !recorderState.isRecording;
     if (!interrupted) {
       resumeAttemptedRef.current = false;
       return;
@@ -297,7 +350,11 @@ export function ActiveVoiceRecording({
 
     (async () => {
       try {
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true });
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
+          allowsBackgroundRecording: true,
+        });
         audioRecorder.record();
       } catch {
         /* checked below regardless */
@@ -310,7 +367,11 @@ export function ActiveVoiceRecording({
         void finishRef.current(true);
       }
     })();
-  }, [recorderState.isRecording, recorderState.mediaServicesDidReset, audioRecorder]);
+  }, [
+    recorderState.isRecording,
+    recorderState.mediaServicesDidReset,
+    audioRecorder,
+  ]);
 
   useEffect(() => {
     controlsRef.current = {
@@ -326,9 +387,19 @@ export function ActiveVoiceRecording({
   }, [controlsRef]);
 
   return (
-    <View style={[styles.recordingBox, { borderColor: color + "66", backgroundColor: color + "18" }]}>
+    <View
+      style={[
+        styles.recordingBox,
+        { borderColor: color + "66", backgroundColor: color + "18" },
+      ]}
+    >
       <RecordingWave color={color} />
-      <Text style={[styles.recordingText, { color, fontFamily: "Inter_600SemiBold" }]}>
+      <Text
+        style={[
+          styles.recordingText,
+          { color, fontFamily: "Inter_600SemiBold" },
+        ]}
+      >
         Recording… {formatDuration(recordSecs)}
       </Text>
       <Pressable
@@ -338,7 +409,12 @@ export function ActiveVoiceRecording({
         hitSlop={8}
         style={styles.cancelBtn}
       >
-        <Text style={[styles.cancelText, { color: mutedColor, fontFamily: "Inter_600SemiBold" }]}>
+        <Text
+          style={[
+            styles.cancelText,
+            { color: mutedColor, fontFamily: "Inter_600SemiBold" },
+          ]}
+        >
           Cancel
         </Text>
       </Pressable>
@@ -355,6 +431,8 @@ type Props = {
   /** This task's saved notes (the English record), so the guide asks about
    * what they don't cover yet. */
   taskNotesText?: string;
+  initialDraft?: string;
+  onDraftChange?: (text: string) => void;
   participantName?: string;
   participantId?: string | null;
   disabled?: boolean;
@@ -367,6 +445,8 @@ export function WorkerMobileComposer({
   taskLabel,
   goalTitle,
   taskNotesText,
+  initialDraft = "",
+  onDraftChange,
   participantName,
   participantId,
   disabled,
@@ -376,7 +456,15 @@ export function WorkerMobileComposer({
   const insets = useSafeAreaInsets();
   const { t, language: appLanguage } = usePreferences();
   const { isOnline, queueWorkerUpdate } = useOffline();
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(initialDraft);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [inputHeight, setInputHeight] = useState(64);
+  useEffect(() => {
+    if (!value) setInputHeight(64);
+  }, [value]);
+  useEffect(() => {
+    onDraftChange?.(value);
+  }, [value, onDraftChange]);
   const [submitting, setSubmitting] = useState(false);
   // Defaults to the language the worker runs the app in, then to whatever
   // they last wrote a note in, so a worker who writes in Nepali isn't asked
@@ -399,7 +487,11 @@ export function WorkerMobileComposer({
   const [recording, setRecording] = useState(false);
   const voiceControlsRef = useRef<VoiceRecordingControls | null>(null);
   const [draftHints, setDraftHints] = useState<DraftNoteHint[]>([]);
-  const [suggestion, setSuggestion] = useState<{ text: string; preview?: string; source: "manual" | "auto" } | null>(null);
+  const [suggestion, setSuggestion] = useState<{
+    text: string;
+    preview?: string;
+    source: "manual" | "auto";
+  } | null>(null);
   const [improving, setImproving] = useState(false);
   const [translatingPreview, setTranslatingPreview] = useState(false);
   const [manualPending, setManualPending] = useState(false);
@@ -423,15 +515,24 @@ export function WorkerMobileComposer({
   useEffect(() => {
     setSkipped([]);
   }, [taskId]);
-  const nextPrompt = nextNotePrompt(taskNotesText ?? "", { hasGoal: !!goalTitle, skipped });
-  const promptParams = { name: firstName ?? t("composer.prompt.theParticipant"), goal: goalTitle ?? "" };
+  const nextPrompt = nextNotePrompt(taskNotesText ?? "", {
+    hasGoal: !!goalTitle,
+    skipped,
+  });
+  const promptParams = {
+    name: firstName ?? t("composer.prompt.theParticipant"),
+    goal: goalTitle ?? "",
+  };
 
   /** A sentence starter in the language the worker is writing in, or null
    * when the app has no translation for that language. */
   const starterFor = (key: TranslationKey) => {
     const inLanguage = language === "auto" ? appLanguage : language;
     if (!(APP_LANGUAGES as readonly string[]).includes(inLanguage)) return null;
-    return translate(inLanguage as AppLanguage, key, { name: firstName ?? "", goal: goalTitle ?? "" });
+    return translate(inLanguage as AppLanguage, key, {
+      name: firstName ?? "",
+      goal: goalTitle ?? "",
+    });
   };
   const answerPrompt = (id: NotePromptId) => {
     const starter = starterFor(GUIDE_QUESTIONS[id].starter);
@@ -439,7 +540,9 @@ export function WorkerMobileComposer({
     if (starter) {
       setValue((current) => {
         const trimmed = current.trimEnd();
-        return trimmed ? `${trimmed}${/[.!?]$/.test(trimmed) ? "" : "."} ${starter}` : starter;
+        return trimmed
+          ? `${trimmed}${/[.!?]$/.test(trimmed) ? "" : "."} ${starter}`
+          : starter;
       });
     }
     inputRef.current?.focus();
@@ -452,7 +555,12 @@ export function WorkerMobileComposer({
   const languageLine =
     language === "en"
       ? t("composer.language.writingInEnglish")
-      : t("composer.language.writingIn", { language: language === "auto" ? t("composer.language.auto") : noteLanguageNative(language) });
+      : t("composer.language.writingIn", {
+          language:
+            language === "auto"
+              ? t("composer.language.auto")
+              : noteLanguageNative(language),
+        });
   const suggestedLanguages = Array.from(new Set([appLanguage, "en", language]));
   const languageResults = searchNoteLanguages(langSearch);
 
@@ -483,14 +591,23 @@ export function WorkerMobileComposer({
     autoFiredRef.current = false;
   }, [taskId]);
 
-  const runImprove = async (text: string, hints: DraftNoteHint[], source: "manual" | "auto") => {
+  const runImprove = async (
+    text: string,
+    hints: DraftNoteHint[],
+    source: "manual" | "auto",
+  ) => {
     if (improving) return;
     setImproving(true);
     if (source === "manual") setManualPending(true);
     try {
       const failedRules = hints.length
         ? hints.map((h) => ({ rule: h.id, message: h.message }))
-        : [{ rule: "clarity", message: "Make this note more specific and audit-ready." }];
+        : [
+            {
+              rule: "clarity",
+              message: "Make this note more specific and audit-ready.",
+            },
+          ];
       const result = await improveNote(text, failedRules, participantId);
       const improved = (result?.improved_note || "").trim();
       if (improved && improved !== text.trim()) {
@@ -506,7 +623,11 @@ export function WorkerMobileComposer({
               if (previewResult?.translated_ok && translated) {
                 // Guard against a stale response landing after the worker
                 // dismissed/replaced/edited past this suggestion.
-                setSuggestion((prev) => (prev && prev.text === improved ? { ...prev, preview: translated } : prev));
+                setSuggestion((prev) =>
+                  prev && prev.text === improved
+                    ? { ...prev, preview: translated }
+                    : prev,
+                );
               }
             })
             .catch(() => {
@@ -515,7 +636,10 @@ export function WorkerMobileComposer({
             .finally(() => setTranslatingPreview(false));
         }
       } else if (source === "manual") {
-        showAlert("No changes suggested", "Your note already looks clear and complete.");
+        showAlert(
+          "No changes suggested",
+          "Your note already looks clear and complete.",
+        );
       }
     } catch {
       if (source === "manual") {
@@ -559,13 +683,22 @@ export function WorkerMobileComposer({
   // worker actively chooses to use) are the right tools for that case, not
   // an unprompted AI suggestion.
   useEffect(() => {
-    if (!hasText || recording || disabled || autoFiredRef.current || !checksLive) return;
+    if (
+      !hasText ||
+      recording ||
+      disabled ||
+      autoFiredRef.current ||
+      !checksLive
+    )
+      return;
     const words = value.trim().split(/\s+/).filter(Boolean).length;
     if (words < 15) return;
     if (value === lastAutoSuggestRef.current) return;
     const timer = setTimeout(() => {
-      const hints = checkDraftNoteHints(value, participantName?.split(" ")[0])
-        .filter((h) => h.id !== "restrictive-practice");
+      const hints = checkDraftNoteHints(
+        value,
+        participantName?.split(" ")[0],
+      ).filter((h) => h.id !== "restrictive-practice");
       const meaningfulHints = hints.filter((h) => h.id !== "word-count");
       if (meaningfulHints.length === 0) return;
       autoFiredRef.current = true;
@@ -581,9 +714,20 @@ export function WorkerMobileComposer({
     noteType: SessionNoteType = "text",
     fileName?: string,
     attachmentUrls?: string[],
-    language?: Pick<SessionNoteRecord, "original_content" | "original_language" | "needs_translation">,
+    language?: Pick<
+      SessionNoteRecord,
+      "original_content" | "original_language" | "needs_translation"
+    >,
   ) => {
     if (!sessionId || !content.trim() || disabled) return;
+    if (content.trim().length > SESSION_NOTE_MAX) {
+      setSubmitting(false);
+      showAlert(
+        "Note is too long",
+        `Keep this note within ${SESSION_NOTE_MAX} characters, or send it as separate updates. Your draft has been kept.`,
+      );
+      return;
+    }
 
     setSubmitting(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -594,7 +738,7 @@ export function WorkerMobileComposer({
       note_id: noteId,
       session_id: sessionId,
       task_id: taskId ?? undefined,
-      content: content.trim().slice(0, SESSION_NOTE_MAX),
+      content: content.trim(),
       created_at: now,
       auto_saved_at: now,
       note_type: noteType,
@@ -604,9 +748,14 @@ export function WorkerMobileComposer({
       ...language,
     };
 
-    onNoteSaved?.(payload);
-    setValue("");
-    setSuggestion(null);
+    const finishSaved = () => {
+      onNoteSaved?.(payload);
+      if (noteType === "text") {
+        setValue("");
+        onDraftChange?.("");
+        setSuggestion(null);
+      }
+    };
 
     // Queue on ANY failure, not just when the device is offline - isOnline
     // is device-link connectivity, not "the CareCliQ API actually accepted
@@ -620,6 +769,7 @@ export function WorkerMobileComposer({
     if (trySync) {
       try {
         await syncSessionNotes(sessionId, [payload]);
+        finishSaved();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setSubmitting(false);
         return;
@@ -636,6 +786,7 @@ export function WorkerMobileComposer({
       timestamp: Date.now(),
     });
     if (queued) {
+      finishSaved();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (syncFailed) {
         showAlert(
@@ -659,7 +810,9 @@ export function WorkerMobileComposer({
    * here, since it may need an incident report. */
   const checkTranslated = (record: RecordTranslation) => {
     if (!record.original) return;
-    const rp = checkDraftNoteHints(record.english, firstName).find((h) => h.id === "restrictive-practice");
+    const rp = checkDraftNoteHints(record.english, firstName).find(
+      (h) => h.id === "restrictive-practice",
+    );
     if (rp) showAlert(t("composer.translate.checkTitle"), localizeHint(rp, t));
   };
 
@@ -667,7 +820,10 @@ export function WorkerMobileComposer({
    * it. Offline, a non-English note waits in the queue and is translated
    * before it syncs. If translation fails, the text stays in the box: an
    * untranslated note is never saved as the English record. */
-  const saveInWorkerLanguage = async (text: string, noteType: SessionNoteType) => {
+  const saveInWorkerLanguage = async (
+    text: string,
+    noteType: SessionNoteType,
+  ) => {
     if (language === "en") return saveNote(text, noteType);
     if (!isOnline) {
       return saveNote(text, noteType, undefined, undefined, {
@@ -682,7 +838,10 @@ export function WorkerMobileComposer({
     } catch {
       setValue(text);
       setSubmitting(false);
-      showAlert(t("composer.translate.failedTitle"), t("composer.translate.failedBody"));
+      showAlert(
+        t("composer.translate.failedTitle"),
+        t("composer.translate.failedBody"),
+      );
       return;
     }
     await saveNote(record.english, noteType, undefined, undefined, {
@@ -707,7 +866,9 @@ export function WorkerMobileComposer({
       );
       return;
     }
-    const perm = await AudioModule.requestRecordingPermissionsAsync().catch(() => null);
+    const perm = await AudioModule.requestRecordingPermissionsAsync().catch(
+      () => null,
+    );
     if (!perm?.granted) {
       showAlert(
         "Microphone blocked",
@@ -754,7 +915,9 @@ export function WorkerMobileComposer({
     } catch (err) {
       showAlert(
         "Transcription failed",
-        err instanceof Error ? err.message : "Could not convert your voice note to text. Please try again.",
+        err instanceof Error
+          ? err.message
+          : "Could not convert your voice note to text. Please try again.",
       );
     } finally {
       setSubmitting(false);
@@ -772,7 +935,9 @@ export function WorkerMobileComposer({
       taskTitle: taskLabel,
       originalName: asset.fileName ?? fallbackName,
     });
-    const mimeType = asset.mimeType ?? (noteType === "photo" ? "image/jpeg" : "application/octet-stream");
+    const mimeType =
+      asset.mimeType ??
+      (noteType === "photo" ? "image/jpeg" : "application/octet-stream");
     setSubmitting(true);
 
     // The captured/picked file is already safely on local disk regardless of
@@ -784,8 +949,14 @@ export function WorkerMobileComposer({
     let uploadFailed = false;
     if (attemptUpload) {
       try {
-        const uploaded = await uploadSessionAttachment(sessionId, { uri: asset.uri, name, type: mimeType });
-        await saveNote(`[Attachment: ${name}]`, noteType, name, [uploaded.public_url]);
+        const uploaded = await uploadSessionAttachment(sessionId, {
+          uri: asset.uri,
+          name,
+          type: mimeType,
+        });
+        await saveNote(`[Attachment: ${name}]`, noteType, name, [
+          uploaded.public_url,
+        ]);
         setSubmitting(false);
         return;
       } catch {
@@ -825,7 +996,10 @@ export function WorkerMobileComposer({
   const handleAttach = async () => {
     if (disabled || submitting) return;
     if (!taskId) {
-      Alert.alert("Select a task", "Select a task above before attaching a file.");
+      Alert.alert(
+        "Select a task",
+        "Select a task above before attaching a file.",
+      );
       return;
     }
     try {
@@ -840,7 +1014,9 @@ export function WorkerMobileComposer({
     } catch (err) {
       Alert.alert(
         "Attachment failed",
-        err instanceof Error ? err.message : "Could not open the photo library.",
+        err instanceof Error
+          ? err.message
+          : "Could not open the photo library.",
       );
     }
   };
@@ -848,7 +1024,10 @@ export function WorkerMobileComposer({
   const handleCamera = async () => {
     if (disabled || submitting) return;
     if (!taskId) {
-      Alert.alert("Select a task", "Select a task above before taking a photo note.");
+      Alert.alert(
+        "Select a task",
+        "Select a task above before taking a photo note.",
+      );
       return;
     }
     try {
@@ -881,25 +1060,61 @@ export function WorkerMobileComposer({
   // One guide message at a time, most important first: a rewrite the worker
   // asked for (or was offered), a possible restrictive practice, a wording tip
   // for what they're typing, then the next question for this task.
-  const topHint = !recording ? draftHints.find((h) => h.severity === "fail") ?? draftHints[0] : undefined;
+  const topHint = !recording
+    ? (draftHints.find((h) => h.severity === "fail") ?? draftHints[0])
+    : undefined;
   const guide = (() => {
     if (!taskId || recording || disabled) return null;
     if (suggestion) {
       return (
         <GuideBubble
-          title={suggestion.source === "auto" ? t("composer.suggestion.auto") : t("composer.suggestion.manual")}
+          title={
+            suggestion.source === "auto"
+              ? t("composer.suggestion.auto")
+              : t("composer.suggestion.manual")
+          }
           actions={[
-            { label: t("composer.suggestion.useThis"), onPress: applySuggestion, primary: true },
-            { label: t("composer.guide.keepMine"), onPress: () => setSuggestion(null) },
+            {
+              label: t("composer.suggestion.useThis"),
+              onPress: applySuggestion,
+              primary: true,
+            },
+            {
+              label: t("composer.guide.keepMine"),
+              onPress: () => setSuggestion(null),
+            },
           ]}
         >
-          <Text style={[styles.guideText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>{suggestion.text}</Text>
-          {(suggestion.preview || (translatingPreview && appLanguage !== "en")) && (
-            <View style={[styles.guidePreview, { borderTopColor: colors.border }]}>
-              <Text style={[styles.guideMeta, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+          <Text
+            style={[
+              styles.guideText,
+              { color: colors.foreground, fontFamily: "Inter_400Regular" },
+            ]}
+          >
+            {suggestion.text}
+          </Text>
+          {(suggestion.preview ||
+            (translatingPreview && appLanguage !== "en")) && (
+            <View
+              style={[styles.guidePreview, { borderTopColor: colors.border }]}
+            >
+              <Text
+                style={[
+                  styles.guideMeta,
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: "Inter_600SemiBold",
+                  },
+                ]}
+              >
                 {t("composer.suggestion.previewLabel")}
               </Text>
-              <Text style={[styles.guideText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+              <Text
+                style={[
+                  styles.guideText,
+                  { color: colors.foreground, fontFamily: "Inter_400Regular" },
+                ]}
+              >
                 {suggestion.preview ?? t("composer.suggestion.translating")}
               </Text>
             </View>
@@ -915,17 +1130,40 @@ export function WorkerMobileComposer({
           actions={
             fail
               ? []
-              : [{ label: improving ? t("composer.suggestion.translating") : t("composer.guide.improve"), onPress: handleImprovePress, icon: "zap", busy: manualPending }]
+              : [
+                  {
+                    label: improving
+                      ? t("composer.suggestion.translating")
+                      : t("composer.guide.improve"),
+                    onPress: handleImprovePress,
+                    icon: "zap",
+                    busy: manualPending,
+                  },
+                ]
           }
         >
-          <Text style={[styles.guideText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>{localizeHint(topHint, t)}</Text>
+          <Text
+            style={[
+              styles.guideText,
+              { color: colors.foreground, fontFamily: "Inter_500Medium" },
+            ]}
+          >
+            {localizeHint(topHint, t)}
+          </Text>
         </GuideBubble>
       );
     }
     if (hasText && !checksLive) {
       return (
         <GuideBubble>
-          <Text style={[styles.guideText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>{t("composer.hint.otherLanguage")}</Text>
+          <Text
+            style={[
+              styles.guideText,
+              { color: colors.foreground, fontFamily: "Inter_400Regular" },
+            ]}
+          >
+            {t("composer.hint.otherLanguage")}
+          </Text>
         </GuideBubble>
       );
     }
@@ -934,11 +1172,27 @@ export function WorkerMobileComposer({
       return (
         <GuideBubble
           actions={[
-            { label: t("composer.guide.answer"), onPress: () => answerPrompt(nextPrompt), primary: true },
-            ...(nextPrompt === "did" ? [] : [{ label: t("composer.guide.skip"), onPress: () => skipPrompt(nextPrompt) }]),
+            {
+              label: t("composer.guide.answer"),
+              onPress: () => answerPrompt(nextPrompt),
+              primary: true,
+            },
+            ...(nextPrompt === "did"
+              ? []
+              : [
+                  {
+                    label: t("composer.guide.skip"),
+                    onPress: () => skipPrompt(nextPrompt),
+                  },
+                ]),
           ]}
         >
-          <Text style={[styles.guideQuestion, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+          <Text
+            style={[
+              styles.guideQuestion,
+              { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+            ]}
+          >
             {t(GUIDE_QUESTIONS[nextPrompt].question, promptParams)}
           </Text>
         </GuideBubble>
@@ -946,12 +1200,20 @@ export function WorkerMobileComposer({
     }
     return (
       <GuideBubble tone="done">
-        <Text style={[styles.guideText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>{t("composer.guide.done")}</Text>
+        <Text
+          style={[
+            styles.guideText,
+            { color: colors.foreground, fontFamily: "Inter_500Medium" },
+          ]}
+        >
+          {t("composer.guide.done")}
+        </Text>
       </GuideBubble>
     );
   })();
 
-  const sendDisabled = disabledInput || submitting || (!hasText && !recording && voiceUnavailable);
+  const sendDisabled =
+    disabledInput || submitting || (!hasText && !recording && voiceUnavailable);
 
   return (
     <View style={styles.wrap}>
@@ -964,7 +1226,14 @@ export function WorkerMobileComposer({
           accessibilityRole="button"
           accessibilityLabel={t("composer.attach.title")}
           hitSlop={4}
-          style={[styles.plusBtn, { backgroundColor: colors.background, borderColor: colors.border, opacity: disabledInput ? 0.45 : 1 }]}
+          style={[
+            styles.plusBtn,
+            {
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+              opacity: disabledInput ? 0.45 : 1,
+            },
+          ]}
         >
           <Feather name="plus" size={20} color={colors.foreground} />
         </Pressable>
@@ -978,12 +1247,35 @@ export function WorkerMobileComposer({
             onSave={handleVoiceSave}
           />
         ) : (
-          <View style={[styles.inputBox, { borderColor: colors.border, backgroundColor: colors.background }]}>
+          <View
+            style={[
+              styles.inputBox,
+              {
+                borderColor: colors.border,
+                backgroundColor: colors.background,
+              },
+            ]}
+          >
             <TextInput
               ref={inputRef}
+              onContentSizeChange={(event) =>
+                setInputHeight(
+                  Math.max(
+                    64,
+                    Math.min(160, event.nativeEvent.contentSize.height),
+                  ),
+                )
+              }
               value={value}
-              onChangeText={setValue}
-              placeholder={taskId ? t("composer.placeholder") : t("composer.hint.selectTask")}
+              onChangeText={(text) => {
+                setValue(text);
+                onDraftChange?.(text);
+              }}
+              placeholder={
+                taskId
+                  ? t("composer.placeholder")
+                  : t("composer.hint.selectTask")
+              }
               placeholderTextColor={colors.mutedForeground}
               maxLength={SESSION_NOTE_MAX}
               editable={!disabledInput && !submitting}
@@ -992,7 +1284,12 @@ export function WorkerMobileComposer({
               // otherwise opens two rows high.
               {...(Platform.OS === "web" ? { numberOfLines: 1 } : null)}
               accessibilityLabel={t("composer.placeholder")}
-              style={[styles.input, NO_WEB_OUTLINE, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+              style={[
+                styles.input,
+                { height: inputHeight },
+                NO_WEB_OUTLINE,
+                { color: colors.foreground, fontFamily: "Inter_400Regular" },
+              ]}
             />
           </View>
         )}
@@ -1008,12 +1305,18 @@ export function WorkerMobileComposer({
           }}
           disabled={disabledInput || submitting}
           accessibilityRole="button"
-          accessibilityLabel={recording || hasText ? t("composer.send") : t("composer.record")}
+          accessibilityLabel={
+            recording || hasText ? t("composer.send") : t("composer.record")
+          }
           accessibilityState={{ disabled: sendDisabled }}
           style={[
             styles.roundBtn,
             {
-              backgroundColor: recording ? colors.destructive : hasText ? colors.composerPurple : colors.composerPink,
+              backgroundColor: recording
+                ? colors.destructive
+                : hasText
+                  ? colors.composerPurple
+                  : colors.composerPink,
               opacity: sendDisabled ? 0.45 : 1,
             },
           ]}
@@ -1044,26 +1347,72 @@ export function WorkerMobileComposer({
         style={styles.langLine}
       >
         <Feather name="globe" size={13} color={colors.primary} />
-        <Text numberOfLines={1} style={[styles.langLineText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-          {voiceUnavailable && !hasText ? t("composer.voice.offlineHint") : languageLine}
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.langLineText,
+            { color: colors.mutedForeground, fontFamily: "Inter_500Medium" },
+          ]}
+        >
+          {voiceUnavailable && !hasText
+            ? t("composer.voice.offlineHint")
+            : languageLine}
         </Text>
         <Feather name="chevron-down" size={13} color={colors.mutedForeground} />
       </Pressable>
 
       {/* Add a photo or file, or tidy the wording */}
-      <Modal visible={attachOpen} transparent animationType="slide" onRequestClose={() => setAttachOpen(false)}>
-        <Pressable style={styles.sheetBackdrop} onPress={() => setAttachOpen(false)}>
+      <Modal
+        visible={attachOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAttachOpen(false)}
+      >
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setAttachOpen(false)}
+        >
           <Pressable
-            style={[styles.sheetCard, { backgroundColor: colors.card, paddingBottom: insets.bottom + 12 }]}
+            style={[
+              styles.sheetCard,
+              {
+                backgroundColor: colors.card,
+                paddingBottom: insets.bottom + 12,
+              },
+            ]}
             onPress={(e) => e.stopPropagation()}
           >
-            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{t("composer.attach.title")}</Text>
+            <View
+              style={[styles.sheetHandle, { backgroundColor: colors.border }]}
+            />
+            <Text
+              style={[
+                styles.sheetTitle,
+                { color: colors.foreground, fontFamily: "Inter_700Bold" },
+              ]}
+            >
+              {t("composer.attach.title")}
+            </Text>
             {(
               [
-                { icon: "camera", label: t("composer.attach.camera"), onPress: handleCamera, show: true },
-                { icon: "image", label: t("composer.attach.library"), onPress: handleAttach, show: true },
-                { icon: "zap", label: t("composer.guide.improve"), onPress: handleImprovePress, show: hasText },
+                {
+                  icon: "camera",
+                  label: t("composer.attach.camera"),
+                  onPress: handleCamera,
+                  show: true,
+                },
+                {
+                  icon: "image",
+                  label: t("composer.attach.library"),
+                  onPress: handleAttach,
+                  show: true,
+                },
+                {
+                  icon: "zap",
+                  label: t("composer.guide.improve"),
+                  onPress: handleImprovePress,
+                  show: hasText,
+                },
               ] as const
             )
               .filter((o) => o.show)
@@ -1075,12 +1424,30 @@ export function WorkerMobileComposer({
                     void o.onPress();
                   }}
                   accessibilityRole="button"
-                  style={({ pressed }) => [styles.sheetOption, pressed && { backgroundColor: colors.activeBg }]}
+                  style={({ pressed }) => [
+                    styles.sheetOption,
+                    pressed && { backgroundColor: colors.activeBg },
+                  ]}
                 >
-                  <View style={[styles.sheetOptionIcon, { backgroundColor: colors.activeBg }]}>
+                  <View
+                    style={[
+                      styles.sheetOptionIcon,
+                      { backgroundColor: colors.activeBg },
+                    ]}
+                  >
                     <Feather name={o.icon} size={18} color={colors.primary} />
                   </View>
-                  <Text style={[styles.sheetOptionText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{o.label}</Text>
+                  <Text
+                    style={[
+                      styles.sheetOptionText,
+                      {
+                        color: colors.foreground,
+                        fontFamily: "Inter_600SemiBold",
+                      },
+                    ]}
+                  >
+                    {o.label}
+                  </Text>
                 </Pressable>
               ))}
           </Pressable>
@@ -1088,23 +1455,68 @@ export function WorkerMobileComposer({
       </Modal>
 
       {/* Which language the worker writes or speaks in */}
-      <Modal visible={langOpen} transparent animationType="slide" onRequestClose={() => setLangOpen(false)}>
-        <Pressable style={styles.sheetBackdrop} onPress={() => setLangOpen(false)}>
+      <Modal
+        visible={langOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setLangOpen(false)}
+      >
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setLangOpen(false)}
+        >
           <Pressable
-            style={[styles.sheetCard, styles.langSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 12 }]}
+            style={[
+              styles.sheetCard,
+              styles.langSheet,
+              {
+                backgroundColor: colors.card,
+                paddingBottom: insets.bottom + 12,
+              },
+            ]}
             onPress={(e) => e.stopPropagation()}
           >
-            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <View
+              style={[styles.sheetHandle, { backgroundColor: colors.border }]}
+            />
             <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{t("composer.language.title")}</Text>
-              <Pressable onPress={() => setLangOpen(false)} hitSlop={10} accessibilityRole="button" accessibilityLabel={t("common.cancel")}>
+              <Text
+                style={[
+                  styles.sheetTitle,
+                  { color: colors.foreground, fontFamily: "Inter_700Bold" },
+                ]}
+              >
+                {t("composer.language.title")}
+              </Text>
+              <Pressable
+                onPress={() => setLangOpen(false)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={t("common.cancel")}
+              >
                 <Feather name="x" size={20} color={colors.mutedForeground} />
               </Pressable>
             </View>
-            <Text style={[styles.sheetIntro, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            <Text
+              style={[
+                styles.sheetIntro,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
+            >
               {t("composer.language.intro")}
             </Text>
-            <View style={[styles.searchBox, { borderColor: colors.border, backgroundColor: colors.background }]}>
+            <View
+              style={[
+                styles.searchBox,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
+            >
               <Feather name="search" size={16} color={colors.mutedForeground} />
               <TextInput
                 value={langSearch}
@@ -1112,17 +1524,48 @@ export function WorkerMobileComposer({
                 placeholder={t("composer.language.search")}
                 placeholderTextColor={colors.mutedForeground}
                 autoCorrect={false}
-                style={[styles.searchInput, NO_WEB_OUTLINE, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                style={[
+                  styles.searchInput,
+                  NO_WEB_OUTLINE,
+                  { color: colors.foreground, fontFamily: "Inter_400Regular" },
+                ]}
               />
             </View>
-            <ScrollView style={styles.sheetScroll} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              style={styles.sheetScroll}
+              keyboardShouldPersistTaps="handled"
+            >
               {[
-                ...(langSearch ? [] : [{ heading: t("composer.language.suggested"), items: NOTE_LANGUAGES.filter((o) => suggestedLanguages.includes(o.value)) }]),
-                { heading: langSearch ? null : t("composer.language.all"), items: languageResults.filter((o) => langSearch || !suggestedLanguages.includes(o.value)) },
+                ...(langSearch
+                  ? []
+                  : [
+                      {
+                        heading: t("composer.language.suggested"),
+                        items: NOTE_LANGUAGES.filter((o) =>
+                          suggestedLanguages.includes(o.value),
+                        ),
+                      },
+                    ]),
+                {
+                  heading: langSearch ? null : t("composer.language.all"),
+                  items: languageResults.filter(
+                    (o) => langSearch || !suggestedLanguages.includes(o.value),
+                  ),
+                },
               ].map((section, sectionIndex) => (
                 <View key={sectionIndex}>
                   {section.heading ? (
-                    <Text style={[styles.sheetSection, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>{section.heading}</Text>
+                    <Text
+                      style={[
+                        styles.sheetSection,
+                        {
+                          color: colors.mutedForeground,
+                          fontFamily: "Inter_600SemiBold",
+                        },
+                      ]}
+                    >
+                      {section.heading}
+                    </Text>
                   ) : null}
                   {section.items.map((opt) => {
                     const active = opt.value === language;
@@ -1136,29 +1579,63 @@ export function WorkerMobileComposer({
                         }}
                         accessibilityRole="button"
                         accessibilityState={{ selected: active }}
-                        style={[styles.langOption, active && { backgroundColor: colors.activeBg }]}
+                        style={[
+                          styles.langOption,
+                          active && { backgroundColor: colors.activeBg },
+                        ]}
                       >
                         <View style={styles.langOptionNames}>
                           <Text
                             numberOfLines={1}
-                            style={[styles.langOptionText, { color: active ? colors.primary : colors.foreground, fontFamily: "Inter_600SemiBold" }]}
+                            style={[
+                              styles.langOptionText,
+                              {
+                                color: active
+                                  ? colors.primary
+                                  : colors.foreground,
+                                fontFamily: "Inter_600SemiBold",
+                              },
+                            ]}
                           >
                             {opt.nativeLabel}
                           </Text>
                           {opt.nativeLabel !== opt.label ? (
-                            <Text numberOfLines={1} style={[styles.langOptionSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                            <Text
+                              numberOfLines={1}
+                              style={[
+                                styles.langOptionSub,
+                                {
+                                  color: colors.mutedForeground,
+                                  fontFamily: "Inter_400Regular",
+                                },
+                              ]}
+                            >
                               {opt.label}
                             </Text>
                           ) : null}
                         </View>
-                        {active ? <Feather name="check" size={18} color={colors.primary} /> : null}
+                        {active ? (
+                          <Feather
+                            name="check"
+                            size={18}
+                            color={colors.primary}
+                          />
+                        ) : null}
                       </Pressable>
                     );
                   })}
                 </View>
               ))}
               {languageResults.length === 0 ? (
-                <Text style={[styles.sheetIntro, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text
+                  style={[
+                    styles.sheetIntro,
+                    {
+                      color: colors.mutedForeground,
+                      fontFamily: "Inter_400Regular",
+                    },
+                  ]}
+                >
                   {t("composer.language.none")}
                 </Text>
               ) : null}
@@ -1170,7 +1647,13 @@ export function WorkerMobileComposer({
   );
 }
 
-type GuideAction = { label: string; onPress: () => void; primary?: boolean; icon?: React.ComponentProps<typeof Feather>["name"]; busy?: boolean };
+type GuideAction = {
+  label: string;
+  onPress: () => void;
+  primary?: boolean;
+  icon?: React.ComponentProps<typeof Feather>["name"];
+  busy?: boolean;
+};
 
 /** A message from the note guide, on the left of the task's conversation. */
 function GuideBubble({
@@ -1186,22 +1669,46 @@ function GuideBubble({
 }) {
   const colors = useColors();
   const { t } = usePreferences();
-  const accent = tone === "danger" ? colors.destructive : tone === "done" ? colors.success : colors.primary;
+  const accent =
+    tone === "danger"
+      ? colors.destructive
+      : tone === "done"
+        ? colors.success
+        : colors.primary;
   return (
     <View style={styles.guideRow} accessibilityRole="text">
       <View style={[styles.guideAvatar, { backgroundColor: accent + "1F" }]}>
-        <Feather name={tone === "danger" ? "alert-triangle" : tone === "done" ? "check" : "compass"} size={14} color={accent} />
+        <Feather
+          name={
+            tone === "danger"
+              ? "alert-triangle"
+              : tone === "done"
+                ? "check"
+                : "compass"
+          }
+          size={14}
+          color={accent}
+        />
       </View>
       <View
         style={[
           styles.guideBubble,
           {
-            backgroundColor: tone === "danger" ? colors.destructive + "12" : colors.card,
-            borderColor: tone === "danger" ? colors.destructive + "55" : colors.border,
+            backgroundColor:
+              tone === "danger" ? colors.destructive + "12" : colors.card,
+            borderColor:
+              tone === "danger" ? colors.destructive + "55" : colors.border,
           },
         ]}
       >
-        <Text style={[styles.guideMeta, { color: accent, fontFamily: "Inter_600SemiBold" }]}>{title ?? t("composer.guide.name")}</Text>
+        <Text
+          style={[
+            styles.guideMeta,
+            { color: accent, fontFamily: "Inter_600SemiBold" },
+          ]}
+        >
+          {title ?? t("composer.guide.name")}
+        </Text>
         {children}
         {actions.length > 0 && (
           <View style={styles.guideActions}>
@@ -1214,16 +1721,37 @@ function GuideBubble({
                 style={[
                   styles.guideChip,
                   a.primary
-                    ? { backgroundColor: colors.composerPurple, borderColor: colors.composerPurple }
-                    : { backgroundColor: "transparent", borderColor: colors.border },
+                    ? {
+                        backgroundColor: colors.composerPurple,
+                        borderColor: colors.composerPurple,
+                      }
+                    : {
+                        backgroundColor: "transparent",
+                        borderColor: colors.border,
+                      },
                 ]}
               >
                 {a.busy ? (
-                  <ActivityIndicator size="small" color={a.primary ? "#FFFFFF" : colors.primary} />
+                  <ActivityIndicator
+                    size="small"
+                    color={a.primary ? "#FFFFFF" : colors.primary}
+                  />
                 ) : a.icon ? (
-                  <Feather name={a.icon} size={13} color={a.primary ? "#FFFFFF" : colors.primary} />
+                  <Feather
+                    name={a.icon}
+                    size={13}
+                    color={a.primary ? "#FFFFFF" : colors.primary}
+                  />
                 ) : null}
-                <Text style={[styles.guideChipText, { color: a.primary ? "#FFFFFF" : colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                <Text
+                  style={[
+                    styles.guideChipText,
+                    {
+                      color: a.primary ? "#FFFFFF" : colors.foreground,
+                      fontFamily: "Inter_600SemiBold",
+                    },
+                  ]}
+                >
                   {a.label}
                 </Text>
               </Pressable>
@@ -1236,6 +1764,36 @@ function GuideBubble({
 }
 
 const styles = StyleSheet.create({
+  editorTools: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  editorTool: {
+    minHeight: 44,
+    paddingHorizontal: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  editorHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  largeEditor: {
+    flex: 1,
+    minHeight: 0,
+    padding: 16,
+    fontSize: 16,
+    lineHeight: 24,
+    textAlignVertical: "top",
+    fontFamily: "Inter_400Regular",
+  },
   wrap: {
     paddingTop: 4,
     gap: 8,
@@ -1327,7 +1885,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
     minHeight: 42,
-    maxHeight: 132,
+    maxHeight: 160,
     paddingTop: 11,
     paddingBottom: 11,
     textAlignVertical: "top",

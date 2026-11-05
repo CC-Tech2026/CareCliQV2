@@ -4,11 +4,13 @@ import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import { HubLayout } from "./HubLayout";
 
+const layout = vi.hoisted(() => ({ nav_layout: "sidebar" }));
+
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ user: { id: "md-1", role: "managing_director", full_name: "Morgan Lee" }, logout: vi.fn() }),
 }));
 vi.mock("@/contexts/AccessibilityContext", () => ({
-  useAccessibility: () => ({ translate: (s: string) => s, setThemeMode: vi.fn(), prefs: { nav_layout: "sidebar" } }),
+  useAccessibility: () => ({ translate: (s: string) => s, setThemeMode: vi.fn(), prefs: layout }),
 }));
 vi.mock("next-themes", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
 vi.mock("@/lib/api-fetch", () => ({ apiFetch: () => Promise.resolve({ ok: false, json: async () => ({}) }) }));
@@ -22,6 +24,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  layout.nav_layout = "sidebar";
   vi.unstubAllGlobals();
 });
 
@@ -69,4 +72,23 @@ it("carries the open complaints count onto the merged entry", () => {
 it("does not show workspace tabs on pages without siblings", () => {
   renderAt("/md/financial");
   expect(screen.queryByRole("navigation", { name: /pages$/ })).toBeNull();
+});
+
+it("keeps main navigation visible on the roster without a floating overlap", () => {
+  layout.nav_layout = "topbar";
+  renderAt("/coordinator/rostering");
+  const mainMenu = screen.getByRole("button", { name: /^Operations & Care$/ });
+  expect(mainMenu).toBeTruthy();
+  const tabs = screen.getByRole("navigation", { name: "Schedule & rostering pages" });
+  expect(within(tabs).getByRole("link", { name: /^Roster$/ }).getAttribute("aria-current")).toBe("page");
+  expect(within(tabs).queryByRole("link", { name: "Long shifts" })).toBeNull();
+  expect(mainMenu.closest(".sticky")).toBeNull();
+});
+
+it("uses the existing shift verification page as the only review destination", () => {
+  renderAt("/coordinator/verification");
+  const tabs = screen.getByRole("navigation", { name: "Shift notes pages" });
+  expect(within(tabs).getByRole("link", { name: "Shift verification" }).getAttribute("aria-current")).toBe("page");
+  expect(screen.queryByRole("link", { name: "Awaiting review" })).toBeNull();
+  expect(within(sidebar()).queryByRole("link", { name: "Shift approvals" })).toBeNull();
 });

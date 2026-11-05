@@ -1,3 +1,4 @@
+import { Feather } from "@expo/vector-icons";
 import { FontFamily } from "@/constants/typography";
 import { useColors } from "@/hooks/useColors";
 import { activeGoals } from "@/lib/client-utils";
@@ -35,14 +36,104 @@ function SupportCard({
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+/** Preserve recorded wording; split only explicit line breaks. */
+function GuidanceRows({
+  value,
+  danger = false,
+}: {
+  value: string;
+  danger?: boolean;
+}) {
+  const c = useColors();
+  const items = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return (
+    <View>
+      {items.map((item, index) => (
+        <View
+          key={index}
+          style={[
+            s.guidanceRow,
+            { borderTopColor: danger ? c.dangerBorder : c.border },
+          ]}
+        >
+          <Text
+            style={[
+              s.rowMarker,
+              { color: danger ? c.dangerText : c.mutedForeground },
+            ]}
+          >
+            {String(index + 1).padStart(2, "0")}
+          </Text>
+          <Text
+            selectable
+            style={[
+              s.body,
+              s.flex,
+              { color: danger ? c.dangerText : c.foreground },
+            ]}
+          >
+            {item}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function SafetyCard({
+  title,
+  label,
+  icon,
+  value,
+  danger = false,
+}: {
+  title: string;
+  label: string;
+  icon: React.ComponentProps<typeof Feather>["name"];
+  value: string;
+  danger?: boolean;
+}) {
   const c = useColors();
   return (
-    <View style={s.detail}>
-      <Text style={[s.label, { color: c.mutedForeground }]}>{label}</Text>
-      <Text selectable style={[s.body, { color: c.foreground }]}>
-        {value}
-      </Text>
+    <View
+      style={[
+        s.card,
+        danger && s.safetyAccent,
+        {
+          backgroundColor: danger ? c.dangerBg : c.card,
+          borderColor: danger ? c.dangerBorder : c.border,
+        },
+      ]}
+    >
+      <View style={s.headingRow}>
+        <View style={[s.iconTile, { backgroundColor: c.soft }]}>
+          <Feather
+            name={icon}
+            size={20}
+            color={danger ? c.dangerText : c.primary}
+          />
+        </View>
+        <View style={s.flex}>
+          <Text
+            style={[
+              s.eyebrow,
+              { color: danger ? c.dangerText : c.mutedForeground },
+            ]}
+          >
+            {label}
+          </Text>
+          <Text
+            accessibilityRole="header"
+            style={[s.heading, { color: danger ? c.dangerText : c.foreground }]}
+          >
+            {title}
+          </Text>
+        </View>
+      </View>
+      <GuidanceRows value={value} danger={danger} />
     </View>
   );
 }
@@ -122,95 +213,58 @@ export function ClientOverviewContent({
     <View style={s.container}>
       {section !== "goals" ? (
         <>
-          <View
-            accessibilityRole={allergies ? "alert" : undefined}
-            style={[
-              s.safety,
-              {
-                backgroundColor: allergies ? c.dangerBg : c.soft,
-                borderColor: allergies ? c.dangerBorder : c.border,
-              },
-            ]}
-          >
-            <View style={s.headingRow}>
-              <View style={s.flex}>
-                <Text
-                  accessibilityRole="header"
-                  style={[
-                    s.label,
-                    { color: allergies ? c.dangerText : c.foreground },
-                  ]}
-                >
-                  {allergies
-                    ? "Allergies: read before support"
-                    : "Allergy information not recorded"}
-                </Text>
-                <Text
-                  selectable
-                  style={[
-                    s.safetyBody,
-                    { color: allergies ? c.dangerText : c.mutedForeground },
-                  ]}
-                >
-                  {allergies ||
-                    "Check with your coordinator before providing support if you are unsure."}
-                </Text>
-              </View>
-            </View>
+          <View>
+            <Text
+              accessibilityRole="header"
+              style={[s.heading, { color: c.foreground }]}
+            >
+              Safety & support
+            </Text>
+            <Text style={[s.caption, { color: c.mutedForeground }]}>
+              Check before support and refer back during your shift
+            </Text>
           </View>
-
-          {communication ? (
-            <View
-              style={[
-                s.communication,
-                { backgroundColor: c.card, borderColor: c.border },
-              ]}
-            >
-              <View style={s.headingRow}>
-                <Text
-                  accessibilityRole="header"
-                  style={[s.heading, s.flex, { color: c.foreground }]}
-                >
-                  Communication
-                </Text>
-              </View>
-              <Text style={[s.caption, { color: c.mutedForeground }]}>
-                Preferences for your visit
-              </Text>
-              <Text
-                selectable
-                style={[s.communicationBody, { color: c.foreground }]}
-              >
-                {communication}
-              </Text>
-            </View>
+          <SafetyCard
+            title="Allergies & sensitivities"
+            label={allergies ? "Check exposure risks" : "Needs confirmation"}
+            icon="alert-triangle"
+            danger={!!allergies}
+            value={
+              allergies ||
+              "Allergy information is not recorded. Confirm with your coordinator before support if you are unsure."
+            }
+          />
+          {plan ? (
+            <SafetyCard
+              title="Behaviour support plan"
+              label="Follow during support"
+              icon="shield"
+              value={plan}
+            />
           ) : null}
-
-          {disability || plan || notes ? (
-            <SupportCard
-              title="Support needs"
-              subtitle="Care guidance for your visit"
-            >
-              {disability ? (
-                <Detail label="Primary disability" value={disability} />
-              ) : null}
-              {plan || notes ? (
-                <View style={[s.behaviour, { borderColor: c.border }]}>
-                  <View style={s.headingRow}>
-                    <Text
-                      accessibilityRole="header"
-                      style={[s.label, { color: c.foreground }]}
-                    >
-                      Behaviour support
-                    </Text>
-                  </View>
-                  {plan ? <Detail label="Support plan" value={plan} /> : null}
-                  {notes ? (
-                    <Detail label="Behaviour notes" value={notes} />
-                  ) : null}
-                </View>
-              ) : null}
-            </SupportCard>
+          {notes ? (
+            <SafetyCard
+              title="Behaviour support notes"
+              label="Know before you act"
+              icon="alert-circle"
+              value={notes}
+            />
+          ) : null}
+          {communication ? (
+            <SafetyCard
+              title="Communication"
+              label="How to communicate"
+              icon="message-circle"
+              value={communication}
+            />
+          ) : null}
+          {disability ? (
+            <SafetyCard
+              title="Primary disability"
+              label="Participant context"
+              icon="user"
+              value={disability}
+            />
           ) : null}
         </>
       ) : null}
@@ -303,30 +357,34 @@ const s = StyleSheet.create({
   },
   label: { fontFamily: FontFamily.interSemiBold, fontSize: 13, lineHeight: 20 },
   body: { fontFamily: FontFamily.interRegular, fontSize: 15, lineHeight: 24 },
-  detail: { gap: 6 },
-  safety: { borderRadius: 10, borderWidth: 1, borderLeftWidth: 3, padding: 14 },
-  safetyBody: {
-    fontFamily: FontFamily.interRegular,
-    fontSize: 14,
-    lineHeight: 22,
-    marginTop: 5,
+  safetyAccent: { borderLeftWidth: 4 },
+  eyebrow: {
+    fontFamily: FontFamily.interSemiBold,
+    fontSize: 11,
+    lineHeight: 17,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    marginBottom: 3,
   },
-  communication: {
-    padding: 18,
+  iconTile: {
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: 6,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  communicationBody: {
-    fontFamily: FontFamily.interMedium,
-    fontSize: 15,
-    lineHeight: 24,
-    marginTop: 4,
-  },
-  behaviour: {
+  guidanceRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingVertical: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 18,
-    gap: 16,
+  },
+  rowMarker: {
+    minWidth: 22,
+    fontFamily: FontFamily.interSemiBold,
+    fontSize: 12,
+    lineHeight: 24,
   },
   goal: {
     paddingTop: 16,

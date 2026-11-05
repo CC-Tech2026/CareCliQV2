@@ -1,7 +1,15 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import React, { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useT } from "@/context/PreferencesContext";
@@ -11,7 +19,11 @@ import { isCheckinSessionNote } from "@workspace/worker-compliance";
 import type { SessionNoteRecord } from "@/lib/worker-api";
 import { noteLanguageNative } from "@/lib/note-languages";
 import type { NoteComplianceFlag } from "@workspace/worker-compliance";
-import { buildAttachmentFileName, formatTimeWithZone, SESSION_NOTE_MAX } from "@/lib/shift-utils";
+import {
+  buildAttachmentFileName,
+  formatTimeWithZone,
+  SESSION_NOTE_MAX,
+} from "@/lib/shift-utils";
 
 type Props = {
   note: SessionNoteRecord;
@@ -77,7 +89,6 @@ export function WorkerMobileNoteBubble({
   const colors = useColors();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const [truncated, setTruncated] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.content);
@@ -96,20 +107,33 @@ export function WorkerMobileNoteBubble({
   const incidentReportCompleted =
     flag?.ruleId === 9 && flag.severity === "warn" && !flag.actionLabel;
   const canEditText = Boolean(
-    editable && !isCheckin && !isAttachment && !incidentReportCompleted && onSave,
+    editable &&
+    !isCheckin &&
+    !isAttachment &&
+    !incidentReportCompleted &&
+    onSave,
   );
   const canRemoveAttachment = Boolean(editable && isAttachment && onRemove);
   const displayContent = isAttachment
     ? `[Attachment: ${attachmentDisplayName(note, participantName, taskLabel)}]`
     : note.content;
   const wc = wordCount(displayContent);
-  const photoUrl = type === "photo" ? note.attachment_urls?.find((u) => u.startsWith("http")) : undefined;
+  const photoUrl =
+    type === "photo"
+      ? note.attachment_urls?.find((u) => u.startsWith("http"))
+      : undefined;
   const isFail = flag?.severity === "fail";
   const accent = isFail ? colors.destructive : colors.warning;
   // In a chat the time is enough; the review card keeps type and length.
-  const metaLine = (variant === "chat"
-    ? [time, isVoice ? "voice" : null, flag ? "flagged" : null]
-    : [time, isCheckin ? "check-in" : isVoice ? "voice" : type, `${wc} words`, flag ? "flagged" : null]
+  const metaLine = (
+    variant === "chat"
+      ? [time, isVoice ? "voice" : null, flag ? "flagged" : null]
+      : [
+          time,
+          isCheckin ? "check-in" : isVoice ? "voice" : type,
+          `${wc} words`,
+          flag ? "flagged" : null,
+        ]
   )
     .filter(Boolean)
     .join(" · ");
@@ -117,7 +141,7 @@ export function WorkerMobileNoteBubble({
   const handlePress = () => {
     if (editing) return;
     onPress?.();
-    if (truncated) setModalOpen(true);
+    setModalOpen(true);
   };
 
   const handleSave = () => {
@@ -133,14 +157,18 @@ export function WorkerMobileNoteBubble({
   };
 
   const handleRemovePress = () => {
-    showAlert(t("review.removeAttachmentTitle"), t("review.removeAttachmentBody"), [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("review.remove"),
-        style: "destructive",
-        onPress: () => onRemove?.(note.note_id),
-      },
-    ]);
+    showAlert(
+      t("review.removeAttachmentTitle"),
+      t("review.removeAttachmentBody"),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("review.remove"),
+          style: "destructive",
+          onPress: () => onRemove?.(note.note_id),
+        },
+      ],
+    );
   };
 
   const chat = variant === "chat";
@@ -150,13 +178,28 @@ export function WorkerMobileNoteBubble({
         styles.bubble,
         chat && styles.chatBubble,
         {
-          backgroundColor: isCheckin ? colors.clockInBg : chat ? colors.activeBg : colors.card,
-          borderColor: isCheckin ? colors.clockInBorder : flag ? accent : chat ? colors.primary + "26" : colors.border,
+          backgroundColor: isCheckin
+            ? colors.clockInBg
+            : chat
+              ? colors.activeBg
+              : colors.card,
+          borderColor: isCheckin
+            ? colors.clockInBorder
+            : flag
+              ? accent
+              : chat
+                ? colors.primary + "26"
+                : colors.border,
         },
       ]}
     >
       {categoryLabel && !chat ? (
-        <Text style={[styles.category, { color: colors.composerPurple, fontFamily: "Inter_600SemiBold" }]}>
+        <Text
+          style={[
+            styles.category,
+            { color: colors.composerPurple, fontFamily: "Inter_600SemiBold" },
+          ]}
+        >
           {categoryLabel}
         </Text>
       ) : null}
@@ -171,18 +214,40 @@ export function WorkerMobileNoteBubble({
             placeholderTextColor={colors.mutedForeground}
             style={[
               styles.editInput,
-              { color: colors.foreground, borderColor: colors.border, fontFamily: "Inter_400Regular" },
+              {
+                color: colors.foreground,
+                borderColor: colors.border,
+                fontFamily: "Inter_400Regular",
+              },
             ]}
           />
           <View style={styles.editActions}>
-            <Pressable onPress={handleSave} style={[styles.saveBtn, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.saveBtnText, { fontFamily: "Inter_600SemiBold" }]}>{t("common.save")}</Text>
+            <Pressable
+              onPress={handleSave}
+              style={[styles.saveBtn, { backgroundColor: colors.primary }]}
+            >
+              <Text
+                style={[
+                  styles.saveBtnText,
+                  { fontFamily: "Inter_600SemiBold" },
+                ]}
+              >
+                {t("common.save")}
+              </Text>
             </Pressable>
             <Pressable
               onPress={handleCancel}
               style={[styles.cancelEditBtn, { borderColor: colors.border }]}
             >
-              <Text style={[styles.cancelEditText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+              <Text
+                style={[
+                  styles.cancelEditText,
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: "Inter_600SemiBold",
+                  },
+                ]}
+              >
                 {t("common.cancel")}
               </Text>
             </Pressable>
@@ -191,24 +256,45 @@ export function WorkerMobileNoteBubble({
       ) : (
         <>
           {photoUrl ? (
-            <Image source={{ uri: photoUrl }} style={styles.photoThumb} contentFit="cover" />
+            <Image
+              source={{ uri: photoUrl }}
+              style={styles.photoThumb}
+              contentFit="cover"
+            />
           ) : null}
           <View style={styles.contentRow}>
             {isVoice ? (
-              <Feather name="mic" size={14} color={colors.composerPink} style={styles.voiceIcon} />
+              <Feather
+                name="mic"
+                size={14}
+                color={colors.composerPink}
+                style={styles.voiceIcon}
+              />
             ) : null}
             <Text
-              style={[styles.content, { color: colors.foreground, fontFamily: "Inter_400Regular", flex: 1 }]}
+              style={[
+                styles.content,
+                {
+                  color: colors.foreground,
+                  fontFamily: "Inter_400Regular",
+                  flex: 1,
+                },
+              ]}
               numberOfLines={editable ? undefined : CLAMP_LINES}
-              onTextLayout={(e) => {
-                if (!editable && !truncated && e.nativeEvent.lines.length > CLAMP_LINES) setTruncated(true);
-              }}
             >
               {displayContent}
             </Text>
           </View>
           {note.needs_translation ? (
-            <Text style={[styles.checkinNote, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            <Text
+              style={[
+                styles.checkinNote,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
+            >
               {t("notes.awaitingTranslation")}
             </Text>
           ) : note.original_content ? (
@@ -219,38 +305,88 @@ export function WorkerMobileNoteBubble({
                 accessibilityRole="button"
                 accessibilityState={{ expanded: showOriginal }}
               >
-                <Text style={[styles.originalToggle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                  {t("notes.translatedFrom", { language: noteLanguageNative(note.original_language) })} ·{" "}
-                  {showOriginal ? t("notes.hideOriginal") : t("notes.showOriginal")}
+                <Text
+                  style={[
+                    styles.originalToggle,
+                    { color: colors.primary, fontFamily: "Inter_600SemiBold" },
+                  ]}
+                >
+                  {t("notes.translatedFrom", {
+                    language: noteLanguageNative(note.original_language),
+                  })}{" "}
+                  ·{" "}
+                  {showOriginal
+                    ? t("notes.hideOriginal")
+                    : t("notes.showOriginal")}
                 </Text>
               </Pressable>
               {showOriginal ? (
-                <Text style={[styles.originalText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text
+                  style={[
+                    styles.originalText,
+                    {
+                      color: colors.mutedForeground,
+                      fontFamily: "Inter_400Regular",
+                    },
+                  ]}
+                >
                   {note.original_content}
                 </Text>
               ) : null}
             </View>
           ) : null}
-          {!editable && truncated ? (
-            <Pressable onPress={() => setModalOpen(true)} hitSlop={6}>
-              <Text style={[styles.readMore, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                ..... Read full note
+          {!editable ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Read full note"
+              onPress={() => setModalOpen(true)}
+              style={{ minHeight: 44, justifyContent: "center" }}
+            >
+              <Text
+                style={[
+                  styles.readMore,
+                  { color: colors.primary, fontFamily: "Inter_600SemiBold" },
+                ]}
+              >
+                Read full note
               </Text>
             </Pressable>
           ) : null}
           {isCheckin ? (
-            <Text style={[styles.checkinNote, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            <Text
+              style={[
+                styles.checkinNote,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
+            >
               {t("review.checkinNotEditable")}
             </Text>
           ) : null}
           {incidentReportCompleted ? (
-            <Text style={[styles.checkinNote, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            <Text
+              style={[
+                styles.checkinNote,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
+            >
               {t("review.incidentNoteNotEditable")}
             </Text>
           ) : null}
           <View style={styles.metaRow}>
             <Text
-              style={[styles.time, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
+              style={[
+                styles.time,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
               numberOfLines={2}
             >
               {metaLine}
@@ -264,7 +400,12 @@ export function WorkerMobileNoteBubble({
                 style={styles.actionBtn}
               >
                 <Feather name="edit-2" size={12} color={colors.primary} />
-                <Text style={[styles.actionBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                <Text
+                  style={[
+                    styles.actionBtnText,
+                    { color: colors.primary, fontFamily: "Inter_600SemiBold" },
+                  ]}
+                >
                   {t("review.edit")}
                 </Text>
               </Pressable>
@@ -278,7 +419,15 @@ export function WorkerMobileNoteBubble({
                 style={styles.actionBtn}
               >
                 <Feather name="trash-2" size={12} color={colors.destructive} />
-                <Text style={[styles.actionBtnText, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
+                <Text
+                  style={[
+                    styles.actionBtnText,
+                    {
+                      color: colors.destructive,
+                      fontFamily: "Inter_600SemiBold",
+                    },
+                  ]}
+                >
                   {t("review.remove")}
                 </Text>
               </Pressable>
@@ -288,25 +437,45 @@ export function WorkerMobileNoteBubble({
       )}
 
       {!editing && flag ? (
-            <View style={[styles.flagBox, { borderColor: accent + "55", backgroundColor: accent + "14" }]}>
-              <Text style={[styles.flagTitle, { color: accent, fontFamily: "Inter_600SemiBold" }]}>
-                Rule {flag.ruleId} — {flag.ruleName}
+        <View
+          style={[
+            styles.flagBox,
+            { borderColor: accent + "55", backgroundColor: accent + "14" },
+          ]}
+        >
+          <Text
+            style={[
+              styles.flagTitle,
+              { color: accent, fontFamily: "Inter_600SemiBold" },
+            ]}
+          >
+            Rule {flag.ruleId} — {flag.ruleName}
+          </Text>
+          <Text
+            style={[
+              styles.flagMsg,
+              { color: colors.foreground, fontFamily: "Inter_400Regular" },
+            ]}
+          >
+            {flag.message}
+          </Text>
+          {flag.actionLabel && onIncidentReport ? (
+            <Pressable
+              onPress={() => onIncidentReport(note.note_id, note.content)}
+              style={[styles.flagBtn, { backgroundColor: colors.destructive }]}
+            >
+              <Text
+                style={[
+                  styles.flagBtnText,
+                  { fontFamily: "Inter_600SemiBold" },
+                ]}
+              >
+                {flag.actionLabel}
               </Text>
-              <Text style={[styles.flagMsg, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                {flag.message}
-              </Text>
-              {flag.actionLabel && onIncidentReport ? (
-                <Pressable
-                  onPress={() => onIncidentReport(note.note_id, note.content)}
-                  style={[styles.flagBtn, { backgroundColor: colors.destructive }]}
-                >
-                  <Text style={[styles.flagBtnText, { fontFamily: "Inter_600SemiBold" }]}>
-                    {flag.actionLabel}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
+            </Pressable>
           ) : null}
+        </View>
+      ) : null}
     </View>
   );
 
@@ -315,43 +484,108 @@ export function WorkerMobileNoteBubble({
       {editable ? (
         bubbleContent
       ) : (
-        <Pressable onPress={handlePress} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}>
+        <Pressable
+          onPress={handlePress}
+          style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+        >
           {bubbleContent}
         </Pressable>
       )}
 
-      <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={() => setModalOpen(false)}>
+      <Modal
+        visible={modalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModalOpen(false)}
+      >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 16 }]}>
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                backgroundColor: colors.card,
+                paddingBottom: insets.bottom + 16,
+              },
+            ]}
+          >
             <View style={styles.modalHandleWrap}>
-              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+              <View
+                style={[styles.modalHandle, { backgroundColor: colors.border }]}
+              />
             </View>
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderText}>
                 {categoryLabel ? (
                   <Text
-                    style={[styles.category, { color: colors.composerPurple, fontFamily: "Inter_600SemiBold" }]}
+                    style={[
+                      styles.category,
+                      {
+                        color: colors.composerPurple,
+                        fontFamily: "Inter_600SemiBold",
+                      },
+                    ]}
                   >
                     {categoryLabel}
                   </Text>
                 ) : null}
-                <Text style={[styles.time, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text
+                  style={[
+                    styles.time,
+                    {
+                      color: colors.mutedForeground,
+                      fontFamily: "Inter_400Regular",
+                    },
+                  ]}
+                >
                   {metaLine}
                 </Text>
               </View>
-              <Pressable onPress={() => setModalOpen(false)} hitSlop={8}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close full note"
+                onPress={() => setModalOpen(false)}
+                style={{
+                  minHeight: 44,
+                  minWidth: 44,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 <Feather name="x" size={22} color={colors.mutedForeground} />
               </Pressable>
             </View>
-            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={{ paddingBottom: 24 }}
+              showsVerticalScrollIndicator
+            >
               {photoUrl ? (
-                <Image source={{ uri: photoUrl }} style={styles.photoThumbLarge} contentFit="contain" />
+                <Image
+                  source={{ uri: photoUrl }}
+                  style={styles.photoThumbLarge}
+                  contentFit="contain"
+                />
               ) : null}
               <View style={styles.contentRow}>
                 {isVoice ? (
-                  <Feather name="mic" size={14} color={colors.composerPink} style={styles.voiceIcon} />
+                  <Feather
+                    name="mic"
+                    size={14}
+                    color={colors.composerPink}
+                    style={styles.voiceIcon}
+                  />
                 ) : null}
-                <Text style={[styles.modalContent, { color: colors.foreground, fontFamily: "Inter_400Regular", flex: 1 }]}>
+                <Text
+                  selectable
+                  style={[
+                    styles.modalContent,
+                    {
+                      color: colors.foreground,
+                      fontFamily: "Inter_400Regular",
+                      flex: 1,
+                    },
+                  ]}
+                >
                   {displayContent}
                 </Text>
               </View>
@@ -375,7 +609,8 @@ const styles = StyleSheet.create({
   },
   chatBubble: {
     alignSelf: "flex-end",
-    maxWidth: "88%",
+    width: "100%",
+    maxWidth: "100%",
     minWidth: 0,
     marginHorizontal: 0,
     marginVertical: 0,
@@ -519,7 +754,7 @@ const styles = StyleSheet.create({
   modalSheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: "80%",
+    height: "80%",
     paddingHorizontal: 18,
     paddingTop: 8,
   },

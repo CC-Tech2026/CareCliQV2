@@ -23,13 +23,20 @@ type Props<T extends string> = {
 
 /** Icon-over-label tabs for moving around a live shift. Scrolls sideways when
  * the tabs don't fit, so a narrow phone never squeezes the labels. */
-export function WorkerShiftTabBar<T extends string>({ tabs, activeTab, onChange }: Props<T>) {
+export function WorkerShiftTabBar<T extends string>({
+  tabs,
+  activeTab,
+  onChange,
+}: Props<T>) {
   const colors = useColors();
 
   return (
     <View
       accessibilityRole="tablist"
-      style={[styles.wrap, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
+      style={[
+        styles.wrap,
+        { backgroundColor: colors.card, borderBottomColor: colors.border },
+      ]}
     >
       <ScrollView
         horizontal
@@ -44,7 +51,11 @@ export function WorkerShiftTabBar<T extends string>({ tabs, activeTab, onChange 
               key={tab.id}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
-              accessibilityLabel={[tab.label, tab.badge, tab.attention ? "needs attention" : null]
+              accessibilityLabel={[
+                tab.label,
+                tab.badge,
+                tab.attention ? "needs attention" : null,
+              ]
                 .filter(Boolean)
                 .join(", ")}
               onPress={() => {
@@ -52,7 +63,7 @@ export function WorkerShiftTabBar<T extends string>({ tabs, activeTab, onChange 
                 Haptics.selectionAsync();
                 onChange(tab.id);
               }}
-              style={styles.tab}
+              style={[styles.tab, tabs.length > 4 && styles.compactTab]}
             >
               <View style={styles.iconRow}>
                 <View>
@@ -61,14 +72,31 @@ export function WorkerShiftTabBar<T extends string>({ tabs, activeTab, onChange 
                     <View
                       style={[
                         styles.dot,
-                        { backgroundColor: colors.destructive, borderColor: colors.card },
+                        {
+                          backgroundColor: colors.destructive,
+                          borderColor: colors.card,
+                        },
                       ]}
                     />
                   ) : null}
                 </View>
                 {tab.badge ? (
-                  <View style={[styles.badge, { backgroundColor: active ? colors.activeBg : colors.muted }]}>
-                    <Text style={[styles.badgeText, { color, fontFamily: FontFamily.interSemiBold }]}>
+                  <View
+                    style={[
+                      styles.badge,
+                      {
+                        backgroundColor: active
+                          ? colors.activeBg
+                          : colors.muted,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.badgeText,
+                        { color, fontFamily: FontFamily.interSemiBold },
+                      ]}
+                    >
                       {tab.badge}
                     </Text>
                   </View>
@@ -80,7 +108,9 @@ export function WorkerShiftTabBar<T extends string>({ tabs, activeTab, onChange 
                   styles.label,
                   {
                     color,
-                    fontFamily: active ? FontFamily.interBold : FontFamily.interMedium,
+                    fontFamily: active
+                      ? FontFamily.interBold
+                      : FontFamily.interMedium,
                   },
                 ]}
               >
@@ -101,6 +131,7 @@ export function WorkerShiftTabBar<T extends string>({ tabs, activeTab, onChange 
 }
 
 const styles = StyleSheet.create({
+  compactTab: { flex: 1, minWidth: 0, paddingHorizontal: 4 },
   wrap: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },

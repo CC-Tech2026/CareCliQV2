@@ -1,23 +1,25 @@
+import { TaskDocumentationReview } from "@/components/worker/TaskDocumentationReview";
 import { FontFamily } from "@/constants/typography";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { useQuery } from "@tanstack/react-query";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ClockedInBanner } from "@/components/worker/ClockedInBanner";
 import { ComplianceScoreBar } from "@/components/worker/ComplianceScoreBar";
 import { DocumentationComplianceBar } from "@/components/worker/DocumentationComplianceBar";
 import { LongShiftEngagementPanel } from "@/components/worker/LongShiftEngagementPanel";
-import { PreShiftParticipantCard } from "@/components/worker/PreShiftParticipantCard";
+import { DuringShiftSupport } from "@/components/worker/DuringShiftSupport";
 import { WorkerMobileNoteBubble } from "@/components/worker/WorkerMobileNoteBubble";
-import { WorkerMobileParticipantStrip } from "@/components/worker/WorkerMobileParticipantStrip";
-import { WorkerMobileRiskStrip } from "@/components/worker/WorkerMobileRiskStrip";
 import { WorkerMobileMedicationChecklist } from "@/components/worker/WorkerMobileMedicationChecklist";
 import { WorkerMobilePrnMedications } from "@/components/worker/WorkerMobilePrnMedications";
 import { WorkerMobileTaskList } from "@/components/worker/WorkerMobileTaskList";
-import { WorkerShiftTabBar, type ShiftTab } from "@/components/worker/WorkerShiftTabBar";
+import {
+  WorkerShiftTabBar,
+  type ShiftTab,
+} from "@/components/worker/WorkerShiftTabBar";
 import { useOffline } from "@/context/OfflineContext";
 import { useColors } from "@/hooks/useColors";
 import type {
@@ -38,6 +40,7 @@ import {
   isMandatoryTask,
   MIN_EVIDENCE_NOTE_CHARS,
   SESSION_NOTE_MAX,
+  parseIsoMs,
 } from "@/lib/shift-utils";
 import type { ComplianceEvaluation } from "@workspace/worker-compliance";
 
@@ -149,7 +152,7 @@ function taskHasMobileDocumentation(
   return combined.length >= MIN_EVIDENCE_NOTE_CHARS;
 }
 
-type SessionTab = "tasks" | "medications" | "participant" | "progress";
+type SessionTab = "tasks" | "medications" | "support" | "briefing" | "progress";
 
 export function WorkerMobileSessionScreen({
   shiftId,
@@ -179,10 +182,13 @@ export function WorkerMobileSessionScreen({
   const [localSessionNotes, setLocalSessionNotes] = useState(sessionNotes);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const [tab, setTab] = useState<SessionTab>("tasks");
   // A tab mounts on first visit and then stays mounted (hidden), so a half
   // written note or a scroll position survives a look at another tab.
-  const [visited, setVisited] = useState<Set<SessionTab>>(() => new Set(["tasks"]));
+  const [visited, setVisited] = useState<Set<SessionTab>>(
+    () => new Set(["tasks"]),
+  );
   const openTab = useCallback((next: SessionTab) => {
     setTab(next);
     setVisited((prev) => (prev.has(next) ? prev : new Set(prev).add(next)));
@@ -240,7 +246,14 @@ export function WorkerMobileSessionScreen({
       : `${activeTasks.filter((t) => t.completed).length} of ${activeTasks.length} done`;
 
   const untaskedNotes = useMemo(
-    () => localSessionNotes.filter((n) => !n.task_id),
+    () =>
+      localSessionNotes
+        .filter((n) => !n.task_id)
+        .sort(
+          (a, b) =>
+            (parseIsoMs(a.created_at ?? a.auto_saved_at) ?? 0) -
+            (parseIsoMs(b.created_at ?? b.auto_saved_at) ?? 0),
+        ),
     [localSessionNotes],
   );
 
@@ -362,25 +375,41 @@ export function WorkerMobileSessionScreen({
       id: "tasks",
       label: "Tasks",
       badge: activeTasks.length > 0 ? tasksBadge : undefined,
-      renderIcon: (color) => <Feather name="check-square" size={20} color={color} />,
+      renderIcon: (color) => (
+        <Feather name="check-square" size={20} color={color} />
+      ),
     },
     {
       id: "medications",
-      label: "Medications",
+      label: "Meds",
       badge: dosesToLog.length > 0 ? String(dosesToLog.length) : undefined,
       attention: doseDueNow,
-      renderIcon: (color) => <MaterialCommunityIcons name="pill" size={21} color={color} />,
+      renderIcon: (color) => (
+        <MaterialCommunityIcons name="pill" size={21} color={color} />
+      ),
     },
     {
-      id: "participant",
-      label: "Participant",
-      renderIcon: (color) => <Feather name="user" size={20} color={color} />,
+      id: "support",
+      label: "Support",
+      attention: healthAlerts.length > 0,
+      renderIcon: (color) => <Feather name="shield" size={20} color={color} />,
+    },
+    {
+      id: "briefing",
+      label: "Briefing",
+      renderIcon: (color) => (
+        <Feather name="file-text" size={20} color={color} />
+      ),
     },
     {
       id: "progress",
       label: "Progress",
-      attention: Boolean(checkinStatus?.can_submit_checkin || checkinStatus?.checkin_overdue),
-      renderIcon: (color) => <Feather name="activity" size={20} color={color} />,
+      attention: Boolean(
+        checkinStatus?.can_submit_checkin || checkinStatus?.checkin_overdue,
+      ),
+      renderIcon: (color) => (
+        <Feather name="activity" size={20} color={color} />
+      ),
     },
   ];
 
@@ -404,9 +433,6 @@ export function WorkerMobileSessionScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <WorkerMobileParticipantStrip participantName={participantName} />
-      {/* Safety alerts stay above the tabs so they are never out of sight. */}
-      <WorkerMobileRiskStrip alerts={healthAlerts} />
       <WorkerShiftTabBar tabs={tabs} activeTab={tab} onChange={openTab} />
 
       {panel(
@@ -475,11 +501,16 @@ export function WorkerMobileSessionScreen({
               { borderColor: colors.border, backgroundColor: colors.card },
             ]}
           >
-            <View style={[styles.taskHeader, { borderBottomColor: colors.border }]}>
+            <View
+              style={[styles.taskHeader, { borderBottomColor: colors.border }]}
+            >
               <Text
                 style={[
                   styles.taskHeaderTitle,
-                  { color: colors.foreground, fontFamily: FontFamily.interSemiBold },
+                  {
+                    color: colors.foreground,
+                    fontFamily: FontFamily.interSemiBold,
+                  },
                 ]}
               >
                 Medications
@@ -488,7 +519,10 @@ export function WorkerMobileSessionScreen({
                 <Text
                   style={[
                     styles.taskHeaderCount,
-                    { color: colors.mutedForeground, fontFamily: FontFamily.interMedium },
+                    {
+                      color: colors.mutedForeground,
+                      fontFamily: FontFamily.interMedium,
+                    },
                   ]}
                 >
                   {dosesToLog.length === 0
@@ -501,10 +535,14 @@ export function WorkerMobileSessionScreen({
               <Text
                 style={[
                   styles.medicationHint,
-                  { color: colors.mutedForeground, fontFamily: FontFamily.interMedium },
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: FontFamily.interMedium,
+                  },
                 ]}
               >
-                Logging every dose here also completes the {medicationTask.label} task.
+                Logging every dose here also completes the{" "}
+                {medicationTask.label} task.
               </Text>
             ) : null}
             {/* Only completes the task from this tab while it is open, and not
@@ -514,9 +552,15 @@ export function WorkerMobileSessionScreen({
               shiftId={shiftId}
               disabled={disabled || busy}
               onStatusChange={
-                medicationTask && tab === "medications" && activeTaskId !== medicationTask.task_id
+                medicationTask &&
+                tab === "medications" &&
+                activeTaskId !== medicationTask.task_id
                   ? (allLogged, hasScheduled) => {
-                      if (allLogged && hasScheduled && !medicationTask.completed) {
+                      if (
+                        allLogged &&
+                        hasScheduled &&
+                        !medicationTask.completed
+                      ) {
                         void toggleTask(medicationTask.task_id);
                       }
                     }
@@ -537,11 +581,18 @@ export function WorkerMobileSessionScreen({
               { borderColor: colors.border, backgroundColor: colors.card },
             ]}
           >
-            <MaterialCommunityIcons name="pill" size={26} color={colors.mutedForeground} />
+            <MaterialCommunityIcons
+              name="pill"
+              size={26}
+              color={colors.mutedForeground}
+            />
             <Text
               style={[
                 styles.emptyTitle,
-                { color: colors.foreground, fontFamily: FontFamily.interSemiBold },
+                {
+                  color: colors.foreground,
+                  fontFamily: FontFamily.interSemiBold,
+                },
               ]}
             >
               No medications on this shift
@@ -549,7 +600,10 @@ export function WorkerMobileSessionScreen({
             <Text
               style={[
                 styles.emptyBody,
-                { color: colors.mutedForeground, fontFamily: FontFamily.interMedium },
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: FontFamily.interMedium,
+                },
               ]}
             >
               Scheduled doses and as needed (PRN) medications show here when{" "}
@@ -560,13 +614,23 @@ export function WorkerMobileSessionScreen({
       )}
 
       {panel(
-        "participant",
+        "support",
         <View style={styles.participantWrap}>
-          <PreShiftParticipantCard
+          <DuringShiftSupport
             shiftId={shiftId}
             participantId={participantId}
-            title={`About ${participantFirstName || participantName}`}
-            intro="Their support needs, today's instructions, last shift's handover and who to call."
+            healthAlerts={healthAlerts}
+          />
+        </View>,
+      )}
+
+      {panel(
+        "briefing",
+        <View style={styles.participantWrap}>
+          <DuringShiftSupport
+            shiftId={shiftId}
+            participantId={participantId}
+            section="briefing"
           />
         </View>,
       )}
@@ -574,6 +638,80 @@ export function WorkerMobileSessionScreen({
       {panel(
         "progress",
         <>
+          <View
+            style={[
+              styles.progressCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.progressHeading}>
+              <Text
+                accessibilityRole="header"
+                style={[styles.progressTitle, { color: colors.foreground }]}
+              >
+                Shift progress
+              </Text>
+              <Text
+                style={[
+                  styles.progressCaption,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                {sessionElapsed || "In progress"}
+              </Text>
+            </View>
+            <View style={styles.progressStats}>
+              {[
+                {
+                  label: "Tasks done",
+                  value: `${activeTasks.filter((t) => t.completed).length}/${activeTasks.length}`,
+                  target: "tasks" as const,
+                },
+                {
+                  label: "Doses to log",
+                  value: String(dosesToLog.length),
+                  target: "medications" as const,
+                },
+              ].map((item) => (
+                <Pressable
+                  key={item.target}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    item.label + ": " + item.value + ". Open " + item.target
+                  }
+                  onPress={() => openTab(item.target)}
+                  style={[
+                    styles.progressStat,
+                    { backgroundColor: colors.soft },
+                  ]}
+                >
+                  <View style={styles.progressHeading}>
+                    <Text
+                      style={[
+                        styles.progressValue,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      {item.value}
+                    </Text>
+                    <Feather
+                      name="arrow-up-right"
+                      size={14}
+                      color={colors.primary}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.progressCaption,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
           <ClockedInBanner
             clockedInAt={clockedInAt}
             participantName={participantName}
@@ -605,6 +743,17 @@ export function WorkerMobileSessionScreen({
             </View>
           )}
 
+          <TaskDocumentationReview
+            tasks={localTasks}
+            notes={localSessionNotes}
+            compliance={compliance}
+            participantFirstName={participantFirstName}
+            onOpenTask={(id) => {
+              setActiveTaskId(id);
+              openTab("tasks");
+            }}
+          />
+
           {/* Task-scoped notes render inline in their own task's thread on the
               Tasks tab - this is only for notes with no task_id, e.g.
               long-shift check-ins, which would otherwise never be shown. */}
@@ -619,9 +768,20 @@ export function WorkerMobileSessionScreen({
                   },
                 ]}
               >
-                CHECK-INS
+                SHIFT ACTIVITY
               </Text>
-              {untaskedNotes.map((note) => {
+              {(showAllHistory
+                ? untaskedNotes
+                : untaskedNotes.filter(
+                    (note, index) =>
+                      index >= untaskedNotes.length - 2 ||
+                      compliance.noteFlags.some(
+                        (flag) =>
+                          flag.noteId === note.note_id &&
+                          flag.severity === "fail",
+                      ),
+                  )
+              ).map((note) => {
                 const flag = compliance.noteFlags.find(
                   (f) => f.noteId === note.note_id,
                 );
@@ -632,14 +792,47 @@ export function WorkerMobileSessionScreen({
                     participantName={participantName}
                     flag={flag}
                     onIncidentReport={
-                      flag?.severity === "fail" ? onOpenIncidentReport : undefined
+                      flag?.severity === "fail"
+                        ? onOpenIncidentReport
+                        : undefined
                     }
                     tz={tz}
                   />
                 );
               })}
+              {untaskedNotes.length > 2 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showAllHistory }}
+                  onPress={() => setShowAllHistory((v) => !v)}
+                  style={[
+                    styles.historyToggle,
+                    { backgroundColor: colors.soft },
+                  ]}
+                >
+                  <Text
+                    style={[styles.progressCaption, { color: colors.primary }]}
+                  >
+                    {showAllHistory
+                      ? "Show recent activity"
+                      : "View all " + untaskedNotes.length + " entries"}
+                  </Text>
+                  <Feather
+                    name={showAllHistory ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color={colors.primary}
+                  />
+                </Pressable>
+              ) : null}
             </>
           )}
+          {!untaskedNotes.length ? (
+            <Text
+              style={[styles.activityEmpty, { color: colors.mutedForeground }]}
+            >
+              No shift activity recorded yet. Task notes stay with their tasks.
+            </Text>
+          ) : null}
         </>,
       )}
     </View>
@@ -647,6 +840,57 @@ export function WorkerMobileSessionScreen({
 }
 
 const styles = StyleSheet.create({
+  progressCard: {
+    marginHorizontal: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    padding: 12,
+    gap: 10,
+  },
+  progressHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  progressTitle: {
+    fontFamily: FontFamily.interSemiBold,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  progressCaption: {
+    fontFamily: FontFamily.interMedium,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  progressStats: { flexDirection: "row", gap: 8 },
+  progressStat: {
+    flex: 1,
+    minHeight: 64,
+    borderRadius: 8,
+    padding: 10,
+    gap: 3,
+  },
+  progressValue: {
+    fontFamily: FontFamily.interBold,
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  historyToggle: {
+    marginHorizontal: 14,
+    paddingHorizontal: 12,
+    minHeight: 44,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  activityEmpty: {
+    marginHorizontal: 16,
+    fontFamily: FontFamily.interRegular,
+    fontSize: 12,
+    lineHeight: 18,
+  },
   container: {
     flex: 1,
   },
@@ -658,6 +902,7 @@ const styles = StyleSheet.create({
   },
   participantWrap: {
     paddingHorizontal: 14,
+    paddingTop: 10,
   },
   medicationHint: {
     fontSize: 13,
@@ -720,6 +965,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   scoreWrap: {
-    marginTop: 12,
+    marginHorizontal: 14,
   },
 });
