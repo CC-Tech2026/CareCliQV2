@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { workerBottomNavHeight } from "@/components/worker/WorkerBottomNav";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ShiftListCard } from "@/components/worker/ShiftListCard";
+import { ShiftOffersSection } from "@/components/worker/ShiftOffersSection";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
 import { WeekCalendar, localDayKey } from "@/components/worker/WeekCalendar";
 import { useOffline } from "@/context/OfflineContext";
@@ -119,6 +120,7 @@ export default function MyShiftsScreen() {
 
   const listHeader = (
     <View style={styles.listHeader}>
+      <ShiftOffersSection />
       <Pressable
         accessibilityRole="button"
         onPress={() => router.push("/worker/availability" as never)}
@@ -152,7 +154,7 @@ export default function MyShiftsScreen() {
         }}
       >
         {selectedKey === todayKey
-          ? "Today"
+          ? t("shifts.today")
           : selectedDate.toLocaleDateString("en-AU", {
               timeZone: getAppTimezone(),
               weekday: "long",
@@ -171,8 +173,16 @@ export default function MyShiftsScreen() {
           fontSize: 13,
         }}
       >
-        {sortedShifts.length} shift{sortedShifts.length === 1 ? "" : "s"}
-        {!isOnline ? " saved on this device" : " on this day"}
+        {t(
+          sortedShifts.length === 1
+            ? isOnline
+              ? "shifts.countOne"
+              : "shifts.countOneOffline"
+            : isOnline
+              ? "shifts.countMany"
+              : "shifts.countManyOffline",
+          { count: sortedShifts.length },
+        )}
       </Text>
     </View>
   );
@@ -247,7 +257,7 @@ export default function MyShiftsScreen() {
               alignItems: "center",
             }}
           >
-            <Text style={{ color: colors.primary }}>Try again</Text>
+            <Text style={{ color: colors.primary }}>{t("shifts.tryAgain")}</Text>
           </Pressable>
         </ScrollView>
       ) : (

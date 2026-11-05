@@ -74,8 +74,10 @@ import {
   newClientNoteId,
   parseIsoMs,
   resolveActiveShiftTasks,
+  shiftInitials,
   timerAnchorIso,
 } from "@/lib/shift-utils";
+import { useT } from "@/context/PreferencesContext";
 import { evaluateWorkerCompliance } from "@workspace/worker-compliance";
 import {
   loadFiledNoteIds,
@@ -277,6 +279,31 @@ function WorkerMobileShiftContent({
   }, [resumingDocs, activeTasks, onRefresh]);
 
   const participantName = shift.participant_name ?? "Participant";
+  const t = useT();
+  // One tap to the people and place a shift depends on, before clocking in.
+  const dial = (value?: string | null) => {
+    const digits = (value ?? "").replace(/[^\d+]/g, "");
+    if (digits) void Linking.openURL(`tel:${digits}`);
+  };
+  const quickActions: Array<{ key: string; icon: "phone" | "phone-call" | "navigation"; label: string; onPress: () => void }> = [
+    ...(shift.participant_phone?.trim()
+      ? [{ key: "call", icon: "phone" as const, label: t("shiftDetail.callName", { name: participantName.split(/\s+/)[0] }), onPress: () => dial(shift.participant_phone) }]
+      : []),
+    ...(shift.office_contact_number?.trim()
+      ? [{ key: "office", icon: "phone-call" as const, label: t("shiftDetail.callOffice"), onPress: () => dial(shift.office_contact_number) }]
+      : []),
+    ...(shift.participant_address?.trim()
+      ? [{
+          key: "directions",
+          icon: "navigation" as const,
+          label: t("shiftDetail.directions"),
+          onPress: () =>
+            void Linking.openURL(
+              `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(shift.participant_address!)}`,
+            ),
+        }]
+      : []),
+  ];
   const participantFirstName = participantName.split(" ")[0];
   const sessionId = shift.session_id ?? null;
   const visualState = shift.visual_state;
@@ -1190,60 +1217,89 @@ function WorkerMobileShiftContent({
             { backgroundColor: colors.card, borderColor: colors.border },
           ]}
         >
-          <Text
-            style={[
-              styles.scheduledName,
-              { color: colors.foreground, fontFamily: FontFamily.interBold },
-            ]}
-          >
-            {participantName}
-          </Text>
-          <Text
-            style={[
-              styles.scheduledTime,
-              {
-                color: colors.mutedForeground,
-                fontFamily: FontFamily.interMedium,
-              },
-            ]}
-          >
-            {shift.scheduled_start
-              ? formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end, shift.timezone)
-              : "Time TBC"}
-          </Text>
+          <View style={styles.scheduledHead}>
+            <View style={[styles.scheduledAvatar, { backgroundColor: colors.soft }]}>
+              <Text style={{ color: colors.primary, fontFamily: FontFamily.interBold, fontSize: 17 }}>
+                {shiftInitials(participantName)}
+              </Text>
+            </View>
+            <View style={styles.scheduledHeadText}>
+              <Text
+                numberOfLines={2}
+                style={[
+                  styles.scheduledName,
+                  { color: colors.foreground, fontFamily: FontFamily.interBold },
+                ]}
+              >
+                {participantName}
+              </Text>
+              <Text
+                style={[
+                  styles.scheduledTime,
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: FontFamily.interMedium,
+                  },
+                ]}
+              >
+                {shift.scheduled_start
+                  ? formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end, shift.timezone)
+                  : t("shifts.listCard.timeTbc")}
+              </Text>
+            </View>
+          </View>
           {shift.agreed_support?.name ? (
-            <Text
-              style={[
-                styles.scheduledTime,
-                { color: colors.foreground, fontFamily: FontFamily.interMedium },
-              ]}
-            >
-              Support: {shift.agreed_support.name}
-            </Text>
-          ) : null}
-
-          {shift.participant_address && (
-            <Pressable
-              accessibilityRole="link"
-              onPress={() => {
-                const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shift.participant_address!)}`;
-                Linking.openURL(url);
-              }}
-              style={styles.mapLink}
-            >
-              <Feather name="map-pin" size={14} color={colors.primary} />
+            <View style={styles.scheduledMeta}>
+              <Feather name="heart" size={14} color={colors.primary} />
               <Text
                 style={[
                   styles.address,
-                  {
-                    color: colors.mutedForeground,
-                    fontFamily: FontFamily.interRegular,
-                  },
+                  { color: colors.foreground, fontFamily: FontFamily.interMedium },
+                ]}
+              >
+                {shift.agreed_support.name}
+              </Text>
+            </View>
+          ) : null}
+          {shift.participant_address ? (
+            <View style={styles.scheduledMeta}>
+              <Feather name="map-pin" size={14} color={colors.mutedForeground} />
+              <Text
+                style={[
+                  styles.address,
+                  { color: colors.mutedForeground, fontFamily: FontFamily.interRegular },
                 ]}
               >
                 {shift.participant_address}
               </Text>
-            </Pressable>
+            </View>
+          ) : null}
+          {quickActions.length > 0 && (
+            <View style={[styles.quickRow, { borderTopColor: colors.border }]}>
+              {quickActions.map((action) => (
+                <Pressable
+                  key={action.key}
+                  accessibilityRole="button"
+                  accessibilityLabel={action.label}
+                  onPress={action.onPress}
+                  style={styles.quickAction}
+                >
+                  <View style={[styles.quickIcon, { backgroundColor: action.key === "directions" ? colors.primary : colors.soft }]}>
+                    <Feather
+                      name={action.icon}
+                      size={18}
+                      color={action.key === "directions" ? colors.primaryForeground : colors.primary}
+                    />
+                  </View>
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: colors.foreground, fontFamily: FontFamily.interSemiBold, fontSize: 12 }}
+                  >
+                    {action.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           )}
         </View>
         <PreShiftParticipantCard
@@ -1356,7 +1412,20 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
-  scheduledName: { fontSize: 22, lineHeight: 29 },
+  scheduledName: { fontSize: 20, lineHeight: 26 },
+  scheduledHead: { flexDirection: "row", alignItems: "center", gap: 12 },
+  scheduledAvatar: { width: 52, height: 52, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  scheduledHeadText: { flex: 1, minWidth: 0, gap: 2 },
+  scheduledMeta: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  quickRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    borderTopWidth: 1,
+    paddingTop: 14,
+    marginTop: 2,
+  },
+  quickAction: { alignItems: "center", gap: 6, minWidth: 76, maxWidth: 120, minHeight: 44 },
+  quickIcon: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
   scheduledTime: { fontSize: 15, lineHeight: 22 },
   mapLink: {
     minHeight: 44,

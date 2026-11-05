@@ -1034,6 +1034,15 @@ async def worker_shift_cannot_attend(
     return {"shift_id": shift_id, "shift": updated}
 
 
+@router.get("/shift-offers")
+async def worker_shift_offers(current_user: dict = Depends(get_current_user)):
+    """Shifts this worker has been offered and hasn't answered yet."""
+    _require_worker(current_user)
+    return shift_offer_service.list_pending_offers(
+        worker_id=get_user_id(current_user), org_id=get_user_organization_id(current_user),
+    )
+
+
 @router.post("/shifts/{shift_id}/offer/accept")
 async def worker_shift_offer_accept(shift_id: str, current_user: dict = Depends(get_current_user)):
     """Accept a pending ranked shift offer — assigns the shift to this

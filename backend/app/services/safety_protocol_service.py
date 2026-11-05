@@ -21,9 +21,20 @@ _DEFAULT_ORG_ACKNOWLEDGEMENT_BODY = """Before starting this shift, you confirm:
 - You will act honestly and with integrity in all records and communications about this shift.
 - You will not have unsupervised or one-on-one contact with the participant outside your rostered, approved duties without your coordinator's prior authorisation.
 - You will report any incident, hazard, safeguarding concern, or suspected abuse, neglect, exploitation, or violence immediately through the organisation's reporting channels - never ignore or delay a concern.
-- You understand this acknowledgement is in addition to, and does not replace, the NDIS Code of Conduct you separately confirmed during onboarding.
+- You understand this acknowledgement is in addition to, and does not replace, the NDIS Code of Conduct you separately confirmed during onboarding."""
 
-This is a starting draft - your organisation should review and adjust this wording before relying on it as a compliance record."""
+# The default used to end with this note to the provider; organisations that
+# saved it unchanged still have it. Workers never see it (the provider's
+# editor carries the same advice).
+_LEGACY_DRAFT_NOTE = (
+    "This is a starting draft - your organisation should review and adjust "
+    "this wording before relying on it as a compliance record."
+)
+
+
+def _worker_facing_body(body: Optional[str]) -> str:
+    text = (body or "").replace(_LEGACY_DRAFT_NOTE, "").strip()
+    return text or _DEFAULT_ORG_ACKNOWLEDGEMENT_BODY
 
 
 def _is_missing_schema_error(exc: Exception) -> bool:
@@ -258,7 +269,7 @@ def build_worker_safety_status(
         "content_version": content_version,
         "requires_safety_ack": not acknowledged_for_shift,
         "has_safety_content": has_content,
-        "org_content_body": org_content.get("body") or _DEFAULT_ORG_ACKNOWLEDGEMENT_BODY,
+        "org_content_body": _worker_facing_body(org_content.get("body")),
         "org_content_version": int(org_content.get("content_version") or 1),
     }
 

@@ -1,31 +1,65 @@
+import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { ShiftDateBlock } from "@/components/worker/ShiftDateBlock";
+import { FontFamily } from "@/constants/typography";
+import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
+import type { TranslationKey } from "@/lib/i18n/translations";
 import type { ShiftOfferSummary } from "@/lib/worker-api";
-import { formatDateInZone, formatTimeWithZone } from "@/lib/shift-utils";
+import {
+  formatDateInZone,
+  formatDurationLabel,
+  formatTime,
+  shiftDurationMinutes,
+  zoneAbbreviation,
+} from "@/lib/shift-utils";
 
 type Props = {
   offer: ShiftOfferSummary;
   onAccept: () => Promise<void>;
   onDecline: (reason?: string) => Promise<void>;
+  /** In a list (Shifts tab) the card sits in the page gutter, not inset. */
+  inList?: boolean;
 };
 
-/** Decision-only card for a pending shift offer — deliberately shows just
- * enough to decide (participant first name, timing, shift type), never the
- * full participant profile. That stays locked server-side until the worker
- * actually accepts (getWorkerShift 403s a pending offer by design). */
-export function ShiftOfferCard({ offer, onAccept, onDecline }: Props) {
+const DECLINE_REASONS = ["clash", "distance", "skills", "availability", "unwell", "other"] as const;
+type DeclineReason = (typeof DECLINE_REASONS)[number];
+
+/** Decision-only card for a pending shift offer: deliberately shows just
+ * enough to decide (participant first name, suburb, timing, shift type),
+ * never the full participant profile. That stays locked server-side until
+ * the worker accepts (getWorkerShift 403s a pending offer by design).
+ * Declining asks why, so the coordinator knows whether to re-offer it. */
+export function ShiftOfferCard({ offer, onAccept, onDecline, inList = false }: Props) {
   const colors = useColors();
+  const t = useT();
   const isDark = colors.scheme === "dark";
   const [busy, setBusy] = useState<"accept" | "decline" | null>(null);
   const [declining, setDeclining] = useState(false);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState<DeclineReason | null>(null);
+  const [otherText, setOtherText] = useState("");
 
-  const timeLabel = offer.scheduled_start
-    ? `${formatDateInZone(offer.scheduled_start, offer.timezone, { weekday: "short", day: "numeric", month: "short" })} ${formatTimeWithZone(offer.scheduled_start, offer.timezone)}`
-    : "Time TBC";
+  const tz = offer.timezone;
+  const start = offer.scheduled_start;
+  const end = offer.scheduled_end;
+  const duration = formatDurationLabel(shiftDurationMinutes(start ?? undefined, end ?? undefined, offer.duration_minutes ?? undefined));
+  const timeLine = start
+    ? [
+        `${formatDateInZone(start, tz, { weekday: "long" })}, ${formatTime(start, tz)}${end ? ` – ${formatTime(end, tz)}` : ""} ${zoneAbbreviation(start, tz)}`,
+        duration,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : t("shifts.listCard.timeTbc");
+  const answerBy = offer.responds_by
+    ? t("offers.answerBy", {
+        time: `${formatDateInZone(offer.responds_by, tz, { weekday: "short" })} ${formatTime(offer.responds_by, tz)}`,
+      })
+    : null;
+  const shiftType = offer.shift_type ? offer.shift_type.replace(/_/g, " ") : null;
 
   const handleAccept = async () => {
     if (busy) return;
@@ -37,97 +71,161 @@ export function ShiftOfferCard({ offer, onAccept, onDecline }: Props) {
     }
   };
 
+  const declineReasonText = () => {
+    if (reason === "other") return otherText.trim() || t("offers.reason.other");
+    return reason ? t(`offers.reason.${reason}` as TranslationKey) : undefined;
+  };
+
   const handleDecline = async () => {
-    if (busy) return;
+    if (busy || !reason) return;
     setBusy("decline");
     try {
-      await onDecline(reason.trim() || undefined);
+      await onDecline(declineReasonText());
     } finally {
       setBusy(null);
     }
   };
 
+  const text = (weight: string, size: number, color: string) => ({ fontFamily: weight, fontSize: size, color });
+
   return (
     <View
       style={[
         styles.card,
+        !inList && styles.inset,
         elevatedCardShadow(isDark),
-        { backgroundColor: colors.card, borderColor: colors.primary },
+        { backgroundColor: colors.card, borderColor: colors.border },
       ]}
     >
-      <Text style={[styles.eyebrow, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
-        Shift offer
-      </Text>
-      <Text style={[styles.time, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{timeLabel}</Text>
-      <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-        with {offer.participant_first_name ?? "a participant"}
-        {offer.shift_type ? ` · ${offer.shift_type.replace(/_/g, " ")}` : ""}
-      </Text>
-      <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-        Full participant details unlock once you accept — decide from the essentials above.
-      </Text>
+      <View style={styles.topRow}>
+        <Text style={[styles.eyebrow, text(FontFamily.interBold, 11, colors.primary)]}>{t("offers.eyebrow")}</Text>
+        {answerBy && (
+          <Text style={text(FontFamily.interMedium, 11, colors.mutedForeground)} numberOfLines={1}>
+            {answerBy}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.body}>
+        <ShiftDateBlock iso={start} timezone={tz} />
+        <View style={styles.details}>
+          <Text style={text(FontFamily.interBold, 16, colors.foreground)} numberOfLines={1}>
+            {t("offers.with", { name: offer.participant_first_name ?? t("offers.someone") })}
+          </Text>
+          <View style={styles.metaRow}>
+            <Feather name="clock" size={12} color={colors.mutedForeground} />
+            <Text style={[styles.meta, text(FontFamily.interMedium, 12, colors.mutedForeground)]}>{timeLine}</Text>
+          </View>
+          {offer.suburb && (
+            <View style={styles.metaRow}>
+              <Feather name="map-pin" size={12} color={colors.mutedForeground} />
+              <Text style={[styles.meta, text(FontFamily.interMedium, 12, colors.mutedForeground)]} numberOfLines={1}>
+                {offer.suburb}
+              </Text>
+            </View>
+          )}
+          {shiftType && (
+            <View style={styles.metaRow}>
+              <Feather name="heart" size={12} color={colors.primary} />
+              <Text style={[styles.meta, styles.capitalise, text(FontFamily.interMedium, 12, colors.primary)]} numberOfLines={1}>
+                {shiftType}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
 
       {declining ? (
         <View style={styles.declineForm}>
-          <TextInput
-            value={reason}
-            onChangeText={setReason}
-            placeholder="Reason (optional)"
-            placeholderTextColor={colors.mutedForeground}
-            multiline
-            style={[
-              styles.input,
-              { borderColor: colors.border, color: colors.foreground, fontFamily: "Inter_400Regular" },
-            ]}
-          />
+          <Text style={text(FontFamily.interBold, 14, colors.foreground)}>{t("offers.declineTitle")}</Text>
+          <View accessibilityRole="radiogroup" style={styles.reasons}>
+            {DECLINE_REASONS.map((key) => {
+              const on = reason === key;
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: on }}
+                  onPress={() => setReason(key)}
+                  style={[
+                    styles.reasonRow,
+                    { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? colors.soft : "transparent" },
+                  ]}
+                >
+                  <View style={[styles.radio, { borderColor: on ? colors.primary : colors.border }]}>
+                    {on && <View style={[styles.radioDot, { backgroundColor: colors.primary }]} />}
+                  </View>
+                  <Text style={[styles.reasonText, text(FontFamily.interMedium, 13, colors.foreground)]}>
+                    {t(`offers.reason.${key}` as TranslationKey)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {reason === "other" && (
+            <TextInput
+              value={otherText}
+              onChangeText={setOtherText}
+              placeholder={t("offers.otherPlaceholder")}
+              placeholderTextColor={colors.mutedForeground}
+              multiline
+              maxLength={300}
+              style={[styles.input, { borderColor: colors.border, color: colors.foreground, fontFamily: FontFamily.interRegular }]}
+            />
+          )}
+          <Text style={text(FontFamily.interRegular, 12, colors.mutedForeground)}>{t("offers.declineNote")}</Text>
           <View style={styles.row}>
             <Pressable
-              onPress={() => setDeclining(false)}
+              accessibilityRole="button"
+              onPress={() => {
+                setDeclining(false);
+                setReason(null);
+              }}
               disabled={!!busy}
               style={[styles.button, styles.outlineButton, { borderColor: colors.border }]}
             >
-              <Text style={[styles.buttonText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                Never mind
-              </Text>
+              <Text style={text(FontFamily.interSemiBold, 14, colors.foreground)}>{t("offers.back")}</Text>
             </Pressable>
             <Pressable
+              accessibilityRole="button"
               onPress={() => void handleDecline()}
-              disabled={!!busy}
-              style={[styles.button, { backgroundColor: colors.primary }]}
+              disabled={!!busy || !reason}
+              style={[styles.button, { backgroundColor: colors.destructive, opacity: reason ? 1 : 0.45 }]}
             >
               {busy === "decline" ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={[styles.buttonText, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>
-                  Confirm decline
-                </Text>
+                <Text style={text(FontFamily.interSemiBold, 14, "#fff")}>{t("offers.confirmDecline")}</Text>
               )}
             </Pressable>
           </View>
         </View>
       ) : (
-        <View style={styles.row}>
-          <Pressable
-            onPress={() => setDeclining(true)}
-            disabled={!!busy}
-            style={[styles.button, styles.outlineButton, { borderColor: colors.border }]}
-          >
-            <Text style={[styles.buttonText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              Decline
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => void handleAccept()}
-            disabled={!!busy}
-            style={[styles.button, { backgroundColor: colors.primary }]}
-          >
-            {busy === "accept" ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={[styles.buttonText, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>Accept</Text>
-            )}
-          </Pressable>
-        </View>
+        <>
+          <Text style={text(FontFamily.interRegular, 12, colors.mutedForeground)}>{t("offers.hint")}</Text>
+          <View style={styles.row}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setDeclining(true)}
+              disabled={!!busy}
+              style={[styles.button, styles.outlineButton, { borderColor: colors.border }]}
+            >
+              <Text style={text(FontFamily.interSemiBold, 14, colors.foreground)}>{t("offers.decline")}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void handleAccept()}
+              disabled={!!busy}
+              style={[styles.button, { backgroundColor: colors.primary }]}
+            >
+              {busy === "accept" ? (
+                <ActivityIndicator color={colors.primaryForeground} size="small" />
+              ) : (
+                <Text style={text(FontFamily.interSemiBold, 14, colors.primaryForeground)}>{t("offers.accept")}</Text>
+              )}
+            </Pressable>
+          </View>
+        </>
       )}
     </View>
   );
@@ -135,20 +233,36 @@ export function ShiftOfferCard({ offer, onAccept, onDecline }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 20,
-    borderWidth: 2,
-    padding: 20,
-    marginHorizontal: 16,
-    gap: 4,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 15,
+    gap: 12,
   },
-  eyebrow: { fontSize: 11, letterSpacing: 0.6, textTransform: "uppercase" },
-  time: { fontSize: 18, marginTop: 4 },
-  subtitle: { fontSize: 14, marginTop: 2 },
-  hint: { fontSize: 12, marginTop: 10, lineHeight: 17 },
-  row: { flexDirection: "row", gap: 10, marginTop: 16 },
-  declineForm: { marginTop: 14, gap: 10 },
+  inset: { marginHorizontal: 16 },
+  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  eyebrow: { letterSpacing: 0.6, textTransform: "uppercase" },
+  body: { flexDirection: "row", gap: 12, alignItems: "stretch" },
+  details: { flex: 1, minWidth: 0, gap: 4, justifyContent: "center" },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  meta: { flex: 1, lineHeight: 16 },
+  capitalise: { textTransform: "capitalize" },
+  row: { flexDirection: "row", gap: 10 },
+  declineForm: { gap: 10 },
+  reasons: { gap: 8 },
+  reasonRow: {
+    minHeight: 46,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  radioDot: { width: 10, height: 10, borderRadius: 5 },
+  reasonText: { flex: 1 },
   input: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderRadius: 12,
     padding: 12,
     fontSize: 13,
@@ -157,11 +271,10 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    height: 44,
-    borderRadius: 22,
+    height: 46,
+    borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
   },
-  outlineButton: { borderWidth: StyleSheet.hairlineWidth, backgroundColor: "transparent" },
-  buttonText: { fontSize: 14 },
+  outlineButton: { borderWidth: 1, backgroundColor: "transparent" },
 });

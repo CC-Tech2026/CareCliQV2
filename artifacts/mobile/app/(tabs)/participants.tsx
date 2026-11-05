@@ -69,7 +69,9 @@ function ClientRow({ client, onPress }: { client: WorkerClient; onPress: () => v
           </Text>
         ) : null}
         <Text style={[styles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
-          {client.plan_management_type ?? "No plan type"}
+          {client.plan_management_type
+            ? client.plan_management_type.charAt(0).toUpperCase() + client.plan_management_type.slice(1)
+            : "No plan type"}
         </Text>
       </View>
 

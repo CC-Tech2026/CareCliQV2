@@ -2501,6 +2501,66 @@ def _create_custom_participant_task_for_shift(
     }
 
 
+# A stored point this close to a fresh lookup is the same place.
+_SAME_POINT_METERS = 25.0
+
+
+def _recheck_against_current_address(
+    shift: dict[str, Any],
+    organization_id: str,
+    stored: tuple[float, float],
+    worker_lat: float,
+    worker_lng: float,
+    accuracy: Any,
+) -> Optional[tuple[bool, float]]:
+    """A worker refused as too far may be at the right door with the stored
+    point wrong: set before an address change, seeded, or placed roughly.
+    Look the current address up once; when it lands somewhere else, save it
+    (participant and their upcoming shifts) and judge against it. None when
+    there's no address, no lookup, or the lookup agrees with the stored point."""
+    from . import geocoding_service
+    from .check_in_service import haversine_meters
+
+    participant_id = shift.get("participant_id")
+    address = (shift.get("participant_address") or "").strip()
+    if not address and participant_id:
+        try:
+            rows = (
+                get_supabase_admin().table("participants").select("address")
+                .eq("id", str(participant_id)).eq("organization_id", organization_id).limit(1).execute().data
+                or []
+            )
+            address = str((rows[0] if rows else {}).get("address") or "").strip()
+        except Exception as exc:
+            logger.debug("participant address lookup failed: %s", exc)
+    if not address:
+        return None
+    point = geocoding_service.geocode_address_sync(address)
+    if not point or haversine_meters(stored[0], stored[1], point[0], point[1]) <= _SAME_POINT_METERS:
+        return None
+
+    logger.info("Clock-in corrected the participant point for shift %s from a fresh address lookup", shift.get("id"))
+    try:
+        supabase = get_supabase_admin()
+        if participant_id:
+            supabase.table("participants").update({"latitude": point[0], "longitude": point[1]}).eq(
+                "id", str(participant_id)
+            ).eq("organization_id", organization_id).execute()
+            supabase.table("shifts").update({"participant_latitude": point[0], "participant_longitude": point[1]}).eq(
+                "participant_id", str(participant_id)
+            ).eq("organization_id", organization_id).in_("status", ["unassigned", "scheduled"]).execute()
+        if shift.get("id"):
+            supabase.table("shifts").update({"participant_latitude": point[0], "participant_longitude": point[1]}).eq(
+                "id", str(shift["id"])
+            ).execute()
+    except Exception as exc:
+        logger.warning("Could not save the corrected participant point: %s", exc)
+    return verify_gps_location(
+        worker_lat, worker_lng, point[0], point[1],
+        accuracy=float(accuracy) if accuracy is not None else None,
+    )
+
+
 def _apply_verified_check_in(
     shift: dict[str, Any],
     organization_id: str,
@@ -2536,6 +2596,17 @@ def _apply_verified_check_in(
                 coords[1],
                 accuracy=float(accuracy) if accuracy is not None else None,
             )
+            if not ok:
+                rechecked = _recheck_against_current_address(
+                    shift, organization_id, coords, worker_lat, worker_lng, accuracy,
+                )
+                if rechecked:
+                    ok, verification_distance = rechecked
+            if not ok:
+                logger.info(
+                    "GPS clock-in outside the geofence: shift %s, %dm from the participant point (accuracy %s)",
+                    shift.get("id"), int(verification_distance or 0), accuracy,
+                )
             if not ok and check_in_geofence_bypassed():
                 logger.warning(
                     "CHECK_IN_GEOFENCE_DISABLED: allowing clock-in %dm from participant",

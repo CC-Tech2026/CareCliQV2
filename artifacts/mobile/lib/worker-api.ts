@@ -328,7 +328,17 @@ export type ShiftOfferSummary = {
   offered_at: string | null;
   /** Participant's branch zone. */
   timezone?: string | null;
+  /** Listed offers only: where (suburb, not the address), how long, and
+   * when the offer lapses to the next worker. */
+  suburb?: string | null;
+  duration_minutes?: number | null;
+  responds_by?: string | null;
 };
+
+/** Shifts offered to this worker that they haven't answered yet. */
+export function listShiftOffers() {
+  return workerFetch<ShiftOfferSummary[]>(`/api/worker/shift-offers`);
+}
 
 /** Decision-only summary for a shift this worker has been offered but not
  * yet accepted/declined — deliberately excludes the full participant
