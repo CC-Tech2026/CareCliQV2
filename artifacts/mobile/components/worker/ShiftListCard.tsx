@@ -28,12 +28,15 @@ import {
   emergencyContactDisplay,
   findInProgressShift,
   formatActiveGoalLabel,
-  formatShiftTimeRange,
+  formatDurationLabel,
+  formatTime,
   isBlockedByInProgressShift,
   isShiftCompletedForList,
   parseIsoMs,
-  shiftInitials,
+  shiftDurationMinutes,
+  zoneAbbreviation,
 } from "@/lib/shift-utils";
+import { ShiftDateBlock } from "@/components/worker/ShiftDateBlock";
 
 type Props = {
   shift: WorkerShift;
@@ -111,6 +114,21 @@ export function ShiftListCard({
   const mapsUrl = address
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
     : null;
+
+  const startIso = shift.scheduled_start;
+  const endIso = shift.scheduled_end;
+  const duration = formatDurationLabel(
+    shiftDurationMinutes(startIso, endIso, shift.duration_minutes),
+  );
+  const timeLine = startIso
+    ? [
+        `${formatTime(startIso, shift.timezone)}${endIso ? ` – ${formatTime(endIso, shift.timezone)}` : ""} ${zoneAbbreviation(startIso, shift.timezone)}`.trim(),
+        duration,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : t("shifts.listCard.timeTbc");
+  const supportName = shift.agreed_support?.name?.trim() || null;
 
   const goals = shift.active_goals ?? [];
   const noteItems = [
@@ -245,37 +263,8 @@ export function ShiftListCard({
         },
       ]}
     >
-      {/* At-a-glance information, always in the same place. */}
-      <View style={styles.header}>
-        <View style={styles.timeWrap}>
-          <Feather name="clock" size={15} color={colors.primary} />
-          <Text
-            numberOfLines={1}
-            style={[
-              styles.time,
-              { color: colors.foreground, fontFamily: FontFamily.interBold },
-            ]}
-          >
-            {formatShiftTimeRange(
-              shift.scheduled_start,
-              shift.scheduled_end,
-              shift.timezone,
-            )}
-          </Text>
-        </View>
-        {isCancelled ? (
-          <Text style={[styles.cancelled, { color: colors.destructive }]}>
-            {t("shifts.listCard.cancelled")}
-          </Text>
-        ) : isCompleted && review ? (
-          <ReviewStatusChip status={review.review_status} />
-        ) : (
-          <ShiftStatusBadge
-            visualState={isCompleted ? "completed" : shift.visual_state}
-          />
-        )}
-      </View>
-
+      {/* When, who and where at a glance: the date block reads down the
+          list, the text beside it never needs truncating mid-time. */}
       <Pressable
         accessibilityRole="button"
         disabled={isCompleted && !canReopen}
@@ -284,53 +273,57 @@ export function ShiftListCard({
         onPress={navigateToShift}
         style={styles.personRow}
       >
-        <View style={[styles.avatar, { backgroundColor: colors.soft }]}>
-          <Text
-            style={[
-              styles.initials,
-              {
-                color: isCancelled ? colors.destructive : colors.primary,
-                fontFamily: FontFamily.interBold,
-              },
-            ]}
-          >
-            {shiftInitials(shift.participant_name)}
-          </Text>
-          {showLiveDot && (
-            <View
-              style={[
-                styles.liveDot,
-                { backgroundColor: colors.success, borderColor: colors.card },
-              ]}
-            />
-          )}
-        </View>
+        <ShiftDateBlock
+          iso={shift.scheduled_start}
+          timezone={shift.timezone}
+          tone={isCancelled ? "muted" : isSessionLive || isClockedIn ? "solid" : "soft"}
+          live={showLiveDot}
+        />
         <View style={styles.personText}>
-          <Text
-            numberOfLines={1}
-            style={[
-              styles.personName,
-              { color: colors.foreground, fontFamily: FontFamily.interBold },
-              isCancelled && styles.strikethrough,
-            ]}
-          >
-            {name}
-          </Text>
-          <View style={styles.addressRow}>
-            <Feather name="map-pin" size={12} color={colors.mutedForeground} />
+          <View style={styles.nameRow}>
             <Text
               numberOfLines={1}
-              style={[styles.address, { color: colors.mutedForeground }]}
+              style={[
+                styles.personName,
+                { color: colors.foreground, fontFamily: FontFamily.interBold },
+                isCancelled && styles.strikethrough,
+              ]}
             >
+              {name}
+            </Text>
+            {isCancelled ? (
+              <Text style={[styles.cancelled, { color: colors.destructive }]}>
+                {t("shifts.listCard.cancelled")}
+              </Text>
+            ) : isCompleted && review ? (
+              <ReviewStatusChip status={review.review_status} />
+            ) : (
+              <ShiftStatusBadge
+                visualState={isCompleted ? "completed" : shift.visual_state}
+              />
+            )}
+          </View>
+          <View style={styles.metaRow}>
+            <Feather name="clock" size={12} color={colors.mutedForeground} />
+            <Text numberOfLines={1} style={[styles.meta, { color: colors.mutedForeground }]}>
+              {timeLine}
+            </Text>
+          </View>
+          <View style={styles.metaRow}>
+            <Feather name="map-pin" size={12} color={colors.mutedForeground} />
+            <Text numberOfLines={1} style={[styles.meta, { color: colors.mutedForeground }]}>
               {address || t("shifts.listCard.noAddress")}
             </Text>
           </View>
+          {supportName && (
+            <View style={styles.metaRow}>
+              <Feather name="heart" size={12} color={colors.primary} />
+              <Text numberOfLines={1} style={[styles.meta, { color: colors.primary }]}>
+                {supportName}
+              </Text>
+            </View>
+          )}
         </View>
-        <Feather
-          name="chevron-right"
-          size={19}
-          color={colors.mutedForeground}
-        />
       </Pressable>
 
       {/* This alert is intentionally outside the Care brief. It should never be hidden. */}
@@ -784,46 +777,17 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 1,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 9,
-  },
-  timeWrap: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-  },
-  time: { fontSize: 14, flexShrink: 1, lineHeight: 19 },
   cancelled: { fontSize: 12, fontFamily: FontFamily.interSemiBold },
   personRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 11,
-    minHeight: 50,
+    alignItems: "stretch",
+    gap: 12,
   },
-  avatar: {
-    width: 47,
-    height: 47,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  initials: { fontSize: 15 },
-  liveDot: {
-    position: "absolute",
-    right: -2,
-    bottom: -2,
-    height: 12,
-    width: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-  },
-  personText: { flex: 1, minWidth: 0, gap: 5 },
-  personName: { fontSize: 16, lineHeight: 21 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  meta: { flex: 1, fontSize: 12, lineHeight: 16, fontFamily: FontFamily.interMedium },
+  personText: { flex: 1, minWidth: 0, gap: 4, justifyContent: "center" },
+  personName: { flex: 1, fontSize: 16, lineHeight: 21 },
   strikethrough: { textDecorationLine: "line-through" },
   addressRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   address: { fontSize: 12, flex: 1 },

@@ -61,8 +61,14 @@ export function PreShiftParticipantCard({
     }
   };
 
-  const activeContent =
-    getActiveText()?.trim() || "No specific details provided for this section.";
+  // Say what's missing and what to do, not just that a box is empty.
+  const EMPTY_TAB_TEXT: Record<BriefingTab, string> = {
+    about: "No background recorded yet. Ask your coordinator if you'd like to know more before you start.",
+    support: "No communication preferences recorded. Ask the participant how they like to be supported.",
+    shift: "No special instructions for this shift.",
+    handover: "No handover from the last shift yet. This is the first shift, or the last worker didn't leave one.",
+  };
+  const activeContent = getActiveText()?.trim() || EMPTY_TAB_TEXT[activeTab];
 
   return (
     <View

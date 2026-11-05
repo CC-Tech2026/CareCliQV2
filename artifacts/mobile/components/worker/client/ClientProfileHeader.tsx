@@ -100,6 +100,29 @@ function resolveClientPhoto(client: WorkerClient, override?: string | null) {
   return null;
 }
 
+/** Plan states are stored as lowercase codes ("active", "under_review"). */
+const PLAN_STATUS_LABELS: Record<string, string> = {
+  active: "Active NDIS plan",
+  expired: "NDIS plan expired",
+  inactive: "Inactive",
+  pending: "Plan pending",
+  under_review: "Plan under review",
+  suspended: "Suspended",
+  cancelled: "Plan cancelled",
+};
+
+export function planStatusLabel(state: string): string {
+  const key = state.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (PLAN_STATUS_LABELS[key]) return PLAN_STATUS_LABELS[key];
+  const words = state.trim().replace(/[_-]+/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** "plan-managed" -> "Plan-managed", "NDIA-managed" stays as written. */
+function managementLabel(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 export function ClientProfileHeader({
   client,
   compact = false,
@@ -181,7 +204,7 @@ export function ClientProfileHeader({
                 lineHeight: 18,
               }}
             >
-              {planState || "Participant"}
+              {planState ? planStatusLabel(planState) : "Participant"}
             </Text>
           </View>
           <Text
@@ -220,7 +243,7 @@ export function ClientProfileHeader({
             {client.plan_management_type ? (
               <PlanFact
                 label="Management"
-                value={client.plan_management_type}
+                value={managementLabel(client.plan_management_type)}
               />
             ) : null}
           </View>
@@ -363,7 +386,7 @@ export function ClientProfileHeader({
                 },
               ]}
             >
-              {planState}
+              {planStatusLabel(planState)}
             </Text>
           </View>
         </View>
@@ -378,7 +401,7 @@ export function ClientProfileHeader({
             />
           )}
           {client.plan_management_type && (
-            <PlanFact label="Management" value={client.plan_management_type} />
+            <PlanFact label="Management" value={managementLabel(client.plan_management_type)} />
           )}
         </View>
       )}

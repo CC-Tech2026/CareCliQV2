@@ -184,9 +184,29 @@ export function WorkerMobileSafetyCardSheet({
               <Text style={[styles.sectionLabel, { color: colors.composerPink, fontFamily: "Inter_700Bold" }]}>
                 BEFORE YOU START
               </Text>
-              <Text style={[styles.sectionBody, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                {protocol?.org_content_body}
-              </Text>
+              {/* "- " lines read as a checklist; anything else stays a paragraph,
+                  so an organisation's own wording still shows as written. */}
+              {(protocol?.org_content_body ?? "")
+                .split(/\n+/)
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map((line, index) =>
+                  /^[-*•]\s+/.test(line) ? (
+                    <View key={index} style={styles.ackBullet}>
+                      <View style={[styles.ackDot, { backgroundColor: colors.composerPink }]} />
+                      <Text style={[styles.sectionBody, styles.ackBulletText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                        {line.replace(/^[-*•]\s+/, "")}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text
+                      key={index}
+                      style={[styles.sectionBody, { color: colors.foreground, fontFamily: index === 0 ? "Inter_600SemiBold" : "Inter_400Regular" }]}
+                    >
+                      {line}
+                    </Text>
+                  ),
+                )}
             </View>
 
             {!hasVisibleContent && (
@@ -348,6 +368,9 @@ export function WorkerMobileSafetyCardSheet({
 }
 
 const styles = StyleSheet.create({
+  ackBullet: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  ackDot: { width: 6, height: 6, borderRadius: 3, marginTop: 8 },
+  ackBulletText: { flex: 1 },
   wrap: { flex: 1 },
   header: {
     flexDirection: "row",

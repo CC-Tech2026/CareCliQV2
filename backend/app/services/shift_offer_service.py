@@ -183,6 +183,64 @@ async def _advance_or_close(
     )
 
 
+def list_pending_offers(*, worker_id: str, org_id: str) -> list[dict[str, Any]]:
+    """This worker's open offers, soonest shift first, so the app can list
+    them instead of relying on the push that announced each one. Same
+    decision-only detail as the single-offer summary: first name, suburb,
+    timing and shift type, never the participant profile."""
+    from ..core.timezone import participant_timezone
+    from .worker_calendar_service import extract_suburb
+
+    supabase = get_supabase_admin()
+    offers = (
+        supabase.table("shift_offers")
+        .select("id, shift_id, offered_at, responds_by")
+        .eq("worker_id", worker_id)
+        .eq("organization_id", org_id)
+        .eq("status", "pending")
+        .execute()
+        .data
+        or []
+    )
+    if not offers:
+        return []
+    shifts = {
+        str(row["id"]): row
+        for row in (
+            supabase.table("shifts")
+            .select("id, organization_id, participant_id, participant_name, participant_address, scheduled_start, "
+                    "scheduled_end, duration_minutes, shift_type, status")
+            .in_("id", [str(o["shift_id"]) for o in offers])
+            .eq("organization_id", org_id)
+            .execute()
+            .data
+            or []
+        )
+    }
+    now = datetime.now(timezone.utc).isoformat()
+    out = []
+    for offer in offers:
+        shift = shifts.get(str(offer["shift_id"]))
+        # Gone, already filled or already started: nothing left to decide.
+        if not shift or shift.get("status") in {"cancelled", "completed"} or str(shift.get("scheduled_start") or "") < now:
+            continue
+        name = (shift.get("participant_name") or "").strip()
+        out.append({
+            "offer_id": offer["id"],
+            "shift_id": shift["id"],
+            "participant_first_name": name.split()[0] if name else None,
+            "suburb": extract_suburb(shift.get("participant_address")),
+            "scheduled_start": shift.get("scheduled_start"),
+            "scheduled_end": shift.get("scheduled_end"),
+            "duration_minutes": shift.get("duration_minutes"),
+            "shift_type": shift.get("shift_type"),
+            "offered_at": offer.get("offered_at"),
+            "responds_by": offer.get("responds_by"),
+            "timezone": str(participant_timezone(shift, organization_id=org_id)),
+        })
+    return sorted(out, key=lambda o: str(o["scheduled_start"] or ""))
+
+
 def _get_pending_offer(*, shift_id: str, worker_id: str) -> dict[str, Any]:
     supabase = get_supabase_admin()
     result = (

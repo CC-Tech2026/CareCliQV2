@@ -134,7 +134,7 @@ export function parseIsoMs(iso?: string | null): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-function formatTime(iso: string, tz?: string | null): string {
+export function formatTime(iso: string, tz?: string | null): string {
   try {
     const d = new Date(iso);
     return d.toLocaleTimeString("en-AU", {
