@@ -1,6 +1,21 @@
 import { jsonFetch } from "@/services/http";
 import type { BugReportAttachment } from "@/services/bugReportService";
 
+export type ProviderInvitation = {
+  id: string; organization_id: string; organization_name: string; email: string;
+  expires_at: string; accepted_at: string | null; created_at: string;
+};
+export type ProviderSetupResult = {
+  invite_url: string; email_delivery: { status: string; message: string };
+};
+export const listProviderInvitations = () => jsonFetch<ProviderInvitation[]>("/api/admin/provider-invitations");
+export const createProviderAccount = (organization_name: string, email: string) =>
+  jsonFetch<ProviderSetupResult>("/api/admin/provider-invitations", {
+    method: "POST", body: JSON.stringify({ organization_name, email }),
+  });
+export const resendProviderInvitation = (id: string) =>
+  jsonFetch<ProviderSetupResult>(`/api/admin/provider-invitations/${id}/resend`, { method: "POST" });
+
 export type OrgStatus = "active" | "suspended" | "offboarded";
 
 // Which service(s) a provider delivers — set by a Super Admin from the
