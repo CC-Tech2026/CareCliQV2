@@ -24,7 +24,7 @@ export function ClockedInBanner({ clockedInAt, tz }: Props) {
           {timeLabel ? `Clocked in at ${timeLabel}` : "Clocked in"}
         </Text>
         <Text style={[styles.hint, { color: colors.clockInText, fontFamily: "Inter_500Medium" }]}>
-          Tap any task to begin documenting
+          Check-ins, breaks and your documentation score
         </Text>
       </View>
     </View>

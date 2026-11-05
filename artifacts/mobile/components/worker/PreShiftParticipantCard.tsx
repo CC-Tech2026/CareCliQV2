@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -12,31 +13,57 @@ import { useShiftBriefing } from "@/hooks/worker/useShiftBriefing";
 import { useColors } from "@/hooks/useColors";
 import { Typography } from "@/constants/typography";
 
-/** Preparation only; the existing safety acknowledgement is still required. */
+type Props = {
+  shiftId: string;
+  participantId?: string | null;
+  title?: string;
+  intro?: string;
+};
+
+type BriefingTab = "about" | "support" | "shift" | "handover";
+
 export function PreShiftParticipantCard({
   shiftId,
   participantId,
-}: {
-  shiftId: string;
-  participantId?: string | null;
-}) {
+  title = "Before your shift",
+  intro = "Get to know the participant and review their support needs before clocking in.",
+}: Props) {
   const colors = useColors();
   const router = useRouter();
   const { data, isLoading, error, refetch } = useShiftBriefing(shiftId);
-  const section = (title: string, text?: string | null) =>
-    text?.trim() ? (
-      <View style={styles.section}>
-        <Text
-          accessibilityRole="header"
-          style={[Typography.bodyStrong, { color: colors.foreground }]}
-        >
-          {title}
-        </Text>
-        <Text style={[Typography.body, { color: colors.foreground }]}>
-          {text}
-        </Text>
-      </View>
-    ) : null;
+  const [activeTab, setActiveTab] = useState<BriefingTab>("about");
+  const [expanded, setExpanded] = useState(false);
+
+  const handleCall = useCallback((phone: string) => {
+    const sanitizedPhone = phone.replace(/[^+\d]/g, "");
+    void Linking.openURL(`tel:${sanitizedPhone}`);
+  }, []);
+
+  const handleOpenProfile = useCallback(() => {
+    if (participantId) {
+      router.push(`/client/${participantId}` as never);
+    }
+  }, [router, participantId]);
+
+  const getActiveText = () => {
+    if (!data) return "";
+    switch (activeTab) {
+      case "about":
+        return data.background_summary.text;
+      case "support":
+        return data.communication_preferences;
+      case "shift":
+        return data.special_instructions;
+      case "handover":
+        return data.previous_shift_note?.content;
+      default:
+        return "";
+    }
+  };
+
+  const activeContent =
+    getActiveText()?.trim() || "No specific details provided for this section.";
+
   return (
     <View
       style={[
@@ -44,29 +71,35 @@ export function PreShiftParticipantCard({
         { backgroundColor: colors.card, borderColor: colors.border },
       ]}
     >
-      <View style={styles.heading}>
-        <Feather name="clipboard" size={20} color={colors.primary} />
-        <Text
-          accessibilityRole="header"
-          style={[Typography.h2, { color: colors.foreground, flex: 1 }]}
-        >
-          Before your shift
-        </Text>
+      {/* Card Header */}
+      <View style={styles.headingRow}>
+        <View style={[styles.iconContainer, { backgroundColor: colors.soft }]}>
+          <Feather name="clipboard" size={18} color={colors.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text
+            accessibilityRole="header"
+            style={[Typography.h2, { color: colors.foreground, fontSize: 16 }]}
+          >
+            {title}
+          </Text>
+          <Text style={[Typography.caption, { color: colors.mutedForeground }]}>
+            {intro}
+          </Text>
+        </View>
       </View>
-      <Text style={[Typography.caption, { color: colors.mutedForeground }]}>
-        Get to know the participant and review their support needs before
-        clocking in.
-      </Text>
+
       {isLoading ? (
         <ActivityIndicator
           color={colors.primary}
           accessibilityLabel="Loading participant briefing"
+          style={styles.loader}
         />
       ) : error ? (
         <Pressable
           accessibilityRole="button"
           onPress={() => void refetch()}
-          style={styles.link}
+          style={styles.retryButton}
         >
           <Text style={[Typography.bodyStrong, { color: colors.primary }]}>
             Briefing unavailable. Tap to retry
@@ -74,125 +107,343 @@ export function PreShiftParticipantCard({
         </Pressable>
       ) : data ? (
         <>
+          {/* Critical Safety Alert Banner */}
           {data.critical_alerts.length > 0 && (
             <View
               style={[
-                styles.alert,
+                styles.alertBanner,
                 {
                   backgroundColor: colors.dangerBg,
                   borderColor: colors.dangerBorder,
                 },
               ]}
             >
-              <Text
-                accessibilityRole="header"
-                style={[Typography.bodyStrong, { color: colors.dangerText }]}
-              >
-                Safety alerts · Read first
-              </Text>
-              {data.critical_alerts.map((alert) => (
+              <Feather name="alert-triangle" size={16} color={colors.dangerText} />
+              <View style={{ flex: 1, gap: 4 }}>
                 <Text
-                  key={alert.id}
-                  style={[Typography.body, { color: colors.dangerText }]}
+                  accessibilityRole="header"
+                  style={[
+                    Typography.bodyStrong,
+                    { color: colors.dangerText, fontSize: 13 },
+                  ]}
                 >
-                  {alert.text}
+                  Critical Safety Alert · Read First
                 </Text>
-              ))}
+                {data.critical_alerts.map((alert) => (
+                  <Text
+                    key={alert.id}
+                    style={[
+                      Typography.body,
+                      { color: colors.dangerText, fontSize: 12, lineHeight: 16 },
+                    ]}
+                  >
+                    {alert.text}
+                  </Text>
+                ))}
+              </View>
             </View>
           )}
-          {section("About me", data.background_summary.text)}
-          {section("How to support me", data.communication_preferences)}
-          {section("For this shift", data.special_instructions)}
-          {section("Last shift handover", data.previous_shift_note?.content)}
+
+          {/* Segmented Briefing Selector */}
+          <View style={[styles.tabBar, { backgroundColor: colors.soft }]}>
+            {(
+              [
+                { id: "about", label: "About" },
+                { id: "support", label: "Support" },
+                { id: "shift", label: "Shift Notes" },
+                { id: "handover", label: "Handover" },
+              ] as const
+            ).map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <Pressable
+                  key={tab.id}
+                  onPress={() => {
+                    setActiveTab(tab.id);
+                    setExpanded(false);
+                  }}
+                  style={[
+                    styles.tabItem,
+                    isActive && {
+                      backgroundColor: colors.card,
+                      shadowColor: "#000",
+                      shadowOpacity: 0.06,
+                      shadowRadius: 3,
+                      elevation: 2,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      Typography.caption,
+                      {
+                        color: isActive
+                          ? colors.foreground
+                          : colors.mutedForeground,
+                        fontFamily: isActive
+                          ? "Inter_600SemiBold"
+                          : "Inter_500Medium",
+                      },
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Content Preview Box with Tap to Expand */}
+          <Pressable
+            onPress={() => setExpanded(!expanded)}
+            style={[
+              styles.contentBox,
+              { backgroundColor: colors.soft, borderColor: colors.border },
+            ]}
+          >
+            <Text
+              numberOfLines={expanded ? undefined : 3}
+              style={[
+                Typography.body,
+                { color: colors.foreground, fontSize: 13, lineHeight: 19 },
+              ]}
+            >
+              {activeContent}
+            </Text>
+            {activeContent.length > 120 && (
+              <Text
+                style={[
+                  Typography.caption,
+                  {
+                    color: colors.primary,
+                    fontSize: 11,
+                    marginTop: 6,
+                    fontWeight: "600",
+                  },
+                ]}
+              >
+                {expanded ? "Show less" : "Tap to read more"}
+              </Text>
+            )}
+          </Pressable>
+
+          {/* Enhanced Emergency Contacts Grid */}
           {data.emergency_contacts.length > 0 && (
             <View style={styles.section}>
               <Text
                 accessibilityRole="header"
-                style={[Typography.bodyStrong, { color: colors.foreground }]}
+                style={[
+                  Typography.bodyStrong,
+                  { color: colors.foreground, fontSize: 13 },
+                ]}
               >
-                Emergency contacts
+                Emergency Contacts
               </Text>
               <View style={styles.contactsGrid}>
-                {data.emergency_contacts.map((contact, index) => (
-                  <Pressable
-                    key={index}
-                    accessibilityRole="link"
-                    accessibilityLabel={`Call ${contact.name}, ${contact.phone}`}
-                    onPress={() =>
-                      void Linking.openURL(
-                        `tel:${contact.phone.replace(/[^+\d]/g, "")}`,
-                      )
-                    }
-                    style={[
-                      styles.contact,
-                      styles.contactGridItem,
-                      { backgroundColor: colors.soft },
-                    ]}
-                  >
-                    <Feather name="phone" size={18} color={colors.success} />
-                    <View style={{ flex: 1 }}>
-                      <Text
+                {data.emergency_contacts.map((contact, index) => {
+                  const initials = contact.name
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase();
+
+                  return (
+                    <View
+                      key={index}
+                      style={[
+                        styles.contactCardItem,
+                        {
+                          backgroundColor: colors.soft,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      {/* Avatar Initial Circle */}
+                      <View
                         style={[
-                          Typography.bodyStrong,
-                          { color: colors.foreground },
+                          styles.contactAvatar,
+                          { backgroundColor: colors.card },
                         ]}
                       >
-                        {contact.name}
-                      </Text>
-                      <Text
+                        <Text
+                          style={[
+                            Typography.bodyStrong,
+                            { color: colors.primary, fontSize: 12 },
+                          ]}
+                        >
+                          {initials}
+                        </Text>
+                      </View>
+
+                      {/* Contact Details */}
+                      <View style={{ flex: 1, justifyContent: "center" }}>
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            Typography.bodyStrong,
+                            { color: colors.foreground, fontSize: 12 },
+                          ]}
+                        >
+                          {contact.name}
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            Typography.caption,
+                            { color: colors.mutedForeground, fontSize: 10 },
+                          ]}
+                        >
+                          {contact.role}
+                        </Text>
+                      </View>
+
+                      {/* Call Trigger Button */}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Call ${contact.name}, ${contact.phone}`}
+                        onPress={() => handleCall(contact.phone)}
                         style={[
-                          Typography.caption,
-                          { color: colors.mutedForeground },
+                          styles.callButton,
+                          {
+                            backgroundColor: colors.card,
+                            borderColor: colors.border,
+                          },
                         ]}
                       >
-                        {contact.role} · {contact.phone}
-                      </Text>
+                        <Feather name="phone-call" size={14} color={colors.success} />
+                      </Pressable>
                     </View>
-                  </Pressable>
-                ))}
+                  );
+                })}
               </View>
             </View>
           )}
         </>
       ) : null}
+
+      {/* Profile Navigation Footer Button */}
       {participantId && (
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push(`/client/${participantId}` as never)}
-          style={[styles.contact, { backgroundColor: colors.soft }]}
+          onPress={handleOpenProfile}
+          style={[
+            styles.profileFooterButton,
+            { backgroundColor: colors.soft, borderColor: colors.border },
+          ]}
         >
-          <Feather name="user" size={18} color={colors.primary} />
+          <Feather name="user" size={16} color={colors.primary} />
           <Text
-            style={[Typography.bodyStrong, { color: colors.primary, flex: 1 }]}
+            style={[
+              Typography.bodyStrong,
+              { color: colors.primary, flex: 1, fontSize: 13 },
+            ]}
           >
-            View participant profile
+            View full participant profile
           </Text>
-          <Feather name="arrow-right" size={18} color={colors.primary} />
+          <Feather name="chevron-right" size={16} color={colors.primary} />
         </Pressable>
       )}
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
     borderWidth: 1,
-    padding: 14,
-    gap: 18,
+    padding: 16,
+    gap: 14,
     marginTop: 16,
   },
-  heading: { flexDirection: "row", alignItems: "center", gap: 10 },
-  section: { gap: 8 },
-  alert: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 10 },
-  contact: {
+  headingRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+  },
+  iconContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  section: {
     gap: 8,
+  },
+  alertBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 10,
+  },
+  tabBar: {
+    flexDirection: "row",
+    borderRadius: 12,
+    padding: 4,
+    gap: 6,
+  },
+  tabItem: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: "center",
+    borderRadius: 10,
+  },
+  contentBox: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+  },
+  contactsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  contactCardItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
     padding: 10,
-    borderRadius: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    minHeight: 52,
+    flexGrow: 1,
+    flexBasis: "46%",
+    minWidth: 150,
+  },
+  contactAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  callButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileFooterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
     minHeight: 48,
   },
-  contactsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  contactGridItem: { flexGrow: 1, flexBasis: "45%", minWidth: 150 },
-  link: { minHeight: 48, justifyContent: "center" },
+  loader: {
+    marginVertical: 20,
+  },
+  retryButton: {
+    minHeight: 48,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 });

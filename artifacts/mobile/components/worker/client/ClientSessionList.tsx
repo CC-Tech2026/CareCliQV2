@@ -1,7 +1,11 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { complianceBadgeMeta, sessionScoreLabel } from "@/lib/client-utils";
+import {
+  complianceBadgeMeta,
+  sessionScoreLabel,
+  uniqueClientRecords,
+} from "@/lib/client-utils";
 import { shiftNoteSubtitle, shiftNoteTitle } from "@/lib/shift-note-title";
 import type { ClientSessionRecord } from "@/lib/worker-api";
 import { useColors } from "@/hooks/useColors";
@@ -14,18 +18,29 @@ export function ClientSessionList({
   emptyLabel?: string;
 }) {
   const colors = useColors();
+  const records = uniqueClientRecords(rows);
 
-  if (rows.length === 0) {
+  if (records.length === 0) {
     return (
-      <Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+      <Text
+        style={[
+          styles.empty,
+          { color: colors.mutedForeground, fontFamily: "Inter_500Medium" },
+        ]}
+      >
         {emptyLabel}
       </Text>
     );
   }
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      {rows.map((session, index) => {
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
+      {records.map((session, index) => {
         const statusVal = session.compliance_status || session.status;
         const badge = complianceBadgeMeta(statusVal);
         const scoreLabel = sessionScoreLabel(session);
@@ -36,28 +51,60 @@ export function ClientSessionList({
             key={session.id}
             style={[
               styles.row,
-              index < rows.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+              index < rows.length - 1 && {
+                borderBottomColor: colors.border,
+                borderBottomWidth: StyleSheet.hairlineWidth,
+              },
             ]}
           >
             <View style={styles.rowContent}>
               {/* One participant's notes, written by this worker: the day and times tell them apart. */}
-              <Text style={[styles.type, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              <Text
+                style={[
+                  styles.type,
+                  { color: colors.foreground, fontFamily: "Inter_700Bold" },
+                ]}
+              >
                 {shiftNoteTitle(session, { participant: false })}
               </Text>
-              <Text style={[styles.date, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              <Text
+                style={[
+                  styles.date,
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: "Inter_400Regular",
+                  },
+                ]}
+              >
                 {shiftNoteSubtitle(session, { worker: false })}
               </Text>
               {preview ? (
                 <Text
-                  style={[styles.preview, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
+                  style={[
+                    styles.preview,
+                    {
+                      color: colors.mutedForeground,
+                      fontFamily: "Inter_400Regular",
+                    },
+                  ]}
                   numberOfLines={2}
                 >
                   {preview}
                 </Text>
               ) : null}
             </View>
-            <View style={[styles.badge, { backgroundColor: badge.bg, borderColor: badge.color }]}>
-              <Text style={[styles.badgeText, { color: badge.color, fontFamily: "Inter_600SemiBold" }]}>
+            <View
+              style={[
+                styles.badge,
+                { backgroundColor: badge.bg, borderColor: badge.color },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.badgeText,
+                  { color: badge.color, fontFamily: "Inter_600SemiBold" },
+                ]}
+              >
                 {scoreLabel}
               </Text>
             </View>
@@ -70,12 +117,24 @@ export function ClientSessionList({
 
 const styles = StyleSheet.create({
   card: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
-  row: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
   rowContent: { flex: 1, gap: 3 },
   type: { fontSize: 14 },
   date: { fontSize: 12 },
   preview: { fontSize: 13, lineHeight: 18, marginTop: 4 },
-  badge: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4, marginTop: 2 },
+  badge: {
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginTop: 2,
+  },
   badgeText: { fontSize: 11, textTransform: "capitalize" },
   empty: { fontSize: 14, paddingVertical: 8 },
 });

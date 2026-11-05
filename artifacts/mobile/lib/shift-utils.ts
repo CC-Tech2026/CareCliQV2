@@ -1,5 +1,9 @@
 import { Brand } from "@/constants/brand";
-import type { ShiftTask, ShiftVisualState, WorkerShift } from "@/lib/worker-api";
+import type {
+  ShiftTask,
+  ShiftVisualState,
+  WorkerShift,
+} from "@/lib/worker-api";
 
 export const MIN_EVIDENCE_NOTE_CHARS = 20;
 export const SESSION_NOTE_MAX = 500;
@@ -39,10 +43,16 @@ function resolveZone(tz?: string | null): string {
 }
 
 /** Short zone name at that instant, e.g. "AEST" / "ACDT". */
-export function zoneAbbreviation(iso: string | Date, tz?: string | null): string {
+export function zoneAbbreviation(
+  iso: string | Date,
+  tz?: string | null,
+): string {
   try {
     const d = typeof iso === "string" ? new Date(iso) : iso;
-    const part = new Intl.DateTimeFormat("en-AU", { timeZone: resolveZone(tz), timeZoneName: "short" })
+    const part = new Intl.DateTimeFormat("en-AU", {
+      timeZone: resolveZone(tz),
+      timeZoneName: "short",
+    })
       .formatToParts(d)
       .find((p) => p.type === "timeZoneName");
     return part?.value ?? "";
@@ -77,7 +87,9 @@ export const STATE_LABELS: Record<ShiftVisualState, string> = {
   completed: "Documented",
 };
 
-export function greetingForHour(now = new Date()): "morning" | "afternoon" | "evening" {
+export function greetingForHour(
+  now = new Date(),
+): "morning" | "afternoon" | "evening" {
   const h = now.getHours();
   if (h < 12) return "morning";
   if (h < 17) return "afternoon";
@@ -143,7 +155,10 @@ function formatTime(iso: string, tz?: string | null): string {
  * progress notes, incidents — must never be ambiguous about which
  * branch's clock they're on, regardless of who's looking.
  */
-export function formatTimeWithZone(iso?: string | null, tz?: string | null): string {
+export function formatTimeWithZone(
+  iso?: string | null,
+  tz?: string | null,
+): string {
   if (!iso) return "";
   return `${formatTime(iso, tz)} ${zoneAbbreviation(iso, tz)}`;
 }
@@ -152,17 +167,27 @@ export function formatTimeWithZone(iso?: string | null, tz?: string | null): str
 export function formatDateInZone(
   iso?: string | null,
   tz?: string | null,
-  opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" },
+  opts: Intl.DateTimeFormatOptions = {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  },
 ): string {
   if (!iso) return "";
   try {
-    return new Intl.DateTimeFormat("en-AU", { ...opts, timeZone: resolveZone(tz) }).format(new Date(iso));
+    return new Intl.DateTimeFormat("en-AU", {
+      ...opts,
+      timeZone: resolveZone(tz),
+    }).format(new Date(iso));
   } catch {
     return iso;
   }
 }
 
-export function formatShiftDate(iso?: string, tz?: string | null): string | null {
+export function formatShiftDate(
+  iso?: string,
+  tz?: string | null,
+): string | null {
   if (!iso) return null;
   try {
     const d = new Date(iso);
@@ -177,7 +202,11 @@ export function formatShiftDate(iso?: string, tz?: string | null): string | null
   }
 }
 
-export function formatShiftTimeRange(start?: string, end?: string, tz?: string | null): string {
+export function formatShiftTimeRange(
+  start?: string,
+  end?: string,
+  tz?: string | null,
+): string {
   if (!start) return "Time not set";
   try {
     const date = formatShiftDate(start, tz);
@@ -217,7 +246,10 @@ export function formatDurationLabel(minutes?: number | null): string | null {
   return `${m}m`;
 }
 
-export function formatElapsedTimer(fromIso?: string | null, now = Date.now()): string {
+export function formatElapsedTimer(
+  fromIso?: string | null,
+  now = Date.now(),
+): string {
   const start = parseIsoMs(fromIso);
   if (start === null) return "00:00:00";
 
@@ -235,7 +267,8 @@ export function timerAnchorIso(
   sessionStartedAt?: string | null,
   clockedInAt?: string | null,
 ): string | null {
-  const session = parseIsoMs(sessionStartedAt) !== null ? sessionStartedAt! : null;
+  const session =
+    parseIsoMs(sessionStartedAt) !== null ? sessionStartedAt! : null;
   const clocked = parseIsoMs(clockedInAt) !== null ? clockedInAt! : null;
 
   if (visualState === "session_active" && session) return session;
@@ -259,9 +292,19 @@ export function formatActiveGoalLabel(
 export function emergencyContactDisplay(
   contact:
     | string
-    | { name?: string | null; phone?: string | null; relationship?: string | null; display?: string }
+    | {
+        name?: string | null;
+        phone?: string | null;
+        relationship?: string | null;
+        display?: string;
+      }
     | undefined,
-): { name: string | null; phone?: string; text: string; detail: string } | null {
+): {
+  name: string | null;
+  phone?: string;
+  text: string;
+  detail: string;
+} | null {
   if (!contact) return null;
   if (typeof contact === "string") {
     return {
@@ -279,12 +322,21 @@ export function emergencyContactDisplay(
     name,
     phone,
     detail,
-    text: contact.display || [name, detail].filter(Boolean).join(" — ") || phone || name || "",
+    text:
+      contact.display ||
+      [name, detail].filter(Boolean).join(" — ") ||
+      phone ||
+      name ||
+      "",
   };
 }
 
 export function isShiftCompletedForList(shift: WorkerShift): boolean {
-  return shift.visual_state === "completed" || shift.status === "completed";
+  return (
+    Boolean(shift.clocked_out_at) ||
+    shift.visual_state === "completed" ||
+    shift.status === "completed"
+  );
 }
 
 export function shiftNeedsRiskAck(shift: WorkerShift): boolean {
@@ -292,7 +344,10 @@ export function shiftNeedsRiskAck(shift: WorkerShift): boolean {
 }
 
 export function shiftHasRiskAlerts(shift: WorkerShift): boolean {
-  return Boolean(shift.has_risk_alerts || (shift.health_alerts && shift.health_alerts.length > 0));
+  return Boolean(
+    shift.has_risk_alerts ||
+    (shift.health_alerts && shift.health_alerts.length > 0),
+  );
 }
 
 export function resolveActiveShiftTasks(
@@ -311,7 +366,9 @@ export function hasStrongTaskEvidence(task: ShiftTask): boolean {
 export function isMandatoryTask(task: ShiftTask): boolean {
   return (
     task.mandatory === true ||
-    (task.type === "default" && task.mandatory !== false && (task.order ?? 0) <= 4)
+    (task.type === "default" &&
+      task.mandatory !== false &&
+      (task.order ?? 0) <= 4)
   );
 }
 
@@ -320,7 +377,9 @@ export function hasIncompleteMandatoryTasks(tasks: ShiftTask[]): boolean {
 }
 
 export function incompleteMandatoryTasks(tasks: ShiftTask[]): ShiftTask[] {
-  return tasks.filter((t) => !t.marked_na && isMandatoryTask(t) && !t.completed);
+  return tasks.filter(
+    (t) => !t.marked_na && isMandatoryTask(t) && !t.completed,
+  );
 }
 
 export function isShiftInProgress(shift: {
@@ -332,9 +391,13 @@ export function isShiftInProgress(shift: {
   return (shift.status ?? "").toLowerCase() === "in_progress";
 }
 
-export function findInProgressShift<T extends { id: string; visual_state?: string | null; status?: string | null }>(
-  shifts: T[],
-): T | null {
+export function findInProgressShift<
+  T extends {
+    id: string;
+    visual_state?: string | null;
+    status?: string | null;
+  },
+>(shifts: T[]): T | null {
   return shifts.find((s) => isShiftInProgress(s)) ?? null;
 }
 
@@ -343,7 +406,11 @@ export function findInProgressShift<T extends { id: string; visual_state?: strin
  * The in-progress shift itself (and completed/cancelled) can always be opened.
  */
 export function isBlockedByInProgressShift<
-  T extends { id: string; visual_state?: string | null; status?: string | null },
+  T extends {
+    id: string;
+    visual_state?: string | null;
+    status?: string | null;
+  },
 >(target: T, inProgress: T | null): boolean {
   if (!inProgress || inProgress.id === target.id) return false;
   if (isShiftCompletedForList(target as WorkerShift)) return false;
@@ -352,7 +419,10 @@ export function isBlockedByInProgressShift<
   return true;
 }
 
-export function sortTodayShiftsForList(shifts: WorkerShift[], now = new Date()): WorkerShift[] {
+export function sortTodayShiftsForList(
+  shifts: WorkerShift[],
+  now = new Date(),
+): WorkerShift[] {
   const priority = (s: WorkerShift): number => {
     if (s.visual_state === "session_active") return 0;
     if (s.visual_state === "clocked_in") return 1;
@@ -380,10 +450,14 @@ export function formatTodayHeading(now = new Date()): string {
   });
 }
 
-export function getPrimaryTodayShiftId(shifts: WorkerShift[], now = new Date()): string | null {
+export function getPrimaryTodayShiftId(
+  shifts: WorkerShift[],
+  now = new Date(),
+): string | null {
   const sorted = sortTodayShiftsForList(shifts, now);
   const active = sorted.find(
-    (s) => s.visual_state === "session_active" || s.visual_state === "clocked_in",
+    (s) =>
+      s.visual_state === "session_active" || s.visual_state === "clocked_in",
   );
   if (active) return active.id;
   const upcoming = sorted.find((s) => s.visual_state === "scheduled");
@@ -405,7 +479,10 @@ export function formatMobileShiftDuration(
   elapsedTimer?: string,
 ): string {
   if (shift.clocked_in_at && shift.clocked_out_at) {
-    const mins = shiftDurationMinutes(shift.clocked_in_at, shift.clocked_out_at);
+    const mins = shiftDurationMinutes(
+      shift.clocked_in_at,
+      shift.clocked_out_at,
+    );
     const label = formatDurationLabel(mins);
     if (label) return label;
   }
@@ -416,7 +493,11 @@ export function formatMobileShiftDuration(
   }
   return (
     formatDurationLabel(
-      shiftDurationMinutes(shift.scheduled_start, shift.scheduled_end, shift.duration_minutes),
+      shiftDurationMinutes(
+        shift.scheduled_start,
+        shift.scheduled_end,
+        shift.duration_minutes,
+      ),
     ) ?? "—"
   );
 }
@@ -429,7 +510,10 @@ function slugFilePart(value: string, fallback = "unknown"): string {
   return cleaned || fallback;
 }
 
-function extensionFromName(originalName?: string | null, fallback = "jpg"): string {
+function extensionFromName(
+  originalName?: string | null,
+  fallback = "jpg",
+): string {
   const match = originalName?.trim().match(/\.([a-zA-Z0-9]+)$/);
   return (match?.[1] ?? fallback).toLowerCase();
 }
@@ -450,4 +534,3 @@ export function buildAttachmentFileName(options: {
   const ext = extensionFromName(options.originalName);
   return `${patient}_${task}_${datetime}.${ext}`;
 }
-

@@ -48,7 +48,8 @@ function applyOptimisticCheckinStatus(
   const required = prev.checkins_required ?? 0;
   // Drop due/prompted rows so local sync cannot re-post the tray notification.
   const upcoming = (prev.upcoming_checkins ?? []).filter(
-    (item) => item.status && !["pending", "prompted", "due"].includes(item.status),
+    (item) =>
+      item.status && !["pending", "prompted", "due"].includes(item.status),
   );
   return {
     ...prev,
@@ -73,34 +74,45 @@ export default function ShiftDetailScreen() {
   }>();
   // Sticky for this mount — query param is stripped after open, but form must stay immediate.
   const [fromCheckinNotif] = useState(() => checkin === "pending");
-  const [scheduledCheckinId] = useState(
-    () => (typeof scheduled_checkin_id === "string" ? scheduled_checkin_id : undefined),
+  const [scheduledCheckinId] = useState(() =>
+    typeof scheduled_checkin_id === "string" ? scheduled_checkin_id : undefined,
   );
   const markedCheckinNotifsRef = useRef(false);
   const checkinInFlightRef = useRef(false);
 
-  const { data: shift, isLoading, error, refetch: refetchShift } = useWorkerShift(id);
+  const {
+    data: shift,
+    isLoading,
+    error,
+    refetch: refetchShift,
+  } = useWorkerShift(id);
 
   // Opening a shift that was already finished (from a list or a link) shows
   // its record and conversation with the office, not the live shift screen.
   // Only on first load: finishing a shift here still shows the submitted
-  // screen, and a shift with documentation still due keeps "Finish
-  // documentation".
+  // screen. Outstanding documentation is handled on the saved record.
   const openedFinishedRef = useRef<boolean | null>(null);
   useEffect(() => {
     if (!shift || openedFinishedRef.current !== null) return;
-    openedFinishedRef.current = isShiftCompletedForList(shift) && !shift.documentation_pending;
-    if (openedFinishedRef.current) router.replace(`/shift/${id}/record` as never);
+    openedFinishedRef.current = isShiftCompletedForList(shift);
+    if (openedFinishedRef.current)
+      router.replace(`/shift/${id}/record` as never);
   }, [shift, id, router]);
   const sessionId = shift?.session_id ?? undefined;
-  const isSessionActive = shift?.visual_state === "session_active" || shift?.visual_state === "clocked_in";
+  const isSessionActive = Boolean(
+    shift &&
+    !isShiftCompletedForList(shift) &&
+    (shift.visual_state === "session_active" ||
+      shift.visual_state === "clocked_in"),
+  );
   const checkinStatus = shift?.checkin_status;
 
   // A shift the worker has only been offered (not yet accepted/declined) has
   // no worker_id on it yet, so getWorkerShift 403s — the backend correctly
   // refusing full participant detail before commitment, not a real error.
   // On exactly that 403, fetch the safe decision-only summary instead.
-  const shiftAccessDenied = error instanceof WorkerApiError && error.status === 403;
+  const shiftAccessDenied =
+    error instanceof WorkerApiError && error.status === 403;
   const {
     data: offerSummary,
     isLoading: offerLoading,
@@ -118,7 +130,10 @@ export default function ShiftDetailScreen() {
       await acceptShiftOffer(id);
       await refetchShift();
     } catch (err) {
-      Alert.alert("Couldn't accept this shift", err instanceof Error ? err.message : "Please try again.");
+      Alert.alert(
+        "Couldn't accept this shift",
+        err instanceof Error ? err.message : "Please try again.",
+      );
     }
   }, [id, refetchShift]);
 
@@ -129,7 +144,10 @@ export default function ShiftDetailScreen() {
         await declineShiftOffer(id, reason);
         await refetchOfferSummary();
       } catch (err) {
-        Alert.alert("Couldn't decline this shift", err instanceof Error ? err.message : "Please try again.");
+        Alert.alert(
+          "Couldn't decline this shift",
+          err instanceof Error ? err.message : "Please try again.",
+        );
       }
     },
     [id, refetchOfferSummary],
@@ -177,7 +195,9 @@ export default function ShiftDetailScreen() {
     void clearShiftComplianceCheckinNotifications({
       shiftId: id,
       scheduledCheckinId,
-      upcomingCheckinIds: checkinStatus?.upcoming_checkins?.map((item) => item.id),
+      upcomingCheckinIds: checkinStatus?.upcoming_checkins?.map(
+        (item) => item.id,
+      ),
     });
   }, [
     id,
@@ -199,14 +219,16 @@ export default function ShiftDetailScreen() {
     if (!id || markedCheckinNotifsRef.current) return;
 
     const longShiftSectionVisible =
-      Boolean(checkinStatus?.applicable) || (checkinStatus?.checkins_required ?? 0) > 0;
+      Boolean(checkinStatus?.applicable) ||
+      (checkinStatus?.checkins_required ?? 0) > 0;
     const checkinUiVisible =
       fromCheckinNotif ||
       checkinOpen ||
       Boolean(checkinStatus?.can_submit_checkin) ||
       Boolean(checkinStatus?.checkin_overdue);
 
-    if (!fromCheckinNotif && !longShiftSectionVisible && !checkinUiVisible) return;
+    if (!fromCheckinNotif && !longShiftSectionVisible && !checkinUiVisible)
+      return;
 
     markedCheckinNotifsRef.current = true;
     markShiftComplianceCheckinNotificationsRead(queryClient, id);
@@ -265,11 +287,16 @@ export default function ShiftDetailScreen() {
     // it was never invalidated, leaving stale scheduled/clocked-in badges
     // until a manual pull-to-refresh.
     void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
+    void queryClient.invalidateQueries({
+      queryKey: ["worker", "shift-reviews"],
+    });
   }, [queryClient, id]);
 
   const invalidateNotesQuery = useCallback(() => {
     if (!sessionId) return;
-    void queryClient.invalidateQueries({ queryKey: ["worker", "session", sessionId, "notes"] });
+    void queryClient.invalidateQueries({
+      queryKey: ["worker", "session", sessionId, "notes"],
+    });
   }, [queryClient, sessionId]);
 
   const handleRefresh = useCallback(() => {
@@ -278,8 +305,12 @@ export default function ShiftDetailScreen() {
   }, [invalidateShiftQueries, invalidateNotesQuery]);
 
   const handleComplete = () => {
-    void queryClient.invalidateQueries({ queryKey: ["worker", "my-compliance"] });
-    void queryClient.invalidateQueries({ queryKey: ["worker", "compliance-detail"] });
+    void queryClient.invalidateQueries({
+      queryKey: ["worker", "my-compliance"],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["worker", "compliance-detail"],
+    });
     void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
     router.replace("/(tabs)/shifts" as never);
   };
@@ -294,7 +325,8 @@ export default function ShiftDetailScreen() {
       const shiftKey = ["worker", "shift", id] as const;
       const notesKey = ["worker", "session", sessionId, "notes"] as const;
       const previousShift = queryClient.getQueryData<WorkerShift>(shiftKey);
-      const previousNotes = queryClient.getQueryData<SessionNoteRecord[]>(notesKey);
+      const previousNotes =
+        queryClient.getQueryData<SessionNoteRecord[]>(notesKey);
 
       // Optimistic: disable Check-in immediately and reflect checked-in status in UI.
       queryClient.setQueryData<WorkerShift>(shiftKey, (prev) => {
@@ -307,8 +339,11 @@ export default function ShiftDetailScreen() {
       setCheckinOpen(false);
       void clearShiftComplianceCheckinNotifications({
         shiftId: id,
-        scheduledCheckinId: scheduledCheckinId ?? checkinStatus?.upcoming_checkins?.[0]?.id,
-        upcomingCheckinIds: checkinStatus?.upcoming_checkins?.map((item) => item.id),
+        scheduledCheckinId:
+          scheduledCheckinId ?? checkinStatus?.upcoming_checkins?.[0]?.id,
+        upcomingCheckinIds: checkinStatus?.upcoming_checkins?.map(
+          (item) => item.id,
+        ),
       });
 
       try {
@@ -316,12 +351,16 @@ export default function ShiftDetailScreen() {
 
         queryClient.setQueryData<SessionNoteRecord[]>(notesKey, (prev) => {
           const list = prev ?? [];
-          if (list.some((n) => n.note_id === result.timelineNote.note_id)) return list;
+          if (list.some((n) => n.note_id === result.timelineNote.note_id))
+            return list;
           return [...list, result.timelineNote];
         });
 
         if (result.status === "INCIDENT_REPORTED") {
-          Alert.alert("Incident noted", "Please document the incident in your shift notes.");
+          Alert.alert(
+            "Incident noted",
+            "Please document the incident in your shift notes.",
+          );
         }
       } catch (err) {
         if (previousShift !== undefined) {
@@ -331,7 +370,10 @@ export default function ShiftDetailScreen() {
           queryClient.setQueryData(notesKey, previousNotes);
         }
         setCheckinOpen(true);
-        Alert.alert("Check-in failed", err instanceof Error ? err.message : "Please try again.");
+        Alert.alert(
+          "Check-in failed",
+          err instanceof Error ? err.message : "Please try again.",
+        );
       } finally {
         checkinInFlightRef.current = false;
         setCheckinBusy(false);
@@ -356,11 +398,28 @@ export default function ShiftDetailScreen() {
 
   if (shiftAccessDenied && offerSummary && !fromCheckinNotif) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <ShiftOfferCard offer={offerSummary} onAccept={handleAcceptOffer} onDecline={handleDeclineOffer} />
-        <Pressable onPress={() => goBackToShifts(router)} style={[styles.backLink, { borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.center,
+          { backgroundColor: colors.background, paddingTop: insets.top },
+        ]}
+      >
+        <ShiftOfferCard
+          offer={offerSummary}
+          onAccept={handleAcceptOffer}
+          onDecline={handleDeclineOffer}
+        />
+        <Pressable
+          onPress={() => goBackToShifts(router)}
+          style={[styles.backLink, { borderColor: colors.border }]}
+        >
           <Feather name="arrow-left" size={16} color={colors.primary} />
-          <Text style={[styles.backLinkText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+          <Text
+            style={[
+              styles.backLinkText,
+              { color: colors.primary, fontFamily: "Inter_600SemiBold" },
+            ]}
+          >
             Go back
           </Text>
         </Pressable>
@@ -370,13 +429,33 @@ export default function ShiftDetailScreen() {
 
   if ((error || !shift) && !fromCheckinNotif) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
-          {shiftAccessDenied ? "This offer is no longer available." : ((error as Error)?.message ?? "Shift not found")}
+      <View
+        style={[
+          styles.center,
+          { backgroundColor: colors.background, paddingTop: insets.top },
+        ]}
+      >
+        <Text
+          style={[
+            styles.errorText,
+            { color: colors.destructive, fontFamily: "Inter_600SemiBold" },
+          ]}
+        >
+          {shiftAccessDenied
+            ? "This offer is no longer available."
+            : ((error as Error)?.message ?? "Shift not found")}
         </Text>
-        <Pressable onPress={() => goBackToShifts(router)} style={[styles.backLink, { borderColor: colors.border }]}>
+        <Pressable
+          onPress={() => goBackToShifts(router)}
+          style={[styles.backLink, { borderColor: colors.border }]}
+        >
           <Feather name="arrow-left" size={16} color={colors.primary} />
-          <Text style={[styles.backLinkText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+          <Text
+            style={[
+              styles.backLinkText,
+              { color: colors.primary, fontFamily: "Inter_600SemiBold" },
+            ]}
+          >
             Go back
           </Text>
         </Pressable>
@@ -404,7 +483,11 @@ export default function ShiftDetailScreen() {
           onNotesRefresh={invalidateNotesQuery}
           onShiftComplete={handleComplete}
           onBack={() => goBackToShifts(router)}
-          canCheckin={isSessionActive && Boolean(checkinStatus?.can_submit_checkin) && !checkinBusy}
+          canCheckin={
+            isSessionActive &&
+            Boolean(checkinStatus?.can_submit_checkin) &&
+            !checkinBusy
+          }
           onCheckin={() => setCheckinOpen(true)}
           checkinStatus={checkinStatus}
           breakStatus={shift.break_status}

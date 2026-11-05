@@ -135,16 +135,16 @@ def list_worker_shift_reviews(worker_id: str, organization_id: str, *, include_v
             )
             .eq("worker_id", worker_id)
             .eq("organization_id", organization_id)
-            .eq("status", "completed")
+            .or_("status.eq.completed,clocked_out_at.not.is.null")
+            .neq("status", "cancelled")
             .order("scheduled_start", desc=True)
             .limit(200)
         )
         if not include_verified:
             query = query.gte("scheduled_start", since)
         shifts = query.execute().data or []
-    except Exception as exc:
-        if _missing_schema(exc):
-            return {"shifts": [], "counts": {"changes_requested": 0, "awaiting_review": 0, "verified": 0}}
+    except Exception:
+        logger.exception("Could not load worker shift history")
         raise
 
     shift_ids = [str(s["id"]) for s in shifts if s.get("id")]
@@ -258,12 +258,23 @@ def _sender_names(user_ids: set[str]) -> dict[str, str]:
     return {str(r["id"]): (r.get("full_name") or "").strip() for r in rows}
 
 
+def require_worker_reopen_access(shift: dict[str, Any], worker_id: str) -> None:
+    """Finished records reopen only for an outstanding office change request."""
+    if shift.get("status") != "completed" and not shift.get("clocked_out_at"):
+        return
+    shift_id = str(shift["id"])
+    status = review_status(shift_id, _verified_shift_ids([shift_id]), _conversation_states(worker_id, [shift_id]))
+    if status != "changes_requested":
+        raise PermissionError("Approved shifts cannot be reopened." if status == "verified" else "This shift can only be reopened when the office requests changes.")
+
+
 def get_worker_shift_thread(shift_id: str, worker_id: str, organization_id: str) -> Optional[dict[str, Any]]:
     """The shift's review status and its whole conversation with the office,
     oldest first, marking the office's messages read."""
     shift = _worker_shift(shift_id, worker_id, organization_id)
     if not shift:
         return None
+    require_worker_reopen_access(shift, worker_id)
     verified = _verified_shift_ids([shift_id])
     states = _conversation_states(worker_id, [shift_id])
     state = states.get(shift_id) or {}
@@ -336,8 +347,7 @@ def post_worker_message(shift_id: str, worker_id: str, organization_id: str, bod
     shift = _worker_shift(shift_id, worker_id, organization_id)
     if not shift:
         return None
-    if _verified_shift_ids([shift_id]):
-        raise PermissionError("This shift has been verified. Contact the office for any changes.")
+    require_worker_reopen_access(shift, worker_id)
     conv = _open_conversation(shift, worker_id, organization_id)
     msg = conversation_service.send_conversation_message(
         conversation_id=str(conv["id"]), sender_id=worker_id, body=body,
@@ -351,6 +361,7 @@ def send_back_for_review(shift_id: str, worker_id: str, organization_id: str, no
     shift = _worker_shift(shift_id, worker_id, organization_id)
     if not shift:
         return None
+    require_worker_reopen_access(shift, worker_id)
     states = _conversation_states(worker_id, [shift_id])
     state = states.get(shift_id) or {}
     if not state.get("open_requests"):

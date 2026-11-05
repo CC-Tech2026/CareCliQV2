@@ -1,5 +1,4 @@
 import { FontFamily } from "@/constants/typography";
-import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -18,7 +17,7 @@ import { ClientNavRow } from "@/components/worker/client/ClientNavRow";
 import { ClientProfileHeader } from "@/components/worker/client/ClientProfileHeader";
 import { ClientScreenShell } from "@/components/worker/client/ClientScreenShell";
 import { RecentNotesPreview } from "@/components/worker/client/RecentNotesPreview";
-import { activeGoals } from "@/lib/client-utils";
+import { activeGoals, uniqueClientRecords } from "@/lib/client-utils";
 import { useWorkerClientDetail } from "@/hooks/worker/useWorkerClientDetail";
 import { useColors } from "@/hooks/useColors";
 
@@ -26,7 +25,9 @@ const RECENT_NOTES_LIMIT = 3;
 
 export default function ClientDetailHubScreen() {
   const colors = useColors();
-  const [tab, setTab] = useState<"before" | "records">("before");
+  const [tab, setTab] = useState<"support" | "goals" | "visits" | "records">(
+    "support",
+  );
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading, error } = useWorkerClientDetail(id);
@@ -63,6 +64,10 @@ export default function ClientDetailHubScreen() {
   const client = data.participant;
   const goals = activeGoals(client.goals);
   const planGoals = goals.length;
+  const recordCount = uniqueClientRecords([
+    ...data.sessions,
+    ...data.notes,
+  ]).length;
   const nextShifts = (schedule.data?.shifts ?? [])
     .filter(
       (shift) =>
@@ -88,18 +93,23 @@ export default function ClientDetailHubScreen() {
     .slice(0, RECENT_NOTES_LIMIT);
 
   return (
-    <ClientScreenShell title={client.full_name} subtitle="Participant profile">
-      <ScrollView contentContainerStyle={styles.scroll}>
+    <ClientScreenShell title="Participant profile">
+      <View style={styles.fixedHeader}>
         <ClientProfileHeader client={client} compact />
 
         <View
           accessibilityRole="tablist"
-          style={[styles.tabs, { backgroundColor: colors.soft }]}
+          style={[
+            styles.tabs,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
         >
           {(
             [
-              ["before", "Before your shift"],
-              ["records", "Notes & records"],
+              ["support", "Support"],
+              ["goals", "Goals"],
+              ["visits", "Visits"],
+              ["records", "Records"],
             ] as const
           ).map(([key, label]) => (
             <Pressable
@@ -108,17 +118,19 @@ export default function ClientDetailHubScreen() {
               accessibilityState={{ selected: tab === key }}
               aria-selected={tab === key}
               onPress={() => setTab(key)}
-              style={[
+              style={({ pressed }) => [
                 styles.tab,
+                { opacity: pressed ? 0.7 : 1 },
                 {
-                  backgroundColor: tab === key ? colors.primary : "transparent",
+                  backgroundColor: "transparent",
+                  borderBottomColor:
+                    tab === key ? colors.primary : "transparent",
                 },
               ]}
             >
               <Text
                 style={{
-                  color:
-                    tab === key ? colors.primaryForeground : colors.foreground,
+                  color: tab === key ? colors.primary : colors.mutedForeground,
                   fontFamily: FontFamily.interSemiBold,
                   textAlign: "center",
                 }}
@@ -128,78 +140,21 @@ export default function ClientDetailHubScreen() {
             </Pressable>
           ))}
         </View>
-        {tab === "before" && (
+      </View>
+      <ScrollView
+        key={client.id + ":" + tab}
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.scroll}
+      >
+        {(tab === "support" || tab === "goals") && (
+          <ClientOverviewContent
+            key={client.id + tab}
+            client={client}
+            section={tab}
+          />
+        )}
+        {tab === "visits" && (
           <>
-            <View
-              style={[
-                styles.intro,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              <Text
-                accessibilityRole="header"
-                style={{
-                  color: colors.foreground,
-                  fontFamily: FontFamily.interBold,
-                  fontSize: 18,
-                }}
-              >
-                Get to know me
-              </Text>
-              <Text
-                style={{
-                  color: colors.mutedForeground,
-                  fontFamily: FontFamily.interRegular,
-                  fontSize: 14,
-                  lineHeight: 22,
-                }}
-              >
-                Read my support needs, communication preferences and goals
-                before your shift.
-              </Text>
-            </View>
-            <ClientOverviewContent client={client} />
-            {recentNotes.length > 0 && (
-              <View style={{ gap: 10 }}>
-                <View style={styles.sectionHeaderRow}>
-                  <Text
-                    accessibilityRole="header"
-                    style={{
-                      color: colors.foreground,
-                      fontFamily: FontFamily.interBold,
-                      fontSize: 18,
-                    }}
-                  >
-                    Recent session notes
-                  </Text>
-                  <Pressable
-                    onPress={() => router.push(`/client/${id}/shift-notes` as never)}
-                  >
-                    <Text
-                      style={{
-                        color: colors.primary,
-                        fontFamily: FontFamily.interSemiBold,
-                        fontSize: 13,
-                      }}
-                    >
-                      View all
-                    </Text>
-                  </Pressable>
-                </View>
-                <Text
-                  style={{
-                    color: colors.mutedForeground,
-                    fontFamily: FontFamily.interRegular,
-                    fontSize: 13,
-                    lineHeight: 19,
-                    marginTop: -4,
-                  }}
-                >
-                  What happened last time, so you know what to follow up on. Tap a note to read it.
-                </Text>
-                <RecentNotesPreview rows={recentNotes} />
-              </View>
-            )}
             <View style={{ gap: 14 }}>
               <Text
                 accessibilityRole="header"
@@ -238,7 +193,6 @@ export default function ClientDetailHubScreen() {
               )}
             </View>
             <ClientNavRow
-              icon="calendar"
               label="Go to my shifts"
               subtitle="Open your scheduled shift to review the briefing and clock in"
               onPress={() => router.push("/(tabs)/shifts" as never)}
@@ -247,44 +201,73 @@ export default function ClientDetailHubScreen() {
         )}
         {tab === "records" && (
           <>
-            <View style={styles.actions}>
-              <Pressable
-                onPress={() => router.push(`/client/${id}/session` as never)}
-                style={[
-                  styles.startSessionBtn,
-                  { backgroundColor: colors.primary },
-                ]}
-              >
-                <Feather
-                  name="mic"
-                  size={16}
-                  color={colors.primaryForeground}
-                />
-                <Text
-                  style={[
-                    styles.startSessionText,
-                    {
-                      color: colors.primaryForeground,
+            {recentNotes.length > 0 && (
+              <View style={{ gap: 10 }}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text
+                    accessibilityRole="header"
+                    style={{
+                      color: colors.foreground,
                       fontFamily: FontFamily.interBold,
-                    },
-                  ]}
+                      fontSize: 18,
+                    }}
+                  >
+                    Recent session notes
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="View all session notes"
+                    style={styles.viewAllAction}
+                    onPress={() =>
+                      router.push(`/client/${id}/shift-notes` as never)
+                    }
+                  >
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontFamily: FontFamily.interSemiBold,
+                        fontSize: 13,
+                      }}
+                    >
+                      View all
+                    </Text>
+                  </Pressable>
+                </View>
+                <Text
+                  style={{
+                    color: colors.mutedForeground,
+                    fontFamily: FontFamily.interRegular,
+                    fontSize: 13,
+                    lineHeight: 19,
+                    marginTop: -4,
+                  }}
                 >
-                  Start session
+                  What happened last time, so you know what to follow up on. Tap
+                  a note to read it.
                 </Text>
-              </Pressable>
+                <RecentNotesPreview rows={recentNotes} />
+              </View>
+            )}
+
+            <View style={styles.actions}>
               <View style={styles.secondaryActions}>
                 <Pressable
                   onPress={() => router.push("/incidents" as never)}
                   style={[
                     styles.actionBtn,
-                    { backgroundColor: colors.card, borderColor: "#FECACA" },
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.dangerBorder,
+                    },
                   ]}
                 >
-                  <Feather name="alert-circle" size={15} color="#DC2626" />
                   <Text
                     style={[
                       styles.actionText,
-                      { color: "#DC2626", fontFamily: FontFamily.interBold },
+                      {
+                        color: colors.dangerText,
+                        fontFamily: FontFamily.interBold,
+                      },
                     ]}
                   >
                     Incident
@@ -300,13 +283,11 @@ export default function ClientDetailHubScreen() {
               ]}
             >
               <ClientNavRow
-                icon="user"
                 label="Overview"
                 subtitle="Medical alerts, preferences, goals"
                 onPress={() => router.push(`/client/${id}/overview` as never)}
               />
               <ClientNavRow
-                icon="target"
                 label="Plan & goals"
                 subtitle={
                   planGoals
@@ -316,15 +297,13 @@ export default function ClientDetailHubScreen() {
                 onPress={() => router.push(`/client/${id}/plan` as never)}
               />
               <ClientNavRow
-                icon="file-text"
                 label="Shift Notes"
-                subtitle={`${data.sessions.length + data.notes.length} record${data.sessions.length + data.notes.length === 1 ? "" : "s"}`}
+                subtitle={`${recordCount} record${recordCount === 1 ? "" : "s"}`}
                 onPress={() =>
                   router.push(`/client/${id}/shift-notes` as never)
                 }
               />
               <ClientNavRow
-                icon="shield"
                 label="Compliance"
                 subtitle={`${data.compliance.length} record${data.compliance.length === 1 ? "" : "s"}`}
                 onPress={() => router.push(`/client/${id}/compliance` as never)}
@@ -350,29 +329,43 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
   },
-  scroll: {
-    padding: 16,
-    gap: 16,
+  fixedHeader: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 12,
     width: "100%",
-    maxWidth: 800,
+    maxWidth: 600,
     alignSelf: "center",
   },
-  tabs: { flexDirection: "row", borderRadius: 24, padding: 5, gap: 4 },
+  scroll: {
+    padding: 16,
+    paddingTop: 4,
+    gap: 16,
+    width: "100%",
+    maxWidth: 600,
+    alignSelf: "center",
+  },
+  tabs: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 4,
+  },
   tab: {
     flex: 1,
     minHeight: 48,
     justifyContent: "center",
-    padding: 10,
-    borderRadius: 20,
+    paddingHorizontal: 4,
+    paddingVertical: 10,
+    borderBottomWidth: 2,
   },
-  intro: { padding: 20, gap: 8, borderWidth: 1, borderRadius: 22 },
+  viewAllAction: { minHeight: 44, paddingLeft: 12, justifyContent: "center" },
   actions: { gap: 10 },
   startSessionBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    borderRadius: 999,
+    borderRadius: 10,
     paddingVertical: 14,
     paddingHorizontal: 16,
   },

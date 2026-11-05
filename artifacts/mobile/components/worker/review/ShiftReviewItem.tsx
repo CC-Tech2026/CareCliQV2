@@ -7,7 +7,10 @@ import { ComplianceScoreRing } from "@/components/worker/compliance/ComplianceSc
 import { useT } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { formatShiftTimeRange } from "@/lib/shift-utils";
-import type { ShiftReviewItem as Item, ShiftReviewStatus } from "@/lib/worker-api";
+import type {
+  ShiftReviewItem as Item,
+  ShiftReviewStatus,
+} from "@/lib/worker-api";
 
 /** The chip for where a finished shift stands with the office. */
 export function ReviewStatusChip({ status }: { status: ShiftReviewStatus }) {
@@ -15,14 +18,35 @@ export function ReviewStatusChip({ status }: { status: ShiftReviewStatus }) {
   const t = useT();
   const tone =
     status === "changes_requested"
-      ? { fg: colors.warning, bg: colors.warning + "1F", icon: "edit-3" as const, label: t("review.status.changesRequested") }
+      ? {
+          fg: colors.warning,
+          bg: colors.warning + "1F",
+          icon: "edit-3" as const,
+          label: t("review.status.changesRequested"),
+        }
       : status === "verified"
-        ? { fg: colors.success, bg: colors.success + "1F", icon: "check-circle" as const, label: t("review.status.verified") }
-        : { fg: colors.mutedForeground, bg: colors.muted, icon: "clock" as const, label: t("review.status.awaiting") };
+        ? {
+            fg: colors.success,
+            bg: colors.success + "1F",
+            icon: "check-circle" as const,
+            label: t("review.status.verified"),
+          }
+        : {
+            fg: colors.mutedForeground,
+            bg: colors.muted,
+            icon: "clock" as const,
+            label: t("review.status.awaiting"),
+          };
   return (
     <View style={[styles.chip, { backgroundColor: tone.bg }]}>
       <Feather name={tone.icon} size={11} color={tone.fg} />
-      <Text style={[styles.chipText, { color: tone.fg, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
+      <Text
+        style={[
+          styles.chipText,
+          { color: tone.fg, fontFamily: "Inter_600SemiBold" },
+        ]}
+        numberOfLines={1}
+      >
         {tone.label}
       </Text>
     </View>
@@ -34,7 +58,9 @@ export function ShiftReviewItem({ item }: { item: Item }) {
   const colors = useColors();
   const t = useT();
   const router = useRouter();
-  const hasScore = item.compliance_score != null && Number.isFinite(Number(item.compliance_score));
+  const hasScore =
+    item.compliance_score != null &&
+    Number.isFinite(Number(item.compliance_score));
   // The range already starts with the day ("Tue, 3 Nov · 10:02 am - 2:01 pm").
   const times = formatShiftTimeRange(
     item.clocked_in_at ?? item.scheduled_start ?? undefined,
@@ -44,9 +70,15 @@ export function ShiftReviewItem({ item }: { item: Item }) {
   const needsYou = item.review_status === "changes_requested";
   return (
     <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={[item.participant_name, times].filter(Boolean).join(", ")}
-      onPress={() => router.push(`/shift/${item.shift_id}/record` as never)}
+      disabled={!needsYou}
+      accessibilityRole={needsYou ? "button" : "text"}
+      accessibilityState={{ disabled: !needsYou }}
+      accessibilityLabel={[item.participant_name, times]
+        .filter(Boolean)
+        .join(", ")}
+      onPress={() => {
+        if (needsYou) router.push(`/shift/${item.shift_id}/record` as never);
+      }}
       style={({ pressed }) => [
         styles.card,
         {
@@ -56,12 +88,28 @@ export function ShiftReviewItem({ item }: { item: Item }) {
         },
       ]}
     >
-      <ComplianceScoreRing score={hasScore ? Math.round(Number(item.compliance_score)) : 0} size={44} empty={!hasScore} />
+      <ComplianceScoreRing
+        score={hasScore ? Math.round(Number(item.compliance_score)) : 0}
+        size={44}
+        empty={!hasScore}
+      />
       <View style={styles.body}>
-        <Text style={[styles.name, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
+        <Text
+          style={[
+            styles.name,
+            { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+          ]}
+          numberOfLines={1}
+        >
           {item.participant_name || t("review.participantFallback")}
         </Text>
-        <Text style={[styles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
+        <Text
+          style={[
+            styles.meta,
+            { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+          ]}
+          numberOfLines={1}
+        >
           {times}
         </Text>
         <View style={styles.row}>
@@ -69,12 +117,22 @@ export function ShiftReviewItem({ item }: { item: Item }) {
           {item.unread_messages > 0 ? (
             <View style={[styles.unread, { backgroundColor: colors.primary }]}>
               <Feather name="message-circle" size={10} color="#FFFFFF" />
-              <Text style={[styles.unreadText, { fontFamily: "Inter_700Bold" }]}>{item.unread_messages}</Text>
+              <Text
+                style={[styles.unreadText, { fontFamily: "Inter_700Bold" }]}
+              >
+                {item.unread_messages}
+              </Text>
             </View>
           ) : null}
         </View>
       </View>
-      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+      {needsYou ? (
+        <Feather
+          name="chevron-right"
+          size={18}
+          color={colors.mutedForeground}
+        />
+      ) : null}
     </Pressable>
   );
 }

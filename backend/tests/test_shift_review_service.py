@@ -26,6 +26,11 @@ class _Query:
         self.filters.append(lambda r: str(r.get(col)) == str(val) if not isinstance(val, bool) else r.get(col) is val)
         return self
 
+    def or_(self, expression):
+        assert expression == "status.eq.completed,clocked_out_at.not.is.null"
+        self.filters.append(lambda r: r.get("status") == "completed" or r.get("clocked_out_at") is not None)
+        return self
+
     def neq(self, col, val):
         self.filters.append(lambda r: str(r.get(col)) != str(val))
         return self
@@ -147,8 +152,8 @@ def test_thread_shows_the_request_and_allows_notes_only_while_changes_are_reques
     # Reading the thread marks the office's message read.
     assert db["conversation_messages"][0]["read_at"]
 
-    waiting = shift_review_service.get_worker_shift_thread("s-waiting", "w1", "org")
-    assert waiting["review_status"] == "awaiting_review" and waiting["can_add_notes"] is False
+    with pytest.raises(PermissionError):
+        shift_review_service.get_worker_shift_thread("s-waiting", "w1", "org")
 
 
 def test_another_workers_shift_is_not_found(db):
@@ -160,22 +165,49 @@ def test_sending_back_closes_the_requests_and_tells_whoever_asked(db):
     assert db["conversation_messages"][0]["actioned_at"]
     assert result["notify_id"] == "md"
     assert result["message"]["body"] == shift_review_service.SENT_BACK_DEFAULT
-    assert shift_review_service.get_worker_shift_thread("s-changes", "w1", "org")["review_status"] == "awaiting_review"
+    with pytest.raises(PermissionError):
+        shift_review_service.get_worker_shift_thread("s-changes", "w1", "org")
     assert shift_review_service.office_review_states(["s-changes"]) == {"s-changes": "sent_back"}
 
 
 def test_sending_back_with_nothing_requested_is_refused(db):
-    with pytest.raises(ValueError):
+    with pytest.raises(PermissionError):
         shift_review_service.send_back_for_review("s-waiting", "w1", "org", "done")
 
 
-def test_worker_can_message_about_a_waiting_shift_but_not_a_verified_one(db):
-    result = shift_review_service.post_worker_message("s-waiting", "w1", "org", "Forgot to mention the bus was late.")
-    assert result["message"]["body"] == "Forgot to mention the bus was late."
-    assert result["notify_id"] == "coord"
+@pytest.mark.parametrize("shift_id", ["s-waiting", "s-verified"])
+def test_closed_shifts_cannot_be_reopened_or_messaged(db, shift_id):
     with pytest.raises(PermissionError):
-        shift_review_service.post_worker_message("s-verified", "w1", "org", "hello")
+        shift_review_service.get_worker_shift_thread(shift_id, "w1", "org")
+    with pytest.raises(PermissionError):
+        shift_review_service.post_worker_message(shift_id, "w1", "org", "hello")
+
+
+def test_approval_overrides_an_outstanding_change_request(db):
+    db["shift_verifications"].append({"shift_id": "s-changes", "reversed_at": None})
+    with pytest.raises(PermissionError):
+        shift_review_service.get_worker_shift_thread("s-changes", "w1", "org")
+    with pytest.raises(PermissionError):
+        shift_review_service.send_back_for_review("s-changes", "w1", "org", "done")
 
 
 def test_office_sees_which_shifts_are_back_with_the_worker(db):
     assert shift_review_service.office_review_states(["s-changes", "s-waiting"]) == {"s-changes": "changes_requested"}
+
+
+def test_history_includes_clocked_out_shift_with_stale_status(db):
+    db["shifts"].extend([
+        {"id": "s-clocked-out", "worker_id": "w1", "organization_id": "org", "status": "in_progress", "clocked_out_at": _iso(1), "scheduled_start": _iso(1)},
+        {"id": "s-live", "worker_id": "w1", "organization_id": "org", "status": "in_progress", "scheduled_start": _iso(1)},
+        {"id": "s-cancelled", "worker_id": "w1", "organization_id": "org", "status": "cancelled", "clocked_out_at": _iso(1), "scheduled_start": _iso(1)},
+    ])
+    ids = {s["shift_id"] for s in shift_review_service.list_worker_shift_reviews("w1", "org", include_verified=True)["shifts"]}
+    assert "s-clocked-out" in ids
+    assert "s-live" not in ids
+    assert "s-cancelled" not in ids
+
+
+def test_history_database_error_is_not_reported_as_empty(db):
+    with patch.object(shift_review_service, "get_supabase_admin", side_effect=RuntimeError("schema unavailable")):
+        with pytest.raises(RuntimeError):
+            shift_review_service.list_worker_shift_reviews("w1", "org", include_verified=True)

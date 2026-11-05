@@ -47,7 +47,35 @@ from ..services.settings_service import get_physical_exam_session_types
 from ..services.supabase_client import get_supabase_admin
 
 
-router = APIRouter(prefix="/worker", tags=["worker"])
+async def _guard_closed_worker_record(request: Request, current_user: dict = Depends(get_current_user)) -> None:
+    """Apply the reopening policy to direct shift and linked-session endpoints."""
+    if not is_support_worker(current_user):
+        return
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    shift_id = request.path_params.get("shift_id")
+    session_id = request.path_params.get("session_id")
+    shift = None
+    if shift_id:
+        shift = shift_service.get_shift_by_id(str(shift_id))
+    elif session_id:
+        rows = (get_supabase_admin().table("shifts").select("*")
+                .eq("session_id", str(session_id)).eq("worker_id", worker_id)
+                .eq("organization_id", org_id).execute()).data or []
+        for row in rows:
+            try:
+                shift_review_service.require_worker_reopen_access(row, worker_id)
+            except PermissionError as exc:
+                raise HTTPException(status_code=403, detail=str(exc)) from exc
+        return
+    if shift and str(shift.get("worker_id") or "") == str(worker_id) and str(shift.get("organization_id") or "") == str(org_id):
+        try:
+            shift_review_service.require_worker_reopen_access(shift, worker_id)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+router = APIRouter(prefix="/worker", tags=["worker"], dependencies=[Depends(_guard_closed_worker_record)])
 logger = logging.getLogger(__name__)
 
 
@@ -2465,9 +2493,12 @@ async def worker_shift_reviews(
 async def worker_shift_review_thread(shift_id: str, current_user: dict = Depends(get_current_user)):
     """A finished shift's review status and its conversation with the office."""
     _require_worker(current_user)
-    thread = shift_review_service.get_worker_shift_thread(
-        shift_id, get_user_id(current_user), get_user_organization_id(current_user),
-    )
+    try:
+        thread = shift_review_service.get_worker_shift_thread(
+            shift_id, get_user_id(current_user), get_user_organization_id(current_user),
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     if thread is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
     return thread
@@ -2514,6 +2545,8 @@ async def worker_shift_send_back(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
     try:
         result = shift_review_service.send_back_for_review(shift_id, worker_id, org_id, body.note)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if result is None:
