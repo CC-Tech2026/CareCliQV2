@@ -26,7 +26,8 @@ HARD BOUNDARY — B2B account data only, never clinical/participant data:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import secrets
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -40,6 +41,8 @@ from ..services import device_security_service as dss
 from ..services import jira_service
 from ..services.object_storage import get_evidence_storage_backend
 from ..services.supabase_client import get_supabase_admin
+from ..core.config import settings
+from ..services.email_service import queue_email_job, send_email
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +52,98 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 def _require_super_admin(user: dict) -> None:
     if not is_super_admin(user):
         raise HTTPException(status_code=403, detail="Super admin access required.")
+
+
+class ProviderAccountCreate(BaseModel):
+    organization_name: str = Field(min_length=1, max_length=200, pattern=r"\S")
+    email: str = Field(max_length=254, pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def _send_provider_setup(invite: dict, organization_name: str) -> dict:
+    url = f"{settings.frontend_base_url.rstrip('/')}/accept-invite?token={invite['token']}"
+    delivery = queue_email_job(
+        label=f"provider-setup:{invite['id']}",
+        send=lambda: send_email(
+            to_email=invite["email"],
+            subject=f"Set up your CareCliQ account for {organization_name}",
+            text_body=(f"The CareCliQ team has prepared an account for {organization_name}.\n\n"
+                       f"Choose your password and complete your organisation details here:\n{url}\n\n"
+                       "This secure link expires in 7 days. Contact the CareCliQ team if you need help."),
+        ),
+    )
+    return {"invite_url": url, "email_delivery": delivery}
+
+
+@router.get("/provider-invitations")
+async def list_provider_invitations(current_user: dict = Depends(get_current_user)):
+    _require_super_admin(current_user)
+    supabase = get_supabase_admin()
+    try:
+        rows = supabase.table("invitations").select(
+            "id, organization_id, email, expires_at, accepted_at, created_at"
+        ).eq("role", "managing_director").order("created_at", desc=True).execute().data or []
+        orgs = supabase.table("organizations").select("organization_id, organization_name, name").execute().data or []
+        names = {o["organization_id"]: o.get("organization_name") or o.get("name") for o in orgs}
+        return [{**r, "organization_name": names.get(r["organization_id"], "Provider")} for r in rows]
+    except Exception as exc:
+        raise HTTPException(500, internal_error_detail("Could not load provider invitations", exc))
+
+
+@router.post("/provider-invitations", status_code=201)
+async def create_provider_account(body: ProviderAccountCreate, current_user: dict = Depends(get_current_user)):
+    _require_super_admin(current_user)
+    from .invitations import _generate_short_code
+    supabase = get_supabase_admin()
+    email = str(body.email).lower()
+    try:
+        if supabase.table("users").select("id").eq("email", email).limit(1).execute().data:
+            raise HTTPException(409, "This email already has an account. Manage their existing provider instead.")
+        if supabase.table("invitations").select("id").eq("email", email).eq("role", "managing_director").is_("accepted_at", "null").limit(1).execute().data:
+            raise HTTPException(409, "A provider invitation already exists for this email. Resend it below.")
+        name = body.organization_name.strip()
+        org = supabase.table("organizations").insert({
+            "name": name, "organization_name": name, "email": email, "status": "active",
+        }).execute().data[0]
+        try:
+            invite = supabase.table("invitations").insert({
+                "organization_id": org["organization_id"], "email": email,
+                "role": "managing_director", "invited_by": None,
+                "token": secrets.token_hex(32), "short_code": _generate_short_code(supabase),
+                "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            }).execute().data[0]
+        except Exception:
+            supabase.table("organizations").delete().eq("organization_id", org["organization_id"]).execute()
+            raise
+        return {"organization_id": org["organization_id"], **_send_provider_setup(invite, name)}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, internal_error_detail("Could not create provider account", exc))
+
+
+@router.post("/provider-invitations/{invitation_id}/resend")
+async def resend_provider_invitation(invitation_id: str, current_user: dict = Depends(get_current_user)):
+    _require_super_admin(current_user)
+    supabase = get_supabase_admin()
+    try:
+        rows = supabase.table("invitations").select("*").eq("id", invitation_id).eq("role", "managing_director").execute().data
+        if not rows:
+            raise HTTPException(404, "Provider invitation not found.")
+        invite = rows[0]
+        if invite.get("accepted_at"):
+            raise HTTPException(409, "This account has already been set up.")
+        orgs = supabase.table("organizations").select("organization_name, name, status").eq("organization_id", invite["organization_id"]).execute().data
+        if not orgs or orgs[0].get("status") in {"suspended", "offboarded"}:
+            raise HTTPException(409, "Activate this provider before sending a setup invitation.")
+        # Keep the same token so a previously delivered email remains usable.
+        supabase.table("invitations").update({
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+        }).eq("id", invitation_id).is_("accepted_at", "null").execute()
+        return _send_provider_setup(invite, orgs[0].get("organization_name") or orgs[0].get("name") or "your organisation")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, internal_error_detail("Could not resend provider invitation", exc))
 
 
 @router.get("/organizations")
