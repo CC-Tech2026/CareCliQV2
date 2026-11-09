@@ -2120,7 +2120,7 @@ export default function Billing() {
                 <button
                   onClick={createInvoice}
                   disabled={creatingInvoice || !canCreateDraft}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold text-white bg-cc-plum shadow-sm transition hover:opacity-95 disabled:opacity-50"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold text-white bg-[var(--cc-cta)] shadow-sm transition hover:opacity-95 disabled:opacity-50"
                 >
                   {creatingInvoice ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -2289,7 +2289,7 @@ export default function Billing() {
                                     {invoice.status === "draft" && (
                                       <Button
                                         size="sm"
-                                        className="rounded-lg bg-cc-plum text-white"
+                                        className="rounded-lg bg-[var(--cc-cta)] text-white"
                                         disabled={busyInvoice !== null}
                                         onClick={() => (setReviewConfirmed(false), setReviewInvoice(invoice))}
                                       >
@@ -2407,7 +2407,7 @@ export default function Billing() {
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <button
                       onClick={() => setShowScheduleLoader(true)}
-                      className="flex-1 rounded-lg px-4 py-2.5 text-sm font-bold text-white bg-cc-plum transition hover:opacity-90"
+                      className="flex-1 rounded-lg px-4 py-2.5 text-sm font-bold text-white bg-[var(--cc-cta)] transition hover:opacity-90"
                     >
                       {translate("billing.loadSchedule")}
                     </button>

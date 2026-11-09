@@ -154,7 +154,7 @@ export default function WorkerHelp() {
             type="button"
             onClick={() => setTab(item.id)}
             className={`rounded-full px-4 py-2 text-xs font-black transition ${
-              tab === item.id ? "bg-cc-plum text-white" : "bg-cc-bg text-cc-muted"
+              tab === item.id ? "bg-[var(--cc-cta)] text-white" : "bg-cc-bg text-cc-muted"
             }`}
           >
             {item.label}

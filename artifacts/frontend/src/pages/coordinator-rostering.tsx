@@ -446,22 +446,22 @@ export default function CoordinatorRosteringPage() {
           <Button
             onClick={() => setTeamPanelOpen(true)}
             variant="outline"
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold"
-            style={{ borderColor: BORDER, color: MUTED }}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold"
+            style={{ borderColor: BORDER, color: TEXT }}
           >
             <Users2 size={14} /> {translate("coordinator.rostering.team")}
           </Button>
           <Button
             onClick={() => setBulkOpen(true)}
             variant="outline"
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold"
-            style={{ borderColor: BORDER, color: MUTED }}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold"
+            style={{ borderColor: BORDER, color: TEXT }}
           >
             <LayoutGrid size={14} /> {translate("coordinator.rostering.recurring")}
           </Button>
           <Button
             onClick={() => setAssignOpen(true)}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-white"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold text-white"
             style={{ background: "var(--cc-cta)" }}
           >
             <Plus size={15} /> {translate("coordinator.rostering.createShift")}
@@ -546,15 +546,16 @@ export default function CoordinatorRosteringPage() {
       </StatCardGroup>
       </details>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-cc-surface px-3 py-2" style={{ borderColor: BORDER }}>
-        <div className="flex overflow-hidden rounded-xl border" style={{ borderColor: BORDER }}>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-0.5 rounded-full border bg-cc-surface p-1" style={{ borderColor: BORDER }}>
           {(["roster", "month"] as ViewMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
               onClick={() => setViewMode(mode)}
-              className="px-4 py-2 text-[12px] font-bold capitalize transition-colors"
-              style={{ background: viewMode === mode ? "var(--cc-cta)" : "var(--cc-bg)", color: viewMode === mode ? "white" : MUTED }}
+              aria-pressed={viewMode === mode}
+              className="h-8 rounded-full px-3.5 text-sm font-medium capitalize transition-colors"
+              style={{ background: viewMode === mode ? "var(--cc-text)" : "transparent", color: viewMode === mode ? "var(--cc-bg)" : MUTED }}
             >
               {translate(`coordinator.rostering.view.${mode}`)}
             </button>
@@ -565,24 +566,24 @@ export default function CoordinatorRosteringPage() {
           <button
             title={translate("coordinator.rostering.previousPeriod")}
             onClick={handlePrev}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
+            className="flex h-9 w-9 items-center justify-center rounded-full border bg-cc-surface transition-colors hover:bg-cc-soft"
             style={{ borderColor: BORDER }}
           >
             <ChevronLeft size={15} />
           </button>
-          <span className="min-w-0 text-center text-[13px] font-black" style={{ color: TEXT }}>{periodLabel}</span>
+          <span className="min-w-0 px-1 text-center text-sm font-semibold" style={{ color: TEXT }}>{periodLabel}</span>
           <button
             title={translate("coordinator.rostering.nextPeriod")}
             onClick={handleNext}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
+            className="flex h-9 w-9 items-center justify-center rounded-full border bg-cc-surface transition-colors hover:bg-cc-soft"
             style={{ borderColor: BORDER }}
           >
             <ChevronRight size={15} />
           </button>
           <button
             onClick={handleToday}
-            className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#F8F6FE]"
-            style={{ borderColor: BORDER, color: PLUM }}
+            className="h-9 rounded-full border bg-cc-surface px-4 text-sm font-medium transition-colors hover:bg-cc-soft"
+            style={{ borderColor: BORDER, color: TEXT }}
           >
             {translate("coordinator.rostering.todayBtn")}
           </button>
@@ -590,7 +591,7 @@ export default function CoordinatorRosteringPage() {
 
         <div className="flex w-full gap-2 sm:ml-auto sm:w-auto">
           <Select value={workerFilter} onValueChange={setWorkerFilter}>
-            <SelectTrigger className="h-8 flex-1 sm:w-[170px] rounded-lg text-[12px]" style={{ borderColor: BORDER }}>
+            <SelectTrigger className="h-10 flex-1 rounded-full bg-cc-surface px-4 text-sm sm:w-[190px]" style={{ borderColor: BORDER }}>
               <SelectValue placeholder={translate("coordinator.rostering.allWorkers")} />
             </SelectTrigger>
             <SelectContent>
@@ -607,7 +608,7 @@ export default function CoordinatorRosteringPage() {
           </Select>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-8 flex-1 sm:w-[145px] rounded-lg text-[12px]" style={{ borderColor: BORDER }}>
+            <SelectTrigger className="h-10 flex-1 rounded-full bg-cc-surface px-4 text-sm sm:w-[160px]" style={{ borderColor: BORDER }}>
               <SelectValue placeholder={translate("coordinator.rostering.allStatuses")} />
             </SelectTrigger>
             <SelectContent>

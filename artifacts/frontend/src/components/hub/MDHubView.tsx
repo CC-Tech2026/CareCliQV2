@@ -1271,7 +1271,7 @@ export function MDHubView() {
         >
           {translate("hub.mdHub.retryHint")}
         </p>
-        <button type="button" disabled={overviewQuery.isFetching} onClick={() => void overviewQuery.refetch()} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg bg-cc-plum px-4 text-sm font-semibold text-white disabled:opacity-60">
+        <button type="button" disabled={overviewQuery.isFetching} onClick={() => void overviewQuery.refetch()} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--cc-cta)] px-4 text-sm font-semibold text-white disabled:opacity-60">
           <RefreshCw size={16} className={overviewQuery.isFetching ? "animate-spin motion-reduce:animate-none" : ""} aria-hidden="true" />
           {overviewQuery.isFetching ? "Retrying…" : "Try again"}
         </button>

@@ -142,7 +142,7 @@ function ShiftCard({
         >
           <p
             className="flex items-center gap-1.5 text-[11.5px] font-bold leading-tight"
-            style={{ color: "var(--cc-text)", textDecoration: live === "cancelled" ? "line-through" : undefined }}
+            style={{ color: "#1A1A2E", textDecoration: live === "cancelled" ? "line-through" : undefined }}
           >
             {dot && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: dot }} />}
             {start ? `${formatAppTime(shift.scheduled_start!, shift.timezone)}${end ? ` – ${formatAppTime(shift.scheduled_end!, shift.timezone)}` : ""}` : ""}
@@ -242,7 +242,7 @@ function DayCell({
       ref={setNodeRef}
       className="px-1.5 py-1.5 align-top transition-colors"
       style={{
-        background: isOver && !disabled ? "#F0ECFF" : cellBg,
+        background: isOver && !disabled ? "var(--cc-plum-soft)" : cellBg,
         opacity: disabled ? 0.4 : 1,
         minWidth: 132,
         minHeight: 56,
@@ -560,7 +560,7 @@ export function RosterBoard({
                     </div>
                     <div
                       className="mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-black"
-                      style={{ background: isToday(d) ? "var(--cc-text)" : "transparent", color: isToday(d) ? "white" : TEXT }}
+                      style={{ background: isToday(d) ? "var(--cc-text)" : "transparent", color: isToday(d) ? "var(--cc-bg)" : TEXT }}
                     >
                       {format(d, "d")}
                     </div>
@@ -622,10 +622,10 @@ export function RosterBoard({
                       let cellState: "available" | "assigned" | "blackout" | "unavailable" | "loading" = "available";
                       // A rostered shift always shows, even on a day off or leave —
                       // hiding it hid a real conflict.
-                      if (hasShift) { cellState = "assigned"; cellBg = onBlackout ? "#FFFBEB" : isToday(d) ? "var(--cc-today-col)" : "var(--cc-surface)"; }
+                      if (hasShift) { cellState = "assigned"; cellBg = onBlackout ? "var(--cc-amber-tint)" : isToday(d) ? "var(--cc-today-col)" : "var(--cc-surface)"; }
                       else if (!avail && loadingAvail) cellState = "loading";
-                      else if (onBlackout) { cellState = "blackout"; cellBg = "#FFFBEB"; }
-                      else if (!isWorkDay) { cellState = "unavailable"; cellBg = "#F8FAFC"; }
+                      else if (onBlackout) { cellState = "blackout"; cellBg = "var(--cc-amber-tint)"; }
+                      else if (!isWorkDay) { cellState = "unavailable"; cellBg = "var(--cc-soft)"; }
                       else { cellState = "available"; cellBg = isToday(d) ? "var(--cc-today-col)" : "var(--cc-surface)"; }
                       // Read-only boards don't need "free slot" green; keep today's column visible instead.
                       if (!allowCreate && (cellState === "available" || cellState === "assigned")) {

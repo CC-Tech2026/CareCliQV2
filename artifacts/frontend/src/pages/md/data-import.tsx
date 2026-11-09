@@ -325,7 +325,7 @@ export default function DataImportPage() {
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={busy}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-cc-plum px-5 text-[13px] font-bold text-white disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--cc-cta)] px-5 text-[13px] font-bold text-white disabled:opacity-50"
                 >
                   {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
                   Choose a file
@@ -396,7 +396,7 @@ export default function DataImportPage() {
                   type="button"
                   onClick={() => void runPreview()}
                   disabled={busy || missingRequired.length > 0}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-cc-plum px-5 text-[13px] font-bold text-white disabled:opacity-40"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--cc-cta)] px-5 text-[13px] font-bold text-white disabled:opacity-40"
                 >
                   {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
                   Check {parsed.rows.length} {parsed.rows.length === 1 ? "row" : "rows"}
@@ -474,7 +474,7 @@ export default function DataImportPage() {
                 type="button"
                 onClick={() => void runImport()}
                 disabled={busy || counts.ready === 0}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-cc-plum px-5 text-[13px] font-bold text-white disabled:opacity-40"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--cc-cta)] px-5 text-[13px] font-bold text-white disabled:opacity-40"
               >
                 {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
                 {counts.ready === 0 ? "Nothing ready to import" : copy.action(counts.ready)}
@@ -499,7 +499,7 @@ export default function DataImportPage() {
               <button
                 type="button"
                 onClick={() => navigate(copy.next.href)}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-cc-plum px-5 text-[13px] font-bold text-white"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--cc-cta)] px-5 text-[13px] font-bold text-white"
               >
                 {copy.next.label} <ArrowRight size={15} aria-hidden="true" />
               </button>

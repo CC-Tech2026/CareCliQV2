@@ -384,7 +384,7 @@
   --cc-plum-border: rgba(244, 114, 182, 0.22);
   --cc-coral-soft: rgba(167, 139, 250, 0.12);
   --cc-coral-ring: rgba(167, 139, 250, 0.28);
-  --cc-cta: #A78BFA;  /* CTA in dark mode — near-white so buttons stay visible on dark canvas */
+  --cc-cta: #E8457A;  /* CTA in dark mode: the brand pink, as in light mode (white text reads on it; the lighter pink and purple did not) */
 
   /* Worker mobile spec v2 — dark */
   --wm-pink: #F472B6;

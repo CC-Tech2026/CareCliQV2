@@ -2,10 +2,10 @@ import { useMemo, useState } from "react";
 import { ChevronDown, FileText } from "lucide-react";
 
 const PLUM = "#E8457A";
-const BORDER = "#E8E8EA";
-const TEXT = "#1F2937";
-const MUTED = "#6A6A77";
-const SOFT = "#F9FAFB";
+const BORDER = "var(--cc-border)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const SOFT = "var(--cc-soft)";
 
 const SPEAKER_COLORS = ["#E8457A", "#166534", "#7C3AED", "#0369A1", "#B45309"];
 

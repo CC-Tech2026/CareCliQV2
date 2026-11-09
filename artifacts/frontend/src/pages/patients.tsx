@@ -1412,7 +1412,7 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
 
         {/* Avatar + name */}
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 sm:w-10 sm:h-10 rounded-2xl bg-cc-plum flex items-center justify-center text-white text-sm font-semibold shrink-0 select-none">
+          <div className="w-11 h-11 sm:w-10 sm:h-10 rounded-2xl bg-[var(--cc-cta)] flex items-center justify-center text-white text-sm font-semibold shrink-0 select-none">
             {initials}
           </div>
           <div className="flex-1 min-w-0">

@@ -1104,7 +1104,7 @@ function TrainingModuleDetail({
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="col-start-2 inline-flex h-9 w-24 items-center justify-center gap-2 rounded-md bg-[var(--cc-plum)] px-3 text-xs font-bold text-white hover:opacity-90 sm:col-start-auto"
+                        className="col-start-2 inline-flex h-9 w-24 items-center justify-center gap-2 rounded-md bg-[var(--cc-cta)] px-3 text-xs font-bold text-white hover:opacity-90 sm:col-start-auto"
                         aria-label={"Open " + res.title + " in a new tab"}
                       >
                         {res.resource_type === "video"
@@ -1202,7 +1202,7 @@ function TrainingModuleDetail({
                   type="button"
                   onClick={onComplete}
                   disabled={!acknowledged || completing || !canSubmit}
-                  className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-lg bg-[var(--cc-plum)] px-4 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+                  className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-lg bg-[var(--cc-cta)] px-4 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
                 >
                   {completing
                     ? translate("common.saving")

@@ -52,11 +52,11 @@ function bandFromSearch(search: string): ComplianceBand | "all" {
 // -- Design tokens — aligned with Dashboard -------------------------------------
 const PLUM        = "#E8457A";
 const CORAL       = "var(--cc-coral)";
-const T1          = "#1A1A2E";
-const T2          = "#374151";
-const T3          = "#6A6A77";
-const BORDER      = "#E8E8EA";
-const SOFT        = "#ECECEC";
+const T1          = "var(--cc-text)";
+const T2          = "var(--cc-text)";
+const T3          = "var(--cc-muted)";
+const BORDER      = "var(--cc-border)";
+const SOFT        = "var(--cc-soft)";
 
 // -- Sort options ---------------------------------------------------------------
 type SortKey = "date_desc" | "date_asc" | "severity" | "participant" | "status" | "activity";
@@ -367,7 +367,7 @@ export default function Sessions() {
     return (
       <div
         className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-3.5 transition-colors duration-150 group border-l-[3px] ${
-          isSelected ? "border-l-[#E8457A]" : "border-l-transparent hover:border-l-[#7C3AED]/30 hover:bg-[#ECECEC]/50"
+          isSelected ? "border-l-[#E8457A]" : "border-l-transparent hover:border-l-[#7C3AED]/30 hover:bg-cc-soft"
         }`}
         style={isSelected ? { background: `${PLUM}06` } : {}}
       >
@@ -481,9 +481,9 @@ export default function Sessions() {
     return (
       <div
         className="px-5 py-2 flex items-center gap-2 sticky top-0 z-10"
-        style={{ background: "rgba(246,244,251,0.95)", borderBottom: `1px solid ${BORDER}` }}
+        style={{ background: "var(--cc-soft)", borderBottom: `1px solid ${BORDER}` }}
       >
-        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: T3 }}>{label}</span>
+        <span className="text-xs font-semibold" style={{ color: T3 }}>{label}</span>
         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
           style={{ background: `${PLUM}10`, color: PLUM }}>
           {count}
@@ -529,7 +529,7 @@ export default function Sessions() {
       />
 
       {/* Filter + session list — dashboard card style */}
-      <section className="rounded-lg border bg-white shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
+      <section className="overflow-hidden rounded-2xl bg-cc-surface">
 
         {/* Filter bar */}
         <div className="p-5 border-b space-y-4" style={{ borderColor: BORDER }}>
@@ -542,7 +542,7 @@ export default function Sessions() {
                   placeholder={translate("sessions.searchPlaceholder")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full h-[38px] rounded-lg text-[13px] pl-9 outline-none pr-3 border bg-white"
+                  className="w-full h-10 rounded-full text-sm pl-9 outline-none pr-4 border bg-cc-surface focus:ring-2 focus:ring-cc-plum"
                   style={{ borderColor: BORDER, color: T1 }}
                 />
               </Field>
@@ -550,7 +550,7 @@ export default function Sessions() {
 
             <div className="md:col-span-3 lg:col-span-2 w-full">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-[38px] rounded-lg text-[13px] w-full bg-white" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectTrigger className="h-10 rounded-full px-4 text-sm w-full bg-cc-surface" style={{ borderColor: BORDER, color: T2 }}>
                   <SelectValue placeholder={translate("sessions.filter.allStatusesPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -564,7 +564,7 @@ export default function Sessions() {
 
             <div className="md:col-span-3 lg:col-span-3 w-full">
               <Select value={participantFilter} onValueChange={setParticipantFilter}>
-                <SelectTrigger className="h-[38px] rounded-lg text-[13px] w-full bg-white flex items-center" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectTrigger className="h-10 rounded-full px-4 text-sm w-full bg-cc-surface flex items-center" style={{ borderColor: BORDER, color: T2 }}>
                   <div className="flex items-center truncate">
                     <Users size={13} className="mr-1.5 opacity-60 shrink-0" />
                     <SelectValue placeholder={translate("sessions.filter.allParticipantsPlaceholder")} />
@@ -599,7 +599,7 @@ export default function Sessions() {
               </span>
               <input
                 type="date"
-                className="flex-1 sm:flex-initial h-[38px] min-w-[130px] rounded-lg text-[13px] px-3 outline-none border bg-white"
+                className="flex-1 sm:flex-initial h-10 min-w-[130px] rounded-full text-sm px-4 outline-none border bg-cc-surface"
                 style={{ borderColor: BORDER, color: T1 }}
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
@@ -608,7 +608,7 @@ export default function Sessions() {
               <span className="text-[12px]" style={{ color: T3 }}>{translate("sessions.dateToLabel")}</span>
               <input
                 type="date"
-                className="flex-1 sm:flex-initial h-[38px] min-w-[130px] rounded-lg text-[13px] px-3 outline-none border bg-white"
+                className="flex-1 sm:flex-initial h-10 min-w-[130px] rounded-full text-sm px-4 outline-none border bg-cc-surface"
                 style={{ borderColor: BORDER, color: T1 }}
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
@@ -618,7 +618,7 @@ export default function Sessions() {
               {bandFilter !== "all" && (
                 <button
                   onClick={() => setBandFilter("all")}
-                  className="flex items-center gap-1 text-[12px] font-semibold px-2.5 py-1.5 rounded-full border transition-colors hover:bg-[#ECECEC]"
+                  className="flex items-center gap-1 text-[12px] font-semibold px-2.5 py-1.5 rounded-full border transition-colors hover:bg-cc-soft"
                   style={{ color: T1, borderColor: BORDER }}
                   aria-label={`${translate(BAND_LABEL_KEYS[bandFilter])} — ${translate("sessions.footer.clearFilters")}`}
                 >
@@ -629,7 +629,7 @@ export default function Sessions() {
               {hasDateFilter && (
                 <button
                   onClick={() => { setDateFrom(""); setDateTo(""); }}
-                  className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[#ECECEC]"
+                  className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-cc-soft"
                   style={{ color: T3 }}
                 >
                   <X size={12} /> {translate("sessions.clearDates")}
@@ -640,7 +640,7 @@ export default function Sessions() {
             <div className="flex items-center gap-2 self-end lg:self-auto w-full sm:w-auto justify-end">
               <ArrowUpDown size={13} style={{ color: T3 }} className="shrink-0" />
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-                <SelectTrigger className="h-[34px] rounded-lg text-[12px] w-full sm:w-48 bg-white" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectTrigger className="h-10 rounded-full px-4 text-sm w-full sm:w-48 bg-cc-surface" style={{ borderColor: BORDER, color: T2 }}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -702,7 +702,7 @@ export default function Sessions() {
                 data-testid="button-bulk-export-pdf"
                 onClick={handleBulkExport}
                 disabled={isBulkExporting}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border bg-white text-[12px] font-semibold transition-all hover:bg-[#ECECEC] disabled:opacity-50 shadow-sm"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border bg-white text-[12px] font-semibold transition-all hover:bg-cc-soft disabled:opacity-50 shadow-sm"
                 style={{ borderColor: `${PLUM}35`, color: PLUM }}
               >
                 {isBulkExporting ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
@@ -710,7 +710,7 @@ export default function Sessions() {
               </button>
               <button
                 onClick={clearSelection}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-[#ECECEC]"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-cc-soft"
                 style={{ color: T3 }}
               >
                 <X size={12} /> {translate("sessions.deselect")}
@@ -731,7 +731,7 @@ export default function Sessions() {
               aria-label={translate("sessions.selectAll")}
               data-testid="checkbox-select-all"
             />
-            <span className="text-[11px] font-semibold tracking-wide uppercase" style={{ color: T3 }}>
+            <span className="text-sm font-medium" style={{ color: T3 }}>
               {allSelected
                 ? translateParams("sessions.deselectAll", { count: String(sorted.length) })
                 : translateParams(sorted.length === 1 ? "sessions.selectAllRecords" : "sessions.selectAllRecordsPlural", { count: String(sorted.length) })}

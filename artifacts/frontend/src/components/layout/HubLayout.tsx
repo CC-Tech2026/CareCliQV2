@@ -322,7 +322,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
     ? "#6C63FF"
     : navIsDark
       ? "rgba(255,255,255,0.18)"
-      : "var(--cc-plum)";
+      // The button pink: in dark mode --cc-plum is a light pink that white
+      // text can't be read on.
+      : "var(--cc-cta)";
 
   const [orgName, setOrgName] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -610,7 +612,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                     className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
                       selected ? "text-white" : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
                     }`}
-                    style={selected ? { background: "var(--cc-plum)" } : undefined}
+                    style={selected ? { background: "var(--cc-cta)" } : undefined}
                   >
                     <Icon size={15} aria-hidden />
                   </button>
@@ -638,7 +640,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             >
               <div
                 className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold text-white shadow-sm"
-                style={{ background: "var(--cc-plum)" }}
+                style={{ background: "var(--cc-cta)" }}
               >
                 {user?.profile_photo_url ? (
                   <img

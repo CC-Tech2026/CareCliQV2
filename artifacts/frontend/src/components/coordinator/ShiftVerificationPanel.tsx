@@ -28,9 +28,9 @@ import {
 } from "@/services/coordinatorService";
 
 const PLUM = "var(--cc-plum)";
-const T1 = "#1A1A2E";
-const T2 = "#374151";
-const T3 = "#6A6A77";
+const T1 = "var(--cc-text)";
+const T2 = "var(--cc-text)";
+const T3 = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
 
@@ -195,7 +195,7 @@ export function ShiftVerificationCard({
             {any_flagged && (
               <span
                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
-                style={{ background: "rgba(245,158,11,0.1)", color: "#92400E" }}
+                style={{ background: "var(--cc-status-warning-bg)", color: "var(--cc-amber)" }}
               >
                 <AlertTriangle size={9} /> Needs review
               </span>

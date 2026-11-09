@@ -589,13 +589,14 @@ export default function MDSchedulePage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search worker or participant..."
-                className="h-9 w-full rounded-md border border-cc-border bg-cc-surface pl-11 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
+                className="h-10 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
                 style={{ color: TEXT }}
               />
               {search && (
                 <button
                   onClick={() => setSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 hover:bg-black/5"
+                  aria-label="Clear schedule search"
+                  className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full hover:bg-cc-soft"
                 >
                   <X size={11} style={{ color: MUTED }} />
                 </button>
@@ -613,7 +614,7 @@ export default function MDSchedulePage() {
                         : startKey,
                     )
                   }
-                  className="inline-flex h-9 items-center gap-1.5 rounded-md px-4 text-sm font-medium transition hover:bg-cc-soft"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft"
                   style={{ color: TEXT }}
                 >
                   <Download size={15} />
@@ -625,7 +626,7 @@ export default function MDSchedulePage() {
                 type="button"
                 disabled={isFetching}
                 onClick={() => void refetch()}
-                className={`${ghostClass} h-9 min-h-9`}
+                className={`${ghostClass} h-10 min-h-10`}
                 aria-label="Refresh the schedule"
               >
                 <RefreshCw
@@ -636,7 +637,7 @@ export default function MDSchedulePage() {
               </button>
 
               <div
-                className="flex items-center gap-0.5 rounded-md border bg-cc-surface p-1"
+                className="flex items-center gap-0.5 rounded-full border bg-cc-surface p-1"
                 style={{ borderColor: BORDER }}
               >
                 {VIEW_TABS.map((v) => (
@@ -651,7 +652,7 @@ export default function MDSchedulePage() {
                           startOfWeek(selectedDay, { weekStartsOn: 1 }),
                         );
                     }}
-                    className="h-8 rounded-md px-3 text-sm font-medium transition"
+                    className="h-8 rounded-full px-3.5 text-sm font-medium transition"
                     style={{
                       background: viewMode === v.id ? TEXT : "transparent",
                       color: viewMode === v.id ? "var(--cc-bg)" : MUTED,
@@ -663,12 +664,12 @@ export default function MDSchedulePage() {
               </div>
 
               <div
-                className="flex items-center gap-1 rounded-md border bg-cc-surface p-1"
+                className="flex items-center gap-1 rounded-full border bg-cc-surface p-1"
                 style={{ borderColor: BORDER }}
               >
                 <button
                   onClick={handlePrev}
-                  className="flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-cc-soft"
+                  className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-cc-soft"
                   aria-label="Previous period"
                 >
                   <ChevronLeft size={14} style={{ color: MUTED }} />
@@ -681,7 +682,7 @@ export default function MDSchedulePage() {
                 </span>
                 <button
                   onClick={handleNext}
-                  className="flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-cc-soft"
+                  className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-cc-soft"
                   aria-label="Next period"
                 >
                   <ChevronRight size={14} style={{ color: MUTED }} />
@@ -693,7 +694,7 @@ export default function MDSchedulePage() {
                     setCurrentMonth(today);
                     setSelectedDay(today);
                   }}
-                  className="h-9 px-3.5 rounded-md text-sm font-medium transition hover:bg-cc-soft"
+                  className="h-8 px-3.5 rounded-full text-sm font-medium transition hover:bg-cc-soft"
                   style={{ color: TEXT }}
                 >
                   Today
@@ -714,7 +715,7 @@ export default function MDSchedulePage() {
                 aria-pressed={filter === "all"}
                 onClick={() => setFilter("all")}
                 className={
-                  "min-h-8 rounded-md px-2.5 text-xs " +
+                  "min-h-8 rounded-full px-3 text-xs " +
                   (filter === "all"
                     ? "bg-cc-soft font-semibold text-cc-text"
                     : "text-cc-muted hover:bg-cc-soft")
@@ -737,7 +738,7 @@ export default function MDSchedulePage() {
                   aria-pressed={filter === bucket}
                   onClick={() => setFilter(filter === bucket ? "all" : bucket)}
                   className={
-                    "min-h-8 rounded-md px-2.5 text-xs " +
+                    "min-h-8 rounded-full px-3 text-xs " +
                     (filter === bucket
                       ? "bg-cc-soft font-semibold text-cc-text"
                       : "text-cc-muted hover:bg-cc-soft")

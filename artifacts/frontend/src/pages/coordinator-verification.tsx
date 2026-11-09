@@ -906,7 +906,7 @@ function ShiftReview({
                 !priceItemCode || approve.isPending || noteMissing || extraReasonMissing ||
                 agreementReasonMissing || overLimit || preview.isFetching
               }
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-cc-plum px-5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[var(--cc-cta)] px-5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {approve.isPending ? (
                 <Loader2 size={16} className="animate-spin" aria-hidden />

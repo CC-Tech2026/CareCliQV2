@@ -201,7 +201,7 @@ export default function MyShifts() {
               {count > 0 && (
                 <span
                   className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-black ${
-                    active ? "bg-cc-plum text-white" : "bg-cc-border text-cc-muted"
+                    active ? "bg-[var(--cc-cta)] text-white" : "bg-cc-border text-cc-muted"
                   }`}
                 >
                   {count}

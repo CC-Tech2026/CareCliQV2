@@ -257,7 +257,7 @@ export function ScheduleLiveCard({
         ) : (
           <Link
             href={`/coordinator/verification?shiftId=${encodeURIComponent(shift.id)}`}
-            className="mx-4 mb-4 flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-cc-plum px-4 text-sm font-bold text-white transition hover:opacity-90"
+            className="mx-4 mb-4 flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-[var(--cc-cta)] px-4 text-sm font-bold text-white transition hover:opacity-90"
           >
             <ArrowRight size={14} aria-hidden />
             {translate("schedule.reviewShift")}
