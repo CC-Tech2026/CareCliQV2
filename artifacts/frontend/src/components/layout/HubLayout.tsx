@@ -296,6 +296,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   };
   const sidebarMode = isMD && prefs?.nav_layout === "sidebar";
   const bottombarMode = isMD && prefs?.nav_layout === "bottombar";
+  const topbarMode = isMD && !sidebarMode && !bottombarMode;
   // User-adjustable nav background (Settings > Layout) — an exact hex code,
   // stored solid (no opacity) per the Color Consistency Directive. Falls
   // back to the default --cc-surface token when unset.
@@ -545,8 +546,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               ) : (
                 <CareCliQLogo size={36} />
               )}
-              <span className="hidden h-5 w-px bg-[var(--cc-border)] sm:block" />
-              <div className="hidden min-w-0 lg:block">
+              <span className={`hidden h-5 w-px bg-[var(--cc-border)] sm:block ${topbarMode ? "xl:hidden 2xl:block" : ""}`} />
+              <div className={`hidden min-w-0 lg:block ${topbarMode ? "xl:hidden 2xl:block" : ""}`}>
                 <div className="flex items-center gap-1.5">
                   <span className="max-w-[240px] truncate text-sm font-semibold tracking-tight" title={organisationDisplay}>
                     {organisationDisplay}
@@ -568,7 +569,74 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {isMD && <div className="mx-2 min-w-0 max-w-md shrink-0 md:flex-1 md:px-2"><ManagementPageSearch groups={MD_NAV_GROUPS} /></div>}
+          {/* Main menu in the header bar on desktop, so pages start straight
+              under it instead of under a second floating row. */}
+          {topbarMode && (
+            <nav
+              ref={navRef}
+              aria-label="Managing Director workspaces"
+              className="mx-2 hidden min-w-0 flex-1 items-center justify-center gap-0.5 xl:flex 2xl:gap-1"
+            >
+              {MD_NAV_GROUPS.map((group) => {
+                const hasActiveRoute = group.items.some((item) => isNavItemActive(location, item));
+                const open = activeGroupHover === group.label;
+                return (
+                  <div key={group.label} className="relative">
+                    <button
+                      type="button"
+                      aria-expanded={open}
+                      aria-controls={"management-group-" + group.label.replaceAll(" ", "-")}
+                      onClick={() => setActiveGroupHover(open ? null : group.label)}
+                      className={`flex min-h-10 items-center gap-1 whitespace-nowrap rounded-full px-3 text-sm font-semibold transition-colors 2xl:gap-1.5 2xl:px-3.5 ${
+                        hasActiveRoute
+                          ? "text-white"
+                          : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
+                      }`}
+                      style={hasActiveRoute ? { background: "var(--cc-cta)" } : undefined}
+                    >
+                      {group.label}
+                      <ChevronDown size={14} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+                    </button>
+                    {open && (
+                      <div
+                        id={"management-group-" + group.label.replaceAll(" ", "-")}
+                        className="absolute left-0 top-full z-50 mt-2 w-60 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150"
+                      >
+                        <div className="space-y-0.5">
+                          {group.items.map((item) => {
+                            const active = isNavItemActive(location, item);
+                            const Icon = item.icon;
+                            return (
+                              <Link
+                                key={item.href}
+                                href={item.href}
+                                onClick={() => setActiveGroupHover(null)}
+                                className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+                                  active
+                                    ? "bg-[var(--cc-plum-soft)] text-[var(--cc-plum)]"
+                                    : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
+                                }`}
+                              >
+                                <Icon size={16} />
+                                <span>{item.label}</span>
+                                <NavCountBadge count={NAV_BADGE_COUNTS[item.href] ?? 0} />
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </nav>
+          )}
+
+          {isMD && (
+            <div className={`mx-2 min-w-0 max-w-md shrink-0 md:flex-1 md:px-2 ${topbarMode ? "xl:mx-0 xl:flex-none xl:px-0 2xl:w-56" : ""}`}>
+              <ManagementPageSearch groups={MD_NAV_GROUPS} compactOnDesktop={topbarMode} />
+            </div>
+          )}
 
           {/* Executive Control Group */}
           <div className="flex shrink-0 items-center gap-1 sm:gap-2" ref={profileRef}>
@@ -652,7 +720,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                   initials
                 )}
               </div>
-              <span className="hidden max-w-32 truncate text-xs font-semibold pr-1 xl:block">
+              <span className={`hidden max-w-32 truncate text-xs font-semibold pr-1 ${topbarMode ? "2xl:block" : "xl:block"}`}>
                 {displayName}
               </span>
               <ChevronDown size={14} className="text-[var(--cc-muted)]" />
@@ -697,104 +765,6 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-
-      {/* Command Deck Executive Navigation (Floating Dock) */}
-      {isMD && !sidebarMode && !bottombarMode && (
-        <div
-          className={calendarWorkspace ? "relative z-30 hidden xl:block px-3 py-2" : `sticky top-[75px] z-30 hidden xl:block py-2 px-3 pointer-events-none transition-transform duration-300 ease-out ${navAutoHidden ? "-translate-y-[calc(100%+2rem)]" : "translate-y-0"}`}
-        >
-          <div
-            ref={navRef}
-            className="pointer-events-auto mx-auto max-w-fit rounded-full border p-2"
-            style={{
-              borderColor: "rgba(124,58,237,0.15)",
-              background: navBackground,
-              boxShadow: "var(--cc-shadow-sm)",
-            }}
-          >
-            <nav className="flex items-center gap-1.5 relative">
-              {MD_NAV_GROUPS.map((group) => {
-                const hasActiveRoute = group.items.some((item) =>
-                  isNavItemActive(location, item),
-                );
-
-                return (
-                  <div
-                    key={group.label}
-                    className="relative"
-                  >
-                    <button
-                      type="button"
-                      aria-expanded={activeGroupHover === group.label}
-                      aria-controls={"management-group-" + group.label.replaceAll(" ", "-")}
-                      onClick={() =>
-                        setActiveGroupHover(
-                          activeGroupHover === group.label ? null : group.label,
-                        )
-                      }
-                      style={{
-                        background: hasActiveRoute ? navActiveBg : undefined,
-                        color: hasActiveRoute ? "#FFFFFF" : navText,
-                        ["--nav-hover-bg" as string]: navHoverBg,
-                        ["--nav-text-hover" as string]: navTextHover,
-                      }}
-                      className={`flex min-h-11 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
-                        hasActiveRoute
-                          ? "shadow-md"
-                          : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"
-                      }`}
-                    >
-                      <span>{group.label}</span>
-                      <ChevronDown
-                        size={14}
-                        className={`transition-transform duration-200 ${
-                          activeGroupHover === group.label ? "rotate-180" : ""
-                        }`}
-                      />
-                    </button>
-
-                    {/* Dropdown Flyout Panel */}
-                    {activeGroupHover === group.label && (
-                      <div
-                        id={"management-group-" + group.label.replaceAll(" ", "-")}
-                        className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
-                      >
-                        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--cc-muted)]">
-                          {group.label}
-                        </div>
-                        <div className="space-y-0.5">
-                          {group.items.map((item) => {
-                            const active = isNavItemActive(location, item);
-                            const Icon = item.icon;
-                            return (
-                              <Link
-                                key={item.href}
-                                href={item.href}
-                                onClick={() => setActiveGroupHover(null)}
-                                className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
-                                  active
-                                    ? "bg-[var(--cc-plum-soft)] text-[var(--cc-plum)]"
-                                    : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
-                                }`}
-                              >
-                                <Icon size={16} />
-                                <span>{item.label}</span>
-                                <NavCountBadge
-                                  count={NAV_BADGE_COUNTS[item.href] ?? 0}
-                                />
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </nav>
-          </div>
-        </div>
-      )}
 
       {/* Bottom Bar Executive Navigation (Floating Dock — mirrors the top Command Deck) */}
       {isMD && bottombarMode && (

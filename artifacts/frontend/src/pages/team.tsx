@@ -630,17 +630,18 @@ export default function Team() {
           {/* Toolbar: search + view toggle */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
             <div className="relative flex-1 max-w-sm">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
               <Input
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 placeholder={translate("team.search.placeholder")}
-                className="pl-9 rounded-xl"
+                aria-label={translate("team.search.placeholder")}
+                className="h-11 rounded-full border-cc-border bg-cc-surface pl-11 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-cc-plum"
               />
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2">
               {/* Status — mutually exclusive, low cardinality: a segmented control reads as one choice, not a scrolling list */}
-              <div className="flex rounded-xl p-1 gap-0.5" style={{ background: SOFT }}>
+              <div className="flex gap-0.5 rounded-full border bg-cc-surface p-1" style={{ borderColor: BORDER }}>
                 {([
                   ["all", translate("team.filter.status.all")],
                   ["active", translate("team.status.active")],
@@ -652,8 +653,9 @@ export default function Team() {
                       key={value}
                       type="button"
                       onClick={() => { setActiveFilter(value); setPage(1); }}
-                      className="rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors"
-                      style={{ background: active ? "var(--cc-bg)" : "transparent", color: active ? PLUM : MUTED, boxShadow: active ? "0 1px 2px rgba(0,0,0,0.06)" : "none" }}
+                      aria-pressed={active}
+                      className="h-8 whitespace-nowrap rounded-full px-3.5 text-sm font-medium transition-colors"
+                      style={{ background: active ? "var(--cc-text)" : "transparent", color: active ? "var(--cc-bg)" : MUTED }}
                     >
                       {label}
                     </button>
@@ -663,12 +665,13 @@ export default function Team() {
               {/* Filtering (status) vs. display settings (view/columns/rules) are different
                   kinds of controls, so they get a visual break instead of sitting in one
                   undivided row where they read as a single group. */}
-              <div className="h-6 w-px shrink-0" style={{ background: BORDER }} aria-hidden="true" />
-              <div className="flex rounded-xl p-1 gap-1" style={{ background: SOFT }}>
+              <div className="hidden h-6 w-px shrink-0 sm:block" style={{ background: BORDER }} aria-hidden="true" />
+              <div className="flex gap-0.5 rounded-full border bg-cc-surface p-1" style={{ borderColor: BORDER }}>
                 <button
                   onClick={() => setViewMode("list")}
-                  className="rounded-lg p-2 transition-colors"
-                  style={{ background: viewMode === "list" ? "var(--cc-bg)" : "transparent", color: viewMode === "list" ? PLUM : MUTED }}
+                  aria-pressed={viewMode === "list"}
+                  className="flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+                  style={{ background: viewMode === "list" ? "var(--cc-text)" : "transparent", color: viewMode === "list" ? "var(--cc-bg)" : MUTED }}
                   title={translate("team.view.list")}
                   aria-label={translate("team.view.list")}
                 >
@@ -676,8 +679,9 @@ export default function Team() {
                 </button>
                 <button
                   onClick={() => setViewMode("cards")}
-                  className="rounded-lg p-2 transition-colors"
-                  style={{ background: viewMode === "cards" ? "var(--cc-bg)" : "transparent", color: viewMode === "cards" ? PLUM : MUTED }}
+                  aria-pressed={viewMode === "cards"}
+                  className="flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+                  style={{ background: viewMode === "cards" ? "var(--cc-text)" : "transparent", color: viewMode === "cards" ? "var(--cc-bg)" : MUTED }}
                   title={translate("team.view.cards")}
                   aria-label={translate("team.view.cards")}
                 >
@@ -687,7 +691,7 @@ export default function Team() {
               {viewMode === "list" && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-1.5 rounded-xl text-xs" title="Show or hide columns">
+                    <Button variant="outline" size="sm" className="h-10 gap-1.5 rounded-full px-4 text-sm font-medium" title="Show or hide columns">
                       <Columns3 size={14} /> Columns
                     </Button>
                   </DropdownMenuTrigger>
@@ -711,7 +715,7 @@ export default function Team() {
                 variant="outline"
                 size="sm"
                 onClick={() => setRulesOpen(true)}
-                className="gap-1.5 rounded-xl text-xs"
+                className="h-10 gap-1.5 rounded-full px-4 text-sm font-medium"
                 title="Configure required credentials per shift type"
               >
                 <Settings2 size={14} /> Rules
@@ -723,8 +727,8 @@ export default function Team() {
               stack "Credentials incomplete" + "Training overdue" to triage everyone with either
               problem at once, not just one axis at a time. Each chip's count/colour is also the
               at-a-glance alert, so no separate summary banner is needed. */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider mr-0.5" style={{ color: MUTED }}>Needs attention</span>
+          <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+            <span className="mr-1 shrink-0 text-sm" style={{ color: MUTED }}>Needs attention</span>
             {([
               ["newly_onboarded", "Newly onboarded", GraduationCap],
               ["onboarding_pending", "Onboarding pending", Clock],
@@ -740,21 +744,18 @@ export default function Team() {
                   type="button"
                   aria-pressed={active}
                   onClick={() => toggleAttentionFilter(value)}
-                  className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold whitespace-nowrap transition-colors"
+                  className="inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-sm font-medium transition-colors"
                   style={{
-                    borderColor: active ? PLUM : flagged ? "var(--cc-status-warning)" : BORDER,
-                    background: active ? PLUM : flagged ? "var(--cc-status-warning-bg)" : "var(--cc-bg)",
-                    color: active ? "#fff" : flagged ? "var(--cc-status-warning)" : MUTED,
+                    borderColor: active ? "var(--cc-text)" : flagged ? "var(--cc-status-warning)" : BORDER,
+                    background: active ? "var(--cc-text)" : flagged ? "var(--cc-status-warning-bg)" : "var(--cc-surface)",
+                    color: active ? "var(--cc-bg)" : flagged ? "var(--cc-amber)" : MUTED,
                   }}
                 >
                   <Icon size={12} />
                   {label}
                   <span
-                    className="inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] rounded-full px-1 text-[10px] font-black"
-                    style={{
-                      background: active ? "rgba(255,255,255,0.25)" : flagged ? "rgba(0,0,0,0.08)" : SOFT,
-                      color: "inherit",
-                    }}
+                    className="tabular-nums"
+                    style={{ opacity: 0.75 }}
                   >
                     {count}
                   </span>
@@ -765,8 +766,8 @@ export default function Team() {
               <button
                 type="button"
                 onClick={() => { setAttentionFilters(new Set()); setPage(1); }}
-                className="text-[11px] font-bold underline ml-1"
-                style={{ color: MUTED }}
+                className="ml-1 min-h-10 px-2 text-sm font-medium underline-offset-4 hover:underline"
+                style={{ color: PLUM }}
               >
                 Clear
               </button>
@@ -811,10 +812,10 @@ export default function Team() {
 
           {/* LIST VIEW */}
           {viewMode === "list" && (
-            <div className="rounded-xl border overflow-x-auto" style={{ borderColor: BORDER, background: SURFACE }}>
+            <div className="overflow-x-auto rounded-2xl" style={{ background: SURFACE }}>
               <table className="w-full">
                 <thead>
-                  <tr style={{ borderBottom: `2px solid ${BORDER}`, background: SOFT }}>
+                  <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
                     <th className="px-4 py-3.5 w-10">
                       <Checkbox
                         checked={pageWorkers.length > 0 && pageWorkers.every((w) => selectedIds.has(w.id))}
@@ -1211,7 +1212,7 @@ function Th({
   // what the parent <th> specifies, the same class of inheritance-break that hit uppercase
   // earlier. justify-content is a flex property, not a text property, so it isn't affected.
   const content = (
-    <span className={`flex items-center gap-1 uppercase w-full ${align === "center" ? "justify-center" : "justify-start"}`}>
+    <span className={`flex items-center gap-1 w-full ${align === "center" ? "justify-center" : "justify-start"}`}>
       {label}
       {sortable && <Icon size={11} style={{ opacity: active ? 1 : 0.4 }} />}
     </span>
@@ -1219,8 +1220,8 @@ function Th({
 
   return (
     <th
-      className={`px-3 py-3.5 text-xs font-bold ${align === "center" ? "text-center" : "text-left"} ${className ?? ""}`}
-      style={{ color: active ? PLUM : MUTED }}
+      className={`px-3 py-3 text-xs font-medium ${align === "center" ? "text-center" : "text-left"} ${className ?? ""}`}
+      style={{ color: active ? TEXT : MUTED }}
     >
       {sortable ? (
         <button type="button" onClick={() => onSort!(sortKey!)} className="w-full">

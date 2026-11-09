@@ -74,10 +74,11 @@ export function InvoiceFlowSteps({
                 type="button"
                 aria-current={on ? "step" : undefined}
                 onClick={() => onChange(step)}
-                className={`group flex min-h-[76px] w-full min-w-0 items-center gap-3 rounded-2xl border px-4 py-3 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-plum)] ${on ? "bg-white" : ""}`}
+                className={`group flex min-h-[72px] w-full min-w-0 items-center gap-3 rounded-2xl px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-plum)] ${on ? "bg-cc-surface" : "hover:bg-cc-surface"}`}
                 style={{
-                  borderColor: on ? "var(--cc-text)" : "var(--cc-border)",
-                  boxShadow: on ? "inset 0 0 0 1px var(--cc-text)" : undefined,
+                  // The open step is marked like an active tab: a pink rule
+                  // along the bottom, not a heavy outline.
+                  boxShadow: on ? "inset 0 -3px 0 var(--cc-cta)" : "inset 0 0 0 1px var(--cc-border)",
                 }}
               >
                 <span
@@ -85,7 +86,7 @@ export function InvoiceFlowSteps({
                   className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
                   style={
                     on
-                      ? { background: "var(--cc-text)", color: "var(--cc-bg)" }
+                      ? { background: "var(--cc-plum-soft)", color: "var(--cc-plum)" }
                       : clear
                         ? { background: "var(--cc-soft)", color: "var(--cc-muted)" }
                         : { boxShadow: "inset 0 0 0 1px var(--cc-border)", color: "var(--cc-text)" }
@@ -93,13 +94,13 @@ export function InvoiceFlowSteps({
                 >
                   <Icon size={16} />
                   {clear && !on && (
-                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white" style={{ boxShadow: "inset 0 0 0 1px var(--cc-border)" }}>
+                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-cc-surface" style={{ boxShadow: "inset 0 0 0 1px var(--cc-border)", color: "var(--cc-green)" }}>
                       <Check size={10} />
                     </span>
                   )}
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-[11px] font-medium uppercase tracking-wide text-cc-muted">
+                  <span className="block truncate text-xs text-cc-muted">
                     Step {index + 1}
                   </span>
                   <span className="block truncate text-sm font-semibold text-cc-text">{copy.title}</span>
@@ -133,7 +134,7 @@ export function StepDone({
 }) {
   const Icon = FLOW_STEP_COPY[step].icon;
   return (
-    <div className="rounded-2xl border border-cc-border bg-white px-6 py-10 text-center">
+    <div className="rounded-2xl bg-cc-surface px-6 py-10 text-center">
       <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "var(--cc-soft)" }}>
         <Icon size={17} className="text-cc-muted" />
       </span>

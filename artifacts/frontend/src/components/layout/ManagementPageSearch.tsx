@@ -22,8 +22,12 @@ type NavigationGroup = {
 };
 export function ManagementPageSearch({
   groups,
+  compactOnDesktop = false,
 }: {
   groups: readonly NavigationGroup[];
+  /** Shrink to an icon on standard desktop widths, where the main menu sits
+   * in the same bar and needs the room; the full box returns on wide screens. */
+  compactOnDesktop?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -75,12 +79,15 @@ export function ManagementPageSearch({
       <DialogTrigger asChild>
         <button
           type="button"
-          className="flex min-h-11 w-full items-center gap-2 rounded-xl border border-cc-border bg-cc-soft px-3 text-left text-sm text-cc-muted"
+          className={`flex min-h-11 w-full items-center gap-2 rounded-xl border border-cc-border bg-cc-soft px-3 text-left text-sm text-cc-muted ${
+            compactOnDesktop ? "xl:min-h-10 xl:w-10 xl:justify-center xl:rounded-full xl:px-0 2xl:w-full 2xl:justify-start 2xl:rounded-xl 2xl:px-3" : ""
+          }`}
           aria-label="Find a page"
+          title="Find a page (Ctrl / Cmd K)"
         >
           <Search className="h-4 w-4 shrink-0" />
-          <span className="hidden md:inline">Find a page</span>
-          <kbd className="ml-auto hidden text-xs lg:inline">Ctrl / Cmd K</kbd>
+          <span className={`hidden md:inline ${compactOnDesktop ? "xl:hidden 2xl:inline" : ""}`}>Find a page</span>
+          <kbd className={`ml-auto hidden text-xs lg:inline ${compactOnDesktop ? "xl:hidden 2xl:inline" : ""}`}>Ctrl / Cmd K</kbd>
         </button>
       </DialogTrigger>
       <DialogContent className="max-h-[85dvh] overflow-hidden sm:max-w-xl">
