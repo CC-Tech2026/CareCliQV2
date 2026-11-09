@@ -19,7 +19,7 @@ VALID_FONT_SIZES = frozenset({"small", "default", "large", "xl"})
 # so the same account doesn't render different colours on different screens.
 VALID_THEME_MODES = frozenset({"light", "dark"})
 VALID_LANGUAGES = frozenset({"en", "vi", "ar", "zh-Hans"})
-VALID_NAV_LAYOUTS = frozenset({"topbar", "sidebar", "bottombar"})
+VALID_NAV_LAYOUTS = frozenset({"topbar", "floating", "sidebar", "docked", "bottombar"})
 
 # Color Consistency Directive: exact 6-digit hex only, no named colors,
 # no alpha channel (rgba/#RRGGBBAA) — the same rule applied everywhere
@@ -124,6 +124,14 @@ def save_accessibility_preferences(
     except Exception as exc:
         if _is_missing_schema(exc):
             raise HTTPException(status_code=503, detail="Accessibility service unavailable.") from exc
+        # A database that hasn't had 251_nav_layout_floating.sql yet still
+        # only allows the original three layouts.
+        if nav_layout in {"floating", "docked"} and ("23514" in str(exc) or "nav_layout_check" in str(exc)):
+            name = "floating menu" if nav_layout == "floating" else "docked sidebar"
+            raise HTTPException(
+                status_code=409,
+                detail=f"The {name} isn't available on this workspace yet. Choose another layout for now.",
+            ) from exc
         raise
     return current
 
