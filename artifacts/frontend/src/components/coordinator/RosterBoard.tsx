@@ -41,6 +41,8 @@ import { UnassignedShiftPanel } from "@/components/coordinator/UnassignedShiftPa
 import { ConflictModal, type PendingDrop } from "@/components/coordinator/ConflictModal";
 import { ZoneLabel } from "@/components/branches/ZoneLabel";
 import { PersonPreview } from "./PersonPreview";
+import { PersonPhoto } from "@/components/ui/person-photo";
+import { sharedNames } from "@/lib/person-identity";
 import { ShiftHoverCard, shiftLiveStatus } from "./ShiftHoverCard";
 import { appLocalDateKey, formatAppTime } from "@/lib/datetime";
 
@@ -368,6 +370,7 @@ export function RosterBoard({
     [shifts]
   );
 
+  const sameNames = useMemo(() => sharedNames(workers.map((w) => w.full_name)), [workers]);
   const weekHoursByWorker = useMemo(() => {
     const totals = new Map<string, number>();
     for (const s of shifts) {
@@ -570,12 +573,16 @@ export function RosterBoard({
                   <tr key={worker.id}>
                     <td className="sticky left-0 z-10 bg-white px-3 py-2.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
                       <div className="flex items-center gap-2.5">
-                        <div
-                          className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black shadow-sm"
-                          style={{ background: avatar.bg, color: avatar.fg }}
-                        >
-                          {initials(worker.full_name)}
-                        </div>
+                        {worker.profile_photo_url ? (
+                          <PersonPhoto name={worker.full_name} photoUrl={worker.profile_photo_url} size={36} />
+                        ) : (
+                          <div
+                            className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black shadow-sm"
+                            style={{ background: avatar.bg, color: avatar.fg }}
+                          >
+                            {initials(worker.full_name)}
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <PersonPreview id={worker.id} name={worker.full_name} kind="worker" worker={worker} scheduledHours={weekHrs} maxHours={maxHrs} className="truncate text-[12px] font-bold leading-tight text-cc-text" />
                           <div className="flex items-center gap-2 mt-0.5">
@@ -587,6 +594,11 @@ export function RosterBoard({
                             <span className="text-[10px] font-medium" style={{ color: overCap ? CORAL : MUTED }}>
                               {weekHrs.toFixed(1)}h{maxHrs != null ? ` / ${maxHrs}h` : ""}
                             </span>
+                            {sameNames.has(worker.full_name.trim().toLowerCase()) && (worker.suburb || worker.employee_id) && (
+                              <span className="truncate text-[10px] font-medium" style={{ color: MUTED }}>
+                                {worker.suburb || `ID ${worker.employee_id}`}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>

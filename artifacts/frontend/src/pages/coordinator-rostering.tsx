@@ -18,6 +18,7 @@ import { useGetParticipants } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { SectionInfo } from "@/components/ui/section-info";
 import { StatCard, StatCardGroup } from "@/components/ui/stat-card";
+import { sharedNames } from "@/lib/person-identity";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -355,6 +356,7 @@ export default function CoordinatorRosteringPage() {
   );
 
   const workers = workersQuery.data ?? [];
+  const sharedWorkerNames = sharedNames(workers.map((w) => w.full_name));
   const shifts  = shiftsQuery.data  ?? [];
   const overdueUnassignedShifts = overdueUnassignedQuery.data ?? [];
 
@@ -593,7 +595,14 @@ export default function CoordinatorRosteringPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{translate("coordinator.rostering.allWorkers")}</SelectItem>
-              {workers.map((w) => <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>)}
+              {workers.map((w) => (
+                <SelectItem key={w.id} value={w.id}>
+                  {w.full_name}
+                  {sharedWorkerNames.has(w.full_name.trim().toLowerCase()) && (w.suburb || w.email) && (
+                    <span className="ml-1.5 text-muted-foreground">{w.suburb || w.email}</span>
+                  )}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 

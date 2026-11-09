@@ -2325,7 +2325,7 @@ export default function MDOnboardingTrainingPage() {
 
   return (
     <HubLayout>
-      <div className="space-y-8 pb-12">
+      <div className="space-y-5 pb-12">
         {!editing && (
           <>
             <PageHeader

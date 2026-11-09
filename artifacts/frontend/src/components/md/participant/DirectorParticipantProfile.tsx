@@ -37,24 +37,28 @@ import {
   type ParticipantDocument,
 } from "@/services/directorParticipantService";
 import {
-  AgreementPortalPanel,
   AuditPanel,
   BAD,
   BORDER,
   CareTeamPanel,
-  DeliverySection,
   DocumentsSection,
-  FundingSection,
   GOOD,
   MUTED,
   PLUM,
-  RiskSection,
   SOFT,
   TEXT,
   WARN,
   formatDate,
-  relativeDays,
 } from "./DirectorParticipantSections";
+import {
+  AgreementsCard,
+  CareProfileCard,
+  DeliveryBand,
+  FilesCard,
+  PlanGlanceCard,
+  RecentShiftsCard,
+  SummaryBand,
+} from "./DirectorParticipantCards";
 import { ArchiveSheet, AuditSheet, ServicesSheet, TeamSheet, UploadSheet, type ServicesMode } from "./DirectorParticipantSheets";
 
 /**
@@ -78,53 +82,6 @@ const ACTION_LABEL: Record<DecisionAction, string> = {
   quality: "Review notes",
   medication: "Check medication",
 };
-
-function initials(name: string) {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-}
-
-function StatStrip({ overview }: { overview: DirectorOverview }) {
-  const f = overview.funding;
-  const days = relativeDays(overview.participant.plan_end_date);
-  const score = overview.quality.average_score;
-  const openIncidents = overview.risk.incidents_open.length;
-  const items: { value: ReactNode; label: string; color: string }[] = [
-    {
-      value: f.percent_used == null ? "N/A" : `${Math.round(f.percent_used)}%`,
-      label: "of funding used",
-      color: f.ahead_by != null && f.ahead_by >= 25 ? BAD : f.ahead_by != null && f.ahead_by >= 10 ? WARN : TEXT,
-    },
-    {
-      value: days == null ? "N/A" : days < 0 ? "Ended" : days,
-      label: days == null ? "plan dates not set" : days < 0 ? `plan ended ${formatDate(overview.participant.plan_end_date)}` : "days left in the plan",
-      color: days == null ? MUTED : days < 0 || days <= 30 ? BAD : days <= 90 ? WARN : TEXT,
-    },
-    {
-      value: score == null ? "N/A" : `${Math.round(score)}%`,
-      label: "note quality",
-      color: score == null ? MUTED : score >= 90 ? GOOD : score >= 75 ? WARN : BAD,
-    },
-    { value: openIncidents, label: openIncidents === 1 ? "open incident" : "open incidents", color: openIncidents ? BAD : GOOD },
-    {
-      value: overview.delivery.upcoming_14d,
-      label: "shifts in the next 14 days",
-      color: overview.delivery.unfilled_14d ? WARN : TEXT,
-    },
-  ];
-  return (
-    <div className="flex flex-wrap items-stretch gap-x-2 gap-y-3">
-      {items.map((item, index) => (
-        <div key={item.label} className="flex items-center gap-2">
-          {index > 0 && <span aria-hidden className="mr-2 hidden h-6 w-px sm:block" style={{ background: BORDER }} />}
-          <span className="flex items-baseline gap-2 px-1">
-            <span className="text-2xl font-semibold tabular-nums tracking-tight" style={{ color: item.color }}>{item.value}</span>
-            <span className="text-sm" style={{ color: MUTED }}>{item.label}</span>
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function Decisions({ decisions, firstName, onAct }: { decisions: Decision[]; firstName: string; onAct: (d: Decision) => void }) {
   if (decisions.length === 0) {
@@ -226,6 +183,7 @@ export function DirectorParticipantProfile({
   const [auditOpen, setAuditOpen] = useState(false);
   const [archiveDoc, setArchiveDoc] = useState<ParticipantDocument | null>(null);
   const [servicesMode, setServicesMode] = useState<ServicesMode | null>(null);
+  const [documentsOpen, setDocumentsOpen] = useState(false);
 
   function refresh() {
     void qc.invalidateQueries({ queryKey: [user?.organizationId ?? "__no_org__", "director-participant", participantId] });
@@ -304,34 +262,18 @@ export function DirectorParticipantProfile({
     }
   }
 
-  const meta = [
-    p.service_category === "aged_care" ? "Aged Care" : "Disability",
-    p.ndis_number ? `NDIS ${p.ndis_number}` : null,
-    p.plan_start_date && p.plan_end_date ? `Plan ${formatDate(p.plan_start_date)} to ${formatDate(p.plan_end_date)}` : null,
-    o.intake?.activated_at ? `With you since ${formatDate(o.intake.activated_at)}` : null,
-  ].filter(Boolean).join(" · ");
+  // A shift still in review opens where it's reviewed; any other opens its
+  // detail on the schedule.
+  function openShift(shiftId: string, review: string | null) {
+    if (review && review !== "verified") navigate(`/coordinator/verification?shiftId=${encodeURIComponent(shiftId)}`);
+    else navigate(`/md/schedule?shiftId=${encodeURIComponent(shiftId)}`);
+  }
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-5 pb-10">
       <header className="space-y-4">
-        {back}
-        <div className="flex flex-wrap items-start justify-between gap-5">
-          <div className="flex min-w-0 items-center gap-4">
-            <div
-              aria-hidden
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-semibold"
-              style={{ background: SOFT, color: TEXT }}
-            >
-              {initials(p.full_name)}
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-3xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
-                {p.full_name}
-              </h1>
-              <p className="mt-1 text-sm" style={{ color: MUTED }}>{meta}</p>
-            </div>
-          </div>
-
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {back}
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -387,30 +329,52 @@ export function DirectorParticipantProfile({
             </DropdownMenu>
           </div>
         </div>
+        <SummaryBand overview={o} />
       </header>
 
       <StatusBanner overview={o} onResume={() => setServicesMode("resume")} />
-      <StatStrip overview={o} />
       {!exited && <Decisions decisions={o.decisions} firstName={firstName} onAct={act} />}
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
         <div className="min-w-0 space-y-5">
-          <FundingSection overview={o} onReview={() => setCareRecordTab("plan_goals")} />
-          <DeliverySection overview={o} onOpenSchedule={() => navigate("/md/schedule")} onOpenShifts={() => setCareRecordTab("sessions")} />
-          <RiskSection
+          <DeliveryBand overview={o} />
+          <div className="grid items-start gap-5 lg:grid-cols-2">
+            <CareProfileCard
+              overview={o}
+              onOpenCare={() => setCareRecordTab("care_profile")}
+              onOpenMedication={() => setCareRecordTab("care_profile")}
+              onOpenRisks={() => navigate(o.risk.incidents_open.length || !o.risk.complaints_open.length ? "/incidents" : "/onboard-participant/complaints")}
+            />
+            <div className="min-w-0 space-y-5">
+              <PlanGlanceCard overview={o} onReview={() => setCareRecordTab("plan_goals")} />
+              <FilesCard participantId={participantId} onUpload={() => setUploadOpen(true)} onManage={() => setDocumentsOpen(true)} />
+            </div>
+          </div>
+          <AgreementsCard
             overview={o}
-            onOpenIncident={(id) => navigate(id ? `/incidents/${id}` : "/incidents")}
-            onOpenComplaints={() => navigate("/onboard-participant/complaints")}
-            onOpenMedication={() => setCareRecordTab("care_profile")}
+            onOpenAgreement={() => setCareRecordTab("plan_goals")}
+            onOpenIntake={() => setIntakeOpen(true)}
+            onManagePortal={() => setPortalOpen(true)}
           />
-          <DocumentsSection participantId={participantId} onUpload={() => setUploadOpen(true)} onExport={() => setExportOpen(true)} onArchive={setArchiveDoc} />
         </div>
         <div className="min-w-0 space-y-5 xl:sticky xl:top-24">
+          <RecentShiftsCard overview={o} onOpenShift={openShift} onNewShift={() => navigate("/coordinator/rostering")} />
           <CareTeamPanel overview={o} onChange={() => setTeamOpen(true)} />
-          <AgreementPortalPanel overview={o} onOpenAgreement={() => setCareRecordTab("plan_goals")} onManagePortal={() => setPortalOpen(true)} />
           <AuditPanel participantId={participantId} onSeeAll={() => setAuditOpen(true)} />
         </div>
       </div>
+
+      <Sheet open={documentsOpen} onOpenChange={setDocumentsOpen}>
+        <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-3xl">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Documents for {p.full_name}</SheetTitle>
+            <SheetDescription>Open, file, archive or export {firstName}'s documents.</SheetDescription>
+          </SheetHeader>
+          <div className="p-4 sm:p-6">
+            <DocumentsSection participantId={participantId} onUpload={() => setUploadOpen(true)} onExport={() => setExportOpen(true)} onArchive={setArchiveDoc} />
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* The coordinator's working record, for anything hands-on. */}
       <Sheet open={careRecordTab !== null} onOpenChange={(v) => { if (!v) { setCareRecordTab(null); refresh(); } }}>

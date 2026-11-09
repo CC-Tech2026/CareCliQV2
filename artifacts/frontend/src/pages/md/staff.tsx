@@ -61,6 +61,8 @@ import {
   type Tone,
 } from "@/lib/directory-insights";
 import { SectionInfo } from "@/components/ui/section-info";
+import { PersonPhoto } from "@/components/ui/person-photo";
+import { matchesPerson, sharedNames } from "@/lib/person-identity";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -138,37 +140,6 @@ function formatRole(role?: string) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
-
-function PersonAvatar({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
-  if (photoUrl) {
-    return (
-      <img
-        src={photoUrl}
-        alt=""
-        className="h-11 w-11 shrink-0 rounded-full object-cover"
-        style={{ background: SOFT }}
-      />
-    );
-  }
-  return (
-    <div
-      aria-hidden
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
-      style={{ background: SOFT, color: TEXT }}
-    >
-      {initials(name)}
-    </div>
-  );
-}
-
 /** Rounded filter pill. Selected = solid navy, theme-safe in light and dark. */
 function FilterPill({
   label,
@@ -186,7 +157,7 @@ function FilterPill({
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+      className="inline-flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
       style={
         selected
           ? { background: TEXT, color: "var(--cc-bg)" }
@@ -499,6 +470,20 @@ export default function MDStaffPage() {
     return map;
   }, [assignmentsQuery.data]);
 
+  // Names of the participants each person supports, so searching a
+  // participant's name finds their workers.
+  const supportedNames = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const assignment of assignmentsQuery.data ?? []) {
+      if (!SUPPORT_ALLOCATION_ROLES.has(assignment.allocated_role) || !assignment.participant?.full_name) continue;
+      map.set(assignment.user_id, [...(map.get(assignment.user_id) ?? []), assignment.participant.full_name]);
+    }
+    return map;
+  }, [assignmentsQuery.data]);
+  const supportedNamesFor = (workerId: string) => supportedNames.get(workerId) ?? [];
+
+  const sharedStaffNames = useMemo(() => sharedNames(allStaff.map((worker) => worker.full_name)), [allStaff]);
+
   /** Participants this person is assigned to support (dashboard count until assignments load). */
   function participantsFor(worker: StaffMember) {
     return participantsByWorker
@@ -542,10 +527,17 @@ export default function MDStaffPage() {
     const normalized = search.trim().toLowerCase();
 
     return allStaff.filter((worker) => {
+      const extra = statsById.get(worker.id);
       const matchesSearch =
         !normalized ||
-        worker.full_name.toLowerCase().includes(normalized) ||
-        worker.email?.toLowerCase().includes(normalized);
+        matchesPerson(normalized, [
+          worker.full_name,
+          worker.email,
+          extra?.employee_id,
+          extra?.phone,
+          extra?.suburb,
+          ...supportedNamesFor(worker.id),
+        ]);
 
       const matchesFilter =
         filter === "all" ||
@@ -563,7 +555,7 @@ export default function MDStaffPage() {
 
       return matchesSearch && matchesFilter && matchesRole && matchesUnassigned;
     });
-  }, [allStaff, filter, roleFilter, search, unassignedOnly, workerStats, credentialsByUser]);
+  }, [allStaff, filter, roleFilter, search, unassignedOnly, workerStats, credentialsByUser, statsById, supportedNames]);
 
   // Counted from the directory itself (not the wider workerStats list, which
   // also holds inactive accounts) so the chip matches what the filter shows.
@@ -637,28 +629,22 @@ export default function MDStaffPage() {
 
   return (
     <HubLayout>
-      <div className="space-y-8 pb-12">
+      <div className="space-y-5 pb-12">
         {/* =========================================================
             HEADER: sits on the page, not in a card, so the team list
             below is the first thing that reads as content.
         ========================================================= */}
 
-        <header className="flex flex-wrap items-end justify-between gap-5">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold" style={{ color: MUTED }}>
-              Staff directory
-            </p>
+        <header className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+          <div className="min-w-0">
+            <p className="sr-only">Staff directory</p>
             <h1
-              className="mt-1 flex items-center gap-2 text-3xl font-semibold tracking-tight"
+              className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
               style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
             >
               Your team
-              <SectionInfo text="Your organisation's staff: who's active, how they're performing, credentials due, and who's coming through hiring." />
+              <SectionInfo text="The people delivering support to your participants: who's active, how their notes are going, credentials due, and who's coming through hiring. Open anyone to see their shifts, credentials and training." />
             </h1>
-            <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>
-              The people delivering support to your participants. Open anyone to
-              see their shifts, credentials and training.
-            </p>
           </div>
 
           <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:gap-2">
@@ -724,80 +710,6 @@ export default function MDStaffPage() {
         ) : (
           <>
             {/* =====================================================
-                AT A GLANCE: one line of numbers instead of a row of
-                tinted tiles. Each figure still jumps to the list.
-            ===================================================== */}
-
-            <div className="flex flex-wrap items-stretch gap-x-2 gap-y-3">
-              {[
-                {
-                  label: "active staff",
-                  value: data.active_staff,
-                  color: TEXT,
-                  onClick: () => showDirectory("all"),
-                },
-                {
-                  label: "average note score",
-                  value: `${stats.average}%`,
-                  color: getScoreColor(stats.average),
-                  onClick: () => showDirectory("all", "compliance"),
-                },
-                {
-                  label: "retention",
-                  value: `${data.staff_retention_rate}%`,
-                  color: TEXT,
-                  onClick: undefined,
-                },
-                {
-                  label: stats.atRisk.length === 1 ? "needs attention" : "need attention",
-                  value: stats.atRisk.length,
-                  color: stats.atRisk.length > 0 ? AMBER : GREEN,
-                  onClick: stats.atRisk.length > 0 ? () => showDirectory("at_risk") : undefined,
-                },
-                {
-                  label: "with credential issues",
-                  value: credentialsLoading ? "…" : credentialIssueCount,
-                  color: credentialIssueCount > 0 ? RED : GREEN,
-                  onClick: credentialIssueCount > 0 ? () => showDirectory("credentials") : undefined,
-                },
-              ].map((item, index) => {
-                const body = (
-                  <>
-                    <span
-                      className="text-2xl font-semibold tabular-nums tracking-tight"
-                      style={{ color: item.color }}
-                    >
-                      {item.value}
-                    </span>
-                    <span className="text-sm" style={{ color: MUTED }}>
-                      {item.label}
-                    </span>
-                  </>
-                );
-                return (
-                  <div key={item.label} className="flex items-center gap-2">
-                    {index > 0 && (
-                      <span aria-hidden className="mr-2 hidden h-6 w-px sm:block" style={{ background: BORDER }} />
-                    )}
-                    {item.onClick ? (
-                      <button
-                        type="button"
-                        onClick={item.onClick}
-                        className="flex min-h-11 items-center rounded-full px-3 transition hover:bg-cc-soft"
-                      >
-                        <span className="flex items-baseline gap-2">{body}</span>
-                      </button>
-                    ) : (
-                      <div className="flex min-h-11 items-center px-3">
-                        <span className="flex items-baseline gap-2">{body}</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* =====================================================
                 THE TEAM: leads the page, it's what people come here for.
             ===================================================== */}
 
@@ -811,8 +723,8 @@ export default function MDStaffPage() {
                   />
                   <input
                     type="text"
-                    placeholder="Search by name or email"
-                    aria-label="Search staff by name or email"
+                    placeholder="Name, email, phone, staff ID, suburb or participant"
+                    aria-label="Search staff"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     className="h-11 w-full rounded-full border bg-cc-surface pl-11 pr-11 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
@@ -886,7 +798,7 @@ export default function MDStaffPage() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2" aria-label="Filter staff">
+              <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" aria-label="Filter staff">
                 {(
                   [
                     ["all", "Everyone", allStaff.length],
@@ -935,6 +847,13 @@ export default function MDStaffPage() {
                 {filtered.length === allStaff.length
                   ? `${allStaff.length} ${allStaff.length === 1 ? "person" : "people"} on your team`
                   : `Showing ${filtered.length} of ${allStaff.length} people`}
+                {stats.average > 0 && (
+                  <>
+                    {" · average note score "}
+                    <span className="font-semibold" style={{ color: getScoreColor(stats.average) }}>{stats.average}%</span>
+                  </>
+                )}
+                {` · ${data.staff_retention_rate}% retention`}
               </p>
 
               {filtered.length === 0 ? (
@@ -998,6 +917,7 @@ export default function MDStaffPage() {
                       const trainingOverdue = !!extra?.training_overdue || !!extra?.induction_overdue;
                       const notes = extra ? notesStatus(extra.draft_count ?? 0, extra.flagged_count ?? 0) : null;
                       const employment = employmentLabel(extra?.employment_type);
+                      const sameName = sharedStaffNames.has(worker.full_name.trim().toLowerCase());
                       const statusDot = scored
                         ? { background: scoreColor }
                         : { boxShadow: `inset 0 0 0 1.5px ${MUTED}` };
@@ -1011,16 +931,31 @@ export default function MDStaffPage() {
                           >
                             {/* Person */}
                             <div className="flex min-w-0 flex-1 items-center gap-3">
-                              <PersonAvatar name={worker.full_name} photoUrl={extra?.profile_photo_url} />
+                              <PersonPhoto name={worker.full_name} photoUrl={extra?.profile_photo_url} />
                               <div className="min-w-0">
-                                <p className="truncate text-[15px] font-semibold" style={{ color: TEXT }}>
-                                  {worker.full_name}
+                                <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-[15px] font-semibold" style={{ color: TEXT }}>
+                                  <span className="truncate">{worker.full_name}</span>
+                                  {sameName && (
+                                    <span
+                                      title="A colleague has this name. Check their email or staff ID."
+                                      className="rounded-full px-2 py-0.5 text-xs font-medium"
+                                      style={{ background: "var(--cc-coral-soft)", color: TEXT }}
+                                    >
+                                      Same name
+                                    </span>
+                                  )}
                                 </p>
                                 <p className="mt-0.5 truncate text-sm" style={{ color: MUTED }}>
-                                  {formatRole(worker.role)}
-                                  {employment && ` · ${employment}`}
-                                  {extra?.suburb && <span className="hidden xl:inline">{` · ${extra.suburb}`}</span>}
+                                  {[
+                                    formatRole(worker.role),
+                                    employment,
+                                    extra?.suburb,
+                                    extra?.employee_id ? `ID ${extra.employee_id}` : null,
+                                  ].filter(Boolean).join(" · ")}
                                 </p>
+                                {sameName && worker.email && (
+                                  <p className="truncate text-xs" style={{ color: MUTED }}>{worker.email}</p>
+                                )}
                                 {/* Phones and tablets: the column facts, condensed. */}
                                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs lg:hidden" style={{ color: MUTED }}>
                                   <span className="flex items-center gap-1.5 font-medium" style={{ color: scored ? scoreColor : MUTED }}>

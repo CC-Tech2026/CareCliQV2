@@ -152,7 +152,7 @@ function Overview({
   const areas = summary.by_area.filter((a) => a.total > 0);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {!data.profile_configured && (
         <Notice
           tone="warning"

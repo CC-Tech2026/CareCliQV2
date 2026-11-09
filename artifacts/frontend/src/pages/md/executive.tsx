@@ -209,7 +209,7 @@ export default function MDExecutivePage() {
   if (overviewQuery.isLoading) {
     return (
       <HubLayout>
-        <div className="space-y-8 pb-12">
+        <div className="space-y-5 pb-12">
           <div className="h-24 w-2/3 animate-pulse rounded-2xl bg-cc-surface" />
           <SkeletonBlocks count={3} height="h-56" />
         </div>
@@ -220,7 +220,7 @@ export default function MDExecutivePage() {
   if (overviewQuery.isError || !data) {
     return (
       <HubLayout>
-        <div className="space-y-8 pb-12">
+        <div className="space-y-5 pb-12">
           <PageHeader eyebrow="Governance & Strategy" title="Performance review" />
           <LoadError onRetry={retry}>
             <AlertTriangle size={16} style={{ color: toneColor("danger") }} />

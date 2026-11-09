@@ -1,9 +1,10 @@
+import type { ReactNode } from "react";
 import { Info } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 /** Click-triggered (not hover-only) info popover for a page or section title —
  *  a Tooltip wouldn't work on touch/click, so this uses Popover throughout. */
-export function SectionInfo({ text }: { text: string }) {
+export function SectionInfo({ text }: { text: ReactNode }) {
   return (
     <Popover>
       <PopoverTrigger asChild>

@@ -200,7 +200,7 @@ export function IncidentRegisterPanel() {
   };
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-5 pb-12">
       <PageHeader
         eyebrow={translate("incidents.new.standard")}
         title={

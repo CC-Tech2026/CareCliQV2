@@ -1,12 +1,13 @@
 /**
  * Page-level pieces in the vault's style, so the Oversight & Risk pages
  * (Audit & Compliance, incidents, complaints, feedback) read as one set:
- * a quiet header, a strip of numbers you can click, pill filters, white
+ * a quiet header, small figure chips you can click, pill filters, white
  * borderless surfaces with divided rows, and plain empty states.
  */
 import type { ReactNode } from "react";
 import { Link } from "wouter";
 import { Search, type LucideIcon } from "lucide-react";
+import { SectionInfo } from "@/components/ui/section-info";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -39,15 +40,20 @@ export function PageHeader({
   /** A small link above the header, e.g. back to a parent list. */
   back?: ReactNode;
 }) {
+  // One compact row, so the page's content starts near the top: the section
+  // name is already lit in the top navigation, and the description sits
+  // behind the info button beside the title (or the title's own one).
+  const ownInfo = typeof title !== "string";
   return (
-    <header className="flex flex-wrap items-end justify-between gap-5">
-      <div className="max-w-2xl">
-        {back && <div className="mb-3">{back}</div>}
-        <p className="text-xs font-semibold" style={{ color: MUTED }}>{eyebrow}</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
+    <header className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+      <div className="min-w-0">
+        {back && <div className="mb-1">{back}</div>}
+        <p className="sr-only">{eyebrow}</p>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
           {title}
+          {description && !ownInfo && <SectionInfo text={description} />}
         </h1>
-        {description && <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>{description}</p>}
+        {description && ownInfo && <p className="sr-only">{description}</p>}
       </div>
       {actions && <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:gap-2">{actions}</div>}
     </header>
@@ -75,39 +81,42 @@ export interface SummaryItem {
   hint?: ReactNode;
 }
 
-/** Big numbers in a row, split by thin rules. Each can act as a filter. */
+/** Key figures as small chips, so the page's list and filters lead rather
+ * than a row of big numbers. Each can act as a filter. */
 export function SummaryStrip({ items, loading }: { items: SummaryItem[]; loading?: boolean }) {
   return (
-    <div className="flex flex-wrap items-stretch gap-x-2 gap-y-3">
-      {items.map((item, index) => {
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((item) => {
         const body = (
-          <span className="block text-left">
-            <span className="flex items-baseline gap-2">
-              <span className="text-2xl font-semibold tabular-nums tracking-tight" style={{ color: toneColor(item.tone) }}>
+          <span className="block text-left leading-tight">
+            <span className="flex items-baseline gap-1.5 whitespace-nowrap">
+              <span className="text-sm font-semibold tabular-nums" style={{ color: toneColor(item.tone) }}>
                 {loading ? "…" : item.value}
               </span>
               <span className="text-sm" style={{ color: MUTED }}>{item.label}</span>
             </span>
-            {item.hint && <span className="block text-xs" style={{ color: MUTED }}>{item.hint}</span>}
+            {item.hint && <span className="mt-0.5 block text-xs" style={{ color: MUTED }}>{item.hint}</span>}
           </span>
         );
-        return (
-          <div key={item.label} className="flex items-center gap-2">
-            {index > 0 && <span aria-hidden className="mr-2 hidden h-6 w-px sm:block" style={{ background: BORDER }} />}
-            {item.onClick ? (
-              <button
-                type="button"
-                onClick={item.onClick}
-                aria-pressed={item.active}
-                className={`flex min-h-11 items-center px-3 transition hover:bg-cc-soft ${item.hint ? "rounded-2xl py-1.5" : "rounded-full"} ${focusRing}`}
-                style={item.active ? { boxShadow: `inset 0 0 0 1px ${BORDER}`, background: "var(--cc-surface)" } : undefined}
-              >
-                {body}
-              </button>
-            ) : (
-              <span className="flex min-h-11 items-center px-3">{body}</span>
-            )}
-          </div>
+        const shape = `inline-flex min-h-10 items-center px-3.5 ${item.hint ? "rounded-2xl py-1.5" : "rounded-full"}`;
+        return item.onClick ? (
+          <button
+            key={item.label}
+            type="button"
+            onClick={item.onClick}
+            aria-pressed={item.active}
+            className={`${shape} transition hover:bg-cc-soft ${focusRing}`}
+            style={{
+              background: item.active ? "var(--cc-surface)" : undefined,
+              boxShadow: `inset 0 0 0 ${item.active ? "1.5px var(--cc-text)" : `1px ${BORDER}`}`,
+            }}
+          >
+            {body}
+          </button>
+        ) : (
+          <span key={item.label} className={shape} style={{ boxShadow: `inset 0 0 0 1px ${BORDER}` }}>
+            {body}
+          </span>
         );
       })}
     </div>

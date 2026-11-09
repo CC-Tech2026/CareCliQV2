@@ -86,6 +86,7 @@ import {
 import { formatBytes, sizeDetails, sizeLabel, useVaultSizes } from "./components/useVaultSizes";
 import { useFolderActions, type FolderTarget } from "./components/useFolderActions";
 import { uniqueDocs } from "@/lib/vault-share";
+import { SectionInfo } from "@/components/ui/section-info";
 
 const FOLDER_ICONS: Record<string, LucideIcon> = {
   session_notes: FileText,
@@ -685,19 +686,17 @@ export default function VaultHome() {
 
   return (
     <HubLayout>
-      <div className="space-y-8 pb-12">
-        <header className="flex flex-wrap items-end justify-between gap-5">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>Documents & Audit Vault</p>
+      <div className="space-y-5 pb-12">
+        <header className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+          <div className="min-w-0">
+            <p className="sr-only">Documents & Audit Vault</p>
             <h1
-              className="mt-1 text-3xl font-semibold tracking-tight"
+              className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
               style={{ color: "var(--cc-text)", fontFamily: "var(--app-font-display)" }}
             >
               Vault
+              <SectionInfo text="Every participant, worker and governance record, filed in folders and ready for audit." />
             </h1>
-            <p className="mt-2 text-sm leading-6" style={{ color: "var(--cc-muted)" }}>
-              Every participant, worker and governance record, filed in folders and ready for audit.
-            </p>
           </div>
           <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:gap-2">
             <button type="button" onClick={() => navigate("/md/staff")} className="min-h-11 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft" style={{ color: "var(--cc-text)" }}>
@@ -718,19 +717,22 @@ export default function VaultHome() {
           </div>
         </header>
 
-        <div className="flex flex-wrap items-stretch gap-x-2 gap-y-3">
-          {summary.map((item, index) => (
-            <div key={item.label} className="flex items-center gap-2">
-              {index > 0 && <span aria-hidden className="mr-2 hidden h-6 w-px sm:block" style={{ background: "var(--cc-border)" }} />}
-              <button type="button" onClick={item.onClick} className="flex min-h-11 items-center rounded-full px-3 transition hover:bg-cc-soft">
-                <span className="flex items-baseline gap-2">
-                  <span className="text-2xl font-semibold tabular-nums tracking-tight" style={{ color: item.color }}>
-                    {loading ? "…" : item.value}
-                  </span>
-                  <span className="text-sm" style={{ color: "var(--cc-muted)" }}>{item.label}</span>
+        <div className="flex flex-wrap gap-1.5">
+          {summary.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={item.onClick}
+              className="inline-flex min-h-10 items-center rounded-full px-3.5 transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+              style={{ boxShadow: "inset 0 0 0 1px var(--cc-border)" }}
+            >
+              <span className="flex items-baseline gap-1.5 whitespace-nowrap">
+                <span className="text-sm font-semibold tabular-nums" style={{ color: item.color }}>
+                  {loading ? "…" : item.value}
                 </span>
-              </button>
-            </div>
+                <span className="text-sm" style={{ color: "var(--cc-muted)" }}>{item.label}</span>
+              </span>
+            </button>
           ))}
         </div>
 

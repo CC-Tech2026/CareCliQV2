@@ -176,14 +176,14 @@ export interface KpiCardProps {
 const KpiCard = React.forwardRef<HTMLDivElement, KpiCardProps>(
   ({ className, icon, label, value, sub, tone = "neutral", flat = false, href, onClick, ...props }, ref) => (
     <Interactive href={href} onClick={onClick} label={interactiveLabel(label, value)} className="h-full">
-    <Card ref={ref} className={cn("rounded-2xl border-0 shadow-sm p-4", (href || onClick) && "h-full cursor-pointer", className)} {...props}>
+    <Card ref={ref} className={cn("rounded-2xl border-0 shadow-sm px-4 py-3", (href || onClick) && "h-full cursor-pointer", className)} {...props}>
       {flat ? (
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-wider leading-tight" style={{ color: "var(--cc-muted)" }}>
             {label}
           </p>
           <p
-            className="mt-1.5 text-[26px] leading-none font-extrabold truncate"
+            className="mt-1 text-xl leading-none font-extrabold truncate"
             style={{ color: toneColour[tone], fontFamily: "var(--app-font-stat)" }}
           >
             {value}
@@ -198,10 +198,10 @@ const KpiCard = React.forwardRef<HTMLDivElement, KpiCardProps>(
         <div className="flex items-center gap-3">
           {icon && (
             <span
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
               style={{ background: kpiTint(tone), color: toneColour[tone] }}
             >
-              {React.cloneElement(icon, { size: icon.props.size ?? 19 })}
+              {React.cloneElement(icon, { size: icon.props.size ?? 16 })}
             </span>
           )}
           <div className="min-w-0">
@@ -209,7 +209,7 @@ const KpiCard = React.forwardRef<HTMLDivElement, KpiCardProps>(
               {label}
             </p>
             <p
-              className="mt-1 text-2xl leading-none font-extrabold truncate"
+              className="mt-1 text-xl leading-none font-extrabold truncate"
               style={{ color: toneColour[tone], fontFamily: "var(--app-font-stat)" }}
             >
               {value}

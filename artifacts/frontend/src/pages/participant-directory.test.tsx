@@ -49,3 +49,30 @@ it("shows each participant's worker, plan and budget, and filters to those witho
   expect(screen.queryByRole("button", { name: /Sam Morgan/ })).toBeNull();
   expect(screen.getByRole("button", { name: /Alex Taylor/ })).toBeTruthy();
 });
+
+it("tells two people with the same name apart and finds them by birth date, suburb or worker", () => {
+  const twins = [
+    { id: "jo-1", full_name: "Jo Smith", ndis_number: "430000011", status: "active", service_category: "disability" },
+    { id: "jo-2", full_name: "Jo Smith", ndis_number: "430000022", status: "active", service_category: "disability" },
+  ] as any;
+  const details = {
+    "jo-1": { workerName: "Priya Nair", workers: ["Priya Nair"], dateOfBirth: "1950-03-12", address: "1 Beach Rd, Glenelg, SA 5045" },
+    "jo-2": { workerName: "Ben Ito", workers: ["Ben Ito"], dateOfBirth: "1990-07-01", address: "9 Hill St, Norwood, SA 5067" },
+  };
+  render(<ActiveParticipantsPage intakes={twins} details={details} onBack={vi.fn()} onOpen={vi.fn()} onOpenComplaints={vi.fn()} />);
+  expect(screen.getAllByText("Same name")).toHaveLength(2);
+  expect(screen.getByText(/born 12 Mar 1950 · Glenelg · NDIS 430000011/)).toBeTruthy();
+
+  const search = screen.getByRole("textbox", { name: "Search participants" });
+  fireEvent.change(search, { target: { value: "12/03/1950" } });
+  expect(screen.getAllByRole("button", { name: /Jo Smith/ })).toHaveLength(1);
+  expect(screen.getByText(/Glenelg/)).toBeTruthy();
+
+  fireEvent.change(search, { target: { value: "norwood" } });
+  expect(screen.getByText(/NDIS 430000022/)).toBeTruthy();
+  expect(screen.queryByText(/NDIS 430000011/)).toBeNull();
+
+  fireEvent.change(search, { target: { value: "priya" } });
+  expect(screen.getByText(/NDIS 430000011/)).toBeTruthy();
+  expect(screen.queryByText(/NDIS 430000022/)).toBeNull();
+});

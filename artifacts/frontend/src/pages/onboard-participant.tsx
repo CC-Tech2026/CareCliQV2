@@ -16,6 +16,8 @@ import {
   type WorkerStats,
 } from "@/services/coordinatorService";
 import { budgetUsage, planEndStatus, planManagementLabel, type Tone } from "@/lib/directory-insights";
+import { ageFrom, formatBirthDate, matchesPerson, sharedNames, suburbFromAddress } from "@/lib/person-identity";
+import { PersonPhoto } from "@/components/ui/person-photo";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -61,6 +63,7 @@ import {
 } from "@/services/participantIntakeService";
 import { useBranches } from "@/hooks/useBranches";
 import { DirectorParticipantProfile } from "@/components/md/participant/DirectorParticipantProfile";
+import { OpenParticipantTabs } from "@/components/md/participant/OpenParticipantTabs";
 import { ParticipantServiceAgreementSection } from "@/components/participants/ParticipantServiceAgreementSection";
 import type { BuilderDefaults } from "@/components/participants/ServiceAgreementBuilder";
 import { GrantResultNotice, PortalAccessCard } from "@/components/participant-portal/PortalAccessCard";
@@ -510,6 +513,12 @@ export interface ParticipantSnapshot {
   planManagement?: string | null;
   activeGoals?: number;
   completedGoals?: number;
+  /** Everyone allocated to support them, for search and the worker filter. */
+  workers?: string[];
+  photoUrl?: string | null;
+  dateOfBirth?: string | null;
+  address?: string | null;
+  preferredName?: string | null;
 }
 
 type ParticipantSort = "name" | "worker" | "planEnd" | "budget";
@@ -548,6 +557,7 @@ export function ActiveParticipantsPage({
 }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<"all" | ServiceCategory>("all");
+  const [workerFilter, setWorkerFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "exited">("all");
   const [focus, setFocus] = useState<ParticipantFocus | null>(null);
   const [sortKey, setSortKey] = useState<ParticipantSort>("name");
@@ -561,9 +571,15 @@ export function ActiveParticipantsPage({
       const snapshot = details?.[intake.id];
       const planStart = snapshot?.planStart ?? intake.plan_start_date ?? null;
       const planEnd = snapshot?.planEnd ?? intake.plan_end_date ?? null;
+      const web = intake.web_intake;
+      const dob = snapshot?.dateOfBirth ?? web?.date_of_birth ?? null;
       return {
         intake,
         snapshot,
+        dob,
+        age: ageFrom(dob),
+        suburb: suburbFromAddress(snapshot?.address) ?? (web?.suburb?.trim() || null),
+        preferred: snapshot?.preferredName ?? (web?.preferred_name?.trim() || null),
         plan: planEndStatus(planEnd),
         budget: budgetUsage(snapshot?.totalBudget ?? intake.total_budget, snapshot?.usedBudget, { start: planStart, end: planEnd }),
         funding: planManagementLabel(snapshot?.planManagement),
@@ -582,11 +598,26 @@ export function ActiveParticipantsPage({
     budget: current.filter(needs.budget).length,
   };
 
-  const q = search.trim().toLowerCase();
+  // Everyone supporting someone on the list, for the worker filter.
+  const workerOptions = [...new Set(roster.flatMap((r) => r.snapshot?.workers ?? []))].sort((a, b) => a.localeCompare(b));
+  // Names held by two or more people, so their rows say how to tell them apart.
+  const shared = sharedNames(roster.map((r) => r.intake.full_name));
+
+  const q = search.trim();
   const dir = sortAsc ? 1 : -1;
   const rows = roster
-    .filter(({ intake: i }) => !q || i.full_name.toLowerCase().includes(q) || i.ndis_number.toLowerCase().includes(q))
+    .filter((r) =>
+      matchesPerson(
+        q,
+        [r.intake.full_name, r.preferred, r.intake.ndis_number, r.suburb, r.snapshot?.address, ...(r.snapshot?.workers ?? [])],
+        r.dob,
+      ),
+    )
     .filter(({ intake: i }) => categoryFilter === "all" || i.service_category === categoryFilter)
+    .filter((r) =>
+      workerFilter === "all" ||
+      (workerFilter === "none" ? r.snapshot?.workerName === null : (r.snapshot?.workers ?? []).includes(workerFilter)),
+    )
     .filter(({ intake: i }) => (statusFilter === "all" ? i.status !== "exited" : i.status === statusFilter))
     .filter((r) => !focus || needs[focus](r))
     .sort((a, b) => {
@@ -606,11 +637,12 @@ export function ActiveParticipantsPage({
   const inactiveTotal = intakes.filter((i) => i.status === "inactive").length;
   const exitedTotal = intakes.filter((i) => i.status === "exited").length;
   const total = activeTotal + inactiveTotal;
-  const filtersActive = !!q || categoryFilter !== "all" || statusFilter !== "all" || focus !== null;
+  const filtersActive = !!q || categoryFilter !== "all" || workerFilter !== "all" || statusFilter !== "all" || focus !== null;
 
   function resetFilters() {
     setSearch("");
     setCategoryFilter("all");
+    setWorkerFilter("all");
     setStatusFilter("all");
     setFocus(null);
   }
@@ -626,76 +658,45 @@ export function ActiveParticipantsPage({
   const pillStyle = (selected: boolean) =>
     selected ? { background: TEXT, color: "var(--cc-bg)" } : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` };
   const pillClass =
-    "inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum";
+    "inline-flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum";
 
   return (
-    <div className="space-y-6 pb-10">
-      <header className="flex flex-wrap items-end justify-between gap-5">
-        <div className="max-w-2xl">
+    <div className="space-y-4 pb-10">
+      <header className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
           <button
             onClick={onBack}
-            className="-ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-full px-2 text-sm font-medium transition-colors hover:bg-cc-soft"
+            className="-ml-2 inline-flex min-h-9 items-center gap-1.5 rounded-full px-2 text-sm font-medium transition-colors hover:bg-cc-soft"
             style={{ color: MUTED }}
           >
             <ArrowLeft size={15} /> Participant onboarding
           </button>
           <h1
-            className="mt-1 flex items-center gap-2 text-3xl font-semibold tracking-tight"
+            className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
             style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
           >
             Participants
-            <SectionInfo text="Everyone onboarded with your organisation, active and inactive." />
+            <SectionInfo text="Everyone onboarded with your organisation, active and inactive. Open anyone to see their plan, care information and the support they've received." />
           </h1>
-          <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>
-            The people your organisation supports. Open anyone to see their plan,
-            care information and the support they've received.
-          </p>
         </div>
 
         <button
           onClick={onOpenComplaints}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-5 text-sm font-medium transition hover:bg-cc-soft"
+          className="inline-flex min-h-10 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-4 text-sm font-medium transition hover:bg-cc-soft"
           style={{ color: TEXT }}
         >
-          <Mail size={16} /> Participant complaints
+          <Mail size={16} /> <span className="sm:hidden">Complaints</span><span className="hidden sm:inline">Participant complaints</span>
         </button>
       </header>
 
-      {!loadFailed && total > 0 && (
-        <div className="flex flex-wrap items-stretch gap-x-2 gap-y-3">
-          {([
-            { label: total === 1 ? "participant" : "participants", value: total, color: TEXT, focus: null },
-            { label: focusCounts.planDue === 1 ? "plan ending or ended" : "plans ending or ended", value: focusCounts.planDue, color: focusCounts.planDue ? "var(--cc-amber)" : "var(--cc-green)", focus: "planDue" },
-            { label: "without a support worker", value: focusCounts.noWorker, color: focusCounts.noWorker ? "var(--cc-amber)" : "var(--cc-green)", focus: "noWorker" },
-            { label: "spending ahead of plan", value: focusCounts.budget, color: focusCounts.budget ? "var(--cc-danger-text)" : "var(--cc-green)", focus: "budget" },
-          ] as const).map((item, index) => (
-            <div key={item.label} className="flex items-center gap-2">
-              {index > 0 && <span aria-hidden className="mr-2 hidden h-6 w-px sm:block" style={{ background: BORDER }} />}
-              <button
-                type="button"
-                disabled={detailsLoading && index > 0}
-                onClick={() => setFocus(item.focus && item.value > 0 ? item.focus : null)}
-                className="flex min-h-11 items-center rounded-full px-3 transition hover:bg-cc-soft disabled:cursor-default"
-              >
-                <span className="flex items-baseline gap-2">
-                  <span className="text-2xl font-semibold tabular-nums tracking-tight" style={{ color: item.color }}>
-                    {detailsLoading && index > 0 ? "…" : item.value}
-                  </span>
-                  <span className="text-sm" style={{ color: MUTED }}>{item.label}</span>
-                </span>
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1 sm:max-w-sm">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="relative min-w-0 flex-1 lg:max-w-md">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search participants" placeholder="Search by name or NDIS number"
+            aria-label="Search participants"
+            placeholder="Name, NDIS number, date of birth, suburb or worker"
             className="h-11 rounded-full border-cc-border bg-cc-surface pl-11 pr-11 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-cc-plum"
           />
           {search && (
@@ -704,9 +705,23 @@ export function ActiveParticipantsPage({
             </button>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:ml-auto">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center lg:ml-auto">
+          {workerOptions.length > 0 && (
+            <Select value={workerFilter} onValueChange={setWorkerFilter}>
+              <SelectTrigger aria-label="Support worker" className="h-11 w-full rounded-full border-cc-border bg-cc-surface px-4 text-sm shadow-none sm:w-[200px]" style={{ color: TEXT }}>
+                <SelectValue placeholder="Any support worker" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any support worker</SelectItem>
+                {focusCounts.noWorker > 0 && <SelectItem value="none">No support worker</SelectItem>}
+                {workerOptions.map((name) => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
-            <SelectTrigger aria-label="Service category" className="h-11 w-full rounded-full border-cc-border bg-cc-surface px-4 text-sm shadow-none sm:w-[180px]" style={{ color: TEXT }}>
+            <SelectTrigger aria-label="Service category" className="h-11 w-full rounded-full border-cc-border bg-cc-surface px-4 text-sm shadow-none sm:w-[170px]" style={{ color: TEXT }}>
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
@@ -715,7 +730,7 @@ export function ActiveParticipantsPage({
               <SelectItem value="aged_care">Aged Care</SelectItem>
             </SelectContent>
           </Select>
-          <div className="flex h-11 min-w-0 items-center rounded-full border bg-cc-surface pl-4 focus-within:ring-2 focus-within:ring-cc-plum lg:hidden" style={{ borderColor: BORDER }}>
+          <div className={`flex h-11 min-w-0 items-center rounded-full border bg-cc-surface pl-4 focus-within:ring-2 focus-within:ring-cc-plum lg:hidden ${workerOptions.length > 0 ? "col-span-2 sm:col-span-1" : ""}`} style={{ borderColor: BORDER }}>
             <select
               aria-label="Sort participants"
               value={sortKey}
@@ -735,7 +750,7 @@ export function ActiveParticipantsPage({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter participants">
+      <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="group" aria-label="Filter participants">
         {([["all", "Everyone", total], ["active", "Active", activeTotal], ["inactive", "Inactive", inactiveTotal], ["exited", "Services ended", exitedTotal]] as const)
           .filter(([value, , count]) => value !== "exited" || count > 0)
           .map(([value, label, count]) => (
@@ -757,15 +772,14 @@ export function ActiveParticipantsPage({
             Clear
           </button>
         )}
+        <p role="status" className={`sr-only text-sm sm:not-sr-only sm:ml-auto ${loadFailed ? "hidden" : ""}`} style={{ color: MUTED }}>
+          {statusFilter === "exited"
+            ? `${rows.length} ${rows.length === 1 ? "person" : "people"} whose services have ended`
+            : rows.length === total
+            ? `${total} ${total === 1 ? "person" : "people"} supported`
+            : `Showing ${rows.length} of ${total}`}
+        </p>
       </div>
-
-      <p role="status" className={`text-sm ${loadFailed ? "hidden" : ""}`} style={{ color: MUTED }}>
-        {statusFilter === "exited"
-          ? `${rows.length} ${rows.length === 1 ? "person" : "people"} whose services have ended`
-          : rows.length === total
-          ? `${total} ${total === 1 ? "person" : "people"} supported by your organisation`
-          : `Showing ${rows.length} of ${total} participants`}
-      </p>
 
       {loadFailed ? (
         <div role="alert" className="rounded-3xl bg-cc-surface px-6 py-14 text-center">
@@ -780,7 +794,7 @@ export function ActiveParticipantsPage({
         <div className="rounded-3xl bg-cc-surface px-6 py-14 text-center">
           <Users size={26} className="mx-auto mb-3 text-cc-muted" />
           <h2 className="text-base font-semibold text-cc-text">{total === 0 ? "Your participant directory starts here" : "No one matches that"}</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-cc-muted">{total === 0 ? "Complete participant onboarding to bring their details, care records and service status into this directory." : "Try another name or NDIS number, or clear the filters to see everyone."}</p>
+          <p className="mx-auto mt-2 max-w-md text-sm text-cc-muted">{total === 0 ? "Complete participant onboarding to bring their details, care records and service status into this directory." : "Try a name, NDIS number, date of birth or suburb, or clear the filters to see everyone."}</p>
           <button type="button" onClick={() => { if (total === 0) onBack(); else resetFilters(); }} className="mt-5 min-h-11 rounded-full border border-cc-border px-5 text-sm font-semibold text-cc-text">{total === 0 ? "Open participant onboarding" : "Clear filters"}</button>
         </div>
       ) : (
@@ -808,7 +822,7 @@ export function ActiveParticipantsPage({
           </div>
 
           <ul>
-            {rows.map(({ intake: i, snapshot, plan, budget, funding }) => {
+            {rows.map(({ intake: i, snapshot, plan, budget, funding, dob, age, suburb, preferred }) => {
               const inactive = i.status === "inactive";
               const exited = i.status === "exited";
               const statusColor = exited ? MUTED : inactive ? "var(--cc-amber)" : "var(--cc-green)";
@@ -819,6 +833,15 @@ export function ActiveParticipantsPage({
                 ? `${snapshot.activeGoals} active${snapshot.completedGoals ? ` · ${snapshot.completedGoals} done` : ""}`
                 : null;
               const pending = <span className="block h-3 w-20 animate-pulse rounded-full" style={{ background: SOFT }} />;
+              // Same-named people also show their birth date, the surest way to tell them apart.
+              const sameName = shared.has(i.full_name.trim().toLowerCase());
+              const showPreferred = preferred && preferred.toLowerCase() !== i.full_name.split(" ")[0]?.toLowerCase();
+              const identity = [
+                age !== null ? (sameName ? `${age} y, born ${formatBirthDate(dob)}` : `${age} y`) : null,
+                suburb,
+                i.ndis_number ? `NDIS ${i.ndis_number}` : null,
+                i.service_category === "aged_care" ? "Aged Care" : null,
+              ].filter(Boolean).join(" · ");
 
               return (
                 <li key={i.id} className="border-b last:border-b-0" style={{ borderColor: BORDER }}>
@@ -828,14 +851,23 @@ export function ActiveParticipantsPage({
                     className={`group flex w-full items-center gap-4 px-4 py-4 text-left transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum sm:px-6 lg:grid ${PARTICIPANT_GRID}`}
                   >
                     <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <div aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold" style={{ background: SOFT, color: TEXT }}>
-                        {initials(i.full_name)}
-                      </div>
+                      <PersonPhoto name={i.full_name} photoUrl={snapshot?.photoUrl} />
                       <div className="min-w-0">
-                        <p className="truncate text-[15px] font-semibold" style={{ color: TEXT }}>{i.full_name}</p>
-                        <p className="mt-0.5 truncate text-sm" style={{ color: MUTED }}>
-                          {i.service_category === "aged_care" ? "Aged Care" : "Disability"}
-                          {i.ndis_number ? ` · NDIS ${i.ndis_number}` : ""}
+                        <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-[15px] font-semibold" style={{ color: TEXT }}>
+                          <span className="truncate">{i.full_name}</span>
+                          {showPreferred && <span className="truncate text-sm font-normal" style={{ color: MUTED }}>goes by {preferred}</span>}
+                          {sameName && (
+                            <span
+                              title="Another participant has this name. Check the birth date and NDIS number."
+                              className="rounded-full px-2 py-0.5 text-xs font-medium"
+                              style={{ background: "var(--cc-coral-soft)", color: TEXT }}
+                            >
+                              Same name
+                            </span>
+                          )}
+                        </p>
+                        <p className={`mt-0.5 text-sm ${sameName ? "" : "truncate"}`} style={{ color: MUTED }}>
+                          {identity || (i.service_category === "aged_care" ? "Aged Care" : "Disability")}
                         </p>
                         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs lg:hidden" style={{ color: MUTED }}>
                           <span className="flex items-center gap-1.5 font-medium" style={{ color: statusColor }}>
@@ -975,6 +1007,11 @@ function ActiveParticipantsRoute(props: {
         planManagement: record.plan_management_type ?? null,
         activeGoals: goals.filter((g) => (g.status ?? "active") === "active").length,
         completedGoals: goals.filter((g) => g.status === "completed").length,
+        workers: names.filter((n) => n !== "Assigned"),
+        photoUrl: record.profile_photo_url ?? null,
+        dateOfBirth: record.date_of_birth ?? null,
+        address: record.address ?? null,
+        preferredName: record.preferred_name ?? null,
       };
     }
     return out;
@@ -1036,7 +1073,7 @@ function ComplaintsPage({ onBack, participants }: { onBack: () => void; particip
   }
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-5 pb-12">
       <PageHeader
         back={
           <button type="button" onClick={onBack} className={kitGhostClass}>
@@ -1513,14 +1550,28 @@ export default function ParticipantOnboardingBoard() {
 
   const profileIntake = profileId ? intakes.find((i) => i.id === profileId) ?? null : null;
 
+  // The participants open as tabs above the list and each profile.
+  const openTabs = (activeId: string | null) => (
+    <OpenParticipantTabs
+      activeId={activeId}
+      participants={intakes.filter((i) => columnIdForStatus(i.status) === "active" || i.status === "inactive").map((i) => ({ id: i.id, name: i.full_name }))}
+      onShowList={() => navigate("/onboard-participant/active")}
+      onOpen={(id) => navigate(`/onboard-participant?profile=${id}`)}
+    />
+  );
+
   if (profileIntake) {
     return (
-      <ParticipantProfilePage
-        intake={profileIntake}
-        onBack={() => navigate("/onboard-participant/active")}
-        onUpdate={(patch) => updateIntake(profileIntake.id, patch)}
-        onReload={reloadIntakes}
-      />
+      <div className="space-y-5">
+        {openTabs(profileIntake.id)}
+        <ParticipantProfilePage
+          key={profileIntake.id}
+          intake={profileIntake}
+          onBack={() => navigate("/onboard-participant/active")}
+          onUpdate={(patch) => updateIntake(profileIntake.id, patch)}
+          onReload={reloadIntakes}
+        />
+      </div>
     );
   }
 
@@ -1538,14 +1589,17 @@ export default function ParticipantOnboardingBoard() {
 
   if (location === "/onboard-participant/active") {
     return (
-      <ActiveParticipantsRoute
-        intakes={intakes}
-        onBack={() => navigate("/onboard-participant")}
-        onOpen={(id) => navigate(`/onboard-participant?profile=${id}`)}
-        onOpenComplaints={() => navigate("/onboard-participant/complaints")}
-        loadFailed={intakesLoadFailed}
-        onRetry={() => setLoadAttempt((n) => n + 1)}
-      />
+      <div className="space-y-5">
+        {openTabs(null)}
+        <ActiveParticipantsRoute
+          intakes={intakes}
+          onBack={() => navigate("/onboard-participant")}
+          onOpen={(id) => navigate(`/onboard-participant?profile=${id}`)}
+          onOpenComplaints={() => navigate("/onboard-participant/complaints")}
+          loadFailed={intakesLoadFailed}
+          onRetry={() => setLoadAttempt((n) => n + 1)}
+        />
+      </div>
     );
   }
 

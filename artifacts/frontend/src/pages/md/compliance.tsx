@@ -463,7 +463,7 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
 
   return (
     <Layout>
-      <div className="space-y-8 pb-12">
+      <div className="space-y-5 pb-12">
         {!embedded && (
           <PageHeader
             eyebrow="Oversight & Risk"
