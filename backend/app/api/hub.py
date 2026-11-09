@@ -13,6 +13,7 @@ from ..core.timezone import app_today, shift_local_date, request_timezone
 from ..schemas.incident import effective_ndis_reportable, notification_clock_start
 from ..services import incident_service, onboarding_pipeline_alerts_service, participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
+from ..services.vault_service import REQUIRED_CREDENTIAL_LABELS
 
 router = APIRouter(prefix="/hub", tags=["hub"])
 
@@ -245,20 +246,28 @@ async def get_compliance_alerts(current_user: dict = Depends(get_current_user)):
         live = _live_status(row)
         if live not in ("expired", "expiring"):
             continue
-        label = row.get("credential_type") or row.get("title") or "Credential"
+        credential_type = str(row.get("credential_type") or "")
+        label = (
+            REQUIRED_CREDENTIAL_LABELS.get(credential_type)
+            or row.get("title")
+            or (credential_type.replace("_", " ").capitalize() if credential_type else "Credential")
+        )
         worker_id = str(row.get("user_id") or "")
         name = names_by_id.get(worker_id, "Team member")
         expiry = str(row.get("expiry_date") or "")[:10]
         try:
-            days = (date.fromisoformat(expiry) - today).days if expiry else None
+            expiry_date = date.fromisoformat(expiry) if expiry else None
         except ValueError:
-            days = None
+            expiry_date = None
+        days = (expiry_date - today).days if expiry_date else None
+        # "20 Nov 2026", the way dates read everywhere else in the app.
+        expiry_text = f"{expiry_date.day} {expiry_date:%b %Y}" if expiry_date else "an unknown date"
         alerts.append({
             "id": f"cred-{row['id']}",
             "credential_id": str(row["id"]),
             "worker_id": worker_id,
             "title": f"{name}: {label}",
-            "detail": f"Expired on {expiry}. Review the credential and arrange renewal." if live == "expired" else f"Expires on {expiry}. Follow up renewal before expiry.",
+            "detail": f"Expired on {expiry_text}. Review the credential and arrange renewal." if live == "expired" else f"Expires on {expiry_text}. Follow up the renewal before then.",
             "severity": "critical" if live == "expired" or (days is not None and days <= 14) else "high",
             "due_date": expiry or None,
             "affected_staff": [name],

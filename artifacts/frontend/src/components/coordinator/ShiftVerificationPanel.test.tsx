@@ -100,9 +100,9 @@ it("filters inclusively using the participant branch date and full identifiers",
     filterVerificationQueue([shift], "", "", "", "all", "another-worker"),
   ).toHaveLength(0);
 });
-it("shows IDs, filters the queue and reveals checks on request", () => {
+it("keeps database IDs off the card, filters the queue and reveals checks on request", () => {
   render(<ShiftVerificationPanel />);
-  expect(screen.getByText("Participant ID: participant-123")).toBeTruthy();
+  expect(screen.queryByText(/participant-123/)).toBeNull();
   expect(screen.queryByRole("combobox", { name: "Price item" })).toBeNull();
   fireEvent.change(screen.getByRole("textbox", { name: "Search shifts" }), {
     target: { value: "missing" },
@@ -110,13 +110,13 @@ it("shows IDs, filters the queue and reveals checks on request", () => {
   expect(screen.getByText("No shifts match these filters.")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
   expect(
-    screen.getByRole("button", { name: "Review shift shift-abc" }),
+    screen.getByRole("button", { name: /^Review .*shift/ }),
   ).toBeTruthy();
 });
 it("prefills only the recorded available price item and still requires verification", async () => {
   render(<ShiftVerificationPanel />);
   fireEvent.click(
-    screen.getByRole("button", { name: "Review shift shift-abc" }),
+    screen.getByRole("button", { name: /^Review .*shift/ }),
   );
   await waitFor(() =>
     expect(

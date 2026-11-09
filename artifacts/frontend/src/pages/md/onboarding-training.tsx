@@ -1921,14 +1921,18 @@ function ModulesTab({
               key={m.id}
               className="flex h-full flex-col rounded-2xl bg-cc-surface p-3"
             >
-              <CourseCover
-                title={m.title}
-                count={m.resources?.length}
-                color={m.cover_color}
-                imageUrl={m.cover_url}
-                className="h-28"
-              />
-              <div className="flex flex-1 flex-col gap-4 p-2 pt-4">
+              {/* A cover only when someone uploaded one: an empty coloured
+                  block just pushes the module's details down. */}
+              {m.cover_url && (
+                <CourseCover
+                  title={m.title}
+                  count={m.resources?.length}
+                  color={m.cover_color}
+                  imageUrl={m.cover_url}
+                  className="h-28"
+                />
+              )}
+              <div className={`flex flex-1 flex-col gap-4 p-2 ${m.cover_url ? "pt-4" : ""}`}>
                 <div className="min-w-0 flex-1">
                   <p
                     className="text-base font-semibold leading-6"
@@ -1950,6 +1954,14 @@ function ModulesTab({
                     </p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {!m.cover_url && (
+                      <span
+                        className="rounded-full px-2.5 py-0.5 text-xs font-medium"
+                        style={{ background: SOFT, color: TEXT }}
+                      >
+                        {m.resources?.length ?? 0} {(m.resources?.length ?? 0) === 1 ? "material" : "materials"}
+                      </span>
+                    )}
                     {m.linked_credential_type && (
                       <span
                         className="rounded-full px-2 py-0.5 text-xs font-semibold"

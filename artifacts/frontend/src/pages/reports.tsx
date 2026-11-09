@@ -550,7 +550,7 @@ export function IncidentReportsSection() {
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{inc.title ?? "Incident Report"}</p>
                       <p className="text-[11px]" style={{ color: T3 }}>
-                        {inc.participant_name ?? "N/A"} · {format(parseISO(inc.incident_date ?? inc.created_at), "MMM d, yyyy")}
+                        {inc.participant_name ?? "N/A"} · {format(parseISO(inc.incident_date ?? inc.created_at), "d MMM yyyy")}
                       </p>
                     </div>
                     <SeverityBadge sev={inc.severity ?? "medium"} />
@@ -636,7 +636,7 @@ function ParticipantNotesSection() {
                         <div className="px-5 py-4 hover:bg-slate-50 cursor-pointer transition-colors group">
                           <div className="flex items-center justify-between mb-2">
                             <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: T3 }}>
-                              {format(parseISO(s.session_date), "EEEE, MMM d, yyyy")}
+                              {format(parseISO(s.session_date), "EEEE, d MMM yyyy")}
                             </p>
                             <ComplianceBadge score={s.compliance_score} />
                           </div>
@@ -775,7 +775,7 @@ function ComplianceReportsSection() {
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name}</p>
                           <p className="text-[11px]" style={{ color: T3 }}>
-                            {[format(parseISO(s.session_date), "MMM d, yyyy"), shiftNoteSubtitle(s as ShiftNoteLike)].filter(Boolean).join(" · ")}
+                            {[format(parseISO(s.session_date), "d MMM yyyy"), shiftNoteSubtitle(s as ShiftNoteLike)].filter(Boolean).join(" · ")}
                           </p>
                         </div>
                         <ComplianceBadge score={s.compliance_score} />

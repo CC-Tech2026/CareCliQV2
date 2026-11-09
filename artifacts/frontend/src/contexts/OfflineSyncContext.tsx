@@ -51,9 +51,17 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   const isSyncingRef = useRef(false);
 
   const refresh = useCallback(async () => {
-    const [count, items] = await Promise.all([countPendingSyncItems(), listSyncQueueItems()]);
-    setPendingCount(count);
-    setQueueItems(items);
+    try {
+      const [count, items] = await Promise.all([countPendingSyncItems(), listSyncQueueItems()]);
+      setPendingCount(count);
+      setQueueItems(items);
+    } catch {
+      // Browser storage unavailable (private window, storage blocked by
+      // policy): nothing can have been queued offline here, so show none
+      // rather than leave an unhandled error on every page.
+      setPendingCount(0);
+      setQueueItems([]);
+    }
   }, []);
 
   const retryAll = useCallback(async () => {
@@ -75,7 +83,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   }, [online, queryClient, refresh]);
 
   useEffect(() => {
-    void purgeTutorialOfflineArtifacts().then(() => refresh());
+    void purgeTutorialOfflineArtifacts().catch(() => undefined).then(() => refresh());
     const onOnline = () => {
       setOnline(true);
       void retryAll();

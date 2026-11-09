@@ -22,7 +22,7 @@ interface BodyMarkerHistoryProps {
   className?: string;
 }
 
-function safeFormat(dateStr?: string | null, fmt = "MMM d, yyyy") {
+function safeFormat(dateStr?: string | null, fmt = "d MMM yyyy") {
   if (!dateStr) return "N/A";
   try {
     return format(parseISO(dateStr), fmt);

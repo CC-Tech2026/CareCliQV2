@@ -1659,7 +1659,7 @@ function PersonalInfoTab({
             label={translate("team.detail.lastLogin")}
             value={
               worker.last_login
-                ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a")
+                ? safeFormat(worker.last_login, "d MMM yyyy, h:mm a")
                 : undefined
             }
             emptyText={translate("team.detail.noLoginYet")}

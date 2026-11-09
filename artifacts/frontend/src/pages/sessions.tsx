@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { flagSessionForReview } from "@/services/coordinatorService";
 import { SectionInfo } from "@/components/ui/section-info";
+import { SummaryStrip } from "@/components/layout/PageKit";
 import {
   Search, Calendar, Clock, ShieldCheck, ChevronDown,
   ChevronRight, FileDown, Loader2, X, ArrowUpDown, Users,
@@ -139,31 +140,6 @@ function SkeletonRow() {
 }
 
 // -- Session stat card — matches Dashboard DashboardStatCard --------------------
-function SessionStatCard({
-  label, value, caption, icon: Icon, valueColor,
-}: {
-  label: string;
-  value: number | string;
-  caption: string;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
-  valueColor?: string;
-}) {
-  return (
-    <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: T3 }}>{label}</p>
-          <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: valueColor ?? T1 }}>{value}</p>
-        </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg" style={{ background: SOFT, color: PLUM }}>
-          <Icon size={20} strokeWidth={2.5} />
-        </div>
-      </div>
-      <p className="mt-3 text-sm font-medium" style={{ color: T3 }}>{caption}</p>
-    </section>
-  );
-}
-
 // -- Main component -------------------------------------------------------------
 export default function Sessions() {
   const { translate, translateParams } = useAccessibility();
@@ -187,6 +163,7 @@ export default function Sessions() {
   const [sortBy, setSortBy]             = useState<SortKey>("date_desc");
   // `?band=at_risk&from=2026-09-01` — stat tiles elsewhere link to a filtered list.
   const [bandFilter, setBandFilter]     = useState<ComplianceBand | "all">(() => bandFromSearch(window.location.search));
+  const [moreFilters, setMoreFilters] = useState(false);
   const [dateFrom, setDateFrom]         = useState(() => new URLSearchParams(window.location.search).get("from") ?? "");
   const [dateTo, setDateTo]             = useState("");
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
@@ -517,41 +494,39 @@ export default function Sessions() {
 
   // -- Render ---------------------------------------------------------------------
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-5 pb-10">
 
-      {/* Page header — matches Dashboard pattern */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Clinical Records</p>
-          <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
-            {translate("sessions.title")}
-            <SectionInfo text="Clinical documentation for every support session: notes, outcomes, and progress toward goals." />
-          </h1>
-          <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
-            {isLoading ? translate("sessions.subtitleLoading") : translateParams("sessions.subtitleCount", { total: String(sessions.length), filtered: String(filtered.length) })}
-          </p>
-        </div>
+      {/* One compact row, so the notes start near the top. Directors and
+          coordinators reach this page as "Shift notes" in their navigation. */}
+      <header className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+        <h1
+          className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
+          style={{ color: "var(--cc-text)", fontFamily: "var(--app-font-display)" }}
+        >
+          {isCoordinator ? "Shift notes" : translate("sessions.title")}
+          <SectionInfo text="The record of every support shift: what happened, outcomes, and progress toward the participant's goals." />
+        </h1>
         <div className="flex flex-wrap items-center gap-2">
-        <Link href="/coordinator/verification" className="inline-flex min-h-10 items-center rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text hover:bg-cc-soft">Shift verification</Link>
-        <Link href="/sessions/new">
-          <button
-            className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]"
+          <Link
+            href="/sessions/new"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90"
             style={{ background: "var(--cc-cta)" }}
           >
             <Plus size={16} strokeWidth={2.5} />
-            {translate("sessions.newSession")}
-          </button>
-        </Link>
+            {isCoordinator ? "New shift note" : translate("sessions.newSession")}
+          </Link>
         </div>
-      </div>
+      </header>
 
-      {/* Stat cards — matches Dashboard grid */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SessionStatCard label={translate("sessions.stat.total")}  value={sessions.length}   caption={translate("sessions.stat.totalCaption")}        icon={Calendar}      />
-        <SessionStatCard label={translate("sessions.stat.thisWeek")}        value={thisWeekCount}     caption={translate("sessions.stat.thisWeekCaption")}     icon={Clock}         />
-        <SessionStatCard label={translate("sessions.stat.avgCompliance")}   value={avgCompliance}     caption={translate("sessions.stat.avgComplianceCaption")}    icon={ShieldCheck}   valueColor={PLUM} />
-        <SessionStatCard label={translate("sessions.stat.inProgress")}      value={inProgressCount}   caption={translate("sessions.stat.inProgressCaption")}    icon={AlertTriangle} valueColor={inProgressCount > 0 ? "#D97706" : T1} />
-      </div>
+      <SummaryStrip
+        loading={isLoading}
+        items={[
+          { value: sessions.length, label: isCoordinator ? "notes in total" : translate("sessions.stat.total").toLowerCase() },
+          { value: thisWeekCount, label: translate("sessions.stat.thisWeek").toLowerCase() },
+          { value: avgCompliance, label: "average score", tone: "info" },
+          { value: inProgressCount, label: "in progress", tone: inProgressCount > 0 ? "warning" : undefined },
+        ]}
+      />
 
       {/* Filter + session list — dashboard card style */}
       <section className="rounded-lg border bg-white shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
@@ -605,8 +580,19 @@ export default function Sessions() {
             </div>
           </div>
 
-          {/* Row 2: date range + sort */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1">
+          {/* Row 2: date range + sort. Folded away on phones until asked for,
+              so the notes aren't five rows of filters down. */}
+          <button
+            type="button"
+            onClick={() => setMoreFilters((v) => !v)}
+            aria-expanded={moreFilters}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium md:hidden"
+            style={{ color: T2 }}
+          >
+            <Calendar size={13} />
+            {moreFilters ? "Fewer filters" : hasDateFilter ? "Dates and sort (dates set)" : "Dates and sort"}
+          </button>
+          <div className={`${moreFilters ? "flex" : "hidden"} md:flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1`}>
             <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
               <span className="flex items-center gap-1.5 text-[12px] font-medium whitespace-nowrap" style={{ color: T3 }}>
                 <Calendar size={13} /> {translate("sessions.dateRange")}

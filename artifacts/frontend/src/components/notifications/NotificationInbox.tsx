@@ -728,12 +728,8 @@ export function NotificationInbox({
       {isPanel && !inDetail && (
         // Left-aligned: the floating assistant button sits bottom-right.
         <div className="flex items-center gap-5 px-4 py-3 text-[12px] font-semibold" style={{ borderTop: "1px solid var(--cc-border)" }}>
-          <Link href="/notifications">
-            <a className="py-1" style={{ color: "var(--cc-plum)" }} onClick={() => onClose?.()}>{translate("inbox.seeAll")}</a>
-          </Link>
-          <Link href="/notifications/settings">
-            <a className="py-1" style={{ color: "var(--cc-muted)" }} onClick={() => onClose?.()}>{translate("inbox.settings")}</a>
-          </Link>
+          <Link href="/notifications" className="py-1" style={{ color: "var(--cc-plum)" }} onClick={() => onClose?.()}>{translate("inbox.seeAll")}</Link>
+          <Link href="/notifications/settings" className="py-1" style={{ color: "var(--cc-muted)" }} onClick={() => onClose?.()}>{translate("inbox.settings")}</Link>
         </div>
       )}
     </div>

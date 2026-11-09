@@ -1285,13 +1285,15 @@ export function MDHubView() {
 
   return (
     <div className="space-y-5 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-cc-plum">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cc-border pb-3">
-        <p role="status" className="text-xs text-cc-muted">
-          {error ? "Refresh failed. Showing the last available overview." : overviewQuery.isFetching ? "Updating overview…" : "Organisation overview"}
+      {/* A quiet line, not a bordered bar: the briefing itself should start
+          straight under the page title. */}
+      <div className="-mt-2 flex flex-wrap items-center justify-end gap-3">
+        <p role="status" className="text-xs" style={{ color: error ? "var(--cc-danger-text)" : "var(--cc-muted)" }}>
+          {error ? "Refresh failed. Showing the last available overview." : overviewQuery.isFetching ? "Updating overview…" : ""}
         </p>
-        <button type="button" disabled={overviewQuery.isFetching} onClick={() => void overviewQuery.refetch()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-cc-border bg-cc-surface px-3 text-sm font-semibold text-cc-text hover:bg-cc-soft disabled:opacity-60">
+        <button type="button" disabled={overviewQuery.isFetching} onClick={() => void overviewQuery.refetch()} aria-label={overviewQuery.isFetching ? "Refreshing…" : "Refresh overview"} className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-cc-muted hover:bg-cc-soft hover:text-cc-text disabled:opacity-60">
           <RefreshCw size={14} aria-hidden="true" className={overviewQuery.isFetching ? "animate-spin motion-reduce:animate-none" : ""} />
-          {overviewQuery.isFetching ? "Refreshing…" : "Refresh overview"}
+          {overviewQuery.isFetching ? "Refreshing…" : "Refresh"}
         </button>
       </div>
 

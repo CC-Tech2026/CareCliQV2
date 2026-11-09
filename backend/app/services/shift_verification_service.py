@@ -107,6 +107,15 @@ def _actual_minutes(shift: dict[str, Any]) -> Optional[float]:
     return None
 
 
+def _minutes_label(minutes: float) -> str:
+    """'45 min', or '2h 5m' once it's an hour or more."""
+    total = round(minutes)
+    if total < 60:
+        return f"{total} min"
+    hours, rest = divmod(total, 60)
+    return f"{hours}h {rest}m" if rest else f"{hours}h"
+
+
 def billable_minutes(shift: dict[str, Any], approve_extra_time: bool = False) -> dict[str, Any]:
     """Minutes to bill: the time worked, but no more than scheduled unless a
     coordinator approves the extra time. Shorter shifts bill what was worked."""
@@ -381,7 +390,7 @@ def compute_verification_checks(
         **billing,
         "flagged": billing["extra_minutes"] > 0,
         "reason": (
-            f"Worked {round(billing['extra_minutes'])} min longer than scheduled — billed at the "
+            f"Worked {_minutes_label(billing['extra_minutes'])} longer than scheduled. Billed at the "
             "scheduled time unless you approve the extra time."
             if billing["extra_minutes"] > 0
             else None

@@ -46,6 +46,7 @@ import { safeFormat } from "@/lib/participant-format";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useReAuth } from "@/hooks/useReAuth";
+import { PersonPhoto } from "@/components/ui/person-photo";
 
 const PLUM  = "var(--cc-plum)";
 const TEXT  = "var(--cc-text)";
@@ -1254,6 +1255,13 @@ function SectionHeaderInline({ icon: Icon, tone, label }: { icon: IconType; tone
 function Avatar({ worker, verified, size }: { worker: WorkerStats; verified: boolean; size: "sm" | "md" }) {
   const dims = size === "sm" ? "h-9 w-9 text-xs" : "h-11 w-11 text-sm";
   const ring = verified ? "var(--cc-status-success)" : "var(--cc-status-warning)";
+  if (worker.profile_photo_url) {
+    return (
+      <span className="shrink-0 rounded-full" style={{ boxShadow: `0 0 0 2px var(--cc-surface), 0 0 0 3.5px ${ring}` }}>
+        <PersonPhoto name={worker.full_name || "?"} photoUrl={worker.profile_photo_url} size={size === "sm" ? 36 : 44} />
+      </span>
+    );
+  }
   return (
     <div
       className={`${dims} rounded-full shrink-0 flex items-center justify-center font-black`}

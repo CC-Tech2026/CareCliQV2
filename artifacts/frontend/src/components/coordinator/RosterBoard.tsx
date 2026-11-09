@@ -371,6 +371,12 @@ export function RosterBoard({
   );
 
   const sameNames = useMemo(() => sharedNames(workers.map((w) => w.full_name)), [workers]);
+  // Support workers first: they're who gets rostered. Office staff (who can
+  // still pick up a shift) follow, so the rows a rosterer needs lead the board.
+  const rosterRows = useMemo(() => {
+    const rank = (w: WorkerStats) => ((w.role ?? "support_worker") === "support_worker" ? 0 : 1);
+    return [...workers].sort((a, b) => rank(a) - rank(b));
+  }, [workers]);
   const weekHoursByWorker = useMemo(() => {
     const totals = new Map<string, number>();
     for (const s of shifts) {
@@ -563,7 +569,7 @@ export function RosterBoard({
               </tr>
             </thead>
             <tbody>
-              {workers.map((worker) => {
+              {rosterRows.map((worker) => {
                 const avail = availMap[worker.id];
                 const avatar = avatarColor(worker.full_name);
                 const weekHrs = weekHoursByWorker.get(worker.id) ?? 0;
