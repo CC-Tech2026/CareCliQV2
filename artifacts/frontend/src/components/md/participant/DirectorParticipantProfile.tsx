@@ -365,7 +365,7 @@ export function DirectorParticipantProfile({
       </div>
 
       <Sheet open={documentsOpen} onOpenChange={setDocumentsOpen}>
-        <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-3xl">
+        <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-2xl">
           <SheetHeader className="sr-only">
             <SheetTitle>Documents for {p.full_name}</SheetTitle>
             <SheetDescription>Open, file, archive or export {firstName}'s documents.</SheetDescription>
@@ -378,7 +378,7 @@ export function DirectorParticipantProfile({
 
       {/* The coordinator's working record, for anything hands-on. */}
       <Sheet open={careRecordTab !== null} onOpenChange={(v) => { if (!v) { setCareRecordTab(null); refresh(); } }}>
-        <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-5xl">
+        <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-4xl">
           <SheetHeader className="sr-only">
             <SheetTitle>Care record for {p.full_name}</SheetTitle>
             <SheetDescription>Personal details, care, plan and goals, shifts, compliance and meetings.</SheetDescription>
@@ -410,7 +410,7 @@ export function DirectorParticipantProfile({
       </Sheet>
 
       <Sheet open={exportOpen} onOpenChange={setExportOpen}>
-        <SheetContent className="flex w-full flex-col p-0 sm:max-w-3xl">
+        <SheetContent className="flex w-full flex-col p-0 sm:max-w-2xl">
           <SheetHeader className="border-b border-cc-border p-5 pr-12">
             <SheetTitle>Export records</SheetTitle>
             <SheetDescription>Download {firstName}'s profile, shift history, invoices and documents on file as one PDF or ZIP.</SheetDescription>

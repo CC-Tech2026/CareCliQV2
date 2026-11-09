@@ -96,7 +96,10 @@ const SheetContent = React.forwardRef<
   const isTop = useIsTopPanel(id)
   return (
   <SheetPortal>
-    {isTop && <SheetOverlay />}
+    {/* Always mounted with the panel, so it stays underneath it in the page:
+        mounting it later put it on top and dimmed the open panel. A panel
+        that isn't on top just hides its backdrop. */}
+    <SheetOverlay style={isTop ? undefined : { display: "none" }} />
     <SheetPrimitive.Content
       ref={ref}
       className={cn(sheetVariants({ side }), className)}

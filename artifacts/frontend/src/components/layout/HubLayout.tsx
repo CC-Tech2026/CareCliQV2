@@ -550,8 +550,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               ) : (
                 <CareCliQLogo size={36} />
               )}
-              <span className={`hidden h-5 w-px bg-[var(--cc-border)] sm:block ${topbarMode ? "xl:hidden 2xl:block" : ""}`} />
-              <div className={`hidden min-w-0 lg:block ${topbarMode ? "xl:hidden 2xl:block" : ""}`}>
+              <span className={`hidden h-5 w-px bg-[var(--cc-border)] sm:block ${topbarMode ? "xl:hidden min-[1800px]:block" : ""}`} />
+              <div className={`hidden min-w-0 lg:block ${topbarMode ? "xl:hidden min-[1800px]:block" : ""}`}>
                 <div className="flex items-center gap-1.5">
                   <span className="max-w-[240px] truncate text-sm font-semibold tracking-tight" title={organisationDisplay}>
                     {organisationDisplay}
@@ -645,7 +645,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           )}
 
           {isMD && (
-            <div className={`mx-2 min-w-0 max-w-md shrink-0 md:flex-1 md:px-2 ${topbarMode ? "xl:mx-0 xl:flex-none xl:px-0 2xl:w-56" : ""}`}>
+            <div className={`mx-2 min-w-0 max-w-md shrink-0 md:flex-1 md:px-2 ${topbarMode ? "xl:mx-0 xl:flex-none xl:px-0 min-[1800px]:w-56" : ""}`}>
               <ManagementPageSearch groups={MD_NAV_GROUPS} compactOnDesktop={topbarMode} />
             </div>
           )}
@@ -732,7 +732,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                   initials
                 )}
               </div>
-              <span className={`hidden max-w-32 truncate text-xs font-semibold pr-1 ${topbarMode ? "2xl:block" : "xl:block"}`}>
+              <span className={`hidden max-w-32 truncate text-xs font-semibold pr-1 ${topbarMode ? "min-[1800px]:block" : "xl:block"}`}>
                 {displayName}
               </span>
               <ChevronDown size={14} className="text-[var(--cc-muted)]" />

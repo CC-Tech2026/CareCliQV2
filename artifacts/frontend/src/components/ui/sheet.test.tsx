@@ -36,8 +36,13 @@ it("shows only the panel on top, then brings the one underneath back when it clo
   fireEvent.click(screen.getByRole("button", { name: "Deactivate" }));
   expect(screen.getByTestId("deactivate-panel").style.visibility).not.toBe("hidden");
   expect(screen.getByTestId("worker-panel").style.visibility).toBe("hidden");
-  // One backdrop, not one per panel.
-  expect(document.querySelectorAll('[class*="bg-black/80"]')).toHaveLength(1);
+  // One backdrop showing, not one per panel; and it sits under the open
+  // panel in the page, never on top of it.
+  const backdrops = [...document.querySelectorAll<HTMLElement>('[class*="bg-black/80"]')];
+  const showing = backdrops.filter((b) => b.style.display !== "none");
+  expect(showing).toHaveLength(1);
+  const top = screen.getByTestId("deactivate-panel");
+  expect(showing[0].compareDocumentPosition(top) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
   act(() => {
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
