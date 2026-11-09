@@ -3371,6 +3371,7 @@ def end_shift(
     force: bool = False,
     reason: str | None = None,
     system_initiated: bool = False,
+    ended_at: str | None = None,
 ) -> Optional[dict[str, Any]]:
     """Complete shift and linked session (CARECLIQV2-156).
 
@@ -3380,6 +3381,11 @@ def end_shift(
     worker-initiated force-end (force=True, system_initiated=False) still
     requires a signature; reason is the worker's own explanation, captured
     alongside the acknowledgement that mandatory tasks were incomplete.
+
+    ended_at overrides the recorded finish (clock-out and session end time).
+    The auto-end passes the moment the shift should have been ended, so a
+    pass that runs late (a restart, an outage) doesn't stretch the shift
+    over the hours or days it was down.
     """
     shift = get_shift_by_id(shift_id)
     if not shift:
@@ -3413,6 +3419,7 @@ def end_shift(
         raise ValueError("Complete all mandatory tasks before ending the shift.")
 
     now = _now_iso()
+    finished_at = ended_at or now
     session_id = shift.get("session_id")
     if session_id:
         # goals_addressed / activities_performed: never populated anywhere
@@ -3507,7 +3514,7 @@ def end_shift(
             # R1 (compliance_engine.check_session_time_and_duration) always
             # fails with "end time is missing" regardless of anything the
             # worker actually did.
-            "end_time": now,
+            "end_time": finished_at,
             "end_validation": validation,
             "compliance_score": validation.get("compliance_score"),
         }
@@ -3546,7 +3553,7 @@ def end_shift(
 
     update_payload: dict[str, Any] = {
         "status": "completed",
-        "clocked_out_at": now,
+        "clocked_out_at": finished_at,
         "updated_at": now,
     }
     # Ended with incomplete mandatory tasks (worker override or system
@@ -3580,7 +3587,7 @@ def end_shift(
             # the deadline tracking rather than blocking the worker entirely.
             base_payload = {
                 "status": "completed",
-                "clocked_out_at": now,
+                "clocked_out_at": finished_at,
                 "updated_at": now,
             }
             try:

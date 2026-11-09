@@ -22,10 +22,12 @@ export default function NotificationsPage() {
             {translate("inbox.pageHint")}
           </p>
         </div>
-        <Link href="/notifications/settings">
-          <a className="flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold" style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}>
-            <Settings2 size={15} /> {translate("inbox.settings")}
-          </a>
+        <Link
+          href="/notifications/settings"
+          className="flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold"
+          style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
+        >
+          <Settings2 size={15} /> {translate("inbox.settings")}
         </Link>
       </header>
       <NotificationInbox key={openId ?? "list"} variant="page" initialOpenId={openId} />

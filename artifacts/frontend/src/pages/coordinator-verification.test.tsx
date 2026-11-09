@@ -240,7 +240,7 @@ it("bills extra time only when approved with a reason", async () => {
   state.search = "shiftId=s3";
   state.confirm.mockResolvedValue({ billed_amount: 175.58 });
   render(<CoordinatorVerificationPage />);
-  expect(screen.getAllByText("Worked 30 min longer than scheduled").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Worked 30m longer than scheduled").length).toBeGreaterThan(0);
   const approve = () => screen.getByRole("button", { name: /Approve shift/ }) as HTMLButtonElement;
   expect(approve().disabled).toBe(false); // billed at the scheduled 2h
   fireEvent.click(screen.getByLabelText("Approve the extra 30 min"));

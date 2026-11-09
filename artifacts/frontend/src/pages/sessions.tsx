@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { flagSessionForReview } from "@/services/coordinatorService";
 import { SectionInfo } from "@/components/ui/section-info";
+import { SummaryStrip } from "@/components/layout/PageKit";
 import {
   Search, Calendar, Clock, ShieldCheck, ChevronDown,
   ChevronRight, FileDown, Loader2, X, ArrowUpDown, Users,
@@ -51,11 +52,11 @@ function bandFromSearch(search: string): ComplianceBand | "all" {
 // -- Design tokens — aligned with Dashboard -------------------------------------
 const PLUM        = "#E8457A";
 const CORAL       = "var(--cc-coral)";
-const T1          = "#1A1A2E";
-const T2          = "#374151";
-const T3          = "#6A6A77";
-const BORDER      = "#E8E8EA";
-const SOFT        = "#ECECEC";
+const T1          = "var(--cc-text)";
+const T2          = "var(--cc-text)";
+const T3          = "var(--cc-muted)";
+const BORDER      = "var(--cc-border)";
+const SOFT        = "var(--cc-soft)";
 
 // -- Sort options ---------------------------------------------------------------
 type SortKey = "date_desc" | "date_asc" | "severity" | "participant" | "status" | "activity";
@@ -139,31 +140,6 @@ function SkeletonRow() {
 }
 
 // -- Session stat card — matches Dashboard DashboardStatCard --------------------
-function SessionStatCard({
-  label, value, caption, icon: Icon, valueColor,
-}: {
-  label: string;
-  value: number | string;
-  caption: string;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
-  valueColor?: string;
-}) {
-  return (
-    <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: T3 }}>{label}</p>
-          <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: valueColor ?? T1 }}>{value}</p>
-        </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg" style={{ background: SOFT, color: PLUM }}>
-          <Icon size={20} strokeWidth={2.5} />
-        </div>
-      </div>
-      <p className="mt-3 text-sm font-medium" style={{ color: T3 }}>{caption}</p>
-    </section>
-  );
-}
-
 // -- Main component -------------------------------------------------------------
 export default function Sessions() {
   const { translate, translateParams } = useAccessibility();
@@ -187,6 +163,7 @@ export default function Sessions() {
   const [sortBy, setSortBy]             = useState<SortKey>("date_desc");
   // `?band=at_risk&from=2026-09-01` — stat tiles elsewhere link to a filtered list.
   const [bandFilter, setBandFilter]     = useState<ComplianceBand | "all">(() => bandFromSearch(window.location.search));
+  const [moreFilters, setMoreFilters] = useState(false);
   const [dateFrom, setDateFrom]         = useState(() => new URLSearchParams(window.location.search).get("from") ?? "");
   const [dateTo, setDateTo]             = useState("");
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
@@ -390,7 +367,7 @@ export default function Sessions() {
     return (
       <div
         className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-3.5 transition-colors duration-150 group border-l-[3px] ${
-          isSelected ? "border-l-[#E8457A]" : "border-l-transparent hover:border-l-[#7C3AED]/30 hover:bg-[#ECECEC]/50"
+          isSelected ? "border-l-[#E8457A]" : "border-l-transparent hover:border-l-[#7C3AED]/30 hover:bg-cc-soft"
         }`}
         style={isSelected ? { background: `${PLUM}06` } : {}}
       >
@@ -504,9 +481,9 @@ export default function Sessions() {
     return (
       <div
         className="px-5 py-2 flex items-center gap-2 sticky top-0 z-10"
-        style={{ background: "rgba(246,244,251,0.95)", borderBottom: `1px solid ${BORDER}` }}
+        style={{ background: "var(--cc-soft)", borderBottom: `1px solid ${BORDER}` }}
       >
-        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: T3 }}>{label}</span>
+        <span className="text-xs font-semibold" style={{ color: T3 }}>{label}</span>
         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
           style={{ background: `${PLUM}10`, color: PLUM }}>
           {count}
@@ -517,44 +494,42 @@ export default function Sessions() {
 
   // -- Render ---------------------------------------------------------------------
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-5 pb-10">
 
-      {/* Page header — matches Dashboard pattern */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Clinical Records</p>
-          <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
-            {translate("sessions.title")}
-            <SectionInfo text="Clinical documentation for every support session: notes, outcomes, and progress toward goals." />
-          </h1>
-          <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
-            {isLoading ? translate("sessions.subtitleLoading") : translateParams("sessions.subtitleCount", { total: String(sessions.length), filtered: String(filtered.length) })}
-          </p>
-        </div>
+      {/* One compact row, so the notes start near the top. Directors and
+          coordinators reach this page as "Shift notes" in their navigation. */}
+      <header className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+        <h1
+          className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
+          style={{ color: "var(--cc-text)", fontFamily: "var(--app-font-display)" }}
+        >
+          {isCoordinator ? "Shift notes" : translate("sessions.title")}
+          <SectionInfo text="The record of every support shift: what happened, outcomes, and progress toward the participant's goals." />
+        </h1>
         <div className="flex flex-wrap items-center gap-2">
-        <Link href="/coordinator/verification" className="inline-flex min-h-10 items-center rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text hover:bg-cc-soft">Shift verification</Link>
-        <Link href="/sessions/new">
-          <button
-            className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]"
+          <Link
+            href="/sessions/new"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90"
             style={{ background: "var(--cc-cta)" }}
           >
             <Plus size={16} strokeWidth={2.5} />
-            {translate("sessions.newSession")}
-          </button>
-        </Link>
+            {isCoordinator ? "New shift note" : translate("sessions.newSession")}
+          </Link>
         </div>
-      </div>
+      </header>
 
-      {/* Stat cards — matches Dashboard grid */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SessionStatCard label={translate("sessions.stat.total")}  value={sessions.length}   caption={translate("sessions.stat.totalCaption")}        icon={Calendar}      />
-        <SessionStatCard label={translate("sessions.stat.thisWeek")}        value={thisWeekCount}     caption={translate("sessions.stat.thisWeekCaption")}     icon={Clock}         />
-        <SessionStatCard label={translate("sessions.stat.avgCompliance")}   value={avgCompliance}     caption={translate("sessions.stat.avgComplianceCaption")}    icon={ShieldCheck}   valueColor={PLUM} />
-        <SessionStatCard label={translate("sessions.stat.inProgress")}      value={inProgressCount}   caption={translate("sessions.stat.inProgressCaption")}    icon={AlertTriangle} valueColor={inProgressCount > 0 ? "#D97706" : T1} />
-      </div>
+      <SummaryStrip
+        loading={isLoading}
+        items={[
+          { value: sessions.length, label: isCoordinator ? "notes in total" : translate("sessions.stat.total").toLowerCase() },
+          { value: thisWeekCount, label: translate("sessions.stat.thisWeek").toLowerCase() },
+          { value: avgCompliance, label: "average score", tone: "info" },
+          { value: inProgressCount, label: "in progress", tone: inProgressCount > 0 ? "warning" : undefined },
+        ]}
+      />
 
       {/* Filter + session list — dashboard card style */}
-      <section className="rounded-lg border bg-white shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
+      <section className="overflow-hidden rounded-2xl bg-cc-surface">
 
         {/* Filter bar */}
         <div className="p-5 border-b space-y-4" style={{ borderColor: BORDER }}>
@@ -567,7 +542,7 @@ export default function Sessions() {
                   placeholder={translate("sessions.searchPlaceholder")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full h-[38px] rounded-lg text-[13px] pl-9 outline-none pr-3 border bg-white"
+                  className="w-full h-10 rounded-full text-sm pl-9 outline-none pr-4 border bg-cc-surface focus:ring-2 focus:ring-cc-plum"
                   style={{ borderColor: BORDER, color: T1 }}
                 />
               </Field>
@@ -575,7 +550,7 @@ export default function Sessions() {
 
             <div className="md:col-span-3 lg:col-span-2 w-full">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-[38px] rounded-lg text-[13px] w-full bg-white" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectTrigger className="h-10 rounded-full px-4 text-sm w-full bg-cc-surface" style={{ borderColor: BORDER, color: T2 }}>
                   <SelectValue placeholder={translate("sessions.filter.allStatusesPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -589,7 +564,7 @@ export default function Sessions() {
 
             <div className="md:col-span-3 lg:col-span-3 w-full">
               <Select value={participantFilter} onValueChange={setParticipantFilter}>
-                <SelectTrigger className="h-[38px] rounded-lg text-[13px] w-full bg-white flex items-center" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectTrigger className="h-10 rounded-full px-4 text-sm w-full bg-cc-surface flex items-center" style={{ borderColor: BORDER, color: T2 }}>
                   <div className="flex items-center truncate">
                     <Users size={13} className="mr-1.5 opacity-60 shrink-0" />
                     <SelectValue placeholder={translate("sessions.filter.allParticipantsPlaceholder")} />
@@ -605,15 +580,26 @@ export default function Sessions() {
             </div>
           </div>
 
-          {/* Row 2: date range + sort */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1">
+          {/* Row 2: date range + sort. Folded away on phones until asked for,
+              so the notes aren't five rows of filters down. */}
+          <button
+            type="button"
+            onClick={() => setMoreFilters((v) => !v)}
+            aria-expanded={moreFilters}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium md:hidden"
+            style={{ color: T2 }}
+          >
+            <Calendar size={13} />
+            {moreFilters ? "Fewer filters" : hasDateFilter ? "Dates and sort (dates set)" : "Dates and sort"}
+          </button>
+          <div className={`${moreFilters ? "flex" : "hidden"} md:flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1`}>
             <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
               <span className="flex items-center gap-1.5 text-[12px] font-medium whitespace-nowrap" style={{ color: T3 }}>
                 <Calendar size={13} /> {translate("sessions.dateRange")}
               </span>
               <input
                 type="date"
-                className="flex-1 sm:flex-initial h-[38px] min-w-[130px] rounded-lg text-[13px] px-3 outline-none border bg-white"
+                className="flex-1 sm:flex-initial h-10 min-w-[130px] rounded-full text-sm px-4 outline-none border bg-cc-surface"
                 style={{ borderColor: BORDER, color: T1 }}
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
@@ -622,7 +608,7 @@ export default function Sessions() {
               <span className="text-[12px]" style={{ color: T3 }}>{translate("sessions.dateToLabel")}</span>
               <input
                 type="date"
-                className="flex-1 sm:flex-initial h-[38px] min-w-[130px] rounded-lg text-[13px] px-3 outline-none border bg-white"
+                className="flex-1 sm:flex-initial h-10 min-w-[130px] rounded-full text-sm px-4 outline-none border bg-cc-surface"
                 style={{ borderColor: BORDER, color: T1 }}
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
@@ -632,7 +618,7 @@ export default function Sessions() {
               {bandFilter !== "all" && (
                 <button
                   onClick={() => setBandFilter("all")}
-                  className="flex items-center gap-1 text-[12px] font-semibold px-2.5 py-1.5 rounded-full border transition-colors hover:bg-[#ECECEC]"
+                  className="flex items-center gap-1 text-[12px] font-semibold px-2.5 py-1.5 rounded-full border transition-colors hover:bg-cc-soft"
                   style={{ color: T1, borderColor: BORDER }}
                   aria-label={`${translate(BAND_LABEL_KEYS[bandFilter])} — ${translate("sessions.footer.clearFilters")}`}
                 >
@@ -643,7 +629,7 @@ export default function Sessions() {
               {hasDateFilter && (
                 <button
                   onClick={() => { setDateFrom(""); setDateTo(""); }}
-                  className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[#ECECEC]"
+                  className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-cc-soft"
                   style={{ color: T3 }}
                 >
                   <X size={12} /> {translate("sessions.clearDates")}
@@ -654,7 +640,7 @@ export default function Sessions() {
             <div className="flex items-center gap-2 self-end lg:self-auto w-full sm:w-auto justify-end">
               <ArrowUpDown size={13} style={{ color: T3 }} className="shrink-0" />
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-                <SelectTrigger className="h-[34px] rounded-lg text-[12px] w-full sm:w-48 bg-white" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectTrigger className="h-10 rounded-full px-4 text-sm w-full sm:w-48 bg-cc-surface" style={{ borderColor: BORDER, color: T2 }}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -716,7 +702,7 @@ export default function Sessions() {
                 data-testid="button-bulk-export-pdf"
                 onClick={handleBulkExport}
                 disabled={isBulkExporting}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border bg-white text-[12px] font-semibold transition-all hover:bg-[#ECECEC] disabled:opacity-50 shadow-sm"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border bg-white text-[12px] font-semibold transition-all hover:bg-cc-soft disabled:opacity-50 shadow-sm"
                 style={{ borderColor: `${PLUM}35`, color: PLUM }}
               >
                 {isBulkExporting ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
@@ -724,7 +710,7 @@ export default function Sessions() {
               </button>
               <button
                 onClick={clearSelection}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-[#ECECEC]"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-cc-soft"
                 style={{ color: T3 }}
               >
                 <X size={12} /> {translate("sessions.deselect")}
@@ -745,7 +731,7 @@ export default function Sessions() {
               aria-label={translate("sessions.selectAll")}
               data-testid="checkbox-select-all"
             />
-            <span className="text-[11px] font-semibold tracking-wide uppercase" style={{ color: T3 }}>
+            <span className="text-sm font-medium" style={{ color: T3 }}>
               {allSelected
                 ? translateParams("sessions.deselectAll", { count: String(sorted.length) })
                 : translateParams(sorted.length === 1 ? "sessions.selectAllRecords" : "sessions.selectAllRecordsPlural", { count: String(sorted.length) })}

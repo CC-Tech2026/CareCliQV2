@@ -41,6 +41,8 @@ import { UnassignedShiftPanel } from "@/components/coordinator/UnassignedShiftPa
 import { ConflictModal, type PendingDrop } from "@/components/coordinator/ConflictModal";
 import { ZoneLabel } from "@/components/branches/ZoneLabel";
 import { PersonPreview } from "./PersonPreview";
+import { PersonPhoto } from "@/components/ui/person-photo";
+import { sharedNames } from "@/lib/person-identity";
 import { ShiftHoverCard, shiftLiveStatus } from "./ShiftHoverCard";
 import { appLocalDateKey, formatAppTime } from "@/lib/datetime";
 
@@ -140,7 +142,7 @@ function ShiftCard({
         >
           <p
             className="flex items-center gap-1.5 text-[11.5px] font-bold leading-tight"
-            style={{ color: "var(--cc-text)", textDecoration: live === "cancelled" ? "line-through" : undefined }}
+            style={{ color: "#1A1A2E", textDecoration: live === "cancelled" ? "line-through" : undefined }}
           >
             {dot && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: dot }} />}
             {start ? `${formatAppTime(shift.scheduled_start!, shift.timezone)}${end ? ` – ${formatAppTime(shift.scheduled_end!, shift.timezone)}` : ""}` : ""}
@@ -240,7 +242,7 @@ function DayCell({
       ref={setNodeRef}
       className="px-1.5 py-1.5 align-top transition-colors"
       style={{
-        background: isOver && !disabled ? "#F0ECFF" : cellBg,
+        background: isOver && !disabled ? "var(--cc-plum-soft)" : cellBg,
         opacity: disabled ? 0.4 : 1,
         minWidth: 132,
         minHeight: 56,
@@ -368,6 +370,13 @@ export function RosterBoard({
     [shifts]
   );
 
+  const sameNames = useMemo(() => sharedNames(workers.map((w) => w.full_name)), [workers]);
+  // Support workers first: they're who gets rostered. Office staff (who can
+  // still pick up a shift) follow, so the rows a rosterer needs lead the board.
+  const rosterRows = useMemo(() => {
+    const rank = (w: WorkerStats) => ((w.role ?? "support_worker") === "support_worker" ? 0 : 1);
+    return [...workers].sort((a, b) => rank(a) - rank(b));
+  }, [workers]);
   const weekHoursByWorker = useMemo(() => {
     const totals = new Map<string, number>();
     for (const s of shifts) {
@@ -551,7 +560,7 @@ export function RosterBoard({
                     </div>
                     <div
                       className="mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-black"
-                      style={{ background: isToday(d) ? "var(--cc-text)" : "transparent", color: isToday(d) ? "white" : TEXT }}
+                      style={{ background: isToday(d) ? "var(--cc-text)" : "transparent", color: isToday(d) ? "var(--cc-bg)" : TEXT }}
                     >
                       {format(d, "d")}
                     </div>
@@ -560,7 +569,7 @@ export function RosterBoard({
               </tr>
             </thead>
             <tbody>
-              {workers.map((worker) => {
+              {rosterRows.map((worker) => {
                 const avail = availMap[worker.id];
                 const avatar = avatarColor(worker.full_name);
                 const weekHrs = weekHoursByWorker.get(worker.id) ?? 0;
@@ -570,12 +579,16 @@ export function RosterBoard({
                   <tr key={worker.id}>
                     <td className="sticky left-0 z-10 bg-white px-3 py-2.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
                       <div className="flex items-center gap-2.5">
-                        <div
-                          className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black shadow-sm"
-                          style={{ background: avatar.bg, color: avatar.fg }}
-                        >
-                          {initials(worker.full_name)}
-                        </div>
+                        {worker.profile_photo_url ? (
+                          <PersonPhoto name={worker.full_name} photoUrl={worker.profile_photo_url} size={36} />
+                        ) : (
+                          <div
+                            className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black shadow-sm"
+                            style={{ background: avatar.bg, color: avatar.fg }}
+                          >
+                            {initials(worker.full_name)}
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <PersonPreview id={worker.id} name={worker.full_name} kind="worker" worker={worker} scheduledHours={weekHrs} maxHours={maxHrs} className="truncate text-[12px] font-bold leading-tight text-cc-text" />
                           <div className="flex items-center gap-2 mt-0.5">
@@ -587,6 +600,11 @@ export function RosterBoard({
                             <span className="text-[10px] font-medium" style={{ color: overCap ? CORAL : MUTED }}>
                               {weekHrs.toFixed(1)}h{maxHrs != null ? ` / ${maxHrs}h` : ""}
                             </span>
+                            {sameNames.has(worker.full_name.trim().toLowerCase()) && (worker.suburb || worker.employee_id) && (
+                              <span className="truncate text-[10px] font-medium" style={{ color: MUTED }}>
+                                {worker.suburb || `ID ${worker.employee_id}`}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -604,10 +622,10 @@ export function RosterBoard({
                       let cellState: "available" | "assigned" | "blackout" | "unavailable" | "loading" = "available";
                       // A rostered shift always shows, even on a day off or leave —
                       // hiding it hid a real conflict.
-                      if (hasShift) { cellState = "assigned"; cellBg = onBlackout ? "#FFFBEB" : isToday(d) ? "var(--cc-today-col)" : "var(--cc-surface)"; }
+                      if (hasShift) { cellState = "assigned"; cellBg = onBlackout ? "var(--cc-amber-tint)" : isToday(d) ? "var(--cc-today-col)" : "var(--cc-surface)"; }
                       else if (!avail && loadingAvail) cellState = "loading";
-                      else if (onBlackout) { cellState = "blackout"; cellBg = "#FFFBEB"; }
-                      else if (!isWorkDay) { cellState = "unavailable"; cellBg = "#F8FAFC"; }
+                      else if (onBlackout) { cellState = "blackout"; cellBg = "var(--cc-amber-tint)"; }
+                      else if (!isWorkDay) { cellState = "unavailable"; cellBg = "var(--cc-soft)"; }
                       else { cellState = "available"; cellBg = isToday(d) ? "var(--cc-today-col)" : "var(--cc-surface)"; }
                       // Read-only boards don't need "free slot" green; keep today's column visible instead.
                       if (!allowCreate && (cellState === "available" || cellState === "assigned")) {

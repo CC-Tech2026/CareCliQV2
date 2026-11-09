@@ -667,7 +667,7 @@ export function NotificationInbox({
           aria-pressed={tab === t.id}
           onClick={() => setTab(t.id)}
           className="flex min-h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold transition"
-          style={tab === t.id ? { background: "var(--cc-text)", color: "#fff" } : { background: "var(--cc-soft)", color: "var(--cc-text)" }}
+          style={tab === t.id ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { background: "var(--cc-soft)", color: "var(--cc-text)" }}
         >
           {t.label}
           {!!t.count && <span className="text-[11px] opacity-80">{t.count > 99 ? "99+" : t.count}</span>}
@@ -728,12 +728,8 @@ export function NotificationInbox({
       {isPanel && !inDetail && (
         // Left-aligned: the floating assistant button sits bottom-right.
         <div className="flex items-center gap-5 px-4 py-3 text-[12px] font-semibold" style={{ borderTop: "1px solid var(--cc-border)" }}>
-          <Link href="/notifications">
-            <a className="py-1" style={{ color: "var(--cc-plum)" }} onClick={() => onClose?.()}>{translate("inbox.seeAll")}</a>
-          </Link>
-          <Link href="/notifications/settings">
-            <a className="py-1" style={{ color: "var(--cc-muted)" }} onClick={() => onClose?.()}>{translate("inbox.settings")}</a>
-          </Link>
+          <Link href="/notifications" className="py-1" style={{ color: "var(--cc-plum)" }} onClick={() => onClose?.()}>{translate("inbox.seeAll")}</Link>
+          <Link href="/notifications/settings" className="py-1" style={{ color: "var(--cc-muted)" }} onClick={() => onClose?.()}>{translate("inbox.settings")}</Link>
         </div>
       )}
     </div>

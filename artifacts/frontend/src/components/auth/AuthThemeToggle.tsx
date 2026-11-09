@@ -27,7 +27,7 @@ export function AuthThemeToggle() {
             disabled={loading}
             onClick={() => setThemeMode(id)}
             className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
-              selected ? "bg-cc-plum text-white" : "text-cc-muted hover:bg-cc-soft"
+              selected ? "bg-[var(--cc-cta)] text-white" : "text-cc-muted hover:bg-cc-soft"
             }`}
             aria-pressed={selected}
             aria-label={translate(labelKey)}

@@ -463,7 +463,7 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
 
   return (
     <Layout>
-      <div className="space-y-8 pb-12">
+      <div className="space-y-5 pb-12">
         {!embedded && (
           <PageHeader
             eyebrow="Oversight & Risk"
@@ -523,7 +523,18 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
                       {getScoreLabel(data.compliance_score)}
                     </p>
                     <StatusText tone={AUDIT_STATUS[derived.readiness].tone}>
-                      {AUDIT_STATUS[derived.readiness].overall}
+                      {/* On target but not audit-ready: say what's holding it
+                          back, so it doesn't read as a contradiction. */}
+                      {derived.readiness === "attention" && data.compliance_score >= data.compliance_target
+                        ? `${[
+                            data.team_compliance_breakdown.non_compliant
+                              ? `${data.team_compliance_breakdown.non_compliant} non-compliant ${data.team_compliance_breakdown.non_compliant === 1 ? "note" : "notes"}`
+                              : null,
+                            derived.highAlerts
+                              ? `${derived.highAlerts} high-priority ${derived.highAlerts === 1 ? "alert" : "alerts"}`
+                              : null,
+                          ].filter(Boolean).join(" and ")} to review`
+                        : AUDIT_STATUS[derived.readiness].overall}
                     </StatusText>
                   </div>
                   <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>
@@ -535,7 +546,9 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
                     <div className="mb-1.5 flex justify-between text-xs" style={{ color: MUTED }}>
                       <span>Progress toward {data.compliance_target}% target</span>
                       <span className="font-semibold tabular-nums" style={{ color: TEXT }}>
-                        {Math.max(0, data.compliance_target - data.compliance_score)} pts to go
+                        {data.compliance_score >= data.compliance_target
+                          ? "Target met"
+                          : `${Math.round(data.compliance_target - data.compliance_score)} pts to go`}
                       </span>
                     </div>
                     <div className="relative h-2 overflow-hidden rounded-full" style={{ background: SOFT }}>

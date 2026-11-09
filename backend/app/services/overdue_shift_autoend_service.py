@@ -28,9 +28,23 @@ logger = logging.getLogger(__name__)
 
 GRACE_PERIOD_MINUTES = 30
 AUTO_END_REASON = (
-    f"Automatically ended by the system — worker did not end this shift within "
+    f"Automatically ended by the system. The worker did not end this shift within "
     f"{GRACE_PERIOD_MINUTES} minutes of the scheduled end time."
 )
+
+
+def _auto_end_time(scheduled_end: Any, now: datetime) -> str:
+    """When the shift should have been ended: the scheduled end plus the
+    grace period, never later than now. A pass that runs late (a restart or
+    an outage) mustn't record the hours it was down as time worked; SCHADS
+    pay is calculated from the clock-out."""
+    try:
+        end = datetime.fromisoformat(str(scheduled_end).replace("Z", "+00:00"))
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return now.isoformat()
+    return min(end + timedelta(minutes=GRACE_PERIOD_MINUTES), now).isoformat()
 
 
 def _is_missing_schema_error(exc: Exception) -> bool:
@@ -78,6 +92,7 @@ async def run_overdue_shift_autoend_pass() -> int:
                 force=True,
                 reason=AUTO_END_REASON,
                 system_initiated=True,
+                ended_at=_auto_end_time(row.get("scheduled_end"), now),
             )
         except ValueError as exc:
             # Already completed by the worker in the window between our query and

@@ -26,7 +26,7 @@ export default function ComplianceWorkspace() {
   if (params.get("view") === "shifts") return <Redirect to="/sessions" replace />;
   const selected = tabs.find(tab => tab.key === params.get("view")) ?? tabs[0];
   return <HubLayout>
-    <div className="space-y-8 pb-12">
+    <div className="space-y-5 pb-12">
       <PageHeader
         eyebrow="Oversight & Risk"
         title="Audit & Compliance"

@@ -71,7 +71,7 @@ export const scheduleCopy = {
   today: ["Today", "Hôm nay", "اليوم", "今天"],
   noteMissing: ["No shift note was submitted.", "Chưa nộp ghi chú ca.", "لم يتم إرسال ملاحظة الوردية.", "未提交班次记录。"],
   noteRequired: ["A progress note is needed before this shift can be approved. Use Request changes to ask the worker.", "Cần có ghi chú tiến độ trước khi duyệt ca này. Dùng Yêu cầu chỉnh sửa để nhắc nhân viên.", "يلزم وجود ملاحظة تقدم قبل اعتماد هذه الوردية. استخدم طلب التعديلات لمطالبة العامل بها.", "批准此班次前需要进度记录。请使用“要求修改”通知员工。"],
-  extraTime: ["Worked {minutes} min longer than scheduled", "Làm lâu hơn lịch {minutes} phút", "عمل {minutes} دقيقة أكثر من المجدول", "比计划多工作 {minutes} 分钟"],
+  extraTime: ["Worked {minutes} longer than scheduled", "Làm lâu hơn lịch {minutes}", "عمل {minutes} أكثر من المجدول", "比计划多工作 {minutes}"],
   extraTimeBilled: ["Billed at the scheduled time unless you approve the extra.", "Tính phí theo thời gian trong lịch trừ khi bạn duyệt phần thêm.", "تُحتسب الفاتورة بالوقت المجدول ما لم تعتمد الوقت الإضافي.", "除非批准额外时间，否则按计划时间计费。"],
   approveExtraTime: ["Approve the extra {minutes} min", "Duyệt thêm {minutes} phút", "اعتماد {minutes} دقيقة إضافية", "批准额外的 {minutes} 分钟"],
   extraTimeReason: ["Reason for the extra time", "Lý do cho thời gian thêm", "سبب الوقت الإضافي", "额外时间的原因"],

@@ -9,6 +9,41 @@ import { cn } from "@/lib/utils"
 
 const Sheet = SheetPrimitive.Root
 
+// Side panels never stack visibly. A panel opened from inside another one
+// takes over the side of the screen; the one underneath is hidden (its
+// state kept) and comes back when the top one closes, like stepping back.
+// Only the top panel shows a backdrop, so the page never darkens twice.
+let openPanels: string[] = []
+const panelListeners = new Set<() => void>()
+function emitPanels() {
+  panelListeners.forEach((listener) => listener())
+}
+function subscribePanels(listener: () => void) {
+  panelListeners.add(listener)
+  return () => {
+    panelListeners.delete(listener)
+  }
+}
+function useIsTopPanel(id: string) {
+  return React.useSyncExternalStore(
+    subscribePanels,
+    () => openPanels.length === 0 || openPanels[openPanels.length - 1] === id,
+    () => true,
+  )
+}
+/** Rendered inside the panel's content, which only exists while it's open. */
+function OpenPanelMarker({ id }: { id: string }) {
+  React.useEffect(() => {
+    openPanels = [...openPanels, id]
+    emitPanels()
+    return () => {
+      openPanels = openPanels.filter((panel) => panel !== id)
+      emitPanels()
+    }
+  }, [id])
+  return null
+}
+
 const SheetTrigger = SheetPrimitive.Trigger
 
 const SheetClose = SheetPrimitive.Close
@@ -56,14 +91,23 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => (
+>(({ side = "right", className, children, style, ...props }, ref) => {
+  const id = React.useId()
+  const isTop = useIsTopPanel(id)
+  return (
   <SheetPortal>
-    <SheetOverlay />
+    {/* Always mounted with the panel, so it stays underneath it in the page:
+        mounting it later put it on top and dimmed the open panel. A panel
+        that isn't on top just hides its backdrop. */}
+    <SheetOverlay style={isTop ? undefined : { display: "none" }} />
     <SheetPrimitive.Content
       ref={ref}
       className={cn(sheetVariants({ side }), className)}
+      aria-hidden={isTop ? undefined : true}
+      style={isTop ? style : { ...style, visibility: "hidden", pointerEvents: "none" }}
       {...props}
     >
+      <OpenPanelMarker id={id} />
       <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
@@ -71,7 +115,8 @@ const SheetContent = React.forwardRef<
       {children}
     </SheetPrimitive.Content>
   </SheetPortal>
-))
+  )
+})
 SheetContent.displayName = SheetPrimitive.Content.displayName
 
 const SheetHeader = ({

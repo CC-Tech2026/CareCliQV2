@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearch } from "wouter";
+import { useSearch } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -31,6 +31,7 @@ import {
   WorkerAvatar,
 } from "@/components/coordinator/ScheduleLiveCard";
 import { appLocalDateKey, formatAppDate, formatAppTime } from "@/lib/datetime";
+import { SectionInfo } from "@/components/ui/section-info";
 
 type Approved = { item: ShiftVerificationQueueItem; billed: number };
 
@@ -58,7 +59,13 @@ function taskLabel(task: NonNullable<ShiftVerificationQueueItem["tasks"]>[number
 
 function timeRange(start?: string | null, end?: string | null, tz?: string | null) {
   if (!start) return null;
-  return `${formatAppTime(start, tz)}${end ? ` – ${formatAppTime(end, tz)}` : ""}`;
+  if (!end) return formatAppTime(start, tz);
+  // Finished on another day (an overnight shift, or one ended late): name the
+  // day, or the range reads as a few hours when it was much longer.
+  const endLabel = appLocalDateKey(end, tz) === appLocalDateKey(start, tz)
+    ? formatAppTime(end, tz)
+    : `${formatAppDate(end, tz, { weekday: "short", day: "numeric", month: "short" })}, ${formatAppTime(end, tz)}`;
+  return `${formatAppTime(start, tz)} – ${endLabel}`;
 }
 
 function humanise(value?: string | null) {
@@ -123,16 +130,14 @@ export default function CoordinatorVerificationPage() {
 
   return (
     <div className="space-y-5 pb-8">
-      <nav className="text-sm text-cc-muted">
-        <Link href="/coordinator/rostering" className="hover:text-cc-plum">
-          {translate("nav.schedule")}
-        </Link>
-        <span aria-hidden> / </span>
-        {translate("schedule.verification")}
-      </nav>
       <header>
-        <h1 className="text-2xl font-bold text-cc-text">{translate("schedule.verification")}</h1>
-        <p className="mt-1 text-sm text-cc-muted">{translate("schedule.verifyDescription")}</p>
+        <h1
+          className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-cc-text"
+          style={{ fontFamily: "var(--app-font-display)" }}
+        >
+          {translate("schedule.verification")}
+          <SectionInfo text={translate("schedule.verifyDescription")} />
+        </h1>
       </header>
       {query.isLoading ? (
         <p role="status" className="text-sm text-cc-muted">{translate("common.loading")}</p>
@@ -472,7 +477,7 @@ function ShiftReview({
   const { evidence, hours_sanity, force_ended } = item.checks ?? ({} as ShiftVerificationQueueItem["checks"]);
   const warnings = [
     noteMissing ? translate("schedule.noteRequired") : null,
-    extraMinutes > 0 ? translateParams("schedule.extraTime", { minutes: String(extraMinutes) }) : null,
+    extraMinutes > 0 ? translateParams("schedule.extraTime", { minutes: formatDuration(extraMinutes) ?? "" }) : null,
     evidence?.mandatory_without_evidence
       ? translateParams("schedule.mandatoryNoEvidence", { count: String(evidence.mandatory_without_evidence) })
       : null,
@@ -633,7 +638,7 @@ function ShiftReview({
         {!approved && extraMinutes > 0 && (
           <section className="rounded-xl border border-cc-border p-4">
             <h3 className="text-sm font-semibold text-cc-text">
-              {translateParams("schedule.extraTime", { minutes: String(extraMinutes) })}
+              {translateParams("schedule.extraTime", { minutes: formatDuration(extraMinutes) ?? "" })}
             </h3>
             <p className="mt-1 text-sm text-cc-muted">
               {translate("schedule.extraTimeBilled")}
@@ -901,7 +906,7 @@ function ShiftReview({
                 !priceItemCode || approve.isPending || noteMissing || extraReasonMissing ||
                 agreementReasonMissing || overLimit || preview.isFetching
               }
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-cc-plum px-5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[var(--cc-cta)] px-5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {approve.isPending ? (
                 <Loader2 size={16} className="animate-spin" aria-hidden />

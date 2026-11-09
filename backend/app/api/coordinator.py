@@ -14,7 +14,7 @@ from postgrest.exceptions import APIError
 logger = logging.getLogger(__name__)
 
 from ..core.errors import internal_error_detail
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access, has_active_grant
+from ..core.access import PARTICIPANT_ROLES, get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director, get_coordinator_team_ids, has_org_wide_access, has_active_grant
 from ..core.config import settings
 from ..core.security import get_current_user
 from ..core.timezone import parse_shift_datetime, participant_timezone, request_timezone
@@ -231,7 +231,13 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
     except Exception:
         return await _team_fallback(org_id, coordinator_user=coordinator_user)
 
-    rows = [row for row in memberships.data or [] if isinstance(row, dict)]
+    # Participant-portal logins (participants and their family) are members of
+    # the organisation too, but they aren't staff: keep them off the team,
+    # the roster and staff counts.
+    rows = [
+        row for row in memberships.data or []
+        if isinstance(row, dict) and str(row.get("role") or "") not in PARTICIPANT_ROLES
+    ]
     if not rows:
         return await _team_fallback(org_id, coordinator_user=coordinator_user)
 
@@ -274,6 +280,8 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
     output = []
     for row in rows:
         profile = profiles_by_id.get(str(row.get("user_id")), {})
+        if profile.get("role") in PARTICIPANT_ROLES:
+            continue
         output.append({
             "id": row.get("user_id"),
             "full_name": profile.get("full_name") or profile.get("email") or "Team member",

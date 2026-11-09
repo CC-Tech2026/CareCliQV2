@@ -27,8 +27,8 @@ import { PortalAccessCard } from "@/components/participant-portal/PortalAccessCa
 const PLUM        = "#E8457A";
 const CORAL       = "#F1738A";
 const T1          = "var(--cc-text)";
-const T2          = "#374151";
-const T3          = "#7A6A8A";
+const T2          = "var(--cc-text)";
+const T3          = "var(--cc-muted)";
 const BORDER      = "rgba(232,213,232,0.5)";
 const CARD_SHADOW = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 

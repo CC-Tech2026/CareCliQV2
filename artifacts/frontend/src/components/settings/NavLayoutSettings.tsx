@@ -11,7 +11,9 @@ import { NAV_INDIGO_NIGHT_HEX } from "@/lib/nav-colors";
  * tweak (a new layout, a new color preset) only needs to happen once.
  */
 
-function LayoutPreview({ variant }: { variant: "topbar" | "sidebar" | "bottombar" }) {
+type LayoutChoice = "topbar" | "floating" | "sidebar" | "docked" | "bottombar";
+
+function LayoutPreview({ variant }: { variant: LayoutChoice }) {
   const PLUM = "var(--cc-plum)";
   const LINE = "var(--cc-border)";
   const SURFACE = "var(--cc-surface)";
@@ -32,6 +34,39 @@ function LayoutPreview({ variant }: { variant: "topbar" | "sidebar" | "bottombar
       <div className="h-1 w-1/2 rounded-full" style={{ background: LINE }} />
     </div>
   );
+
+  if (variant === "topbar") {
+    return (
+      <div className="flex h-16 w-full flex-col overflow-hidden rounded-lg border" style={{ borderColor: LINE, background: SURFACE }}>
+        <div className="flex h-4 shrink-0 items-center gap-1 border-b px-1.5" style={{ borderColor: LINE, background: SURFACE }}>
+          <div className="h-1.5 w-1.5 shrink-0 rounded-sm" style={{ background: PLUM }} />
+          <div className="mx-auto flex items-center gap-0.5">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-1 w-2.5 rounded-full" style={{ background: i === 0 ? PLUM : LINE }} />
+            ))}
+          </div>
+          <div className="h-2 w-2 shrink-0 rounded-full" style={{ background: PLUM }} />
+        </div>
+        {bodyLines}
+      </div>
+    );
+  }
+
+  if (variant === "docked") {
+    return (
+      <div className="flex h-16 w-full flex-col overflow-hidden rounded-lg border" style={{ borderColor: LINE, background: SURFACE }}>
+        {headerRow}
+        <div className="flex flex-1">
+          <div className="flex w-5 shrink-0 flex-col gap-1 border-r px-1 pt-1.5" style={{ borderColor: LINE }}>
+            <div className="h-1 w-full rounded-full" style={{ background: PLUM }} />
+            <div className="h-1 w-full rounded-full" style={{ background: LINE }} />
+            <div className="h-1 w-full rounded-full" style={{ background: LINE }} />
+          </div>
+          {bodyLines}
+        </div>
+      </div>
+    );
+  }
 
   if (variant === "sidebar") {
     return (
@@ -118,7 +153,7 @@ function NavDesignPreview({ hex }: { hex: string | null }) {
   const dark = hex ? isDarkHex(hex) : false;
   const indigoNight = hex === NAV_INDIGO_NIGHT_HEX;
   const text = dark ? "rgba(255,255,255,0.85)" : "var(--cc-muted)";
-  const activeBg = indigoNight ? "#6C63FF" : dark ? "rgba(255,255,255,0.18)" : "var(--cc-plum)";
+  const activeBg = indigoNight ? "#6C63FF" : dark ? "rgba(255,255,255,0.18)" : "var(--cc-cta)";
 
   return (
     <div
@@ -156,7 +191,7 @@ function NavColorPicker() {
         {translate("settings.branding.navColorLabel")}
       </p>
       <p className="mb-3 text-[11px]" style={{ color: "var(--cc-muted)" }}>
-        Each option is a full nav design. Background and text are matched for you, so you never end up with unreadable labels.
+        Each option is a full menu design, used in every layout. Background and text are matched for you, so labels always stay readable.
       </p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {NAV_COLOR_PRESETS.map((preset) => {
@@ -195,7 +230,7 @@ export function NavLayoutCard() {
   const layout = prefs?.nav_layout ?? "topbar";
   const [busy, setBusy] = useState(false);
 
-  async function choose(value: "topbar" | "sidebar" | "bottombar") {
+  async function choose(value: LayoutChoice) {
     if (value === layout || busy) return;
     setBusy(true);
     try {
@@ -205,9 +240,11 @@ export function NavLayoutCard() {
     }
   }
 
-  const options: { value: "topbar" | "sidebar" | "bottombar"; label: string }[] = [
+  const options: { value: LayoutChoice; label: string }[] = [
     { value: "topbar", label: translate("settings.branding.layoutTopbar") },
+    { value: "floating", label: translate("settings.branding.layoutFloating") },
     { value: "sidebar", label: translate("settings.branding.layoutSidebar") },
+    { value: "docked", label: translate("settings.branding.layoutDocked") },
     { value: "bottombar", label: translate("settings.branding.layoutBottombar") },
   ];
 
@@ -216,7 +253,7 @@ export function NavLayoutCard() {
       <div className="p-6">
         <p className="mb-4 text-[15px] font-bold" style={{ color: "var(--cc-text)" }}>{translate("settings.branding.layoutLabel")}</p>
         <p className="mb-3 text-[11px]" style={{ color: "var(--cc-muted)" }}>{translate("settings.branding.layoutHint")}</p>
-        <div className="grid grid-cols-3 gap-3 max-w-lg">
+        <div className="grid max-w-3xl grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {options.map((opt) => {
             const selected = layout === opt.value;
             return (

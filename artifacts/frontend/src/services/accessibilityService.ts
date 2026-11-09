@@ -5,7 +5,7 @@ export type FontSize = "small" | "default" | "large" | "xl";
 // THEME_OPTIONS comment. Theme is a fixed, explicit user choice.
 export type ThemeMode = "light" | "dark";
 export type AppLanguage = "en" | "vi" | "ar" | "zh-Hans";
-export type NavLayout = "topbar" | "sidebar" | "bottombar";
+export type NavLayout = "topbar" | "floating" | "sidebar" | "docked" | "bottombar";
 
 export type AccessibilityPreferences = {
   font_size: FontSize;

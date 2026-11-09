@@ -18,7 +18,7 @@ const PAGE_SIZE = 10;
 function safeDate(value: string | undefined, translate: (key: string) => string) {
   if (!value) return translate("compliance.notRecorded");
   try {
-    return format(parseISO(value), "MMM d, yyyy");
+    return format(parseISO(value), "d MMM yyyy");
   } catch {
     return value;
   }

@@ -2,7 +2,7 @@ import { format, parseISO } from "date-fns";
 
 /** Shared formatting/status helpers for participant detail + list views. */
 
-export function safeFormat(dateStr?: string | null, fmt = "MMM d, yyyy") {
+export function safeFormat(dateStr?: string | null, fmt = "d MMM yyyy") {
   if (!dateStr) return "N/A";
   try {
     return format(parseISO(dateStr), fmt);

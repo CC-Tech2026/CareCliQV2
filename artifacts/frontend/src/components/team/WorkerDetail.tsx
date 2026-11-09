@@ -594,6 +594,7 @@ export function WorkerDetail({
   onDeleteAccount,
   fullScreen,
   onToggleFullScreen,
+  scrollContext,
 }: {
   worker: WorkerStats;
   onBack: () => void;
@@ -612,9 +613,9 @@ export function WorkerDetail({
   onDeleteAccount?: () => void;
   /** Optional — only set when this profile is rendered inside a Sheet whose
    * parent controls the panel width (e.g. md/staff.tsx). */
-  /** No longer changes layout: both the portal page and a Sheet scroll inside
-   * their own container, so the section tabs stick at its top either way.
-   * Still accepted so existing callers don't need to change. */
+  /** "panel" when opened from the roster or schedule's person panel: hides
+   * the "Back to Workers" link (the panel's own close goes back). Scrolling
+   * is the same either way: the section tabs stick at the container's top. */
   scrollContext?: "page" | "panel";
   fullScreen?: boolean;
   onToggleFullScreen?: () => void;
@@ -803,6 +804,9 @@ export function WorkerDetail({
           own built-in close (X) button, which sits fixed top-right whenever
           this panel is opened inside one (e.g. md/staff.tsx). */}
       <div className="flex flex-wrap items-center justify-between gap-2 pr-8">
+        {/* Opened from the roster or schedule, the panel's own close returns
+            there; a "Back to Workers" link would point somewhere it didn't come from. */}
+        {scrollContext === "panel" ? <span /> : (
         <button
           type="button"
           onClick={onBack}
@@ -811,6 +815,7 @@ export function WorkerDetail({
         >
           <ArrowLeft size={15} /> {translate("team.detail.back")}
         </button>
+        )}
         <div className="flex items-center gap-2">
           {onToggleFullScreen && (
             <button
@@ -902,8 +907,11 @@ export function WorkerDetail({
       </div>
 
       {/* Identity + at-a-glance header */}
-      <div className="overflow-hidden rounded-2xl" style={{ background: SURFACE }}>
-        <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
+      {/* Sized to the space the profile has (a container query), not the
+          screen: opened in a side panel it stacks, on a full page it sits
+          side by side. */}
+      <div className="@container overflow-hidden rounded-2xl" style={{ background: SURFACE }}>
+        <div className="flex flex-col gap-4 p-4 sm:p-5 @3xl:flex-row @3xl:items-start @3xl:justify-between">
           <div className="flex min-w-0 items-start gap-3.5">
             <div
               className="h-14 w-14 text-xl rounded-full shrink-0 flex items-center justify-center overflow-hidden font-semibold"
@@ -1659,7 +1667,7 @@ function PersonalInfoTab({
             label={translate("team.detail.lastLogin")}
             value={
               worker.last_login
-                ? safeFormat(worker.last_login, "MMM d, yyyy h:mm a")
+                ? safeFormat(worker.last_login, "d MMM yyyy, h:mm a")
                 : undefined
             }
             emptyText={translate("team.detail.noLoginYet")}

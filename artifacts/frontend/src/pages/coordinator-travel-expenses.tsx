@@ -92,12 +92,10 @@ export default function CoordinatorTravelExpenses() {
   });
 
   return (
-    <div className="w-full space-y-6 pb-24">
+    <div className="w-full space-y-5 pb-24">
       <header>
-        <p className="text-xs font-black uppercase tracking-wider" style={{ color: PLUM }}>
-          {translate("coordinator.travel.eyebrow")}
-        </p>
-        <h1 className="mt-1 flex items-center gap-2 text-2xl font-black" style={{ color: TEXT }}>
+        <p className="sr-only">{translate("coordinator.travel.eyebrow")}</p>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
           {translate("coordinator.travel.title")}
           <SectionInfo text={translate("coordinator.travel.subtitle")} />
         </h1>
@@ -200,9 +198,9 @@ export default function CoordinatorTravelExpenses() {
                 <ul className="mt-3 space-y-2 border-t pt-3" style={{ borderColor: BORDER }}>
                   {(sub.expenses || []).map((exp) => (
                     <li key={exp.id} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 capitalize" style={{ color: TEXT }}>
+                      <span className="flex items-center gap-2" style={{ color: TEXT }}>
                         {exp.expense_type === "mileage" ? <Car size={14} /> : <Bus size={14} />}
-                        {exp.expense_type}
+                        {exp.expense_type ? exp.expense_type.charAt(0).toUpperCase() + exp.expense_type.slice(1) : ""}
                         {exp.claimed_km != null ? translateParams("coordinator.travel.kmSuffix", { km: String(exp.claimed_km) }) : ""}
                         {exp.transit_type ? ` · ${exp.transit_type}` : ""}
                       </span>

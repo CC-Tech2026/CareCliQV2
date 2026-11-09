@@ -148,7 +148,7 @@ export function PersonDetailsProvider({ children }: { children: ReactNode }) {
         }}
       >
         <SheetContent
-          className="w-full overflow-y-auto sm:max-w-3xl"
+          className="w-full overflow-y-auto sm:max-w-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           <SheetHeader className="mb-4 pr-6">

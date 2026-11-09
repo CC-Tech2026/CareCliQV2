@@ -143,7 +143,7 @@ const SPEECH_LANGUAGE_CODES: Record<string, string> = {
 function safeDate(value?: string | null, notRecorded = "Not recorded") {
   if (!value) return notRecorded;
   try {
-    return format(parseISO(value), "MMM d, yyyy");
+    return format(parseISO(value), "d MMM yyyy");
   } catch {
     return value;
   }

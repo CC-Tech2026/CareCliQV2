@@ -31,3 +31,59 @@ def test_save_accessibility_preferences_rejects_invalid_font(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         save_accessibility_preferences("user-1", "device-1", font_size="huge")
     assert exc.value.status_code == 422
+
+
+class _Upsert:
+    """Stands in for supabase .table(...).upsert(...).execute()."""
+
+    def __init__(self, error=None):
+        self.error = error
+        self.saved = None
+
+    def table(self, name):
+        return self
+
+    def upsert(self, record, on_conflict=None):
+        self.saved = record
+        return self
+
+    def execute(self):
+        if self.error:
+            raise self.error
+        return self
+
+
+def _stored_prefs(monkeypatch, client):
+    monkeypatch.setattr(
+        "backend.app.services.accessibility_service.get_accessibility_preferences",
+        lambda user_id, device_id: {**DEFAULT_PREFS, "device_id": device_id},
+    )
+    monkeypatch.setattr("backend.app.services.accessibility_service.get_supabase_admin", lambda: client)
+
+
+@pytest.mark.parametrize("layout", ["topbar", "floating", "sidebar", "docked", "bottombar"])
+def test_every_menu_layout_can_be_chosen(monkeypatch, layout):
+    client = _Upsert()
+    _stored_prefs(monkeypatch, client)
+    prefs = save_accessibility_preferences("user-1", "account-preferences", nav_layout=layout)
+    assert prefs["nav_layout"] == layout
+    assert client.saved["nav_layout"] == layout
+
+
+def test_floating_menu_on_a_database_without_the_migration_says_so(monkeypatch):
+    client = _Upsert(Exception(
+        'new row for relation "user_accessibility_preferences" violates check constraint '
+        '"user_accessibility_preferences_nav_layout_check" (23514)'
+    ))
+    _stored_prefs(monkeypatch, client)
+    with pytest.raises(HTTPException) as exc:
+        save_accessibility_preferences("user-1", "account-preferences", nav_layout="floating")
+    assert exc.value.status_code == 409
+    assert "floating menu" in exc.value.detail
+
+
+def test_unknown_layout_is_still_rejected(monkeypatch):
+    _stored_prefs(monkeypatch, _Upsert())
+    with pytest.raises(HTTPException) as exc:
+        save_accessibility_preferences("user-1", "account-preferences", nav_layout="dock")
+    assert exc.value.status_code == 422

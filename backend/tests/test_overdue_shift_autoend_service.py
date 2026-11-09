@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from backend.app.services import overdue_shift_autoend_service as svc
@@ -48,6 +49,9 @@ def test_overdue_shift_gets_auto_ended_and_audited(
         force=True,
         reason=svc.AUTO_END_REASON,
         system_initiated=True,
+        # The pass ran long after (this test runs in a later year), so the
+        # clock-out is the scheduled end plus the grace period, not now.
+        ended_at="2026-01-01T09:30:00+00:00",
     )
     mock_audit.assert_called_once()
     assert mock_audit.call_args.kwargs["action_type"] == "system.shift.auto_ended_overdue"
@@ -86,3 +90,17 @@ def test_already_completed_shift_is_skipped_not_double_counted(
     assert count == 0
     mock_audit.assert_not_called()
     mock_notify.assert_not_called()
+
+
+def test_auto_end_time_is_capped_at_the_grace_period_and_never_in_the_future():
+    now = datetime(2026, 11, 9, 2, 0, tzinfo=timezone.utc)
+    # Ran three days late: record when it should have ended, not now.
+    assert svc._auto_end_time("2026-11-06T03:30:00+00:00", now) == "2026-11-06T04:00:00+00:00"
+    # Ran on time (31 minutes after the end): the end plus grace is still the cap.
+    on_time = datetime(2026, 11, 6, 4, 1, tzinfo=timezone.utc)
+    assert svc._auto_end_time("2026-11-06T03:30:00+00:00", on_time) == "2026-11-06T04:00:00+00:00"
+    # Never later than now, and a bad date falls back to now.
+    early = datetime(2026, 11, 6, 3, 45, tzinfo=timezone.utc)
+    assert svc._auto_end_time("2026-11-06T03:30:00+00:00", early) == early.isoformat()
+    assert svc._auto_end_time(None, now) == now.isoformat()
+    assert svc._auto_end_time("2026-11-06T03:30:00Z", now) == "2026-11-06T04:00:00+00:00"

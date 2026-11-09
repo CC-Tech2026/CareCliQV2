@@ -312,6 +312,86 @@ def _agreement(agreements: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
     }
 
 
+RECENT_SHIFTS = 6
+
+
+def _split_list(text: Any) -> list[str]:
+    """Allergies are stored as free text; show them as separate items."""
+    if not text:
+        return []
+    parts = [p.strip(" .") for p in str(text).replace(";", ",").replace("\n", ",").split(",")]
+    return [p for p in parts if p and p.lower() not in ("nil", "none", "nka", "nkda", "n/a")]
+
+
+def _care(participant_id: str, org_id: str, row: dict[str, Any], meds: list[dict[str, Any]]) -> dict[str, Any]:
+    """What a worker needs to know to support the participant safely: the
+    care-profile card on the director's participant page."""
+    from .briefing_service import list_participant_briefing_alerts
+    from .shift_service import _parse_emergency_contact
+
+    try:
+        alerts = [a.get("alert_text") for a in list_participant_briefing_alerts(participant_id, org_id) if a.get("alert_text")]
+    except Exception as exc:
+        logger.warning("director participant: briefing alerts failed: %s", exc)
+        alerts = []
+    contact = _parse_emergency_contact(row.get("emergency_contact"))
+    current = [m for m in meds if m.get("status") not in ("rejected", "discontinued", "ceased", "archived")]
+    current.sort(key=lambda m: (not m.get("is_high_risk"), str(m.get("name") or "").lower()))
+    return {
+        "primary_disability": row.get("primary_disability"),
+        "allergies": _split_list(row.get("allergies")),
+        "alerts": alerts,
+        "communication": row.get("communication_preferences"),
+        "medications": [
+            {"name": m.get("name") or "Medication", "high_risk": bool(m.get("is_high_risk")), "prn": bool(m.get("is_prn"))}
+            for m in current
+        ],
+        "emergency_contact": (
+            {"name": contact.get("name"), "relationship": contact.get("relationship"), "phone": contact.get("phone")}
+            if isinstance(contact, dict)
+            else ({"name": None, "relationship": None, "phone": contact} if isinstance(contact, str) else None)
+        ),
+    }
+
+
+def _recent_shifts(shifts: list[dict[str, Any]], people: dict[str, dict[str, Any]], now: datetime) -> list[dict[str, Any]]:
+    """The latest shifts that have started, newest first, with where each
+    stands with the office: verified, back with the worker for changes,
+    changes made, or waiting for review."""
+    from .shift_review_service import _verified_shift_ids, office_review_states
+
+    started = [s for s in shifts if s.get("scheduled_start") and str(s["scheduled_start"]) <= now.isoformat()]
+    started.sort(key=lambda s: str(s.get("scheduled_start")), reverse=True)
+    latest = started[:RECENT_SHIFTS]
+    completed_ids = [str(s["id"]) for s in latest if s.get("status") == "completed"]
+    try:
+        verified = _verified_shift_ids(completed_ids)
+        states = office_review_states(completed_ids)
+    except Exception as exc:
+        logger.warning("director participant: shift review states failed: %s", exc)
+        verified, states = set(), {}
+
+    def review(s: dict[str, Any]) -> Optional[str]:
+        sid = str(s["id"])
+        if s.get("status") != "completed":
+            return None
+        if sid in verified:
+            return "verified"
+        return states.get(sid) or "awaiting_review"
+
+    return [
+        {
+            "id": s["id"],
+            "start": s.get("scheduled_start"),
+            "end": s.get("scheduled_end"),
+            "status": s.get("status"),
+            "worker": _person(s.get("worker_id"), people),
+            "review": review(s),
+        }
+        for s in latest
+    ]
+
+
 def decisions_for(summary: dict[str, Any], today: date) -> list[dict[str, Any]]:
     """What needs the director's call, most urgent first. Pure: built from the
     summary alone so the rules can be tested without a database."""
@@ -411,7 +491,11 @@ async def build_overview(participant_id: str, org_id: str, current_user: dict) -
     sessions = _rows("sessions", "id, session_date, compliance_score, compliance_status, status", patient_id=participant_id, organization_id=org_id)
     incidents = _rows("incidents", "id, title, severity, status, incident_date, reference_number, ndis_reportable", participant_id=participant_id, organization_id=org_id)
     complaints = _rows("participant_complaints", "id, subject, status, filed_at", participant_id=participant_id, organization_id=org_id)
-    meds = _rows("medications", "id, status, is_prn, is_high_risk", participant_id=participant_id, organization_id=org_id)
+    meds = _rows("medications", "id, name, status, is_prn, is_high_risk", participant_id=participant_id, organization_id=org_id)
+    care_rows = _rows(
+        "participants", "primary_disability, allergies, communication_preferences, emergency_contact",
+        id=participant_id, organization_id=org_id,
+    )
     agreements = _rows("service_agreements", "id, status, agreement_number, start_date, end_date, signed_date", participant_id=participant_id, organization_id=org_id)
 
     main_id = participant.get("assigned_worker_id")
@@ -472,6 +556,8 @@ async def build_overview(participant_id: str, org_id: str, current_user: dict) -
         "medication": _medication(meds),
         "agreement": _agreement(agreements),
         "portal": portal,
+        "care": _care(participant_id, org_id, care_rows[0] if care_rows else participant, meds),
+        "recent_shifts": _recent_shifts(shifts, people, now),
     }
     summary["decisions"] = decisions_for(summary, today)
     return summary

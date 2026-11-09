@@ -101,6 +101,25 @@ export type DirectorOverview = {
   } | null;
   portal: { status: string | null; people: { name?: string | null; relationship?: string | null; status?: string | null }[] };
   decisions: Decision[];
+  /** What a worker needs to know to support them safely. Older APIs leave it out. */
+  care?: {
+    primary_disability?: string | null;
+    allergies: string[];
+    alerts: string[];
+    communication?: string | null;
+    medications: { name: string; high_risk: boolean; prn: boolean }[];
+    emergency_contact: { name?: string | null; relationship?: string | null; phone?: string | null } | null;
+  };
+  /** The latest shifts that have started, newest first. */
+  recent_shifts?: {
+    id: string;
+    start?: string | null;
+    end?: string | null;
+    status?: string | null;
+    worker: PersonRef | null;
+    /** Completed shifts only: where the office's review stands. */
+    review: "verified" | "changes_requested" | "sent_back" | "awaiting_review" | null;
+  }[];
 };
 
 export type Incident = {

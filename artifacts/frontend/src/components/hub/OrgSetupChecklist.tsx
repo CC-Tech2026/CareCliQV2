@@ -164,7 +164,7 @@ export function OrgSetupChecklist({
                   <button
                     type="button"
                     onClick={() => onNavigate(step.href)}
-                    className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-cc-plum px-4 text-[13px] font-bold text-white hover:opacity-90"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-[var(--cc-cta)] px-4 text-[13px] font-bold text-white hover:opacity-90"
                   >
                     {step.action}
                     <ArrowRight size={14} aria-hidden="true" />

@@ -127,7 +127,7 @@ export function ParticipantContextPanel({
                 onClick={() => setTab(t.id)}
                 className={cn(
                   "shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition",
-                  activeTab === t.id ? "bg-cc-plum text-white" : "bg-cc-active-bg text-cc-plum",
+                  activeTab === t.id ? "bg-[var(--cc-cta)] text-white" : "bg-cc-active-bg text-cc-plum",
                 )}
               >
                 {t.label}

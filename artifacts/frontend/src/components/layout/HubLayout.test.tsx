@@ -82,7 +82,10 @@ it("keeps main navigation visible on the roster without a floating overlap", () 
   const tabs = screen.getByRole("navigation", { name: "Schedule & rostering pages" });
   expect(within(tabs).getByRole("link", { name: /^Roster$/ }).getAttribute("aria-current")).toBe("page");
   expect(within(tabs).queryByRole("link", { name: "Long shifts" })).toBeNull();
-  expect(mainMenu.closest(".sticky")).toBeNull();
+  // The menu sits in the header bar itself, not a separate floating row
+  // laid over the page.
+  expect(mainMenu.closest("header")).toBeTruthy();
+  expect(mainMenu.closest(".pointer-events-none")).toBeNull();
 });
 
 it("uses the existing shift verification page as the only review destination", () => {

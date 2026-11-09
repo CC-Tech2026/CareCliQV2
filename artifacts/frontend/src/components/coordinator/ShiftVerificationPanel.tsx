@@ -28,9 +28,9 @@ import {
 } from "@/services/coordinatorService";
 
 const PLUM = "var(--cc-plum)";
-const T1 = "#1A1A2E";
-const T2 = "#374151";
-const T3 = "#6A6A77";
+const T1 = "var(--cc-text)";
+const T2 = "var(--cc-text)";
+const T3 = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
 
@@ -195,18 +195,12 @@ export function ShiftVerificationCard({
             {any_flagged && (
               <span
                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
-                style={{ background: "rgba(245,158,11,0.1)", color: "#92400E" }}
+                style={{ background: "var(--cc-status-warning-bg)", color: "var(--cc-amber)" }}
               >
                 <AlertTriangle size={9} /> Needs review
               </span>
             )}
           </div>
-          <p className="mt-1 break-all text-xs" style={{ color: T3 }}>
-            Participant ID: {item.participant_id || "Not recorded"}
-          </p>
-          <p className="mt-1 break-all text-xs" style={{ color: T3 }}>
-            Shift ID: {item.shift_id}
-          </p>
           <div
             className="mt-1 flex items-center gap-1.5 text-[11px] font-medium"
             style={{ color: T3 }}
@@ -221,7 +215,7 @@ export function ShiftVerificationCard({
         <button
           aria-expanded={expanded}
           aria-controls={`shift-review-${item.shift_id}`}
-          aria-label={`${expanded ? "Close" : "Review"} shift ${item.shift_id}`}
+          aria-label={`${expanded ? "Close" : "Review"} ${item.participant_name || "participant"}'s shift, ${safeDateTime(item.scheduled_start, item.timezone)}`}
           onClick={() => setExpanded((v) => !v)}
           className="flex min-h-11 items-center gap-2 rounded-lg border px-3 transition hover:bg-gray-50 shrink-0"
           style={{ borderColor: BORDER, color: T3 }}
