@@ -819,8 +819,14 @@ def send_email(
     from_display_name: str | None = None,
     reply_to: str | None = None,
     attachments: list[tuple[str, bytes, str]] | None = None,
+    calendar_invite: tuple[str, str] | None = None,
 ) -> None:
-    """attachments: (file name, content, MIME type such as "application/pdf")."""
+    """attachments: (file name, content, MIME type such as "application/pdf").
+
+    calendar_invite: (iCalendar text, METHOD such as "REQUEST" or "CANCEL").
+    Sent both as a text/calendar part, which is what makes Gmail and Outlook
+    show Accept/Decline and add it to the calendar, and as invite.ics for
+    mail apps that only look at attachments."""
     if not settings.email_enabled:
         logger.info("Email disabled; skipping outbound email to %s", to_email)
         return
@@ -836,6 +842,16 @@ def send_email(
     message.set_content(text_body)
     if html_body:
         message.add_alternative(html_body, subtype="html")
+    if calendar_invite:
+        ics_text, method = calendar_invite
+        message.add_alternative(ics_text, subtype="calendar", params={"method": method})
+        message.add_attachment(
+            ics_text.encode("utf-8"),
+            maintype="text",
+            subtype="calendar",
+            filename="invite.ics",
+            params={"method": method},
+        )
     for file_name, content, mime_type in attachments or []:
         maintype, _, subtype = mime_type.partition("/")
         message.add_attachment(content, maintype=maintype, subtype=subtype or "octet-stream", filename=file_name)

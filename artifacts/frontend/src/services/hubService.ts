@@ -31,12 +31,49 @@ export type OrgEvent = {
   /** "HH:MM", 24h. Null on events created before this field existed —
    *  those render in the calendar's all-day strip instead of the hour grid. */
   start_time?: string | null;
+  /** Set when the meeting is with a participant (plan review, intake...). */
+  participant_id?: string | null;
+  participant_name?: string | null;
+  meeting_kind?: ParticipantMeetingKind | null;
+  meeting_mode?: MeetingMode | null;
+  meeting_link?: string | null;
+  /** In-person meeting the MD will record with Easy Capture. */
+  easy_capture?: boolean;
+  /** Who's invited. In-person and phone meetings email them a calendar invite. */
+  attendees?: MeetingAttendee[];
+  /** When calendar invites last went out; null if none have. */
+  invites_sent_at?: string | null;
+  invite_sequence?: number;
   organization_id?: string;
   created_by?: string;
   created_at?: string;
 };
 
-export type OrgEventPayload = Omit<OrgEvent, "id" | "organization_id" | "created_by" | "created_at">;
+export type ParticipantMeetingKind =
+  | "intake"
+  | "service_agreement"
+  | "plan_review"
+  | "goal_review"
+  | "check_in"
+  | "care_team"
+  | "incident_followup";
+
+export type MeetingMode = "in_person" | "phone" | "video";
+
+export type MeetingAttendee = { email: string; name?: string | null; role?: string | null };
+
+export type OrgEventPayload = Omit<
+  OrgEvent,
+  "id" | "participant_name" | "organization_id" | "created_by" | "created_at" | "invites_sent_at" | "invite_sequence"
+> & {
+  /** Email the attendees a calendar invite (in-person and phone meetings). */
+  send_invites?: boolean;
+};
+
+/** What happened to the calendar invites when a meeting was saved. */
+export type InviteResult = { sent: string[]; failed: string[]; email_off: boolean };
+
+export type SavedOrgEvent = OrgEvent & { invites?: InviteResult };
 
 export type Announcement = {
   id: string;
@@ -76,15 +113,31 @@ export async function getOnboardingAlerts(): Promise<HubComplianceAlert[]> {
   return jsonFetch<HubComplianceAlert[]>("/api/hub/onboarding-alerts");
 }
 
-export async function getOrgEvents(): Promise<OrgEvent[]> {
-  return jsonFetch<OrgEvent[]>("/api/hub/org-events");
+/** With a range ("yyyy-MM-dd"), everything in it; without, the next 20 upcoming. */
+export async function getOrgEvents(range?: { start: string; end: string }): Promise<OrgEvent[]> {
+  const query = range ? `?start=${range.start}&end=${range.end}` : "";
+  return jsonFetch<OrgEvent[]>(`/api/hub/org-events${query}`);
 }
 
-export async function createOrgEvent(payload: OrgEventPayload): Promise<OrgEvent> {
-  return jsonFetch<OrgEvent>("/api/hub/org-events", {
+export async function createOrgEvent(payload: OrgEventPayload): Promise<SavedOrgEvent> {
+  return jsonFetch<SavedOrgEvent>("/api/hub/org-events", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function updateOrgEvent(id: string, payload: OrgEventPayload): Promise<SavedOrgEvent> {
+  return jsonFetch<SavedOrgEvent>(`/api/hub/org-events/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** People to suggest inviting: you, and for a participant meeting the
+ *  participant, their nominee/family contacts and their support workers. */
+export async function getMeetingInvitees(participantId?: string | null): Promise<Required<MeetingAttendee>[]> {
+  const query = participantId ? `?participant_id=${encodeURIComponent(participantId)}` : "";
+  return jsonFetch<Required<MeetingAttendee>[]>(`/api/hub/org-events/invitees${query}`);
 }
 
 export async function deleteOrgEvent(id: string): Promise<void> {

@@ -111,12 +111,13 @@ const MD_NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
   {
     label: "Operations & Care",
     items: [
+      // Shifts and meetings by day/week/month live in the Calendar (header
+      // button); Rostering is where shifts get staffed.
       {
-        href: "/md/schedule",
-        label: "Schedule & rostering",
+        href: "/coordinator/rostering",
+        label: "Rostering",
         icon: CalendarDays,
         tabs: [
-          { href: "/md/schedule", label: "Calendar" },
           { href: "/coordinator/rostering", label: "Roster" },
           { href: "/coordinator/live", label: "Live" },
         ],
@@ -531,7 +532,12 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
         <div className={`mx-auto flex h-[72px] items-center justify-between px-3 sm:px-4 ${isMD ? "w-full" : "max-w-[1600px]"}`}>
           {/* Brand & Organization Badge */}
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex items-center gap-3">
+            <Link
+              href="/hub"
+              aria-label={`${organisationDisplay}: home`}
+              title="Home"
+              className="flex items-center gap-3 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--cc-plum)]"
+            >
               {!brandingLoaded ? (
                 // Reserve the exact footprint so nothing shifts once the
                 // branding fetch resolves - no flash of one logo swapping
@@ -550,8 +556,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               ) : (
                 <CareCliQLogo size={36} />
               )}
-              <span className={`hidden h-5 w-px bg-[var(--cc-border)] sm:block ${topbarMode ? "xl:hidden min-[1800px]:block" : ""}`} />
-              <div className={`hidden min-w-0 lg:block ${topbarMode ? "xl:hidden min-[1800px]:block" : ""}`}>
+              <span className={`hidden h-5 w-px bg-[var(--cc-border)] sm:block ${topbarMode ? "xl:max-[1799px]:hidden" : ""}`} />
+              <div className={`hidden min-w-0 lg:block ${topbarMode ? "xl:max-[1799px]:hidden" : ""}`}>
                 <div className="flex items-center gap-1.5">
                   <span className="max-w-[240px] truncate text-sm font-semibold tracking-tight" title={organisationDisplay}>
                     {organisationDisplay}
@@ -570,7 +576,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                   )}
                 </div>
               </div>
-            </div>
+            </Link>
           </div>
 
           {/* Main menu in the header bar on desktop, so pages start straight
@@ -588,6 +594,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               {MD_NAV_GROUPS.map((group) => {
                 const hasActiveRoute = group.items.some((item) => isNavItemActive(location, item));
                 const open = activeGroupHover === group.label;
+                // On the plain header the current group is a soft pink tint, the
+                // same as the active item in its menu, so it doesn't outshout the
+                // page's own main button. A menu colour from Settings keeps its
+                // solid active pill, which that colour scheme is designed around.
+                const quietActive = hasActiveRoute && !prefs?.nav_color;
                 return (
                   <div key={group.label} className="relative">
                     <button
@@ -599,8 +610,10 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         hasActiveRoute ? "" : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"
                       }`}
                       style={{
-                        background: hasActiveRoute ? navActiveBg : undefined,
-                        color: hasActiveRoute ? "#FFFFFF" : navText,
+                        // An open menu keeps its trigger lit, so it's clear which
+                        // group the list below belongs to.
+                        background: quietActive ? "var(--cc-plum-soft)" : hasActiveRoute ? navActiveBg : open ? navHoverBg : undefined,
+                        color: quietActive ? "var(--cc-plum)" : hasActiveRoute ? "#FFFFFF" : open ? navTextHover : navText,
                         ["--nav-hover-bg" as string]: navHoverBg,
                         ["--nav-text-hover" as string]: navTextHover,
                       }}
@@ -662,8 +675,14 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             {isMD && (
               <Link
                 href="/md/calendar"
-                className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)] transition-colors"
-                aria-label="Calendar"
+                className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors ${
+                  location === "/md/calendar"
+                    ? "bg-[var(--cc-plum-soft)] text-[var(--cc-plum)]"
+                    : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
+                }`}
+                aria-label="Calendar: shifts and meetings"
+                aria-current={location === "/md/calendar" ? "page" : undefined}
+                title="Calendar: shifts and meetings"
               >
                 <CalendarDays size={17} />
               </Link>
@@ -690,23 +709,16 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                     aria-label={label}
                     title={label}
                     className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
-                      selected ? "text-white" : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
+                      selected
+                        ? "bg-[var(--cc-plum-soft)] text-[var(--cc-plum)]"
+                        : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
                     }`}
-                    style={selected ? { background: "var(--cc-cta)" } : undefined}
                   >
                     <Icon size={15} aria-hidden />
                   </button>
                 );
               })}
             </div>
-
-            <Link
-              href="/settings"
-              className="hidden xl:flex h-11 w-11 items-center justify-center rounded-full text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)] transition-colors"
-              aria-label="Settings"
-            >
-              <Settings size={17} />
-            </Link>
 
             <div className="mx-1 h-5 w-px bg-[var(--cc-border)] hidden sm:block" />
 
@@ -740,21 +752,26 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
             {/* Profile Dropdown */}
             {profileOpen && (
-              <div className="absolute right-4 top-14 w-56 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-1.5 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="absolute right-4 top-14 w-64 rounded-2xl border border-[var(--cc-border)] bg-[var(--cc-surface)] p-1.5 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="px-3 py-2 border-b border-[var(--cc-border)]">
-                  <p className="text-xs font-bold">{displayName}</p>
-                  <p className="text-[11px] text-[var(--cc-muted)] truncate">
+                  <p className="text-sm font-semibold">{displayName}</p>
+                  <p className="text-xs text-[var(--cc-muted)] truncate">
                     {user?.email}
+                  </p>
+                  {/* The header only has room for the organisation name on
+                      very wide screens, so it is always here. */}
+                  <p className="mt-1.5 truncate text-xs font-medium" title={organisationDisplay}>
+                    {organisationDisplay}
                   </p>
                 </div>
                 <div className="py-1">
                   <Link
                     href="/settings"
                     onClick={() => setProfileOpen(false)}
-                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium hover:bg-[var(--cc-soft)] transition-colors"
+                    className="flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--cc-soft)] transition-colors"
                   >
-                    <Settings size={14} />
-                    <span>Governance Settings</span>
+                    <Settings size={15} />
+                    <span>Settings</span>
                   </Link>
                   <button
                     type="button"
@@ -762,11 +779,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                       setProfileOpen(false);
                       logout();
                     }}
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--cc-status-danger-bg)]"
+                    className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors hover:bg-[var(--cc-status-danger-bg)]"
                     style={{ color: "var(--cc-status-danger)" }}
                   >
-                    <LogOut size={14} />
-                    <span>Sign Out</span>
+                    <LogOut size={15} />
+                    <span>Sign out</span>
                   </button>
                 </div>
               </div>

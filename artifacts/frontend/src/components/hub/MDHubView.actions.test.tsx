@@ -16,7 +16,7 @@ it("opens the relevant workflow from each demand and capacity card", () => {
   fireEvent.click(screen.getByRole("button", { name: /Review support requests/ }));
   expect(navigate).toHaveBeenLastCalledWith("/onboard-participant");
   fireEvent.click(screen.getByRole("button", { name: /Review staff availability/ }));
-  expect(navigate).toHaveBeenLastCalledWith("/md/schedule");
+  expect(navigate).toHaveBeenLastCalledWith("/coordinator/rostering");
   expect(screen.getByText("32 h")).toBeTruthy();
   expect(screen.getByText(/2 workers have no availability recorded/)).toBeTruthy();
 });

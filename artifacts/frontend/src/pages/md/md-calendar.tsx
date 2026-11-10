@@ -1,18 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, Redirect, useSearch } from "wouter";
 import {
   format, parseISO, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, isSameDay, isSameMonth, isToday, addMonths, subMonths, addDays,
 } from "date-fns";
 import {
-  CalendarDays, ChevronLeft, ChevronRight, Plus, Trash2, MapPin, Clock,
-  ClipboardCheck, BookOpen, Users, Target, Briefcase, X,
+  CalendarDays, ChevronLeft, ChevronRight, Plus, MapPin, Clock,
+  ClipboardCheck, BookOpen, Users, Target, Briefcase, Video, Mic,
 } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
 import { SectionInfo } from "@/components/ui/section-info";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { getOrgEvents, createOrgEvent, deleteOrgEvent, type OrgEvent } from "@/services/hubService";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { MeetingBookingSheet, type BookingDraft } from "@/components/calendar/MeetingBookingSheet";
+import { MeetingDetailSheet } from "@/components/calendar/MeetingDetailSheet";
+import { MEETING_CHOICES, MEETING_MODES, choiceOf, isOnlineMode } from "@/lib/meeting-booking";
+import {
+  getOrgEvents, createOrgEvent, updateOrgEvent, deleteOrgEvent,
+  type InviteResult, type OrgEvent, type OrgEventPayload,
+} from "@/services/hubService";
 import { listCoordinatorShifts, type CoordinatorShiftRecord } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 
@@ -46,16 +52,6 @@ const EVENT_CFG: Record<EventType, { label: string; icon: typeof Users; color: s
   training: { label: "Training", icon: BookOpen, color: PLUM, bg: "var(--cc-plum-soft)" },
   meeting: { label: "Meeting", icon: Users, color: "#0EA5E9", bg: "#E0F2FE" },
   review: { label: "Review", icon: Target, color: "#0F7B57", bg: "#E9F5F0" },
-};
-
-const BLANK_FORM = {
-  title: "",
-  event_date: "",
-  start_time: "09:00",
-  end_time: "10:00",
-  event_type: "meeting" as EventType,
-  location: "",
-  participants_desc: "",
 };
 
 /** Same appointment concept as Master Schedule's "Unassigned" bucket — a
@@ -96,23 +92,18 @@ function parseDurationMinutes(duration: string): number {
   if (minMatch) minutes += parseFloat(minMatch[1]);
   return minutes > 0 ? Math.round(minutes) : 60;
 }
-function formatDurationLabel(minutes: number): string {
-  const m = Math.max(15, Math.round(minutes));
-  const h = Math.floor(m / 60);
-  const rem = m % 60;
-  if (h === 0) return `${rem} min${rem === 1 ? "" : "s"}`;
-  if (rem === 0) return `${h} hour${h === 1 ? "" : "s"}`;
-  return `${h}h ${rem}m`;
-}
-
-function ShiftCard({ s }: { s: CoordinatorShiftRecord }) {
+function ShiftCard({ s, onOpen }: { s: CoordinatorShiftRecord; onOpen?: () => void }) {
   return (
-    <div className="rounded-xl border p-3" style={{ borderColor: BORDER, background: isVacantShift(s) ? AMBER_SOFT : SOFT }}>
+    <div
+      onClick={onOpen}
+      className={`rounded-xl border p-3 ${onOpen ? "cursor-pointer hover:border-[var(--cc-plum)]" : ""}`}
+      style={{ borderColor: BORDER, background: isVacantShift(s) ? AMBER_SOFT : SOFT }}
+    >
       <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wide" style={{ color: isVacantShift(s) ? AMBER : BLUE }}>
         <Briefcase size={10} /> {isVacantShift(s) ? "Unfilled appointment" : "Appointment"}
       </div>
       <p className="mt-1 text-[12px] font-bold" style={{ color: TEXT }}>
-        {s.participant_name || "Participant"} {s.worker_name ? `· ${s.worker_name}` : ""}
+        {s.participant_name || "Participant"} {s.worker_name && !isVacantShift(s) ? `· ${s.worker_name}` : ""}
       </p>
       <p className="mt-0.5 flex items-center gap-1 text-[10px]" style={{ color: MUTED }}>
         <Clock size={9} />
@@ -123,31 +114,64 @@ function ShiftCard({ s }: { s: CoordinatorShiftRecord }) {
   );
 }
 
-function EventCard({ ev, onDelete }: { ev: OrgEvent; onDelete: (id: string) => void }) {
+/** One line on what happened to the calendar invites. */
+function inviteSummary(invites: InviteResult | undefined, update: boolean): string {
+  if (!invites) return "";
+  if (invites.email_off) return "Email is turned off, so no invites were sent.";
+  const sent = invites.sent.length;
+  const failed = invites.failed.length;
+  const parts = [];
+  if (sent) parts.push(`${update ? "Updated invite" : "Calendar invite"} sent to ${sent} ${sent === 1 ? "person" : "people"}.`);
+  if (failed) parts.push(`Couldn't reach ${invites.failed.join(", ")}.`);
+  return parts.join(" ");
+}
+
+function EventCard({ ev, onOpen }: { ev: OrgEvent; onOpen: () => void }) {
   const cfg = EVENT_CFG[ev.event_type] ?? EVENT_CFG.meeting;
   const Icon = cfg.icon;
+  const online = isOnlineMode(ev.meeting_mode);
   return (
-    <div className="rounded-xl border p-3" style={{ borderColor: BORDER, background: SURFACE }}>
-      <div className="flex items-start justify-between gap-2">
-        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black" style={{ background: cfg.bg, color: cfg.color }}>
-          <Icon size={9} /> {cfg.label}
-        </span>
-        <button onClick={() => onDelete(ev.id)} className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/5" aria-label={`Remove ${ev.title}`}>
-          <Trash2 size={11} style={{ color: MUTED }} />
-        </button>
-      </div>
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full rounded-xl border p-3 text-left transition-colors hover:border-[var(--cc-plum)]"
+      style={{ borderColor: BORDER, background: SURFACE }}
+    >
+      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black" style={{ background: cfg.bg, color: cfg.color }}>
+        <Icon size={9} /> {MEETING_CHOICES[choiceOf(ev)]?.label ?? cfg.label}
+      </span>
       <p className="mt-1.5 text-[12px] font-bold" style={{ color: TEXT }}>{ev.title}</p>
       <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px]" style={{ color: MUTED }}>
         {ev.start_time && <span className="flex items-center gap-1"><Clock size={9} /> {ev.start_time}{ev.duration ? ` · ${ev.duration}` : ""}</span>}
         {!ev.start_time && ev.duration && <span className="flex items-center gap-1"><Clock size={9} /> {ev.duration}</span>}
-        {ev.location && <span className="flex items-center gap-1"><MapPin size={9} /> {ev.location}</span>}
+        {online && ev.meeting_mode && <span className="flex items-center gap-1"><Video size={9} /> {MEETING_MODES[ev.meeting_mode].label}</span>}
+        {!online && ev.location && <span className="flex items-center gap-1"><MapPin size={9} /> {ev.location}</span>}
+        {ev.easy_capture && <span className="flex items-center gap-1"><Mic size={9} /> Easy Capture</span>}
       </div>
-      {ev.participants_desc && <p className="mt-1 text-[10px]" style={{ color: MUTED }}>{ev.participants_desc}</p>}
-    </div>
+    </button>
   );
 }
 
-type Viewing = { kind: "shift"; shift: CoordinatorShiftRecord } | { kind: "event"; event: OrgEvent } | null;
+const SHIFT_STATUS_LABEL: Record<string, string> = {
+  scheduled: "Scheduled",
+  in_progress: "In progress",
+  clocked_in: "In progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  unassigned: "Unassigned",
+};
+
+/** The old Schedule page. Its shift views are the Calendar now, and a shift
+ *  link (?shiftId=, from notifications and alerts) opens that shift in Rostering. */
+export function LegacyScheduleRedirect() {
+  const shiftId = new URLSearchParams(useSearch()).get("shiftId");
+  return (
+    <Redirect
+      to={shiftId ? `/coordinator/rostering?openShift=${encodeURIComponent(shiftId)}` : "/md/calendar"}
+      replace
+    />
+  );
+}
 
 export default function MDCalendarPage() {
   const { toast } = useToast();
@@ -156,10 +180,12 @@ export default function MDCalendarPage() {
   const [selectedDay, setSelectedDay] = useState(() => new Date());
   const [events, setEvents] = useState<OrgEvent[] | null>(null);
   const [shifts, setShifts] = useState<CoordinatorShiftRecord[] | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState(BLANK_FORM);
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [bookingDraft, setBookingDraft] = useState<BookingDraft | null>(null);
+  const [editingEvent, setEditingEvent] = useState<OrgEvent | null>(null);
   const [saving, setSaving] = useState(false);
-  const [viewing, setViewing] = useState<Viewing>(null);
+  const [viewingEvent, setViewingEvent] = useState<OrgEvent | null>(null);
+  const [viewingShift, setViewingShift] = useState<CoordinatorShiftRecord | null>(null);
   const hourGridRef = useRef<HTMLDivElement>(null);
 
   // The grid window depends on the active view: a full month-of-weeks for
@@ -184,11 +210,11 @@ export default function MDCalendarPage() {
 
   useEffect(() => {
     let cancelled = false;
-    getOrgEvents()
+    getOrgEvents({ start: format(gridStart, "yyyy-MM-dd"), end: format(gridEnd, "yyyy-MM-dd") })
       .then((data) => { if (!cancelled) setEvents(data); })
       .catch(() => { if (!cancelled) setEvents([]); });
     return () => { cancelled = true; };
-  }, []);
+  }, [gridStart, gridEnd]);
 
   useEffect(() => {
     let cancelled = false;
@@ -264,18 +290,20 @@ export default function MDCalendarPage() {
         : format(anchor, "EEEE d MMMM yyyy");
 
   function openAddMeeting(day?: Date, startHHMM?: string, endHHMM?: string) {
-    setForm({
-      ...BLANK_FORM,
-      event_date: format(day ?? effectiveDay, "yyyy-MM-dd"),
-      start_time: startHHMM ?? BLANK_FORM.start_time,
-      end_time: endHHMM ?? BLANK_FORM.end_time,
-    });
-    setViewing(null);
-    setFormOpen(true);
+    setBookingDraft({ date: day ?? effectiveDay, start: startHHMM ?? "09:00", end: endHHMM ?? "10:00" });
+    setEditingEvent(null);
+    setViewingEvent(null);
+    setBookingOpen(true);
   }
 
-  /** Click anywhere empty in a day's hour column opens Add Schedule, snapped
-   *  to the nearest half hour under the cursor. */
+  function openEditMeeting(ev: OrgEvent) {
+    setEditingEvent(ev);
+    setViewingEvent(null);
+    setBookingOpen(true);
+  }
+
+  /** Click anywhere empty in a day's hour column opens the booking panel,
+   *  snapped to the nearest half hour under the cursor. */
   function handleGridClick(e: React.MouseEvent<HTMLDivElement>, day: Date) {
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
@@ -286,40 +314,40 @@ export default function MDCalendarPage() {
     openAddMeeting(day, startHHMM, endHHMM);
   }
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form.title.trim() || !form.event_date) return;
+  async function handleSave(payload: OrgEventPayload) {
     setSaving(true);
     try {
-      const startMin = hhmmToMinutes(form.start_time);
-      const endMin = Math.max(startMin + 15, hhmmToMinutes(form.end_time));
-      const created = await createOrgEvent({
-        title: form.title.trim(),
-        event_date: form.event_date,
-        duration: formatDurationLabel(endMin - startMin),
-        event_type: form.event_type,
-        location: form.location.trim() || null,
-        participants_desc: form.participants_desc.trim() || null,
-        start_time: form.start_time,
+      const { invites, ...saved } = editingEvent ? await updateOrgEvent(editingEvent.id, payload) : await createOrgEvent(payload);
+      setEvents((prev) => [...(prev ?? []).filter((e) => e.id !== saved.id), saved]);
+      setBookingOpen(false);
+      setEditingEvent(null);
+      const when = `${saved.title} on ${format(parseISO(saved.event_date), "d MMM")}${saved.start_time ? ` at ${saved.start_time}` : ""}.`;
+      toast({
+        title: editingEvent ? "Meeting updated" : "Meeting booked",
+        description: [when, inviteSummary(invites, !!editingEvent)].filter(Boolean).join(" "),
+        variant: invites?.failed.length ? "destructive" : undefined,
       });
-      setEvents((prev) => [...(prev ?? []), created]);
-      setFormOpen(false);
-      setForm(BLANK_FORM);
-      toast({ title: "Meeting added", description: `${created.title} on ${format(parseISO(created.event_date), "d MMM")}.` });
+      // A video call's invite is sent from Google Calendar or Outlook, so open
+      // the meeting where those buttons are.
+      if (isOnlineMode(saved.meeting_mode) && (saved.attendees?.length ?? 0) > 0) setViewingEvent(saved);
     } catch (err) {
-      toast({ title: "Couldn't add meeting", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
+      toast({ title: "Couldn't save the meeting", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(ev: OrgEvent) {
     try {
-      await deleteOrgEvent(id);
-      setEvents((prev) => (prev ?? []).filter((e) => e.id !== id));
-      toast({ title: "Meeting removed" });
+      await deleteOrgEvent(ev.id);
+      setEvents((prev) => (prev ?? []).filter((e) => e.id !== ev.id));
+      setViewingEvent(null);
+      toast({
+        title: "Meeting cancelled",
+        description: ev.invites_sent_at ? "Everyone invited has been sent a cancellation, which takes it off their calendar." : undefined,
+      });
     } catch (err) {
-      toast({ title: "Couldn't remove meeting", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
+      toast({ title: "Couldn't cancel the meeting", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
     }
   }
 
@@ -330,7 +358,7 @@ export default function MDCalendarPage() {
           <div>
             <h1 className="text-xl font-black flex items-center gap-2" style={{ color: TEXT }}>
               <CalendarDays size={19} style={{ color: PLUM }} /> Calendar
-              <SectionInfo text="Scheduled appointments across the organisation, plus your own audits, training, meetings and reviews." />
+              <SectionInfo text="Every shift across the organisation, plus the meetings you book: participant meetings in person or online, team meetings, training and audits. Staff and shifts are managed in Rostering." />
             </h1>
           </div>
           <div className="flex items-center gap-2">
@@ -352,7 +380,7 @@ export default function MDCalendarPage() {
               ))}
             </div>
             <Button variant="navy" className="gap-2 rounded-lg" onClick={() => openAddMeeting()}>
-              <Plus size={15} /> Add meeting
+              <Plus size={15} /> Book meeting
             </Button>
           </div>
         </div>
@@ -471,8 +499,8 @@ export default function MDCalendarPage() {
                 {dayShifts.length === 0 && dayEvents.length === 0 && (
                   <p className="py-8 text-center text-[11px] font-medium" style={{ color: MUTED }}>Nothing scheduled this day.</p>
                 )}
-                {dayShifts.map((s) => <ShiftCard key={s.id} s={s} />)}
-                {dayEvents.map((ev) => <EventCard key={ev.id} ev={ev} onDelete={handleDelete} />)}
+                {dayEvents.map((ev) => <EventCard key={ev.id} ev={ev} onOpen={() => setViewingEvent(ev)} />)}
+                {dayShifts.map((s) => <ShiftCard key={s.id} s={s} onOpen={() => setViewingShift(s)} />)}
               </div>
             </div>
           </div>
@@ -526,7 +554,7 @@ export default function MDCalendarPage() {
                         return (
                           <button
                             key={ev.id}
-                            onClick={() => setViewing({ kind: "event", event: ev })}
+                            onClick={() => setViewingEvent(ev)}
                             className="truncate rounded px-1 py-0.5 text-left text-[9px] font-bold"
                             style={{ background: cfg.bg, color: cfg.color }}
                           >
@@ -592,7 +620,7 @@ export default function MDCalendarPage() {
                         return (
                           <button
                             key={s.id}
-                            onClick={(e) => { e.stopPropagation(); setViewing({ kind: "shift", shift: s }); }}
+                            onClick={(e) => { e.stopPropagation(); setViewingShift(s); }}
                             className="absolute left-0.5 right-0.5 overflow-hidden rounded-md px-1.5 py-1 text-left"
                             style={{ top, height, background: vacant ? AMBER_SOFT : BLUE_SOFT, borderLeft: `3px solid ${vacant ? AMBER : BLUE}` }}
                           >
@@ -610,7 +638,7 @@ export default function MDCalendarPage() {
                         return (
                           <button
                             key={ev.id}
-                            onClick={(e) => { e.stopPropagation(); setViewing({ kind: "event", event: ev }); }}
+                            onClick={(e) => { e.stopPropagation(); setViewingEvent(ev); }}
                             className="absolute left-0.5 right-0.5 overflow-hidden rounded-md px-1.5 py-1 text-left"
                             style={{ top, height, background: cfg.bg, borderLeft: `3px solid ${cfg.color}` }}
                           >
@@ -627,143 +655,66 @@ export default function MDCalendarPage() {
         )}
       </div>
 
-      {/* Add Schedule / view-detail overlay — a compact floating card rather
-          than a side sheet, so it reads the same whether opened from the top
-          button, the month day panel's "+", or a click on an empty hour slot. */}
-      {(formOpen || viewing) && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
-          onClick={() => { setFormOpen(false); setViewing(null); }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-2xl border p-4 shadow-2xl"
-            style={{ borderColor: BORDER, background: SURFACE }}
-          >
-            {formOpen && (
-              <form onSubmit={handleAdd} className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-[13px] font-black flex items-center gap-1.5" style={{ color: TEXT }}>
-                    <Plus size={15} style={{ color: PLUM }} /> Add Schedule
-                  </p>
-                  <button type="button" onClick={() => setFormOpen(false)} className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-cc-soft" aria-label="Close">
-                    <X size={13} style={{ color: MUTED }} />
-                  </button>
-                </div>
+      <MeetingBookingSheet
+        open={bookingOpen}
+        onOpenChange={(open) => { setBookingOpen(open); if (!open) setEditingEvent(null); }}
+        draft={bookingDraft}
+        editing={editingEvent}
+        editingMinutes={editingEvent ? parseDurationMinutes(editingEvent.duration) : undefined}
+        saving={saving}
+        onSave={handleSave}
+      />
 
-                <Input
-                  value={form.title}
-                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                  placeholder="New event title"
-                  className="text-[13px] font-bold"
-                  autoFocus
-                  required
-                />
+      <MeetingDetailSheet
+        event={viewingEvent}
+        minutes={viewingEvent ? parseDurationMinutes(viewingEvent.duration) : 60}
+        onOpenChange={(open) => { if (!open) setViewingEvent(null); }}
+        onEdit={openEditMeeting}
+        onDelete={handleDelete}
+      />
 
-                <div className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5" style={{ borderColor: BORDER }}>
-                  <CalendarDays size={13} style={{ color: MUTED }} />
-                  <input
-                    type="date"
-                    value={form.event_date}
-                    onChange={(e) => setForm((f) => ({ ...f, event_date: e.target.value }))}
-                    className="w-full bg-transparent text-[12px] font-semibold outline-none"
-                    style={{ color: TEXT }}
-                    required
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5" style={{ borderColor: BORDER }}>
-                  <Clock size={13} style={{ color: MUTED }} />
-                  <input
-                    type="time"
-                    value={form.start_time}
-                    onChange={(e) => setForm((f) => ({ ...f, start_time: e.target.value }))}
-                    className="bg-transparent text-[12px] font-semibold outline-none"
-                    style={{ color: TEXT }}
-                    required
-                  />
-                  <span style={{ color: MUTED }}>→</span>
-                  <input
-                    type="time"
-                    value={form.end_time}
-                    onChange={(e) => setForm((f) => ({ ...f, end_time: e.target.value }))}
-                    className="bg-transparent text-[12px] font-semibold outline-none"
-                    style={{ color: TEXT }}
-                    required
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {(Object.keys(EVENT_CFG) as EventType[]).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, event_type: t }))}
-                      className="h-6 w-6 rounded-full transition-shadow"
-                      style={{
-                        background: EVENT_CFG[t].color,
-                        boxShadow: form.event_type === t ? `0 0 0 2px ${SURFACE}, 0 0 0 4px ${EVENT_CFG[t].color}` : "none",
-                      }}
-                      aria-label={EVENT_CFG[t].label}
-                      title={EVENT_CFG[t].label}
-                    />
-                  ))}
-                  <span className="text-[10px] font-bold" style={{ color: MUTED }}>{EVENT_CFG[form.event_type].label}</span>
-                </div>
-
-                <div className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5" style={{ borderColor: BORDER }}>
-                  <MapPin size={13} style={{ color: MUTED }} />
-                  <input
-                    value={form.location}
-                    onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-                    placeholder="Location (optional)"
-                    className="w-full bg-transparent text-[12px] font-semibold outline-none"
-                    style={{ color: TEXT }}
-                  />
-                </div>
-
-                <Textarea
-                  value={form.participants_desc}
-                  onChange={(e) => setForm((f) => ({ ...f, participants_desc: e.target.value }))}
-                  placeholder="Add description — who's involved, agenda notes…"
-                  className="min-h-[64px] text-[12px]"
-                />
-
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button type="button" variant="outline" size="sm" onClick={() => setFormOpen(false)}>Cancel</Button>
-                  <Button type="submit" variant="navy" size="sm" disabled={saving || !form.title.trim() || !form.event_date}>
-                    {saving ? "Adding…" : "Save"}
+      {/* Shifts are read-only here; staffing changes happen in Rostering. */}
+      <Sheet open={!!viewingShift} onOpenChange={(open) => { if (!open) setViewingShift(null); }}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
+          {viewingShift && (
+            <>
+              <SheetHeader>
+                <SheetTitle>{viewingShift.participant_name || "Participant"}</SheetTitle>
+                <SheetDescription>
+                  {viewingShift.scheduled_start ? format(new Date(viewingShift.scheduled_start), "EEEE d MMMM yyyy") : "Shift"}
+                  {" · "}
+                  {SHIFT_STATUS_LABEL[isVacantShift(viewingShift) ? "unassigned" : viewingShift.status ?? ""] ?? viewingShift.status}
+                </SheetDescription>
+              </SheetHeader>
+              <div className="mt-5 space-y-4">
+                <ShiftCard s={viewingShift} />
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild variant="navy" className="gap-2">
+                    <Link href={`/coordinator/rostering?openShift=${encodeURIComponent(viewingShift.id)}`}>
+                      <Briefcase size={15} /> {isVacantShift(viewingShift) ? "Fill in Rostering" : "Open in Rostering"}
+                    </Link>
                   </Button>
+                  {viewingShift.participant_id && (
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => {
+                        const s = viewingShift;
+                        setViewingShift(null);
+                        setBookingDraft({ date: s.scheduled_start ? new Date(s.scheduled_start) : effectiveDay, start: "09:00", end: "09:30", participantId: s.participant_id ?? undefined });
+                        setEditingEvent(null);
+                        setBookingOpen(true);
+                      }}
+                    >
+                      <CalendarDays size={15} /> Book a meeting with them
+                    </Button>
+                  )}
                 </div>
-              </form>
-            )}
-
-            {viewing?.kind === "shift" && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-[13px] font-black" style={{ color: TEXT }}>Appointment</p>
-                  <button onClick={() => setViewing(null)} className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-cc-soft" aria-label="Close">
-                    <X size={13} style={{ color: MUTED }} />
-                  </button>
-                </div>
-                <ShiftCard s={viewing.shift} />
               </div>
-            )}
-
-            {viewing?.kind === "event" && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-[13px] font-black" style={{ color: TEXT }}>Meeting</p>
-                  <button onClick={() => setViewing(null)} className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-cc-soft" aria-label="Close">
-                    <X size={13} style={{ color: MUTED }} />
-                  </button>
-                </div>
-                <EventCard ev={viewing.event} onDelete={(id) => { handleDelete(id); setViewing(null); }} />
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </HubLayout>
   );
 }

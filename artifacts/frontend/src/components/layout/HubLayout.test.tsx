@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import { HubLayout } from "./HubLayout";
@@ -45,7 +45,7 @@ it("lists each job once, with the coordinator pages folded under it", () => {
   for (const gone of ["Workers", "Audit pack", "Shift note review", "Long-shift monitor", "Participant Complaints", "Feedback & Reports", "NDIS invoices"]) {
     expect(within(nav).queryByRole("link", { name: gone })).toBeNull();
   }
-  for (const kept of ["Schedule & rostering", "Staff", "Shift notes", "Incidents & complaints", "Billing & claims"]) {
+  for (const kept of ["Rostering", "Staff", "Shift notes", "Incidents & complaints", "Billing & claims"]) {
     expect(within(nav).getByRole("link", { name: new RegExp(kept) })).toBeTruthy();
   }
 });
@@ -79,8 +79,10 @@ it("keeps main navigation visible on the roster without a floating overlap", () 
   renderAt("/coordinator/rostering");
   const mainMenu = screen.getByRole("button", { name: /^Operations & Care$/ });
   expect(mainMenu).toBeTruthy();
-  const tabs = screen.getByRole("navigation", { name: "Schedule & rostering pages" });
+  const tabs = screen.getByRole("navigation", { name: "Rostering pages" });
   expect(within(tabs).getByRole("link", { name: /^Roster$/ }).getAttribute("aria-current")).toBe("page");
+  // Shift calendars live in the Calendar now, not as a second schedule tab.
+  expect(within(tabs).queryByRole("link", { name: "Calendar" })).toBeNull();
   expect(within(tabs).queryByRole("link", { name: "Long shifts" })).toBeNull();
   // The menu sits in the header bar itself, not a separate floating row
   // laid over the page.
@@ -94,4 +96,16 @@ it("uses the existing shift verification page as the only review destination", (
   expect(within(tabs).getByRole("link", { name: "Shift verification" }).getAttribute("aria-current")).toBe("page");
   expect(screen.queryByRole("link", { name: "Awaiting review" })).toBeNull();
   expect(within(sidebar()).queryByRole("link", { name: "Shift approvals" })).toBeNull();
+});
+
+it("goes home from the logo and keeps settings and the organisation in the account menu", () => {
+  layout.nav_layout = "topbar";
+  renderAt("/md/staff");
+  const header = screen.getByRole("banner");
+  expect(within(header).getByRole("link", { name: /home$/ }).getAttribute("href")).toBe("/hub");
+  // Settings lives in the account menu, not as another icon in the bar.
+  expect(within(header).queryByRole("link", { name: "Settings" })).toBeNull();
+  fireEvent.click(within(header).getByRole("button", { name: "Account menu" }));
+  expect(within(header).getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings");
+  expect(within(header).getAllByText("hub.orgFallback").length).toBeGreaterThan(0);
 });

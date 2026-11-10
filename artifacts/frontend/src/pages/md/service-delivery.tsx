@@ -350,7 +350,7 @@ export default function MDServiceDeliveryPage() {
         <nav aria-label="Care management" className="flex flex-wrap gap-2">
           {[
             ["Participants", "/patients"],
-            ["Master schedule", "/md/schedule"],
+            ["Calendar", "/md/calendar"],
             ["Staff directory", "/md/staff"],
           ].map(([label, href]) => (
             <Link

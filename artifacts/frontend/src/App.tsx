@@ -62,7 +62,6 @@ import WorkerOnboarding from "@/pages/worker-onboarding";
 import CoordinatorOnboarding from "@/pages/coordinator-onboarding";
 import HubPage from "@/pages/hub/HubPage";
 import MDExecutivePage from "@/pages/md/executive";
-import MDSchedulePage from "@/pages/md/schedule";
 import MDServiceDeliveryPage from "@/pages/md/service-delivery";
 import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage, { LegacyAuditRedirect } from "@/pages/md/compliance-workspace";
@@ -70,7 +69,7 @@ import MDVaultHomePage from "@/pages/md/vault/VaultHome";
 import MDVaultFolderPage from "@/pages/md/vault/VaultFolder";
 import MDVaultTreeFolderPage from "@/pages/md/vault/VaultTreeFolder";
 import MDFinancialPage from "@/pages/md/financial";
-import MDCalendarPage from "@/pages/md/md-calendar";
+import MDCalendarPage, { LegacyScheduleRedirect } from "@/pages/md/md-calendar";
 import AdminDashboardPage from "@/pages/admin/dashboard";
 import AdminProvidersPage from "@/pages/admin/providers";
 import AdminProviderDetailPage from "@/pages/admin/provider-detail";
@@ -330,7 +329,7 @@ function Router() {
 
       <Route path="/md/schedule">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
-          <MDSchedulePage />
+          <LegacyScheduleRedirect />
         </ProtectedRoute>
       </Route>
 
