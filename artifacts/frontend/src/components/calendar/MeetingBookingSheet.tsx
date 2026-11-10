@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { CalendarDays, Clock, Mail, MapPin, Mic, Phone, Plus, Users, Video, X } from "lucide-react";
 import { useGetParticipants } from "@workspace/api-client-react";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
+import { SidePanel } from "@/components/layout/SidePanel";
+import { ctaClass, outlineClass } from "@/components/layout/PageKit";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -61,12 +61,42 @@ function toPerson(a: MeetingAttendee): Person {
   return { email: a.email, name: a.name ?? "", role: a.role ?? "" };
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+// Matches the shared Input, for fields that carry an icon.
+const FIELD_BOX =
+  "flex h-10 items-center gap-2 rounded-md border border-cc-border bg-cc-surface px-3 shadow-sm focus-within:ring-1 focus-within:ring-ring";
+
+function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string | null; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-semibold" style={{ color: MUTED }}>{label}</p>
+    <div className="space-y-2">
+      <p className="text-sm font-medium" style={{ color: TEXT }}>{label}</p>
       {children}
+      {error ? (
+        <p className="text-xs font-medium" style={{ color: DANGER }}>{error}</p>
+      ) : hint ? (
+        <p className="text-xs" style={{ color: MUTED }}>{hint}</p>
+      ) : null}
     </div>
+  );
+}
+
+/** A setting with an explanation and, usually, a switch. */
+function OptionCard({ icon: Icon, title, text, control }: { icon: typeof Video; title: string; text: string; control?: React.ReactNode }) {
+  const body = (
+    <>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cc-soft" style={{ color: MUTED }}>
+        <Icon size={16} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium" style={{ color: TEXT }}>{title}</span>
+        <span className="mt-0.5 block text-xs leading-relaxed" style={{ color: MUTED }}>{text}</span>
+      </span>
+      {control}
+    </>
+  );
+  return control ? (
+    <label className="flex cursor-pointer items-start gap-3 rounded-xl border p-3" style={{ borderColor: BORDER }}>{body}</label>
+  ) : (
+    <div className="flex items-start gap-3 rounded-xl border p-3" style={{ borderColor: BORDER }}>{body}</div>
   );
 }
 
@@ -263,19 +293,27 @@ export function MeetingBookingSheet({
   const alreadyInvited = !!editing?.invites_sent_at;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>{editing ? "Edit meeting" : "Book a meeting"}</SheetTitle>
-          <SheetDescription>
-            {editing && editing.event_date
-              ? `Booked for ${format(parseISO(editing.event_date), "EEEE d MMMM")}.`
-              : "Everyone you invite gets it in their own calendar: Google, Outlook or Apple."}
-          </SheetDescription>
-        </SheetHeader>
-
-        <form onSubmit={handleSubmit} className="mt-5 space-y-5">
-          <Field label="Meeting type">
+    <SidePanel
+      open={open}
+      onOpenChange={onOpenChange}
+      eyebrow={editing ? "Edit meeting" : "New meeting"}
+      title={editing ? editing.title : "Book a meeting"}
+      description={
+        editing && editing.event_date
+          ? `Booked for ${format(parseISO(editing.event_date), "EEEE d MMMM")}.`
+          : "Everyone you invite gets it in their own calendar: Google, Outlook or Apple."
+      }
+      footer={
+        <>
+          <button type="button" className={`${outlineClass} ml-auto`} onClick={() => onOpenChange(false)}>Cancel</button>
+          <button type="submit" form="meeting-booking-form" className={ctaClass} disabled={saving}>
+            {saving ? "Saving..." : editing ? "Save changes" : "Book meeting"}
+          </button>
+        </>
+      }
+    >
+        <form id="meeting-booking-form" onSubmit={handleSubmit} className="space-y-5">
+          <Field label="Meeting type" hint={config.hint}>
             <Select value={choice} onValueChange={(v) => pickChoice(v as MeetingChoice)}>
               <SelectTrigger className="h-10">
                 <SelectValue />
@@ -292,11 +330,10 @@ export function MeetingBookingSheet({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs" style={{ color: MUTED }}>{config.hint}</p>
           </Field>
 
           {withParticipant && (
-            <Field label="Participant">
+            <Field label="Participant" error={triedSave && missingParticipant ? "Choose who the meeting is with." : null}>
               <SearchableSelect
                 value={participantId}
                 onValueChange={pickParticipant}
@@ -310,9 +347,6 @@ export function MeetingBookingSheet({
                   return { value: p.id, label, keywords: [label, p.address].filter(Boolean).join(" ") };
                 })}
               />
-              {triedSave && missingParticipant && (
-                <p className="text-xs font-medium" style={{ color: DANGER }}>Choose who the meeting is with.</p>
-              )}
             </Field>
           )}
 
@@ -325,15 +359,15 @@ export function MeetingBookingSheet({
             />
           </Field>
 
-          <Field label="When">
-            <div className="space-y-2">
-              <div className="flex h-10 items-center gap-2 rounded-md border px-3" style={{ borderColor: BORDER }}>
-                <CalendarDays size={14} className="shrink-0" style={{ color: MUTED }} />
+          <Field label="When" error={endBeforeStart ? "The meeting has to end after it starts." : null}>
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <div className={FIELD_BOX}>
+                <CalendarDays size={15} className="shrink-0" style={{ color: MUTED }} />
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required
                   className="w-full min-w-0 bg-transparent text-sm outline-none" style={{ color: TEXT }} aria-label="Date" />
               </div>
-              <div className="flex h-10 items-center gap-2 rounded-md border px-3" style={{ borderColor: BORDER }}>
-                <Clock size={14} className="shrink-0" style={{ color: MUTED }} />
+              <div className={FIELD_BOX}>
+                <Clock size={15} className="shrink-0" style={{ color: MUTED }} />
                 <input type="time" value={start} onChange={(e) => setStart(e.target.value)} required
                   className="min-w-0 flex-1 bg-transparent text-sm outline-none" style={{ color: TEXT }} aria-label="Start time" />
                 <span className="shrink-0 text-sm" style={{ color: MUTED }}>to</span>
@@ -341,11 +375,10 @@ export function MeetingBookingSheet({
                   className="min-w-0 flex-1 bg-transparent text-sm outline-none" style={{ color: TEXT }} aria-label="End time" />
               </div>
             </div>
-            {endBeforeStart && <p className="text-xs font-medium" style={{ color: DANGER }}>The meeting has to end after it starts.</p>}
           </Field>
 
           <Field label="How">
-            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Meeting format">
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Meeting format">
               {(Object.keys(MEETING_MODES) as MeetingMode[]).map((m) => {
                 const Icon = MODE_ICONS[m];
                 const selected = mode === m;
@@ -356,14 +389,13 @@ export function MeetingBookingSheet({
                     role="radio"
                     aria-checked={selected}
                     onClick={() => setMode(m)}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors"
-                    style={{
-                      borderColor: selected ? "var(--cc-plum)" : BORDER,
-                      background: selected ? "var(--cc-plum-soft)" : "transparent",
-                      color: selected ? "var(--cc-plum)" : TEXT,
-                    }}
+                    className={`flex min-h-11 items-center justify-center gap-1.5 rounded-xl border px-2 text-sm font-medium transition-colors ${
+                      selected
+                        ? "border-[var(--cc-brand-purple)] bg-[var(--cc-brand-purple-soft)] text-[var(--cc-brand-purple)]"
+                        : "border-cc-border text-cc-text hover:bg-cc-soft"
+                    }`}
                   >
-                    <Icon size={14} /> {MEETING_MODES[m].label}
+                    <Icon size={15} /> {MEETING_MODES[m].label}
                   </button>
                 );
               })}
@@ -372,8 +404,8 @@ export function MeetingBookingSheet({
 
           {mode === "in_person" && (
             <Field label="Where">
-              <div className="flex h-10 items-center gap-2 rounded-md border px-3" style={{ borderColor: BORDER }}>
-                <MapPin size={14} style={{ color: MUTED }} />
+              <div className={FIELD_BOX}>
+                <MapPin size={15} className="shrink-0" style={{ color: MUTED }} />
                 <input value={location} onChange={(e) => setLocation(e.target.value)}
                   placeholder={withParticipant ? "Participant's home, office, community venue..." : "Office, meeting room..."}
                   className="w-full bg-transparent text-sm outline-none" style={{ color: TEXT }} aria-label="Location" />
@@ -383,8 +415,8 @@ export function MeetingBookingSheet({
 
           {mode === "phone" && (
             <Field label="Number to call (optional)">
-              <div className="flex h-10 items-center gap-2 rounded-md border px-3" style={{ borderColor: BORDER }}>
-                <Phone size={14} style={{ color: MUTED }} />
+              <div className={FIELD_BOX}>
+                <Phone size={15} className="shrink-0" style={{ color: MUTED }} />
                 <input value={location} onChange={(e) => setLocation(e.target.value)} inputMode="tel"
                   placeholder="Who calls whom, or a dial-in number"
                   className="w-full bg-transparent text-sm outline-none" style={{ color: TEXT }} aria-label="Number to call" />
@@ -393,30 +425,28 @@ export function MeetingBookingSheet({
           )}
 
           {mode === "in_person" && withParticipant && (
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3" style={{ borderColor: BORDER }}>
-              <Mic size={16} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold" style={{ color: TEXT }}>Record with Easy Capture</span>
-                <span className="block text-xs" style={{ color: MUTED }}>
-                  Record and transcribe the meeting on the day. Goals and tasks from it are suggested on the participant's Meetings tab. Consent is asked before recording starts.
-                </span>
-              </span>
-              <Switch checked={capture} onCheckedChange={setCapture} aria-label="Record with Easy Capture" />
-            </label>
+            <OptionCard
+              icon={Mic}
+              title="Record with Easy Capture"
+              text="Record and transcribe the meeting on the day. Goals and tasks from it are suggested on the participant's Meetings tab. Consent is asked before recording starts."
+              control={<Switch checked={capture} onCheckedChange={setCapture} aria-label="Record with Easy Capture" />}
+            />
           )}
 
-          <Field label="Who to invite">
+          <Field label="Who to invite" error={newEmailError}>
             {withParticipant && !participantId ? (
-              <p className="text-sm" style={{ color: MUTED }}>Choose the participant to see their family, nominee and support workers here.</p>
+              <p className="rounded-xl border border-dashed px-3 py-3 text-sm" style={{ borderColor: BORDER, color: MUTED }}>
+                Choose the participant to see their family, nominee and support workers here.
+              </p>
             ) : inviteesQuery.isLoading ? (
               <p role="status" className="text-sm" style={{ color: MUTED }}>Finding who to invite...</p>
             ) : (
-              <ul className="divide-y rounded-lg border" style={{ borderColor: BORDER }}>
+              <ul className="divide-y overflow-hidden rounded-xl border" style={{ borderColor: BORDER }}>
                 {people.map((p) => {
                   const on = invited.has(p.email.toLowerCase());
                   const id = `invite-${p.email}`;
                   return (
-                    <li key={p.email} className="flex items-center gap-3 px-3 py-2.5" style={{ borderColor: BORDER }}>
+                    <li key={p.email} className="flex min-h-12 items-center gap-3 px-3 py-2" style={{ borderColor: BORDER }}>
                       <Checkbox id={id} checked={on} onCheckedChange={(v) => toggle(p.email, v === true)} />
                       <label htmlFor={id} className="min-w-0 flex-1 cursor-pointer">
                         <span className="block truncate text-sm font-medium" style={{ color: TEXT }}>{p.name || p.email}</span>
@@ -426,21 +456,21 @@ export function MeetingBookingSheet({
                       </label>
                       {p.role === "Added" && (
                         <button type="button" onClick={() => { toggle(p.email, false); setExtra((prev) => prev.filter((x) => x.email !== p.email)); }}
-                          aria-label={`Remove ${p.email}`} className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-cc-soft" style={{ color: MUTED }}>
-                          <X size={14} />
+                          aria-label={`Remove ${p.email}`} className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-cc-soft" style={{ color: MUTED }}>
+                          <X size={15} />
                         </button>
                       )}
                     </li>
                   );
                 })}
                 {people.length === 0 && (
-                  <li className="px-3 py-2.5 text-sm" style={{ color: MUTED }}>No one with an email address yet. Add someone below.</li>
+                  <li className="px-3 py-3 text-sm" style={{ color: MUTED }}>No one with an email address yet. Add someone below.</li>
                 )}
               </ul>
             )}
             <div className="flex gap-2">
-              <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-md border px-3" style={{ borderColor: BORDER }}>
-                <Mail size={14} className="shrink-0" style={{ color: MUTED }} />
+              <div className={`${FIELD_BOX} min-w-0 flex-1`}>
+                <Mail size={15} className="shrink-0" style={{ color: MUTED }} />
                 <input
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
@@ -453,33 +483,25 @@ export function MeetingBookingSheet({
                   style={{ color: TEXT }}
                 />
               </div>
-              <Button type="button" variant="outline" className="h-10 gap-1" onClick={addEmail} disabled={!newEmail.trim() || !!newEmailError}>
-                <Plus size={14} /> Add
-              </Button>
+              <button type="button" className={outlineClass} onClick={addEmail} disabled={!newEmail.trim() || !!newEmailError}>
+                <Plus size={15} /> Add
+              </button>
             </div>
-            {newEmailError && <p className="text-xs font-medium" style={{ color: DANGER }}>{newEmailError}</p>}
           </Field>
 
           {video ? (
-            <p className="rounded-lg border p-3 text-sm" style={{ borderColor: BORDER, color: MUTED }}>
-              <Video size={14} className="mr-1.5 inline-block align-[-2px]" />
-              {MEETING_MODES.video.hint}
-            </p>
+            <OptionCard icon={Video} title="Sent from your own calendar" text={MEETING_MODES.video.hint} />
           ) : (
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3" style={{ borderColor: BORDER }}>
-              <Mail size={16} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold" style={{ color: TEXT }}>
-                  {alreadyInvited ? "Email the updated invite" : "Email calendar invites"}
-                </span>
-                <span className="block text-xs" style={{ color: MUTED }}>
-                  {attendees.length
-                    ? `${attendees.length} ${attendees.length === 1 ? "person gets" : "people get"} an invite they can accept into Google, Outlook or Apple Calendar. If you change or cancel the meeting, their calendars update.`
-                    : "Tick who to invite above."}
-                </span>
-              </span>
-              <Switch checked={sendInvites} onCheckedChange={setSendInvites} aria-label="Email calendar invites" />
-            </label>
+            <OptionCard
+              icon={Mail}
+              title={alreadyInvited ? "Email the updated invite" : "Email calendar invites"}
+              text={
+                attendees.length
+                  ? `${attendees.length} ${attendees.length === 1 ? "person gets" : "people get"} an invite they can accept into Google, Outlook or Apple Calendar. If you change or cancel the meeting, their calendars update.`
+                  : "Tick who to invite above."
+              }
+              control={<Switch checked={sendInvites} onCheckedChange={setSendInvites} aria-label="Email calendar invites" />}
+            />
           )}
 
           <Field label="Agenda and notes">
@@ -487,18 +509,10 @@ export function MeetingBookingSheet({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="What to cover, what to bring. This goes in the invite."
-              className="min-h-[80px] text-sm"
+              className="min-h-[88px] text-sm"
             />
           </Field>
-
-          <div className="flex justify-end gap-2 border-t pt-4" style={{ borderColor: BORDER }}>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" variant="navy" disabled={saving}>
-              {saving ? "Saving..." : editing ? "Save changes" : "Book meeting"}
-            </Button>
-          </div>
         </form>
-      </SheetContent>
-    </Sheet>
+    </SidePanel>
   );
 }

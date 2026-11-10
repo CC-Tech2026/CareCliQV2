@@ -3,7 +3,7 @@ import { NotificationBell, NotificationInbox } from "@/components/notifications/
 import { NotificationRealtimeBridge } from "@/components/worker/NotificationRealtimeBridge";
 import { PageErrorBoundary } from "@/components/ErrorBoundary";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { ManagementPageSearch } from "./ManagementPageSearch";
+import { ManagementPageSearch, type QuickAction } from "./ManagementPageSearch";
 ﻿import { useEffect, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -37,6 +37,9 @@ import {
   BadgeCheck,
   Car,
   Receipt,
+  CalendarPlus,
+  HeartPulse,
+  MailPlus,
   type LucideIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -45,7 +48,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { NAV_INDIGO_NIGHT_HEX } from "@/lib/nav-colors";
-import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
 import {
   getOrganizationBranding,
   type OrganizationBranding,
@@ -197,6 +199,15 @@ const MD_NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
 
 const NAV_ITEMS = MD_NAV_GROUPS.flatMap((group) => group.items);
 
+// Things the director does often, offered first in the header search.
+const MD_QUICK_ACTIONS: readonly QuickAction[] = [
+  { href: "/md/calendar?book=1", label: "Book a meeting", detail: "With a participant, in person or online", icon: CalendarPlus },
+  { href: "/participants/new", label: "Add a participant", detail: "Start a new participant record", icon: HeartPulse },
+  { href: "/team", label: "Invite a staff member", detail: "Send a sign-up invite", icon: MailPlus },
+  { href: "/md/calendar", label: "Calendar", detail: "Shifts and meetings by day, week or month", icon: CalendarDays },
+  { href: "/settings", label: "Settings", detail: "Branding, menu layout and your account", icon: Settings },
+];
+
 function isNavItemActive(location: string, item: NavItem) {
   return (
     [item.href, ...(item.tabs ?? []).map((t) => t.href), ...(item.match ?? [])].some((href) =>
@@ -236,7 +247,7 @@ function WorkspaceTabs({ item, location }: { item: NavItem; location: string }) 
             aria-current={active ? "page" : undefined}
             className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap border-b-2 px-3 text-sm font-semibold transition-colors ${
               active
-                ? "border-[var(--cc-plum)] text-[var(--cc-plum)]"
+                ? "border-[var(--cc-brand-purple)] text-[var(--cc-brand-purple)]"
                 : "border-transparent text-[var(--cc-muted)] hover:text-[var(--cc-text)]"
             }`}
           >
@@ -328,9 +339,10 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
     ? "#6C63FF"
     : navIsDark
       ? "rgba(255,255,255,0.18)"
-      // The button pink: in dark mode --cc-plum is a light pink that white
-      // text can't be read on.
-      : "var(--cc-cta)";
+      // CareCliQ Purple marks where you are in every menu layout (pink is for
+      // the page's own buttons). The fixed hex, not --cc-brand-purple, which
+      // turns light lilac in dark mode and white text can't be read on it.
+      : "#7C3AED";
 
   const [orgName, setOrgName] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -554,22 +566,32 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                   className="h-9 max-w-[80px] object-contain sm:max-w-[120px]"
                 />
               ) : (
-                <CareCliQLogo size={36} />
+                // The full logo stacks the wordmark under the mark, which is
+                // unreadable at header size: the mark on its own, with the
+                // wordmark set beside it in the logo's pink and purple.
+                <span className="flex items-center gap-2">
+                  <img src="/carecliq-mark.png" alt="" className="h-9 w-9 shrink-0" draggable={false} />
+                  <span
+                    className="hidden text-[21px] font-bold leading-none tracking-tight sm:inline"
+                    style={{ fontFamily: "var(--app-font-display)" }}
+                  >
+                    <span style={{ color: "var(--cc-plum)" }}>Care</span>
+                    <span style={{ color: "var(--cc-brand-purple)" }}>CliQ</span>
+                  </span>
+                </span>
               )}
-              <span className={`hidden h-5 w-px bg-[var(--cc-border)] sm:block ${topbarMode ? "xl:max-[1799px]:hidden" : ""}`} />
-              <div className={`hidden min-w-0 lg:block ${topbarMode ? "xl:max-[1799px]:hidden" : ""}`}>
+              {/* With the wordmark beside the mark, the organisation name only fits next
+                  to the menu from 1900px; below that it is in the account menu. */}
+              <span className={`hidden h-6 w-px bg-[var(--cc-border)] lg:block ${topbarMode ? "xl:max-[1899px]:hidden" : ""}`} />
+              <div className={`hidden min-w-0 lg:block ${topbarMode ? "xl:max-[1899px]:hidden" : ""}`}>
                 <div className="flex items-center gap-1.5">
                   <span className="max-w-[240px] truncate text-sm font-semibold tracking-tight" title={organisationDisplay}>
                     {organisationDisplay}
                   </span>
                   {isMD && (
                     <span
-                      className="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold"
-                      style={{
-                        background: "rgba(124,58,237,0.1)",
-                        color: "#7C3AED",
-                        borderColor: "rgba(124,58,237,0.1)",
-                      }}
+                      className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
+                      style={{ background: "var(--cc-brand-purple-soft)", color: "var(--cc-brand-purple)" }}
                     >
                       Governance
                     </span>
@@ -585,7 +607,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             <nav
               ref={navRef}
               aria-label="Managing Director workspaces"
-              className="mx-2 hidden min-w-0 flex-1 items-center justify-center xl:flex"
+              className="mx-5 hidden min-w-0 flex-1 items-center justify-center xl:flex"
             >
               <div
                 className={`flex items-center gap-0.5 2xl:gap-1 ${prefs?.nav_color ? "rounded-full p-1" : ""}`}
@@ -594,10 +616,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               {MD_NAV_GROUPS.map((group) => {
                 const hasActiveRoute = group.items.some((item) => isNavItemActive(location, item));
                 const open = activeGroupHover === group.label;
-                // On the plain header the current group is a soft pink tint, the
-                // same as the active item in its menu, so it doesn't outshout the
-                // page's own main button. A menu colour from Settings keeps its
-                // solid active pill, which that colour scheme is designed around.
+                // On the plain header the current group is a soft CareCliQ Purple
+                // tint, the same as the active item in its menu: purple marks where
+                // you are, pink is kept for the page's own buttons. A menu colour
+                // from Settings keeps its solid active pill, which that colour
+                // scheme is designed around.
                 const quietActive = hasActiveRoute && !prefs?.nav_color;
                 return (
                   <div key={group.label} className="relative">
@@ -612,8 +635,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                       style={{
                         // An open menu keeps its trigger lit, so it's clear which
                         // group the list below belongs to.
-                        background: quietActive ? "var(--cc-plum-soft)" : hasActiveRoute ? navActiveBg : open ? navHoverBg : undefined,
-                        color: quietActive ? "var(--cc-plum)" : hasActiveRoute ? "#FFFFFF" : open ? navTextHover : navText,
+                        background: quietActive ? "var(--cc-brand-purple-soft)" : hasActiveRoute ? navActiveBg : open ? navHoverBg : undefined,
+                        color: quietActive ? "var(--cc-brand-purple)" : hasActiveRoute ? "#FFFFFF" : open ? navTextHover : navText,
                         ["--nav-hover-bg" as string]: navHoverBg,
                         ["--nav-text-hover" as string]: navTextHover,
                       }}
@@ -635,13 +658,14 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                                 key={item.href}
                                 href={item.href}
                                 onClick={() => setActiveGroupHover(null)}
+                                aria-current={active ? "page" : undefined}
                                 className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                                   active
-                                    ? "bg-[var(--cc-plum-soft)] text-[var(--cc-plum)]"
-                                    : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
+                                    ? "bg-[var(--cc-brand-purple-soft)] text-[var(--cc-brand-purple)]"
+                                    : "text-[var(--cc-text)] hover:bg-[var(--cc-soft)]"
                                 }`}
                               >
-                                <Icon size={16} />
+                                <Icon size={16} className={active ? "" : "text-[var(--cc-muted)]"} />
                                 <span>{item.label}</span>
                                 <NavCountBadge count={NAV_BADGE_COUNTS[item.href] ?? 0} />
                               </Link>
@@ -659,12 +683,13 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
           {isMD && (
             <div className={`mx-2 min-w-0 max-w-md shrink-0 md:flex-1 md:px-2 ${topbarMode ? "xl:mx-0 xl:flex-none xl:px-0 min-[1800px]:w-56" : ""}`}>
-              <ManagementPageSearch groups={MD_NAV_GROUPS} compactOnDesktop={topbarMode} />
+              <ManagementPageSearch groups={MD_NAV_GROUPS} actions={MD_QUICK_ACTIONS} includePeople compactOnDesktop={topbarMode} />
             </div>
           )}
 
-          {/* Executive Control Group */}
-          <div className="flex shrink-0 items-center gap-1 sm:gap-2" ref={profileRef}>
+          {/* Executive Control Group. Every control here is the same 44px round
+              button with an 18px icon, so they line up on one centre line. */}
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1" ref={profileRef}>
             <NotificationBell onClick={() => setNotificationsOpen(true)} />
             <NotificationRealtimeBridge />
               <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}><SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md [&>button]:hidden"><SheetHeader className="sr-only"><SheetTitle>Notifications</SheetTitle><SheetDescription>Your notifications and team alerts</SheetDescription></SheetHeader>{notificationsOpen && <NotificationInbox onClose={() => setNotificationsOpen(false)} />}</SheetContent></Sheet>
@@ -677,21 +702,21 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                 href="/md/calendar"
                 className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors ${
                   location === "/md/calendar"
-                    ? "bg-[var(--cc-plum-soft)] text-[var(--cc-plum)]"
+                    ? "bg-[var(--cc-brand-purple-soft)] text-[var(--cc-brand-purple)]"
                     : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
                 }`}
                 aria-label="Calendar: shifts and meetings"
                 aria-current={location === "/md/calendar" ? "page" : undefined}
                 title="Calendar: shifts and meetings"
               >
-                <CalendarDays size={17} />
+                <CalendarDays size={18} />
               </Link>
             )}
 
             {/* Day / Night pill — both options always visible, active one highlighted. */}
             <div
-              className="hidden xl:inline-flex items-center gap-0.5 rounded-full border p-0.5"
-              style={{ borderColor: "var(--cc-border)", background: "var(--cc-surface)" }}
+              className="mx-1 hidden h-9 items-center gap-0.5 rounded-full p-0.5 xl:inline-flex"
+              style={{ background: "var(--cc-soft)" }}
               role="group"
               aria-label="Theme"
             >
@@ -708,19 +733,19 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                     aria-pressed={selected}
                     aria-label={label}
                     title={label}
-                    className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+                    className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
                       selected
-                        ? "bg-[var(--cc-plum-soft)] text-[var(--cc-plum)]"
-                        : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
+                        ? "bg-[var(--cc-surface)] text-[var(--cc-brand-purple)] shadow-sm"
+                        : "text-[var(--cc-muted)] hover:text-[var(--cc-text)]"
                     }`}
                   >
-                    <Icon size={15} aria-hidden />
+                    <Icon size={16} aria-hidden />
                   </button>
                 );
               })}
             </div>
 
-            <div className="mx-1 h-5 w-px bg-[var(--cc-border)] hidden sm:block" />
+            <div className="mx-1.5 hidden h-6 w-px bg-[var(--cc-border)] sm:block" />
 
             {/* MD User Menu */}
             <button
@@ -728,11 +753,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               onClick={() => setProfileOpen((prev) => !prev)}
               aria-label="Account menu"
               aria-expanded={profileOpen}
-              className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full p-1 border border-transparent hover:border-[var(--cc-border)] hover:bg-[var(--cc-soft)]/60 transition-all"
+              className={`flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-[var(--cc-soft)] ${profileOpen ? "bg-[var(--cc-soft)]" : ""}`}
             >
               <div
-                className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold text-white shadow-sm"
-                style={{ background: "var(--cc-cta)" }}
+                className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold text-white"
+                style={{ background: "#7C3AED" }}
               >
                 {user?.profile_photo_url ? (
                   <img
@@ -744,10 +769,10 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                   initials
                 )}
               </div>
-              <span className={`hidden max-w-32 truncate text-xs font-semibold pr-1 ${topbarMode ? "min-[1800px]:block" : "xl:block"}`}>
+              <span className={`hidden max-w-32 truncate text-sm font-semibold ${topbarMode ? "min-[1800px]:block" : "xl:block"}`}>
                 {displayName}
               </span>
-              <ChevronDown size={14} className="text-[var(--cc-muted)]" />
+              <ChevronDown size={16} className={`text-[var(--cc-muted)] transition-transform duration-200 ${profileOpen ? "rotate-180" : ""}`} />
             </button>
 
             {/* Profile Dropdown */}
@@ -868,10 +893,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                                 key={item.href}
                                 href={item.href}
                                 onClick={() => setActiveGroupHover(null)}
+                                aria-current={active ? "page" : undefined}
                                 className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                                   active
-                                    ? "bg-[var(--cc-plum-soft)] text-[var(--cc-plum)]"
-                                    : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
+                                    ? "bg-[var(--cc-brand-purple-soft)] text-[var(--cc-brand-purple)]"
+                                    : "text-[var(--cc-text)] hover:bg-[var(--cc-soft)]"
                                 }`}
                               >
                                 <Icon size={16} />
@@ -968,10 +994,11 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                                 key={item.href}
                                 href={item.href}
                                 onClick={() => setActiveGroupHover(null)}
+                                aria-current={active ? "page" : undefined}
                                 className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                                   active
-                                    ? "bg-[var(--cc-plum-soft)] text-[var(--cc-plum)]"
-                                    : "text-[var(--cc-muted)] hover:bg-[var(--cc-soft)] hover:text-[var(--cc-text)]"
+                                    ? "bg-[var(--cc-brand-purple-soft)] text-[var(--cc-brand-purple)]"
+                                    : "text-[var(--cc-text)] hover:bg-[var(--cc-soft)]"
                                 }`}
                               >
                                 <Icon size={16} />
