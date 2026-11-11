@@ -275,7 +275,7 @@ function SignatureCard({
           <p className="text-sm font-semibold flex items-center gap-1.5" style={{ color: TEXT }}>
             <CheckCircle2 size={14} style={{ color: SUCCESS }} /> {signedName}
           </p>
-          <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>
+          <p className="text-xs mt-0.5" style={{ color: MUTED }}>
             Signed {new Date(signedAt!).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
           </p>
         </div>
@@ -712,7 +712,7 @@ function ApplicantCard({ applicant, onReject, onOpen }: { applicant: Applicant; 
         opacity: isDragging ? 0.4 : 1,
         borderColor: BORDER,
       }}
-      className="group relative select-none rounded-2xl border bg-white p-4 shadow-sm transition-[transform,box-shadow,opacity] duration-150 hover:-translate-y-0.5 hover:shadow-md"
+      className="group relative select-none rounded-2xl border bg-cc-surface p-4 transition-[background-color,opacity] duration-150 hover:bg-cc-soft"
     >
       <div
         className="cursor-grab active:cursor-grabbing"
@@ -723,16 +723,16 @@ function ApplicantCard({ applicant, onReject, onOpen }: { applicant: Applicant; 
         <div className="flex items-start gap-3 pr-5">
           <Avatar name={applicant.full_name} size={36} color={accent} />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[12px] font-black" style={{ color: TEXT }}>{applicant.full_name}</p>
-            <p className="mt-0.5 truncate text-[10px] font-medium" style={{ color: MUTED }}>{roleLabel}</p>
+            <p className="truncate text-sm font-semibold" style={{ color: TEXT }}>{applicant.full_name}</p>
+            <p className="mt-0.5 truncate text-xs" style={{ color: MUTED }}>{roleLabel}</p>
           </div>
         </div>
-        <div className="mt-3 flex items-center gap-1.5 text-[10px] font-medium" style={{ color: MUTED }}>
+        <div className="mt-3 flex items-center gap-1.5 text-xs" style={{ color: MUTED }}>
           <CalendarDays size={11} />
           <span className="truncate">{applicantMeta(applicant)}</span>
         </div>
         {isNew && (
-          <span className="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black" style={{ background: "#EEF1F5", color: "#3D5A6C" }}>
+          <span className="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: SOFT, color: MUTED }}>
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: CORAL }} /> New
           </span>
         )}
@@ -754,15 +754,15 @@ function ApplicantCard({ applicant, onReject, onOpen }: { applicant: Applicant; 
 function ApplicantDragClone({ applicant }: { applicant: Applicant }) {
   const roleLabel = applicant.role === "support_coordinator" ? "Support Coordinator" : "Support Worker";
   return (
-    <div className="w-[248px] rotate-2 cursor-grabbing rounded-2xl border-2 bg-white p-4 shadow-2xl" style={{ borderColor: PLUM }}>
+    <div className="w-[248px] rotate-2 cursor-grabbing rounded-2xl border-2 bg-cc-surface p-4 shadow-2xl" style={{ borderColor: PLUM }}>
       <div className="flex items-start gap-3">
         <Avatar name={applicant.full_name} size={36} color={STAGE_COLOR.interview} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-black" style={{ color: TEXT }}>{applicant.full_name}</p>
-          <p className="mt-0.5 truncate text-[10px] font-medium" style={{ color: MUTED }}>{roleLabel}</p>
+          <p className="truncate text-sm font-semibold" style={{ color: TEXT }}>{applicant.full_name}</p>
+          <p className="mt-0.5 truncate text-xs" style={{ color: MUTED }}>{roleLabel}</p>
         </div>
       </div>
-      <div className="mt-3 flex items-center gap-1.5 text-[10px] font-medium" style={{ color: MUTED }}>
+      <div className="mt-3 flex items-center gap-1.5 text-xs" style={{ color: MUTED }}>
         <CalendarDays size={11} />
         <span className="truncate">{applicantMeta(applicant)}</span>
       </div>
@@ -805,7 +805,7 @@ function ColumnHeading({
         </div>
       )}
       {onOpenAll ? (
-        <span className="flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-[10px] font-black" style={{ background: `${color}1F`, color }}>
+        <span className="flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-xs font-medium" style={{ background: `${color}1F`, color }}>
           {count}
         </span>
       ) : (
@@ -823,17 +823,17 @@ function ColumnPager({ page, totalPages, onChange }: { page: number; totalPages:
         type="button"
         onClick={() => onChange(Math.max(0, page - 1))}
         disabled={page === 0}
-        className="rounded-lg px-2 py-1 text-[10px] font-bold transition-opacity disabled:opacity-30"
+        className="rounded-lg px-2 py-1 text-xs font-medium transition-opacity disabled:opacity-30"
         style={{ color: MUTED }}
       >
         ‹ Prev
       </button>
-      <span className="text-[10px] font-bold" style={{ color: MUTED }}>{page + 1} / {totalPages}</span>
+      <span className="text-xs font-medium" style={{ color: MUTED }}>{page + 1} / {totalPages}</span>
       <button
         type="button"
         onClick={() => onChange(Math.min(totalPages - 1, page + 1))}
         disabled={page === totalPages - 1}
-        className="rounded-lg px-2 py-1 text-[10px] font-bold transition-opacity disabled:opacity-30"
+        className="rounded-lg px-2 py-1 text-xs font-medium transition-opacity disabled:opacity-30"
         style={{ color: MUTED }}
       >
         Next ›
@@ -859,7 +859,7 @@ function DroppableColumn<T>({
       ref={setNodeRef}
       className="flex min-h-[220px] w-[300px] shrink-0 scale-100 flex-col gap-3 rounded-2xl p-4 transition-all duration-150 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink"
       style={{
-        background: active ? "var(--cc-plum-soft)" : "var(--cc-bg)",
+        background: active ? "var(--cc-plum-soft)" : "var(--cc-surface)",
         opacity: disabled ? 0.5 : 1,
         outline: active ? `2px dashed ${PLUM}` : "2px dashed transparent",
         outlineOffset: -6,
@@ -896,7 +896,7 @@ function StaticColumn<T>({
   const clampedPage = Math.min(page, totalPages - 1);
   const pageItems = items.slice(clampedPage * COLUMN_PAGE_SIZE, clampedPage * COLUMN_PAGE_SIZE + COLUMN_PAGE_SIZE);
   return (
-    <div className="flex min-h-[220px] w-[300px] shrink-0 flex-col gap-3 rounded-2xl p-4 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink" style={{ background: "var(--cc-bg)" }}>
+    <div className="flex min-h-[220px] w-[300px] shrink-0 flex-col gap-3 rounded-2xl p-4 lg:min-h-[430px] lg:w-auto lg:min-w-[280px] lg:flex-1 lg:shrink" style={{ background: "var(--cc-surface)", boxShadow: `inset 0 0 0 1px ${BORDER}` }}>
       <ColumnHeading label={label} count={items.length} color={color} onOpenAll={onOpenAll} openAllTitle={openAllTitle} />
       <div className="flex min-h-[120px] flex-1 flex-col gap-2.5">
         {pageItems.map(renderItem)}
@@ -921,17 +921,17 @@ function OfferLetterCard({ hire, onOpen }: { hire: PipelinePerson; onOpen: () =>
   const { meta, attention } = offerLetterMeta(hire);
   const accent = STAGE_COLOR.offer_extended;
   return (
-    <button onClick={onOpen} className="group w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md" style={{ borderColor: BORDER }}>
+    <button onClick={onOpen} className="group w-full rounded-2xl border bg-cc-surface p-4 text-left transition-colors hover:bg-cc-soft" style={{ borderColor: BORDER }}>
       <div className="flex items-start gap-3">
         <Avatar name={hire.full_name} size={36} color={accent} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-black" style={{ color: TEXT }}>{hire.full_name}</p>
-          <p className="mt-0.5 truncate text-[10px] font-medium" style={{ color: MUTED }}>Offer letter</p>
+          <p className="truncate text-sm font-semibold" style={{ color: TEXT }}>{hire.full_name}</p>
+          <p className="mt-0.5 truncate text-xs" style={{ color: MUTED }}>Offer letter</p>
         </div>
         <ArrowRight size={14} className="mt-1 opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" style={{ color: MUTED }} />
       </div>
-      <p className="mt-3 truncate text-[10px] font-medium" style={{ color: MUTED }}>{meta}</p>
-      <span className="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black" style={{ background: attention ? WARNING_BG : SOFT, color: attention ? WARNING : MUTED }}>
+      <p className="mt-3 truncate text-xs" style={{ color: MUTED }}>{meta}</p>
+      <span className="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: attention ? WARNING_BG : SOFT, color: attention ? WARNING : MUTED }}>
         {attention ? <><AlertCircle size={9} /> Action needed</> : "In progress"}
       </span>
     </button>
@@ -1333,7 +1333,7 @@ function ApplicantDetailSheet({
                   className={`mt-3 resize-none ${textareaClass}`}
                   style={{ borderColor: BORDER, color: TEXT }}
                 />
-                {notesMut.isPending && <p className="mt-1.5 text-[10px]" style={{ color: MUTED }}>Saving…</p>}
+                {notesMut.isPending && <p className="mt-1.5 text-xs" style={{ color: MUTED }}>Saving…</p>}
               </div>
 
               <button
@@ -1356,9 +1356,9 @@ function ConfirmOfferModal({
 }: { applicant: Applicant; onConfirm: () => void; onCancel: () => void; confirming: boolean }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-sm rounded-2xl border bg-white shadow-2xl" style={{ borderColor: BORDER }}>
+      <div className="w-full max-w-sm rounded-2xl border bg-cc-surface shadow-2xl" style={{ borderColor: BORDER }}>
         <div className="px-5 pt-5 pb-4 border-b" style={{ borderColor: BORDER }}>
-          <h2 className="text-[15px] font-black" style={{ color: TEXT }}>Extend an offer?</h2>
+          <h2 className="text-base font-semibold" style={{ color: TEXT }}>Extend an offer?</h2>
           <p className="mt-1 text-[12px]" style={{ color: MUTED }}>
             This creates a real hire record for {applicant.full_name} — you'll attach the offer letter and send it for signature next.
           </p>
@@ -1380,9 +1380,9 @@ function RejectModal({
   const [reason, setReason] = useState("");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-sm rounded-2xl border bg-white shadow-2xl" style={{ borderColor: BORDER }}>
+      <div className="w-full max-w-sm rounded-2xl border bg-cc-surface shadow-2xl" style={{ borderColor: BORDER }}>
         <div className="px-5 pt-5 pb-4 border-b" style={{ borderColor: BORDER }}>
-          <h2 className="text-[15px] font-black" style={{ color: TEXT }}>Reject {applicant.full_name}?</h2>
+          <h2 className="text-base font-semibold" style={{ color: TEXT }}>Reject {applicant.full_name}?</h2>
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -1424,15 +1424,15 @@ function roleLabelFor(role?: string | null): string {
 function FlagBadge({ flag }: { flag?: PipelinePerson["flag"] }) {
   if (flag === "warn") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black" style={{ background: WARNING_BG, color: WARNING }}>
+      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: WARNING_BG, color: WARNING }}>
         <Clock size={9} /> Action needed
       </span>
     );
   }
   if (flag === "complete") {
-    return <span className="rounded-full px-2 py-0.5 text-[9px] font-black" style={{ background: SUCCESS_BG, color: SUCCESS }}>Active</span>;
+    return <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: SUCCESS_BG, color: SUCCESS }}>Active</span>;
   }
-  return <span className="rounded-full px-2 py-0.5 text-[9px] font-black" style={{ background: SOFT, color: MUTED }}>In progress</span>;
+  return <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: SOFT, color: MUTED }}>In progress</span>;
 }
 
 const OVERSIGHT_LABEL: Record<OversightColumnKey, string> = { credentials: "Screening/Credentials", training: "Training", active: "Active" };
@@ -1450,18 +1450,18 @@ function OversightCard({ columnKey, person, onOpen }: { columnKey: OversightColu
   const isAttention = person.flag === "warn";
   const accent = STAGE_COLOR[columnKey];
   return (
-    <button onClick={onOpen} className="group w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md" style={{ borderColor: BORDER }}>
+    <button onClick={onOpen} className="group w-full rounded-2xl border bg-cc-surface p-4 text-left transition-colors hover:bg-cc-soft" style={{ borderColor: BORDER }}>
       <div className="flex items-start gap-3">
         <Avatar name={person.full_name} size={36} color={accent} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-black" style={{ color: TEXT }}>{person.full_name}</p>
-          <p className="mt-0.5 truncate text-[10px] font-medium" style={{ color: MUTED }}>{OVERSIGHT_LABEL[columnKey]}</p>
+          <p className="truncate text-sm font-semibold" style={{ color: TEXT }}>{person.full_name}</p>
+          <p className="mt-0.5 truncate text-xs" style={{ color: MUTED }}>{OVERSIGHT_LABEL[columnKey]}</p>
         </div>
         <ArrowRight size={14} className="mt-1 opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" style={{ color: MUTED }} />
       </div>
-      <p className="mt-3 truncate text-[10px] font-medium" style={{ color: MUTED }}>{oversightMeta(columnKey, person)}</p>
+      <p className="mt-3 truncate text-xs" style={{ color: MUTED }}>{oversightMeta(columnKey, person)}</p>
       <div className="mt-2"><FlagBadge flag={person.flag} /></div>
-      {isAttention && <div className="mt-2 flex items-center gap-1 text-[9px] font-bold" style={{ color: WARNING }}><AlertCircle size={10} /> Requires attention</div>}
+      {isAttention && <div className="mt-2 flex items-center gap-1 text-xs font-medium" style={{ color: WARNING }}><AlertCircle size={10} /> Requires attention</div>}
     </button>
   );
 }
@@ -1502,7 +1502,7 @@ function PipelineListView({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="overflow-hidden rounded-2xl border bg-cc-surface" style={{ borderColor: BORDER }}>
       <div className="grid grid-cols-[1fr_140px_140px_1fr_76px] gap-3 border-b px-5 py-2.5 text-xs font-medium" style={{ borderColor: BORDER, color: MUTED }}>
         <SortHeader label="Candidate" k="name" />
         <SortHeader label="Role" k="name" className="hidden sm:flex" />
@@ -1522,10 +1522,10 @@ function PipelineListView({
             >
               <div className="flex min-w-0 items-center gap-3">
                 <Avatar name={row.name} size={30} color={row.color} />
-                <p className="truncate text-[12px] font-black" style={{ color: TEXT }}>{row.name}</p>
+                <p className="truncate text-sm font-semibold" style={{ color: TEXT }}>{row.name}</p>
               </div>
               <p className="hidden truncate text-[11px] font-medium sm:block" style={{ color: MUTED }}>{row.roleLabel}</p>
-              <span className="inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black" style={{ background: `${row.color}1F`, color: row.color }}>
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: `${row.color}1F`, color: row.color }}>
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: row.color }} />
                 {row.stageLabel}
               </span>
@@ -1545,7 +1545,7 @@ function PipelineListView({
                 )}
                 {row.onOpen && (
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors group-hover:bg-black/5">
-                    <ArrowRight size={14} style={{ color: "#B8B4B0" }} className="transition-transform group-hover:translate-x-0.5" />
+                    <ArrowRight size={14} style={{ color: MUTED }} className="transition-transform group-hover:translate-x-0.5" />
                   </span>
                 )}
               </div>
@@ -1740,34 +1740,19 @@ export default function StaffOnboardingBoard() {
 
   return (
     <>
-      <div className="space-y-6 pb-12">
+      <div className="space-y-4 pb-12">
         {hireGrant && <TemporaryAccessBanner grant={hireGrant} label={hireGrantLabel} />}
         <PageHeader
-          back={
-            <button type="button" onClick={() => navigate("/hub")} className={`${ghostClass} -ml-4`}>
-              <ArrowLeft size={15} /> Back to Hub
-            </button>
-          }
           eyebrow="Workforce & People"
-          title={
-            <span className="inline-flex items-center gap-2">
-              Staff Onboarding
-              <SectionInfo text="Manage candidates from interview through activation, and track them through credentials and training." />
-            </span>
-          }
-          description={
+          title="Staff onboarding"
+          description="Candidates from interview through to their first shift, with credentials and training tracked on the way."
+          actions={
             <>
-              Candidates from interview through to their first shift, with credentials and training tracked on the way.
               {pipelineQuery.dataUpdatedAt > 0 && (
-                <span className="ml-1 inline-flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: SUCCESS }} />
+                <span role="status" className="px-2 text-xs" style={{ color: MUTED }}>
                   Updated {new Date(pipelineQuery.dataUpdatedAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}
                 </span>
               )}
-            </>
-          }
-          actions={
-            <>
               <GovernanceTriage
                 variant="floating"
                 onNavigate={navigate}
@@ -1785,13 +1770,13 @@ export default function StaffOnboardingBoard() {
 
         {pipelineQuery.isLoading ? (
           <div className="space-y-4">
-            <div className="h-11 w-2/3 animate-pulse rounded-full bg-cc-bg" />
+            <div className="h-11 w-2/3 animate-pulse rounded-full bg-cc-surface" />
             <div className="flex gap-3 overflow-hidden">
-              {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-[420px] min-w-[250px] flex-1 animate-pulse rounded-2xl bg-cc-bg" />)}
+              {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-[420px] min-w-[250px] flex-1 animate-pulse rounded-2xl bg-cc-surface" />)}
             </div>
           </div>
         ) : !data ? (
-          <div role="alert" className="rounded-2xl bg-cc-bg px-6 py-12 text-center">
+          <div role="alert" className="rounded-2xl bg-cc-surface px-6 py-12 text-center">
             <p className="text-base font-semibold" style={{ color: TEXT }}>Could not load Staff Onboarding</p>
             <p className="mt-1 text-sm" style={{ color: MUTED }}>Reload the page to try again.</p>
           </div>
@@ -1851,7 +1836,7 @@ export default function StaffOnboardingBoard() {
               </div>
             </div>
 
-            <div className="flex items-start gap-3 rounded-2xl bg-cc-bg px-5 py-3.5">
+            <div className="flex items-start gap-3 rounded-2xl border border-cc-border bg-cc-surface px-5 py-3.5">
               <Settings2 size={16} style={{ color: MUTED }} className="mt-0.5 shrink-0" />
               <div className="min-w-0 flex-1">
                 <button onClick={() => setRulesOpen((v) => !v)} className="flex w-full items-center gap-2 text-left">
@@ -1936,10 +1921,10 @@ export default function StaffOnboardingBoard() {
               <PipelineListView rows={listRows} sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
             )}
 
-            <div className="overflow-hidden rounded-2xl bg-cc-bg">
+            <div className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
               <button onClick={() => setNotProceedingOpen((v) => !v)} className="flex w-full items-center gap-2 px-5 py-4 transition-colors hover:bg-cc-soft">
                 <p className="text-sm font-semibold" style={{ color: TEXT }}>Not proceeding</p>
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-black" style={{ background: SOFT, color: MUTED }}>{notProceedingCount}</span>
+                <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: SOFT, color: MUTED }}>{notProceedingCount}</span>
                 {notProceedingOpen ? <ChevronUp size={14} className="ml-auto" style={{ color: MUTED }} /> : <ChevronDown size={14} className="ml-auto" style={{ color: MUTED }} />}
               </button>
               {notProceedingOpen && (
@@ -1950,7 +1935,7 @@ export default function StaffOnboardingBoard() {
                   {data.not_proceeding.rejected_applicants.map((p) => (
                     <div key={p.id} className="rounded-2xl border-l-[3px] p-3 opacity-70" style={{ borderColor: BORDER, borderLeftColor: "#C8C4BC", background: SOFT }}>
                       <p className="text-[11px] font-bold" style={{ color: TEXT }}>{p.full_name}</p>
-                      <p className="text-[10px] font-medium" style={{ color: MUTED }}>Rejected</p>
+                      <p className="text-xs" style={{ color: MUTED }}>Rejected</p>
                     </div>
                   ))}
                   {data.not_proceeding.expired_offers.map((p) => (
@@ -1961,13 +1946,13 @@ export default function StaffOnboardingBoard() {
                       style={{ borderColor: BORDER, borderLeftColor: DANGER, background: SOFT }}
                     >
                       <p className="text-[11px] font-bold" style={{ color: TEXT }}>{p.full_name}</p>
-                      <p className="text-[10px] font-medium" style={{ color: DANGER }}>Offer expired · click to resend</p>
+                      <p className="text-xs" style={{ color: DANGER }}>Offer expired · click to resend</p>
                     </button>
                   ))}
                   {data.not_proceeding.auto_deactivated_workers.map((p) => (
                     <div key={p.id} className="rounded-2xl border-l-[3px] p-3 opacity-70" style={{ borderColor: BORDER, borderLeftColor: "#C8C4BC", background: SOFT }}>
                       <p className="text-[11px] font-bold" style={{ color: TEXT }}>{p.full_name}</p>
-                      <p className="text-[10px] font-medium" style={{ color: MUTED }}>Auto-deactivated</p>
+                      <p className="text-xs" style={{ color: MUTED }}>Auto-deactivated</p>
                     </div>
                   ))}
                 </div>

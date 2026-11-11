@@ -34,19 +34,8 @@ export default function OnboardingWorkspace() {
 
   return (
     <HubLayout>
-      <div className="space-y-0">
-        {!viewingDetail && <OnboardingAreaSwitcher active={active} />}
-        {/* Same background as the active tab (--cc-surface) so the tab
-            visually opens into this panel rather than into the page
-            canvas behind it — the curved tab corners only read correctly
-            when the two colors actually match. */}
-        <div
-          className={viewingDetail ? "" : "rounded-b-3xl rounded-tr-3xl p-6"}
-          style={viewingDetail ? undefined : { background: "var(--cc-surface)" }}
-        >
-          {active === "staff" ? <StaffOnboardingBoard /> : <ParticipantOnboardingBoard />}
-        </div>
-      </div>
+      {!viewingDetail && <OnboardingAreaSwitcher active={active} />}
+      {active === "staff" ? <StaffOnboardingBoard /> : <ParticipantOnboardingBoard />}
     </HubLayout>
   );
 }

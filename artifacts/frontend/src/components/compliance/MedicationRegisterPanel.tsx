@@ -4,7 +4,7 @@ import { AlertTriangle, Clock3, FileText, GitCommitHorizontal, Pill, ShieldAlert
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { KpiCard, KpiGrid } from "@/components/ui/stat-card";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { SidePanel } from "@/components/layout/SidePanel";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { formatAppTimeWithZone } from "@/lib/datetime";
@@ -316,17 +316,17 @@ function MedicationHistoryDrawer({ medicationId, onClose }: { medicationId: stri
   });
 
   return (
-    <Sheet open={!!medicationId} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>{data?.medication.name ?? translate("compliance.centre.medications.title")}</SheetTitle>
-          <SheetDescription>{translate("compliance.centre.medications.historyDesc")}</SheetDescription>
-        </SheetHeader>
-
+    <SidePanel
+      open={!!medicationId}
+      onOpenChange={(open) => { if (!open) onClose(); }}
+      icon={Pill}
+      title={data?.medication.name ?? translate("compliance.centre.medications.title")}
+      description={translate("compliance.centre.medications.historyDesc")}
+    >
         {isLoading ? (
           <LoadingBlock label={translate("common.loading")} />
         ) : data ? (
-          <div className="mt-4 space-y-4">
+          <div className="space-y-4">
             <div className="rounded-xl border p-3 space-y-1" style={{ borderColor: BORDER }}>
               <p className="text-[11px]" style={{ color: MUTED }}>
                 {data.medication.participant_name} · {data.medication.dosage || ""} {data.medication.route}
@@ -397,7 +397,6 @@ function MedicationHistoryDrawer({ medicationId, onClose }: { medicationId: stri
             )}
           </div>
         ) : null}
-      </SheetContent>
-    </Sheet>
+    </SidePanel>
   );
 }

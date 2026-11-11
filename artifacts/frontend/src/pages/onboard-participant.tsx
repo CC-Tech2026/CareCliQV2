@@ -1658,20 +1658,10 @@ export default function ParticipantOnboardingBoard() {
 
   return (
     <>
-      <div className="space-y-6 pb-12">
+      <div className="space-y-4 pb-12">
         <PageHeader
-          back={
-            <button type="button" onClick={() => navigate("/hub")} className={`${kitGhostClass} -ml-4`}>
-              <ArrowLeft size={15} /> Back to Hub
-            </button>
-          }
           eyebrow="Participants & Intake"
-          title={
-            <span className="inline-flex items-center gap-2">
-              Participant Onboarding
-              <SectionInfo text="Manage participants from initial referral through to plan activation, service agreements, and care coordination." />
-            </span>
-          }
+          title="Participant onboarding"
           description="Move a new participant from referral through to an active plan: intake, consent, meet & greet, and setup."
           actions={
             <>
@@ -1786,7 +1776,7 @@ export default function ParticipantOnboardingBoard() {
                 <div
                   key={col.id}
                   className="flex min-h-[220px] w-[300px] shrink-0 scale-100 flex-col gap-3 rounded-2xl p-4 transition-all duration-150 lg:min-h-[430px] lg:w-auto lg:min-w-[200px] lg:flex-1 lg:shrink"
-                  style={{ background: "var(--cc-bg)" }}
+                  style={{ background: "var(--cc-surface)", boxShadow: `inset 0 0 0 1px ${BORDER}` }}
                 >
                   <div className="flex items-center justify-between px-0.5 pb-0.5">
                     {col.id === "active" ? (

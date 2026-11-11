@@ -772,10 +772,11 @@ export function NotificationBell({ onClick }: { onClick: () => void }) {
 
   const label = unread > 0 ? translateParams("inbox.bellUnread", { count: String(unread) }) : translate("inbox.title");
   return (
-    <button type="button" aria-label={label} title={label} className="relative min-h-11 min-w-11 rounded-full p-2 transition-colors hover:bg-black/5" onClick={onClick}>
-      <Bell size={20} style={{ color: "var(--cc-muted)" }} />
+    <button type="button" aria-label={label} title={label} className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-cc-muted transition-colors hover:bg-cc-soft hover:text-cc-text" onClick={onClick}>
+      <Bell size={18} />
+      {/* CareCliQ Purple, ringed in the header colour so it sits cleanly on the icon. */}
       {unread > 0 && (
-        <span className="absolute right-0.5 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-black" style={{ background: "var(--cc-coral)", color: "#fff" }}>
+        <span className="absolute right-1 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold ring-2 ring-[var(--cc-surface)]" style={{ background: "#7C3AED", color: "#fff" }}>
           {unread > 99 ? "99+" : unread}
         </span>
       )}

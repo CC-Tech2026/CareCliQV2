@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SidePanel } from "@/components/layout/SidePanel";
+import { ctaClass, outlineClass } from "@/components/layout/PageKit";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { useToast } from "@/hooks/use-toast";
@@ -109,12 +110,27 @@ function CreateGrantSheet({
   const canSubmit = Boolean(coordinatorId && capability && expiresAt);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto p-6 sm:max-w-md" style={{ background: "var(--cc-bg)" }}>
-        <SheetHeader>
-          <SheetTitle>Grant temporary access</SheetTitle>
-        </SheetHeader>
-        <div className="mt-6 space-y-5">
+    <SidePanel
+      open={open}
+      onOpenChange={onOpenChange}
+      icon={ShieldCheck}
+      title="Grant temporary access"
+      description="Let a coordinator do one thing you normally do, until a time you choose."
+      footer={
+        <>
+          <button type="button" className={outlineClass} onClick={() => onOpenChange(false)}>Cancel</button>
+          <button
+            type="button"
+            className={ctaClass}
+            onClick={() => createMutation.mutate()}
+            disabled={!canSubmit || createMutation.isPending}
+          >
+            {createMutation.isPending ? "Granting..." : "Grant access"}
+          </button>
+        </>
+      }
+    >
+        <div className="space-y-5">
           <div>
             <Label htmlFor="grant-coordinator">Coordinator</Label>
             <Select value={coordinatorId} onValueChange={setCoordinatorId}>
@@ -176,17 +192,7 @@ function CreateGrantSheet({
             />
           </div>
         </div>
-        <SheetFooter className="mt-6">
-          <Button
-            onClick={() => createMutation.mutate()}
-            disabled={!canSubmit || createMutation.isPending}
-            className="w-full"
-          >
-            {createMutation.isPending ? "Granting…" : "Grant access"}
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+    </SidePanel>
   );
 }
 

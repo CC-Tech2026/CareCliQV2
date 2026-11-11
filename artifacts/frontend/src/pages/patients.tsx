@@ -2705,7 +2705,7 @@ export default function Patients() {
   );
 
   return (
-    <div className="flex h-[calc(100dvh-8.5rem)] md:h-[calc(100dvh-8rem)] gap-0 md:gap-4 overflow-hidden -mx-4 md:mx-0">
+    <div className="flex h-[calc(100dvh-8.5rem)] md:h-[calc(100dvh-8rem)] gap-0 md:gap-4 overflow-hidden">
 
       {/* ── Left panel — participant list ─────────────────────────────── */}
       <div

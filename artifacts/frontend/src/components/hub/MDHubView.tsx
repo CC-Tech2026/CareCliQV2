@@ -366,7 +366,7 @@ export function DemandCapacityPanel({ data, loading, error, onRetry, onNavigate 
   const cards = [
     { title: "Enquiries to review", value: formatNumber(data.waitlist.count), detail: data.waitlist.count > 0 ? "Awaiting initial screening" : "No enquiries awaiting screening", action: "Review participant intake", path: "/onboard-participant", icon: Clock },
     { title: "Requested support", value: formatNumber(data.waitlist.hours) + " h", detail: "Weekly hours requested by the waiting list", action: "Review support requests", path: "/onboard-participant", icon: Timer },
-    { title: "Available this week", value: formatNumber(reliable + casual) + " h", detail: reliable + " h permanent staff / " + casual + " h casual staff", action: "Review staff availability", path: "/md/schedule", icon: Zap },
+    { title: "Available this week", value: formatNumber(reliable + casual) + " h", detail: reliable + " h permanent staff / " + casual + " h casual staff", action: "Review staff availability", path: "/coordinator/rostering", icon: Zap },
   ];
   return <section aria-label="Demand and capacity" className="space-y-3">
     <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-lg font-semibold text-cc-text">Plan your next move</h2><span className="text-xs text-cc-muted">Enquiries and this week's capacity</span></div>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
@@ -9,12 +10,13 @@ from pydantic import BaseModel
 from ..core.errors import internal_error_detail
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
-from ..core.timezone import app_today, shift_local_date, request_timezone
+from ..core.timezone import app_today, shift_local_date, request_timezone, user_timezone
 from ..schemas.incident import effective_ndis_reportable, notification_clock_start
-from ..services import incident_service, onboarding_pipeline_alerts_service, participant_service, session_service
+from ..services import incident_service, meeting_invite_service, onboarding_pipeline_alerts_service, participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
 from ..services.vault_service import REQUIRED_CREDENTIAL_LABELS
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/hub", tags=["hub"])
 
 
@@ -536,6 +538,24 @@ async def get_onboarding_alerts(current_user: dict = Depends(get_current_user)):
 
 # ── Organisation Events ───────────────────────────────────────────────────────
 
+ORG_EVENT_TYPES = {"audit", "training", "meeting", "review"}
+# Meetings held with a participant. They are all event_type "meeting".
+PARTICIPANT_MEETING_KINDS = {
+    "intake", "service_agreement", "plan_review", "goal_review",
+    "check_in", "care_team", "incident_followup",
+}
+# How a meeting happens. A video call's invite goes out from the organiser's
+# own Google Calendar or Outlook, which adds the Meet or Teams link; in-person
+# and phone meetings are emailed as calendar invites by CareCliQ.
+MEETING_MODES = {"in_person", "phone", "video"}
+
+
+class MeetingAttendee(BaseModel):
+    email: str
+    name: Optional[str] = None
+    role: Optional[str] = None
+
+
 class OrgEventBody(BaseModel):
     title: str
     event_date: str
@@ -544,27 +564,78 @@ class OrgEventBody(BaseModel):
     location: Optional[str] = None
     participants_desc: Optional[str] = None
     start_time: Optional[str] = None  # "HH:MM", 24h — positions the event in the Week/Day hour grid
+    participant_id: Optional[str] = None
+    meeting_kind: Optional[str] = None
+    meeting_mode: Optional[str] = None
+    easy_capture: bool = False
+    attendees: list[MeetingAttendee] = []
+    # Email the attendees a calendar invite (in-person and phone meetings).
+    send_invites: bool = True
+
+
+async def _validated_event_payload(body: OrgEventBody, current_user: dict) -> dict:
+    """Checks the booking fits together and returns the row to store."""
+    if body.event_type not in ORG_EVENT_TYPES:
+        raise HTTPException(status_code=422, detail=f"event_type must be one of: {', '.join(sorted(ORG_EVENT_TYPES))}")
+    if not body.title.strip():
+        raise HTTPException(status_code=422, detail="Give the meeting a title.")
+    if body.meeting_kind is not None:
+        if body.meeting_kind not in PARTICIPANT_MEETING_KINDS:
+            raise HTTPException(status_code=422, detail="Unknown meeting type.")
+        if body.event_type != "meeting":
+            raise HTTPException(status_code=422, detail="A participant meeting must be a meeting.")
+        if not body.participant_id:
+            raise HTTPException(status_code=422, detail="Choose the participant this meeting is with.")
+    if body.meeting_mode is not None and body.meeting_mode not in MEETING_MODES:
+        raise HTTPException(status_code=422, detail="Unknown meeting format.")
+    if body.easy_capture and (body.meeting_mode != "in_person" or not body.participant_id):
+        raise HTTPException(status_code=422, detail="Easy Capture is for in-person meetings with a participant.")
+    try:
+        attendees = meeting_invite_service.normalise_attendees([a.model_dump() for a in body.attendees])
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if body.participant_id:
+        participant = await participant_service.get_participant_by_id(body.participant_id, current_user)
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found.")
+
+    row = body.model_dump(exclude={"send_invites"})
+    return {**row, "title": body.title.strip(), "attendees": attendees}
+
+
+def _with_participant_names(supabase, rows: list[dict]) -> list[dict]:
+    ids = sorted({str(r["participant_id"]) for r in rows if r.get("participant_id")})
+    names: dict[str, str] = {}
+    if ids:
+        try:
+            result = supabase.table("participants").select("id, full_name").in_("id", ids).execute()
+            names = {str(p["id"]): p.get("full_name") or "" for p in result.data or []}
+        except Exception:
+            names = {}
+    return [{**r, "participant_name": names.get(str(r.get("participant_id") or "")) or None} for r in rows]
 
 
 @router.get("/org-events")
-async def list_org_events(current_user: dict = Depends(get_current_user)):
-    """List upcoming org calendar events from the database."""
+async def list_org_events(
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Org calendar events. With start and end (the Calendar's visible range),
+    everything in that range; without them, the next 20 upcoming."""
     org_id = _get_org_id(current_user)
     if not org_id:
         return []
     supabase = get_supabase_admin()
     try:
-        today = app_today().isoformat()
-        result = (
-            supabase.table("org_events")
-            .select("*")
-            .eq("organization_id", org_id)
-            .gte("event_date", today)
-            .order("event_date", desc=False)
-            .limit(20)
-            .execute()
-        )
-        return result.data or []
+        query = supabase.table("org_events").select("*").eq("organization_id", org_id)
+        if start and end:
+            query = query.gte("event_date", start.isoformat()).lte("event_date", end.isoformat()).limit(500)
+        else:
+            query = query.gte("event_date", app_today().isoformat()).limit(20)
+        result = query.order("event_date", desc=False).execute()
+        return _with_participant_names(supabase, result.data or [])
     except Exception:
         return []
 
@@ -581,30 +652,169 @@ def _require_org_wide(user: dict) -> str:
     return org_id
 
 
+def _organiser(supabase, user: dict) -> dict:
+    """Name and email of the person booking: the invite's organiser."""
+    user_id = get_user_id(user)
+    try:
+        rows = supabase.table("users").select("full_name, email").eq("id", user_id).limit(1).execute().data or []
+    except Exception:
+        rows = []
+    row = rows[0] if rows else {}
+    return {"name": row.get("full_name") or user.get("full_name") or "", "email": row.get("email") or user.get("email") or ""}
+
+
+def _org_name(supabase, org_id: str) -> str:
+    try:
+        res = supabase.table("organizations").select("name").eq("organization_id", org_id).limit(1).execute()
+        return ((res.data or [{}])[0].get("name")) or "Your provider"
+    except Exception:
+        return "Your provider"
+
+
+def _invites_go_by_email(row: dict) -> bool:
+    """Video calls are sent from the organiser's own calendar instead."""
+    return row.get("meeting_mode") != "video"
+
+
+async def _send(supabase, row: dict, *, user: dict, org_id: str, attendees: list[dict], method: str, update: bool = False) -> dict:
+    organiser = _organiser(supabase, user)
+    if not organiser["email"]:
+        return {"sent": [], "failed": [a["email"] for a in attendees], "email_off": False}
+    return await meeting_invite_service.send_invites(
+        row,
+        attendees=attendees,
+        organizer=organiser,
+        method=method,
+        sequence=int(row.get("invite_sequence") or 0),
+        tz=user_timezone(get_user_id(user), org_id, supabase=supabase),
+        org_name=_org_name(supabase, org_id),
+        update=update,
+    )
+
+
+def _merge_results(*results: dict) -> dict:
+    return {
+        "sent": [e for r in results for e in r.get("sent", [])],
+        "failed": [e for r in results for e in r.get("failed", [])],
+        "email_off": any(r.get("email_off") for r in results),
+    }
+
+
+@router.get("/org-events/invitees")
+async def meeting_invitees(participant_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """Who to suggest inviting: you, and for a participant meeting the
+    participant, their nominee/family contacts and their support workers."""
+    org_id = _require_org_wide(current_user)
+    if participant_id:
+        participant = await participant_service.get_participant_by_id(participant_id, current_user)
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found.")
+    supabase = get_supabase_admin()
+    return meeting_invite_service.suggested_invitees(supabase, org_id, participant_id, _organiser(supabase, current_user))
+
+
 @router.post("/org-events", status_code=201)
 async def create_org_event(body: OrgEventBody, current_user: dict = Depends(get_current_user)):
     org_id = _require_org_wide(current_user)
-    allowed_types = {"audit", "training", "meeting", "review"}
-    if body.event_type not in allowed_types:
-        raise HTTPException(status_code=422, detail=f"event_type must be one of: {', '.join(allowed_types)}")
-    supabase = get_supabase_admin()
     payload = {
-        **body.model_dump(),
+        **await _validated_event_payload(body, current_user),
         "organization_id": org_id,
         "created_by": get_user_id(current_user),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    supabase = get_supabase_admin()
     try:
         result = supabase.table("org_events").insert(payload).execute()
-        return result.data[0] if result.data else payload
+        row = _with_participant_names(supabase, [result.data[0] if result.data else payload])[0]
     except Exception as e:
         raise HTTPException(status_code=500, detail=internal_error_detail("Could not create event", e))
+
+    invites = {"sent": [], "failed": [], "email_off": False}
+    if body.send_invites and row.get("id") and row.get("attendees") and _invites_go_by_email(row):
+        invites = await _send(supabase, row, user=current_user, org_id=org_id, attendees=row["attendees"], method="REQUEST")
+        if invites["sent"]:
+            sent_at = datetime.now(timezone.utc).isoformat()
+            try:
+                supabase.table("org_events").update({"invites_sent_at": sent_at}).eq("id", row["id"]).execute()
+                row["invites_sent_at"] = sent_at
+            except Exception as exc:
+                logger.warning("Recording invites_sent_at failed for %s: %s", row["id"], exc)
+    return {**row, "invites": invites}
+
+
+def _existing_event(supabase, event_id: str, org_id: str) -> dict:
+    try:
+        rows = supabase.table("org_events").select("*").eq("id", event_id).eq("organization_id", org_id).limit(1).execute().data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not load event", e))
+    if not rows:
+        raise HTTPException(status_code=404, detail="Event not found.")
+    return rows[0]
+
+
+@router.put("/org-events/{event_id}")
+async def update_org_event(event_id: str, body: OrgEventBody, current_user: dict = Depends(get_current_user)):
+    """Reschedule or edit a booked event. Anyone already invited gets the
+    updated invite; anyone taken off the list gets a cancellation."""
+    org_id = _require_org_wide(current_user)
+    supabase = get_supabase_admin()
+    before = _existing_event(supabase, event_id, org_id)
+    payload = {
+        **await _validated_event_payload(body, current_user),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    was_invited = bool(before.get("invites_sent_at")) and _invites_go_by_email(before)
+    by_email = _invites_go_by_email(payload)
+    will_invite = by_email and bool(payload["attendees"]) and (was_invited or body.send_invites)
+    if was_invited or will_invite:
+        # Calendars only take a change whose SEQUENCE is higher than the last.
+        payload["invite_sequence"] = int(before.get("invite_sequence") or 0) + 1
+
+    try:
+        result = supabase.table("org_events").update(payload).eq("id", event_id).eq("organization_id", org_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=internal_error_detail("Could not update event", e))
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Event not found.")
+    row = _with_participant_names(supabase, result.data)[0]
+
+    # Everyone who had the invite and isn't on the new list (or every one of
+    # them, if the meeting became a video call sent from a calendar app) gets
+    # a cancellation for the version they have.
+    keep = {a["email"].lower() for a in payload["attendees"]} if will_invite else set()
+    dropped = [a for a in (before.get("attendees") or []) if str(a.get("email", "")).lower() not in keep] if was_invited else []
+    results = []
+    if dropped:
+        cancelled = {**row, **{k: before.get(k) for k in ("event_date", "start_time", "duration", "location", "meeting_mode")}}
+        results.append(await _send(supabase, cancelled, user=current_user, org_id=org_id, attendees=dropped, method="CANCEL"))
+    if will_invite:
+        results.append(await _send(supabase, row, user=current_user, org_id=org_id, attendees=payload["attendees"], method="REQUEST", update=was_invited))
+    invites = _merge_results(*results) if results else {"sent": [], "failed": [], "email_off": False}
+
+    if will_invite:
+        sent_at = datetime.now(timezone.utc).isoformat() if invites["sent"] else before.get("invites_sent_at")
+    else:
+        sent_at = None
+    if sent_at != row.get("invites_sent_at"):
+        try:
+            supabase.table("org_events").update({"invites_sent_at": sent_at}).eq("id", event_id).execute()
+            row["invites_sent_at"] = sent_at
+        except Exception as exc:
+            logger.warning("Recording invites_sent_at failed for %s: %s", event_id, exc)
+    return {**row, "invites": invites}
 
 
 @router.delete("/org-events/{event_id}", status_code=204)
 async def delete_org_event(event_id: str, current_user: dict = Depends(get_current_user)):
+    """Cancels the meeting. If invites went out, everyone invited is sent a
+    cancellation, which takes it off their calendars."""
     org_id = _require_org_wide(current_user)
     supabase = get_supabase_admin()
+    before = _existing_event(supabase, event_id, org_id)
+    if before.get("invites_sent_at") and _invites_go_by_email(before) and before.get("attendees"):
+        cancelled = {**_with_participant_names(supabase, [before])[0], "invite_sequence": int(before.get("invite_sequence") or 0) + 1}
+        await _send(supabase, cancelled, user=current_user, org_id=org_id, attendees=before["attendees"], method="CANCEL")
     try:
         supabase.table("org_events").delete().eq("id", event_id).eq("organization_id", org_id).execute()
     except Exception as e:
