@@ -67,13 +67,7 @@ import {
   type VaultShareEvent,
   type VaultTreeFolder,
 } from "@/services/vaultService";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
+import { SidePanel } from "@/components/layout/SidePanel";
 import { formatAppDate } from "@/lib/datetime";
 import { ShareAuditorDialog } from "./components/ShareAuditorDialog";
 import { CreateFolderDialog } from "./components/CreateFolderDialog";
@@ -409,13 +403,14 @@ function ShareHistorySheet({ open, onOpenChange }: { open: boolean; onOpenChange
   }, [open]);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>Shared with auditors</SheetTitle>
-          <SheetDescription>Every share from the vault in the last 30 days.</SheetDescription>
-        </SheetHeader>
-        <div className="mt-4 space-y-2.5">
+    <SidePanel
+      open={open}
+      onOpenChange={onOpenChange}
+      icon={Share2}
+      title="Shared with auditors"
+      description="Every share from the vault in the last 30 days."
+    >
+        <div className="space-y-2.5">
           {failed ? (
             <p role="alert" className="text-sm" style={{ color: "var(--cc-status-danger)" }}>
               Couldn't load the share history. Try again shortly.
@@ -446,8 +441,7 @@ function ShareHistorySheet({ open, onOpenChange }: { open: boolean; onOpenChange
             ))
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+    </SidePanel>
   );
 }
 

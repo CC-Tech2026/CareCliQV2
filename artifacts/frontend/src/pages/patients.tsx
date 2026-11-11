@@ -64,6 +64,9 @@ import {
   Moon,
   Clock,
   FileDown,
+  UserRoundPen,
+  ListChecks,
+  Contact,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -110,6 +113,7 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
+import { SidePanel } from "@/components/layout/SidePanel";
 // ---------------------------------------------------------------------------
 // Template Presets (backed by participant_task_templates via getTaskTemplates)
 // ---------------------------------------------------------------------------
@@ -639,11 +643,12 @@ function EditParticipantPanel({
         <Edit className="h-3.5 w-3.5 shrink-0" />
         <span>Edit personal details</span>
       </Button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>{translate("patients.editTitle")}</SheetTitle>
-          </SheetHeader>
+      <SidePanel
+        open={open}
+        onOpenChange={setOpen}
+        icon={UserRoundPen}
+        title={translate("patients.editTitle")}
+      >
           <ParticipantForm
             form={editForm}
             onSubmit={(data) => updateMutation.mutate(data)}
@@ -652,8 +657,7 @@ function EditParticipantPanel({
             hasPlan={hasPlan}
             submitLabel={translate("patients.saveChanges")}
           />
-        </SheetContent>
-      </Sheet>
+      </SidePanel>
     </div>
   );
 }
@@ -803,11 +807,12 @@ function SetupPlanPanel({
           </>
         )}
       </Button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>{hasPlan ? "Edit Plan Details" : translate("patients.setupPlan")}</SheetTitle>
-          </SheetHeader>
+      <SidePanel
+        open={open}
+        onOpenChange={setOpen}
+        icon={ClipboardList}
+        title={hasPlan ? "Edit plan details" : translate("patients.setupPlan")}
+      >
           <Form {...planForm}>
             <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -996,8 +1001,7 @@ function SetupPlanPanel({
               </SheetFooter>
             </form>
           </Form>
-        </SheetContent>
-      </Sheet>
+      </SidePanel>
     </div>
   );
 }
@@ -2561,30 +2565,27 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
             </section>
 
             {/* Goal & Task forms — right-side panels, consistent with Edit Participant / Edit Plan */}
-            <Sheet open={createMode === "goal" || createMode === "edit_goal"} onOpenChange={(open) => { if (!open) cancelGoalForm(); }}>
-              <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-                <SheetHeader>
-                  <SheetTitle>{createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}</SheetTitle>
-                  <p className="text-[12px] text-cc-muted">{participant.full_name}</p>
-                </SheetHeader>
-                <div className="py-4">{goalFormContent}</div>
-              </SheetContent>
-            </Sheet>
+            <SidePanel
+              open={createMode === "goal" || createMode === "edit_goal"}
+              onOpenChange={(open) => { if (!open) cancelGoalForm(); }}
+              icon={Target}
+              title={createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}
+              description={participant.full_name}
+            >
+                {goalFormContent}
+            </SidePanel>
 
-            <Sheet
+            <SidePanel
               open={createMode === "tasks"}
               onOpenChange={(open) => {
                 if (!open) { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }
               }}
+              icon={ListChecks}
+              title="New task"
+              description={`Setting up support for ${participant.full_name}`}
             >
-              <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-                <SheetHeader>
-                  <SheetTitle>Create New Task</SheetTitle>
-                  <p className="text-[12px] text-cc-muted">Setting up support for {participant.full_name}</p>
-                </SheetHeader>
-                <div className="py-4">{taskFormContent}</div>
-              </SheetContent>
-            </Sheet>
+                {taskFormContent}
+            </SidePanel>
             </>
           );
         })()}
@@ -2634,7 +2635,7 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
 
       {isCoordinator && <Sheet open={exportOpen} onOpenChange={setExportOpen}><SheetContent className="flex w-full flex-col p-0 sm:max-w-3xl"><SheetHeader className="border-b border-cc-border p-5 pr-12"><SheetTitle>Export records</SheetTitle><SheetDescription>Download profile, shift history and invoices for {participant.full_name} as one PDF or ZIP.</SheetDescription></SheetHeader><ParticipantRecordsTab key={id} participantId={id} participantName={participant.full_name} /></SheetContent></Sheet>}
       {isCoordinator && <Sheet open={invoicesOpen} onOpenChange={setInvoicesOpen}><SheetContent className="flex w-full flex-col p-0 sm:max-w-2xl"><SheetHeader className="border-b border-cc-border p-5 pr-12"><SheetTitle>Invoices</SheetTitle><SheetDescription>Invoices for {participant.full_name}. Pick a financial year or any period, open a PDF, or tick several to download together.</SheetDescription></SheetHeader><ParticipantInvoicesPanel key={id} participantId={id} /></SheetContent></Sheet>}
-      {isCoordinator && <Sheet open={contactsOpen} onOpenChange={setContactsOpen}><SheetContent className="w-full overflow-y-auto sm:max-w-2xl"><SheetHeader><SheetTitle>Care contacts & support details</SheetTitle></SheetHeader><ParticipantShiftContextEditor participantId={id} onSaved={() => { participantQuery.refetch(); onRefreshList(); }} /></SheetContent></Sheet>}
+      {isCoordinator && <SidePanel open={contactsOpen} onOpenChange={setContactsOpen} wide icon={Contact} title="Care contacts & support details"><ParticipantShiftContextEditor participantId={id} onSaved={() => { participantQuery.refetch(); onRefreshList(); }} /></SidePanel>}
       {isCoordinator && (
         <ShiftAssignmentModal
           open={shiftModalOpen}

@@ -50,7 +50,7 @@ export function SidePanel({
         </SheetHeader>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">{children}</div>
         {footer && (
-          <SheetFooter className="flex-row items-center justify-end gap-2 border-t border-cc-border p-4 sm:space-x-0">
+          <SheetFooter className="flex-row flex-wrap items-center justify-end gap-2 border-t border-cc-border p-4 sm:space-x-0">
             {footer}
           </SheetFooter>
         )}

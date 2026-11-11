@@ -22,9 +22,7 @@ import { sharedNames } from "@/lib/person-identity";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
-} from "@/components/ui/sheet";
+import { SidePanel } from "@/components/layout/SidePanel";
 import {
   getCoordinatorWorkerStats,
   listCoordinatorShifts,
@@ -658,14 +656,14 @@ export default function CoordinatorRosteringPage() {
       )}
 
       {/* -- Team availability & skills side panel --------------------------- */}
-      <Sheet open={teamPanelOpen} onOpenChange={(open) => { setTeamPanelOpen(open); if (!open) setAvailWorker(null); }}>
-        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>{translate("coordinator.rostering.workerAvailability")}</SheetTitle>
-            <SheetDescription>{translate("coordinator.rostering.teamPanelDesc")}</SheetDescription>
-          </SheetHeader>
-
-          <div className="mt-4">
+      <SidePanel
+        open={teamPanelOpen}
+        onOpenChange={(open) => { setTeamPanelOpen(open); if (!open) setAvailWorker(null); }}
+        icon={CalendarDays}
+        title={translate("coordinator.rostering.workerAvailability")}
+        description={translate("coordinator.rostering.teamPanelDesc")}
+      >
+          <div>
             {availWorker ? (
               <div className="space-y-3">
                 <button
@@ -703,8 +701,7 @@ export default function CoordinatorRosteringPage() {
               </div>
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+      </SidePanel>
 
       <ShiftAssignmentModal
         onAssigned={setNewShiftId}

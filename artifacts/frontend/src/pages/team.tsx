@@ -34,9 +34,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle,
-} from "@/components/ui/sheet";
+import { SidePanel } from "@/components/layout/SidePanel";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
   DropdownMenuCheckboxItem, DropdownMenuLabel,
@@ -954,7 +952,7 @@ export default function Team() {
       </>
       )}
 
-      <Sheet
+      <SidePanel
         open={inviteOpen}
         onOpenChange={(open) => {
           setInviteOpen(open);
@@ -963,14 +961,22 @@ export default function Team() {
             setInviteRole("support_worker");
           }
         }}
+        icon={UserPlus}
+        title={translate("team.invite.title")}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setInviteOpen(false)}>{translate("common.close")}</Button>
+            <Button
+              variant="navy"
+              onClick={handleInvite}
+              disabled={!inviteEmail.trim() || inviteSending}
+            >
+              {inviteSending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />{translate("team.invite.sending")}</> : translate("team.invite.send")}
+            </Button>
+          </>
+        }
       >
-        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" style={{ background: SURFACE }}>
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
-              <UserPlus size={18} style={{ color: PLUM }} /> {translate("team.invite.title")}
-            </SheetTitle>
-          </SheetHeader>
-          <div className="space-y-4 py-1">
+          <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.invite.email")}</label>
               <Input
@@ -1039,19 +1045,7 @@ export default function Team() {
               </ul>
             )}
           </div>
-
-          <SheetFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setInviteOpen(false)}>{translate("common.close")}</Button>
-            <Button
-              variant="navy"
-              onClick={handleInvite}
-              disabled={!inviteEmail.trim() || inviteSending}
-            >
-              {inviteSending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />{translate("team.invite.sending")}</> : translate("team.invite.send")}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+      </SidePanel>
 
       {deactivateTarget && (
         <DeactivateWorkerPanel
@@ -1102,18 +1096,19 @@ export default function Team() {
         workers={shiftWorker ? [shiftWorker] : []}
       />
 
-      <Sheet open={rulesOpen} onOpenChange={setRulesOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto" style={{ background: SURFACE }}>
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2" style={{ color: TEXT }}>
-              <Settings2 size={18} style={{ color: PLUM }} /> Credential Rules
-            </SheetTitle>
-          </SheetHeader>
-          <p className="mt-1 text-sm" style={{ color: MUTED }}>
-            Configure which credential types are required per shift type. Shift assignment blocks when a required credential is missing or invalid.
-          </p>
-
-          <div className="mt-4 grid gap-3">
+      <SidePanel
+        open={rulesOpen}
+        onOpenChange={setRulesOpen}
+        icon={Settings2}
+        title="Credential rules"
+        description="Which credentials each type of shift needs. Assigning a shift is blocked when a required credential is missing or invalid."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setRulesOpen(false)}>{translate("common.close")}</Button>
+          </>
+        }
+      >
+          <div className="grid gap-3">
             <div>
               <Label>Shift type</Label>
               <select
@@ -1175,12 +1170,7 @@ export default function Team() {
               </div>
             ))}
           </div>
-
-          <SheetFooter className="mt-6">
-            <Button variant="outline" onClick={() => setRulesOpen(false)}>{translate("common.close")}</Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+      </SidePanel>
 
       {reauthModal}
     </IndexTemplate>
