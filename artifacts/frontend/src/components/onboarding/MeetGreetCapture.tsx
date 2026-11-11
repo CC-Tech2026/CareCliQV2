@@ -9,6 +9,7 @@ import {
   type ConsentMethod,
 } from "@/services/coordinatorService";
 import { uploadMeetGreetRecording, type ParticipantIntake } from "@/services/participantIntakeService";
+import { appTodayKey } from "@/lib/datetime";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -344,7 +345,7 @@ export function MeetGreetCapture({
     try {
       // Consent is recorded server-side (with its own timestamp) before any audio exists.
       const session = await createMeetingSession(
-        "meet_greet", new Date().toISOString().slice(0, 10), undefined, undefined, givenBy, method, intake.id,
+        "meet_greet", appTodayKey(), undefined, undefined, givenBy, method, intake.id,
       );
       sessionRef.current = session.session_id;
     } catch (err) {

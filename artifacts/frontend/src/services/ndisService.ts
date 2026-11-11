@@ -1,4 +1,5 @@
 import { jsonFetch } from "@/services/http";
+import { appTodayKey } from "@/lib/datetime";
 
 export type NdisPriceResolution = {
   unit: string;
@@ -88,7 +89,7 @@ export type EditItemPriceResponse = {
  */
 export function resolveNdisPrice(
   itemCode: string,
-  asOfDate: string = new Date().toISOString().split("T")[0],
+  asOfDate: string = appTodayKey(),
   locationType: "national" | "remote" | "very_remote" = "national",
 ) {
   return jsonFetch<NdisPriceResolution>("/api/ndis-pricing/resolve", {

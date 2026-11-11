@@ -120,7 +120,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
-import { datetimeLocalValueToUtcIso } from "@/lib/datetime";
+import { datetimeLocalValueToUtcIso, appTodayKey } from "@/lib/datetime";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -2180,7 +2180,7 @@ function WorkerTagsSection({ workerId }: { workerId: string }) {
           disabled={!selectedTagId || addMutation.isPending}
           onClick={() => selectedTagId && addMutation.mutate(selectedTagId)}
           className="rounded-lg px-3 text-xs font-bold text-white disabled:opacity-50"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           Add
         </button>
@@ -2666,7 +2666,7 @@ function CredentialsTab({
       requireReAuth(() =>
         reviewCredential(credential.id, {
           status: "valid",
-          last_checked_against_nwsd: new Date().toISOString().slice(0, 10),
+          last_checked_against_nwsd: appTodayKey(),
         }),
       ),
     onSuccess: () => {
@@ -4696,7 +4696,7 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
           disabled={saveMutation.isPending}
           onClick={() => saveMutation.mutate()}
           className="rounded-lg px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-50"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           Save
         </button>

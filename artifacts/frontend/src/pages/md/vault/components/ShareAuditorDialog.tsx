@@ -39,6 +39,7 @@ import {
 } from "@/services/vaultService";
 import { FolderMark } from "./FileManager";
 import { Field, PrimaryButton, SecondaryButton, inputClass, textareaClass } from "./PanelKit";
+import { appTodayKey } from "@/lib/datetime";
 
 /** Somewhere documents can be shared from: a folder, a person, a subfolder. */
 export interface ShareSource {
@@ -363,7 +364,7 @@ export function ShareAuditorDialog({
         extras,
         folderFor: groupByFolder ? (ref) => folderOf.get(keyOf(ref)) : undefined,
       });
-      triggerBlobDownload(blob, `carecliq-audit-pack-${new Date().toISOString().slice(0, 10)}.zip`);
+      triggerBlobDownload(blob, `carecliq-audit-pack-${appTodayKey()}.zip`);
       setStage("done");
       await logShareEvent({ method: "download_zip", folder_keys: scopeKeys, documents: refs }).catch(() => undefined);
     } catch (err) {

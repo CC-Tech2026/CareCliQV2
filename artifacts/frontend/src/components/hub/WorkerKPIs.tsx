@@ -535,7 +535,7 @@ function PublishDrawer({
               disabled={saving}
               className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[11px] font-bold text-white transition-opacity disabled:cursor-not-allowed"
               style={{
-                background: PLUM,
+                background: "var(--cc-cta)",
                 opacity: saving ? 0.6 : 1,
               }}
             >
@@ -906,7 +906,7 @@ export function NewsFeed() {
                     type="button"
                     onClick={() => setShowForm(true)}
                     className="mt-4 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-bold text-white"
-                    style={{ background: PLUM }}
+                    style={{ background: "var(--cc-cta)" }}
                   >
                     <Plus size={12} />
                     Publish update

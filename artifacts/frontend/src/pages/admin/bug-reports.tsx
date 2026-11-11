@@ -22,6 +22,7 @@ import {
 } from "@/lib/bug-report-filters";
 import { buildBugReportsCsv } from "@/lib/bug-report-csv";
 import { downloadBlob } from "@/lib/download-file";
+import { appTodayKey } from "@/lib/datetime";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -153,7 +154,7 @@ export default function AdminBugReportsPage() {
   function exportCsv() {
     if (!visibleReports || visibleReports.length === 0) return;
     const csv = buildBugReportsCsv(visibleReports);
-    downloadBlob(new Blob([csv], { type: "text/csv" }), `carecliq-bug-reports-${new Date().toISOString().slice(0, 10)}.csv`);
+    downloadBlob(new Blob([csv], { type: "text/csv" }), `carecliq-bug-reports-${appTodayKey()}.csv`);
   }
 
   return (

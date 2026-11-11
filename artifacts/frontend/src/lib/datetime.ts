@@ -142,6 +142,13 @@ export function appLocalDateKey(iso: string, tz?: string | null): string {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
+/** Today as yyyy-MM-dd in the branch zone. Use this, not
+ * `new Date().toISOString().slice(0, 10)`, which is today in UTC: before
+ * 10:30 am in Adelaide that is still yesterday. */
+export function appTodayKey(tz?: string | null): string {
+  return appLocalDateKey(new Date().toISOString(), tz);
+}
+
 /** Minutes since local midnight in the branch zone — for placing a shift on a
  * day timeline without the viewer's own zone shifting it. */
 export function appMinutesOfDay(iso: string, tz?: string | null): number {

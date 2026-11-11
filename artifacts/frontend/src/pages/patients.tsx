@@ -491,7 +491,7 @@ function ParticipantForm({
             <FormItem>
               <Label>{translate("patients.field.totalBudget")}</Label>
               <p className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                Managed via Set Up NDIS Plan
+                Managed via Set up NDIS plan
               </p>
             </FormItem>
           ) : (

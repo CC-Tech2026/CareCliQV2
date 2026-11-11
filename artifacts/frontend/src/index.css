@@ -267,7 +267,7 @@
   --cc-plum-border: rgba(232, 69, 122, 0.12);
   --cc-coral-soft: rgba(124, 58, 237, 0.08);
   --cc-coral-ring: rgba(124, 58, 237, 0.20);
-  --cc-cta: var(--cc-plum); /* CTA in light mode — near-black so buttons stay visible on light canvas */
+  --cc-cta: #1A1A2E; /* Main action buttons: Charcoal Navy. Pink stays for links, focus and selected states. */
 
   /* Accessibility — scaled by AccessibilityContext on <html> */
   --font-scale: 1;
@@ -384,7 +384,7 @@
   --cc-plum-border: rgba(244, 114, 182, 0.22);
   --cc-coral-soft: rgba(167, 139, 250, 0.12);
   --cc-coral-ring: rgba(167, 139, 250, 0.28);
-  --cc-cta: #E8457A;  /* CTA in dark mode: the brand pink, as in light mode (white text reads on it; the lighter pink and purple did not) */
+  --cc-cta: #62629A;  /* Main action buttons in dark mode: a lighter navy, so the button stands out on the navy page (3:1) and white text still reads on it (5.6:1) */
 
   /* Worker mobile spec v2 — dark */
   --wm-pink: #F472B6;
@@ -969,26 +969,26 @@
 
   /* Solid → outline on hover */
   .cc-btn-primary {
-    border: 2px solid var(--cc-plum);
-    background-color: var(--cc-plum);
+    border: 2px solid var(--cc-cta);
+    background-color: var(--cc-cta);
     color: #fff;
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   }
 
   .cc-btn-primary:hover:not(:disabled) {
     background-color: transparent;
-    color: var(--cc-plum);
+    color: var(--cc-text);
   }
 
   .cc-btn-outline {
-    border: 2px solid var(--cc-plum);
+    border: 2px solid var(--cc-cta);
     background-color: transparent;
-    color: var(--cc-plum);
+    color: var(--cc-text);
     transition: background-color 0.15s ease, color 0.15s ease;
   }
 
   .cc-btn-outline:hover:not(:disabled) {
-    background-color: var(--cc-plum);
+    background-color: var(--cc-cta);
     color: #fff;
   }
 

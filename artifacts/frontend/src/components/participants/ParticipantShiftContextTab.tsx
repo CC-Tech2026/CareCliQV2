@@ -129,7 +129,7 @@ function ParticipantTagsSection({ participantId }: { participantId: string }) {
           disabled={!selectedTagId || addMutation.isPending}
           onClick={() => selectedTagId && addMutation.mutate(selectedTagId)}
           className="rounded-lg px-3 text-xs font-bold text-white disabled:opacity-50"
-          style={{ background: "var(--cc-plum)" }}
+          style={{ background: "var(--cc-cta)" }}
         >
           Add
         </button>

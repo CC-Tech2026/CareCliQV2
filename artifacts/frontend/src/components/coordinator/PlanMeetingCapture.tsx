@@ -24,6 +24,7 @@ import {
   type ConsentGivenBy,
   type ConsentMethod,
 } from "@/services/coordinatorService";
+import { appTodayKey } from "@/lib/datetime";
 
 const PLUM   = "var(--cc-plum)";
 const TEXT   = "var(--cc-text)";
@@ -141,7 +142,7 @@ function DraftCard({
             style={{ border: `1px solid ${BORDER}`, color: TEXT }}
           />
           <div className="flex gap-2">
-            <Button size="sm" className="rounded-lg" style={{ background: PLUM, color: "#fff" }} onClick={onSaveEdit}>
+            <Button size="sm" className="rounded-lg" style={{ background: "var(--cc-cta)", color: "#fff" }} onClick={onSaveEdit}>
               Save
             </Button>
             <Button size="sm" variant="outline" className="rounded-lg" style={{ borderColor: BORDER }} onClick={onCancelEdit}>
@@ -303,7 +304,7 @@ function RecordMeetingFlow({ participantId, participantName, onDone, onCancel }:
       try {
         const session = await createMeetingSession(
           meetingType,
-          new Date().toISOString().slice(0, 10),
+          appTodayKey(),
           undefined,
           participantId,
           consentGivenBy,
@@ -704,7 +705,7 @@ function RecordMeetingFlow({ participantId, participantName, onDone, onCancel }:
           </div>
 
           <div className="flex gap-2">
-            <Button size="sm" className="rounded-lg gap-1 text-[11px] flex-1" style={{ background: PLUM, color: "#fff" }} onClick={exportCsv}>
+            <Button size="sm" className="rounded-lg gap-1 text-[11px] flex-1" style={{ background: "var(--cc-cta)", color: "#fff" }} onClick={exportCsv}>
               <FileText size={11} /> CSV
             </Button>
             <Button size="sm" className="rounded-lg gap-1 text-[11px] flex-1" style={{ background: CORAL, color: "#fff" }} onClick={exportPdf}>
@@ -1055,7 +1056,7 @@ export function PlanMeetingCapture({ participantId, participantName }: PlanMeeti
         <Button
           size="sm"
           className="rounded-xl gap-1 px-3 shrink-0"
-          style={{ background: PLUM, color: "#fff" }}
+          style={{ background: "var(--cc-cta)", color: "#fff" }}
           onClick={() => setRecording(true)}
         >
           <FileText size={12} /> Record meeting
@@ -1137,7 +1138,7 @@ export function PlanMeetingCapture({ participantId, participantName }: PlanMeeti
           <Button
             size="sm"
             className="mt-4 rounded-xl gap-1 px-4"
-            style={{ background: PLUM, color: "#fff" }}
+            style={{ background: "var(--cc-cta)", color: "#fff" }}
             onClick={() => setRecording(true)}
           >
             <FileText size={12} /> Record first meeting

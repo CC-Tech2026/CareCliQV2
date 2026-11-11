@@ -29,6 +29,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { ShareAuditorDialog } from "./ShareAuditorDialog";
 import { FolderIcon, type FolderMenuItem } from "./FileManager";
 import { Field, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass } from "./PanelKit";
+import { appTodayKey } from "@/lib/datetime";
 
 export interface FolderTarget {
   title: string;
@@ -116,7 +117,7 @@ export function useFolderActions({ onChanged }: { onChanged?: () => void } = {})
         progress.update({ id: progress.id, title: `Preparing ${target.title}`, description: `${done} of ${total} files` }),
       );
       const safeName = target.title.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "folder";
-      triggerBlobDownload(blob, `${safeName}-${new Date().toISOString().slice(0, 10)}.zip`);
+      triggerBlobDownload(blob, `${safeName}-${appTodayKey()}.zip`);
       progress.update({ id: progress.id, title: `${target.title} downloaded`, description: `${documentCount} files in one ZIP` });
     } catch (err) {
       progress.update({

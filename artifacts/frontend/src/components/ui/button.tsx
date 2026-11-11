@@ -10,9 +10,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        // The main action: Charcoal Navy (a lighter navy in dark mode), the same
+        // colour as PageKit's ctaClass and the navy variant.
         default:
-           // @replit: no hover, and add primary border
-           "bg-primary text-primary-foreground border border-primary-border",
+           "bg-[var(--cc-cta)] text-white border border-[var(--cc-cta)] hover:opacity-90",
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm border-destructive-border",
         outline:
@@ -26,8 +27,7 @@ const buttonVariants = cva(
         // @replit no hover, transparent border
         ghost: "border border-transparent",
         link: "text-primary underline-offset-4 hover:underline",
-        // Primary action when a screen has a single standout CTA — solid navy, no gradient.
-        // NO GRADIENT HARD RULE: Reserved. Accent is pink text only in links.
+        // Same as default; kept so existing variant="navy" buttons keep working.
         navy:
   "border-none text-white bg-[var(--cc-cta)] hover:opacity-90 active:opacity-80",
       },

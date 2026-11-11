@@ -372,7 +372,7 @@ function toggleFullscreen() {
           disabled={selectedDocs.length === 0}
           className="mt-1 w-full gap-2"
           onClick={onShare}
-          style={{ background: "var(--cc-plum)", color: "white" }}
+          style={{ background: "var(--cc-cta)", color: "white" }}
         >
           <Share2 size={14} />
           Share with auditor

@@ -229,7 +229,7 @@ function NotificationActions({ item, audience, className }: { item: UserNotifica
       <div className="flex flex-wrap gap-2">
         {canRespondToOffer && (
           <>
-            <button type="button" disabled={busy} onClick={() => accept.mutate()} className="min-h-9 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50" style={{ background: "var(--cc-plum)" }}>
+            <button type="button" disabled={busy} onClick={() => accept.mutate()} className="min-h-9 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50" style={{ background: "var(--cc-cta)" }}>
               {translate("notifications.panel.acceptShift")}
             </button>
             <button type="button" disabled={busy} onClick={() => decline.mutate()} className="min-h-9 rounded-full border px-4 text-[12px] font-semibold disabled:opacity-50" style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}>
@@ -238,7 +238,7 @@ function NotificationActions({ item, audience, className }: { item: UserNotifica
           </>
         )}
         {needsAck && (
-          <button type="button" disabled={busy} onClick={() => acknowledge.mutate()} className="min-h-9 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50" style={{ background: "var(--cc-plum)" }}>
+          <button type="button" disabled={busy} onClick={() => acknowledge.mutate()} className="min-h-9 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50" style={{ background: "var(--cc-cta)" }}>
             {translate("inbox.acknowledge")}
           </button>
         )}
@@ -268,7 +268,7 @@ function NotificationActions({ item, audience, className }: { item: UserNotifica
             style={{ borderColor: "var(--cc-border)" }}
           />
           <div className="flex gap-2">
-            <button type="submit" disabled={!reply.trim() || sendReply.isPending} className="min-h-9 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50" style={{ background: "var(--cc-plum)" }}>
+            <button type="submit" disabled={!reply.trim() || sendReply.isPending} className="min-h-9 rounded-full px-4 text-[12px] font-semibold text-white disabled:opacity-50" style={{ background: "var(--cc-cta)" }}>
               {translate("notifications.panel.sendReply")}
             </button>
             <button type="button" onClick={() => { setReplying(false); setReply(""); }} className="min-h-9 rounded-full px-3 text-[12px] font-semibold" style={{ color: "var(--cc-muted)" }}>
@@ -403,7 +403,7 @@ function DetailShell({ onBack, children }: { onBack: () => void; children: React
 
 function GoButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-5 text-[14px] font-semibold text-white" style={{ background: "var(--cc-plum)" }}>
+    <button type="button" onClick={onClick} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-5 text-[14px] font-semibold text-white" style={{ background: "var(--cc-cta)" }}>
       {label} <ArrowRight size={15} aria-hidden />
     </button>
   );

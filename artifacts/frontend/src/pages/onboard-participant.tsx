@@ -74,6 +74,7 @@ import {
   type GrantResult,
   type PortalIdentityMethod,
 } from "@/services/participantPortalAccessService";
+import { appTodayKey } from "@/lib/datetime";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -1206,7 +1207,7 @@ function LogComplaintSheet({
 }) {
   const { toast } = useToast();
   const OTHER = "__other__";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = appTodayKey();
   const [participantId, setParticipantId] = useState("");
   const [otherName, setOtherName] = useState("");
   const [raisedBy, setRaisedBy] = useState("");
@@ -1220,7 +1221,7 @@ function LogComplaintSheet({
     setParticipantId("");
     setOtherName("");
     setRaisedBy("");
-    setFiledOn(new Date().toISOString().slice(0, 10));
+    setFiledOn(appTodayKey());
     setSubject("");
     setDescription("");
   }, [open]);
@@ -1941,7 +1942,7 @@ export default function ParticipantOnboardingBoard() {
                   <input
                     id="referral-dob"
                     type="date"
-                    max={new Date().toISOString().slice(0, 10)}
+                    max={appTodayKey()}
                     value={dob}
                     onChange={(e) => setDob(e.target.value)}
                     onBlur={() => touch("dob")}

@@ -1365,7 +1365,7 @@ function ConfirmOfferModal({
         </div>
         <div className="flex justify-end gap-2 px-5 py-4">
           <button onClick={onCancel} className="rounded-full px-4 py-1.5 text-[12px] font-bold" style={{ background: SOFT, color: MUTED }}>Cancel</button>
-          <button onClick={onConfirm} disabled={confirming} className="rounded-full px-4 py-1.5 text-[12px] font-bold text-white disabled:opacity-60" style={{ background: PLUM }}>
+          <button onClick={onConfirm} disabled={confirming} className="rounded-full px-4 py-1.5 text-[12px] font-bold text-white disabled:opacity-60" style={{ background: "var(--cc-cta)" }}>
             {confirming ? "Creating…" : "Extend offer"}
           </button>
         </div>

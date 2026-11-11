@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useReAuth } from "@/hooks/useReAuth";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { apiFetch } from "@/lib/api-fetch";
-import { formatAppDate } from "@/lib/datetime";
+import { formatAppDate, appTodayKey } from "@/lib/datetime";
 
 export type ClaimRow = {
   invoice_id: string;
@@ -673,7 +673,7 @@ export function NdiaClaimsPanel({
             }}
           >
             <Field label="Payment date" htmlFor="ndia-payment-date">
-              <input id="ndia-payment-date" type="date" value={paymentDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setPaymentDate(e.target.value)} className={inputClass} style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }} />
+              <input id="ndia-payment-date" type="date" value={paymentDate} max={appTodayKey()} onChange={(e) => setPaymentDate(e.target.value)} className={inputClass} style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }} />
             </Field>
             <Field label="Remittance reference" htmlFor="ndia-payment-reference" optional>
               <input id="ndia-payment-reference" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="From the NDIA remittance advice" className={inputClass} style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }} />

@@ -3,7 +3,7 @@ import autoTable from "jspdf-autotable";
 import { getStoredSignature } from "@/lib/signature-store";
 import { apiFetch } from "@/lib/api-fetch";
 import { getOrganizationBranding } from "@/services/organizationBrandingService";
-import { formatAppDate } from "@/lib/datetime";
+import { formatAppDate, appTodayKey } from "@/lib/datetime";
 
 export interface AuditPayload {
   audit_version: string;
@@ -995,7 +995,7 @@ export async function exportSingleSessionPDF(sessionId: string): Promise<void> {
     .toLowerCase()
     .replace(/\s+/g, "_")
     .replace(/[^a-z0-9_]/g, "");
-  const dateStr = (s.date || new Date().toISOString().slice(0, 10)).replace(/-/g, "_");
+  const dateStr = (s.date || appTodayKey()).replace(/-/g, "_");
   pdf.save(`ndis_audit_${participantName}_${dateStr}.pdf`);
 }
 
