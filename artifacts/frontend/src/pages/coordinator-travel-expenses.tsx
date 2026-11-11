@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bus, Car, Check, Loader2, Settings2, X } from "lucide-react";
+import { Bus, Car, Check, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SectionInfo } from "@/components/ui/section-info";
+import { EmptyState, PageHeader, Section, SkeletonBlocks, outlineClass } from "@/components/layout/PageKit";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -19,7 +19,6 @@ import {
 } from "@/services/coordinatorTravelService";
 import { formatAppDate } from "@/lib/datetime";
 
-const PLUM = "var(--cc-plum)";
 const BORDER = "var(--cc-border)";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -93,28 +92,18 @@ export default function CoordinatorTravelExpenses() {
 
   return (
     <div className="w-full space-y-5 pb-24">
-      <header>
-        <p className="sr-only">{translate("coordinator.travel.eyebrow")}</p>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
-          {translate("coordinator.travel.title")}
-          <SectionInfo text={translate("coordinator.travel.subtitle")} />
-        </h1>
-      </header>
+      <PageHeader
+        eyebrow={translate("coordinator.travel.eyebrow")}
+        title={translate("coordinator.travel.title")}
+        description={translate("coordinator.travel.subtitle")}
+      />
 
-      <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
-        <div className="mb-3 flex items-center gap-2">
-          <Settings2 size={18} style={{ color: PLUM }} />
-          <h2 className="text-sm font-black" style={{ color: TEXT }}>
-            {translate("coordinator.travel.mileageRate")}
-          </h2>
-        </div>
-        {settings?.rate_display && (
-          <p className="mb-3 text-sm font-semibold" style={{ color: TEXT }}>
-            {settings.rate_display}
-          </p>
-        )}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <div className="flex-1">
+      <Section
+        title={translate("coordinator.travel.mileageRate")}
+        description={settings?.rate_display}
+      >
+        <div className="flex w-full flex-wrap items-end gap-2 rounded-2xl border border-cc-border bg-cc-surface p-4 sm:w-fit sm:p-5">
+          <div className="w-full sm:w-48">
             <Label htmlFor="mileage-rate" className="text-xs text-cc-muted">
               {translate("coordinator.travel.newRate")}
             </Label>
@@ -126,41 +115,32 @@ export default function CoordinatorTravelExpenses() {
               placeholder="0.88"
               value={rateDraft}
               onChange={(e) => setRateDraft(e.target.value)}
-              className="mt-1"
+              className="mt-1 h-10 rounded-full px-4"
             />
           </div>
-          <Button
+          <button
             type="button"
-            className="font-black text-white"
-            style={{ background: "var(--cc-cta)" }}
+            className={outlineClass}
             disabled={rateMut.isPending}
             onClick={() => rateMut.mutate()}
           >
             {rateMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("coordinator.travel.updateRate")}
-          </Button>
+          </button>
         </div>
-      </section>
+      </Section>
 
-      <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
-        <h2 className="text-sm font-black" style={{ color: TEXT }}>
-          {translateParams("coordinator.travel.pendingSubmissions", { count: String(submissions.length) })}
-        </h2>
-
+      <Section title={translateParams("coordinator.travel.pendingSubmissions", { count: String(submissions.length) })}>
         {isLoading ? (
-          <p className="mt-4 text-sm" style={{ color: MUTED }}>
-            {translate("common.loading")}
-          </p>
+          <SkeletonBlocks count={2} height="h-16" />
         ) : submissions.length === 0 ? (
-          <p className="mt-4 rounded-xl bg-cc-bg p-4 text-sm font-medium" style={{ color: MUTED }}>
-            {translate("coordinator.travel.noSubmissions")}
-          </p>
+          <EmptyState icon={Car} title={translate("coordinator.travel.noSubmissions")} />
         ) : (
-          <ul className="mt-4 space-y-4">
+          <ul className="divide-y overflow-hidden rounded-2xl border border-cc-border bg-cc-surface" style={{ borderColor: BORDER }}>
             {submissions.map((sub: TravelSubmission) => (
-              <li key={sub.id} className="rounded-xl border p-4" style={{ borderColor: BORDER }}>
+              <li key={sub.id} className="px-4 py-4 sm:px-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-black" style={{ color: TEXT }}>
+                    <p className="text-sm font-semibold" style={{ color: TEXT }}>
                       {sub.worker_name}
                     </p>
                     <p className="text-xs" style={{ color: MUTED }}>
@@ -171,31 +151,28 @@ export default function CoordinatorTravelExpenses() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button
+                    <button
                       type="button"
-                      size="sm"
-                      className="gap-1 bg-emerald-600 font-bold text-white hover:bg-emerald-700"
+                      className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
                       disabled={actionMut.isPending}
                       onClick={() => actionMut.mutate({ id: sub.id, approve: true })}
                     >
                       <Check size={14} />
                       {translate("coordinator.travel.approve")}
-                    </Button>
-                    <Button
+                    </button>
+                    <button
                       type="button"
-                      size="sm"
-                      variant="outline"
-                      className="gap-1 font-bold"
+                      className={outlineClass}
                       disabled={actionMut.isPending}
                       onClick={() => setRejectId(sub.id)}
                     >
                       <X size={14} />
                       {translate("coordinator.travel.reject")}
-                    </Button>
+                    </button>
                   </div>
                 </div>
 
-                <ul className="mt-3 space-y-2 border-t pt-3" style={{ borderColor: BORDER }}>
+                <ul className="mt-3 space-y-1.5 rounded-xl bg-cc-soft px-3 py-2.5">
                   {(sub.expenses || []).map((exp) => (
                     <li key={exp.id} className="flex items-center justify-between text-sm">
                       <span className="flex items-center gap-2" style={{ color: TEXT }}>
@@ -204,14 +181,14 @@ export default function CoordinatorTravelExpenses() {
                         {exp.claimed_km != null ? translateParams("coordinator.travel.kmSuffix", { km: String(exp.claimed_km) }) : ""}
                         {exp.transit_type ? ` · ${exp.transit_type}` : ""}
                       </span>
-                      <span className="font-bold">{formatAud(exp.amount_cents)}</span>
+                      <span className="font-medium tabular-nums">{formatAud(exp.amount_cents)}</span>
                     </li>
                   ))}
                 </ul>
 
                 {rejectId === sub.id && (
-                  <div className="mt-3 space-y-2 rounded-xl bg-red-50 p-3">
-                    <Label htmlFor={`reject-${sub.id}`} className="text-xs font-bold text-red-800">
+                  <div className="mt-3 space-y-2 rounded-xl p-3" style={{ background: "var(--cc-status-danger-bg)" }}>
+                    <Label htmlFor={`reject-${sub.id}`} className="text-xs font-medium" style={{ color: "var(--cc-danger-text)" }}>
                       {translate("coordinator.travel.rejectionReason")}
                     </Label>
                     <Textarea
@@ -247,7 +224,7 @@ export default function CoordinatorTravelExpenses() {
             ))}
           </ul>
         )}
-      </section>
+      </Section>
     </div>
   );
 }

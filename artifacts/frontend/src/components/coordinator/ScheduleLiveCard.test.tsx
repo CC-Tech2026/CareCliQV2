@@ -41,7 +41,7 @@ it("flags a late shift and says the coordinator was alerted", () => {
   const { container } = render(<ScheduleLiveCard shift={late} onOpen={() => {}} />);
   expect(screen.getByText("Not clocked in")).toBeTruthy();
   expect(screen.getByText("Coordinator alerted")).toBeTruthy();
-  expect(container.querySelector("article")?.className).toContain("border-red-400");
+  expect(container.querySelector("article")?.getAttribute("data-stage")).toBe("late");
 });
 it("names the participant and the latest task on an active shift", () => {
   const active = { ...shift, status: "in_progress", clocked_out_at: null, checklist: [

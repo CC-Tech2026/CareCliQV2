@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, Download, FileUp, Loader2, Users, UserPlus } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { PageHeader, ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
 import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
 import { useReAuth } from "@/hooks/useReAuth";
@@ -19,7 +20,7 @@ type RowResult = {
   record: Record<string, string | number | null>;
 };
 
-const RED = "#B3261E";
+const RED = "var(--cc-danger-text)";
 
 const SOURCES = [
   { value: "spreadsheet", label: "A spreadsheet (Excel, Google Sheets, Numbers)" },
@@ -108,7 +109,7 @@ async function readError(res: Response, fallback: string) {
 function StatusChip({ status }: { status: RowStatus }) {
   const meta = {
     ready: { label: "Ready", bg: "var(--cc-status-success-bg)", fg: "var(--cc-status-success)" },
-    error: { label: "Needs fixing", bg: "color-mix(in srgb, #B3261E 10%, transparent)", fg: RED },
+    error: { label: "Needs fixing", bg: "var(--cc-status-danger-bg)", fg: RED },
     duplicate: { label: "Duplicate", bg: "var(--cc-soft)", fg: "var(--cc-muted)" },
   }[status];
   return (
@@ -255,19 +256,15 @@ export default function DataImportPage() {
 
   return (
     <HubLayout>
-      <div className="mx-auto w-full max-w-4xl space-y-6 pb-12">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-cc-muted">Move to CareCliQ</p>
-          <h1 className="mt-1 text-2xl font-black tracking-tight text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>
-            Bring your records across
-          </h1>
-          <p className="mt-1 max-w-2xl text-[14px] leading-relaxed text-cc-muted">
-            Upload a CSV export of your participants or staff from your previous system. Nothing is saved until you've
-            reviewed every row.
-          </p>
-        </div>
+      <div className="space-y-4 pb-12">
+        <PageHeader
+          eyebrow="Move to CareCliQ"
+          title="Import records"
+          description="Upload a CSV export of your participants or staff from your previous system. Nothing is saved until you've reviewed every row."
+        />
 
-        <div role="tablist" aria-label="What are you importing?" className="inline-flex rounded-xl border border-cc-border bg-cc-surface p-1">
+        {/* Same navy pill toggle as the Calendar's Month / Week / Day. */}
+        <div role="tablist" aria-label="What are you importing?" className="inline-flex items-center gap-0.5 rounded-full border border-cc-border bg-cc-surface p-1">
           {([
             ["participants", "Participants", Users],
             ["staff", "Staff", UserPlus],
@@ -279,8 +276,8 @@ export default function DataImportPage() {
               aria-selected={kind === value}
               disabled={busy}
               onClick={() => reset(value)}
-              className="inline-flex min-h-10 items-center gap-2 rounded-lg px-4 text-[13px] font-bold"
-              style={kind === value ? { background: "var(--cc-plum)", color: "#fff" } : { color: "var(--cc-muted)" }}
+              className="inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors disabled:opacity-50"
+              style={kind === value ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { color: "var(--cc-muted)" }}
             >
               <Icon size={15} aria-hidden="true" />
               {label}
@@ -289,22 +286,22 @@ export default function DataImportPage() {
         </div>
 
         {step === "upload" && (
-          <section className="rounded-xl border border-cc-border bg-cc-surface">
+          <section className="max-w-4xl rounded-2xl border border-cc-border bg-cc-surface">
             <div className="space-y-5 p-5">
-              <p className="text-[13px] leading-relaxed text-cc-muted">{copy.lands}</p>
+              <p className="text-sm leading-relaxed text-cc-muted">{copy.lands}</p>
 
               <label className="block max-w-md">
-                <span className="text-[12px] font-bold text-cc-text">Where are your {copy.plural} now?</span>
+                <span className="text-sm font-medium text-cc-text">Where are your {copy.plural} now?</span>
                 <select
                   value={source}
                   onChange={(e) => setSource(e.target.value)}
-                  className="mt-1.5 h-11 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-[14px] text-cc-text"
+                  className="mt-1.5 h-11 w-full rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text"
                 >
                   {SOURCES.map((s) => (
                     <option key={s.value} value={s.value}>{s.label}</option>
                   ))}
                 </select>
-                <span className="mt-1.5 block text-[12px] leading-snug text-cc-muted">
+                <span className="mt-1.5 block text-xs leading-snug text-cc-muted">
                   {source === "spreadsheet"
                     ? "Save it as CSV first: in Excel choose File, Save As, CSV."
                     : `Export your ${kind === "participants" ? "client" : "staff"} list from ${SOURCES.find((s) => s.value === source)?.label ?? "it"} as a CSV file. Any column names work; you'll match them up next.`}
@@ -315,28 +312,28 @@ export default function DataImportPage() {
                 onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={(e) => { e.preventDefault(); setDragging(false); void upload(e.dataTransfer.files?.[0]); }}
-                className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center"
+                className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-10 text-center"
                 style={{ borderColor: dragging ? "var(--cc-plum)" : "var(--cc-border)", background: dragging ? "var(--cc-plum-subtle)" : "var(--cc-soft)" }}
               >
                 <FileUp size={26} className="text-cc-muted" aria-hidden="true" />
-                <p className="text-[14px] font-semibold text-cc-text">Drop your CSV here</p>
+                <p className="text-sm font-semibold text-cc-text">Drop your CSV here</p>
                 <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={busy}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--cc-cta)] px-5 text-[13px] font-bold text-white disabled:opacity-50"
+                  className={ctaClass}
                 >
                   {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
                   Choose a file
                 </button>
-                <p className="text-[12px] text-cc-muted">CSV, up to 5 MB and 2,000 rows</p>
+                <p className="text-xs text-cc-muted">CSV, up to 5 MB and 2,000 rows</p>
               </div>
 
               <button
                 type="button"
                 onClick={() => downloadCsv(`carecliq-${kind}-template.csv`, TEMPLATES[kind])}
-                className="inline-flex min-h-11 items-center gap-2 text-[13px] font-bold text-cc-plum"
+                className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-cc-plum"
               >
                 <Download size={15} aria-hidden="true" />
                 No export? Download a template to fill in
@@ -346,10 +343,10 @@ export default function DataImportPage() {
         )}
 
         {step === "map" && parsed && (
-          <section className="rounded-xl border border-cc-border bg-cc-surface">
+          <section className="max-w-4xl rounded-2xl border border-cc-border bg-cc-surface">
             <div className="border-b border-cc-border px-5 py-4">
-              <h2 className="text-[15px] font-black text-cc-text">Match your columns</h2>
-              <p className="mt-0.5 text-[13px] text-cc-muted">
+              <h2 className="text-base font-semibold text-cc-text">Match your columns</h2>
+              <p className="mt-0.5 text-sm text-cc-muted">
                 {fileName} · {parsed.rows.length} {parsed.rows.length === 1 ? "row" : "rows"}. We matched what we could; check each one.
               </p>
             </div>
@@ -360,24 +357,24 @@ export default function DataImportPage() {
                 return (
                   <li key={field.key} className="grid gap-2 px-5 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] sm:items-center">
                     <div>
-                      <p className="text-[14px] font-bold text-cc-text">
+                      <p className="text-sm font-semibold text-cc-text">
                         {field.label}
                         {field.required ? <span style={{ color: RED }}> *</span> : null}
                       </p>
-                      {field.hint ? <p className="text-[12px] leading-snug text-cc-muted">{field.hint}</p> : null}
+                      {field.hint ? <p className="text-xs leading-snug text-cc-muted">{field.hint}</p> : null}
                     </div>
                     <select
                       aria-label={`Column for ${field.label}`}
                       value={header}
                       onChange={(e) => setMapping((m) => ({ ...m, [field.key]: e.target.value }))}
-                      className="h-10 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-[13px] text-cc-text"
+                      className="h-10 w-full rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text"
                     >
                       <option value="">Not in my file</option>
                       {parsed.headers.map((h) => (
                         <option key={h} value={h}>{h || "(blank header)"}</option>
                       ))}
                     </select>
-                    <p className="truncate text-[12px] text-cc-muted" title={sample}>
+                    <p className="truncate text-xs text-cc-muted" title={sample}>
                       {sample ? <>e.g. <span className="text-cc-text">{sample}</span></> : null}
                     </p>
                   </li>
@@ -385,18 +382,18 @@ export default function DataImportPage() {
               })}
             </ul>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-cc-border px-5 py-4">
-              <button type="button" onClick={() => reset()} className="inline-flex min-h-11 items-center gap-2 text-[13px] font-bold text-cc-muted">
+              <button type="button" onClick={() => reset()} className={`${ghostClass} -ml-4`}>
                 <ArrowLeft size={15} aria-hidden="true" /> Choose another file
               </button>
               <div className="flex flex-wrap items-center gap-3">
                 {missingRequired.length ? (
-                  <p className="text-[12px] font-semibold" style={{ color: RED }}>Choose a column for {missingRequired.join(", ")}</p>
+                  <p className="text-xs font-medium" style={{ color: RED }}>Choose a column for {missingRequired.join(", ")}</p>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => void runPreview()}
                   disabled={busy || missingRequired.length > 0}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--cc-cta)] px-5 text-[13px] font-bold text-white disabled:opacity-40"
+                  className={ctaClass}
                 >
                   {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
                   Check {parsed.rows.length} {parsed.rows.length === 1 ? "row" : "rows"}
@@ -408,8 +405,8 @@ export default function DataImportPage() {
         )}
 
         {step === "review" && (
-          <section className="rounded-xl border border-cc-border bg-cc-surface">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-cc-border px-5 py-4">
+          <section className="max-w-4xl rounded-2xl border border-cc-border bg-cc-surface">
+            <div className="flex flex-wrap items-center gap-1.5 border-b border-cc-border px-5 py-3">
               {([
                 ["all", `${results.length} rows`],
                 ["ready", `${counts.ready} ready`],
@@ -421,8 +418,8 @@ export default function DataImportPage() {
                   type="button"
                   aria-pressed={filter === value}
                   onClick={() => setFilter(value)}
-                  className="min-h-9 text-[13px] font-bold"
-                  style={{ color: filter === value ? "var(--cc-plum)" : "var(--cc-muted)", textDecoration: filter === value ? "underline" : "none", textUnderlineOffset: 6 }}
+                  className="inline-flex min-h-9 items-center rounded-full px-3.5 text-sm font-medium transition-colors hover:bg-cc-soft"
+                  style={filter === value ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { color: "var(--cc-text)", boxShadow: "inset 0 0 0 1px var(--cc-border)" }}
                 >
                   {label}
                 </button>
@@ -430,7 +427,7 @@ export default function DataImportPage() {
             </div>
 
             {counts.error > 0 ? (
-              <div className="flex flex-wrap items-center gap-3 border-b border-cc-border px-5 py-3 text-[13px] text-cc-text" style={{ background: "var(--cc-soft)" }}>
+              <div className="flex flex-wrap items-center gap-3 border-b border-cc-border px-5 py-3 text-sm text-cc-text" style={{ background: "var(--cc-soft)" }}>
                 <AlertTriangle size={15} className="shrink-0" style={{ color: RED }} aria-hidden="true" />
                 <span className="min-w-0 flex-1 basis-56">Rows that need fixing are skipped. Fix them in your file and import it again; rows already brought across won't be duplicated.</span>
                 <button type="button" onClick={downloadProblems} className="inline-flex min-h-9 items-center gap-1.5 font-bold text-cc-plum">
@@ -442,9 +439,9 @@ export default function DataImportPage() {
             <ul className="max-h-[60vh] divide-y divide-cc-border overflow-y-auto">
               {shown.map((r) => (
                 <li key={r.row} className="flex flex-wrap items-start gap-3 px-5 py-3 sm:flex-nowrap">
-                  <span className="w-10 shrink-0 pt-0.5 text-[12px] tabular-nums text-cc-muted">#{r.row}</span>
+                  <span className="w-10 shrink-0 pt-0.5 text-xs tabular-nums text-cc-muted">#{r.row}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[14px] font-bold text-cc-text">
+                    <p className="truncate text-sm font-semibold text-cc-text">
                       {String(r.record.full_name || r.record.email || "No name")}
                       {kind === "staff" && r.record.email && r.record.full_name ? (
                         <span className="font-normal text-cc-muted"> · {String(r.record.email)}</span>
@@ -454,27 +451,27 @@ export default function DataImportPage() {
                       ) : null}
                     </p>
                     {r.errors.map((e) => (
-                      <p key={e} className="text-[12px] leading-snug" style={{ color: r.status === "error" ? RED : "var(--cc-muted)" }}>{e}</p>
+                      <p key={e} className="text-xs leading-snug" style={{ color: r.status === "error" ? RED : "var(--cc-muted)" }}>{e}</p>
                     ))}
                     {r.warnings.map((w) => (
-                      <p key={w} className="text-[12px] leading-snug text-cc-muted">{w}</p>
+                      <p key={w} className="text-xs leading-snug text-cc-muted">{w}</p>
                     ))}
                   </div>
                   <StatusChip status={r.status} />
                 </li>
               ))}
-              {shown.length === 0 ? <li className="px-5 py-8 text-center text-[13px] text-cc-muted">No rows here.</li> : null}
+              {shown.length === 0 ? <li className="px-5 py-8 text-center text-sm text-cc-muted">No rows here.</li> : null}
             </ul>
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-cc-border px-5 py-4">
-              <button type="button" onClick={() => setStep("map")} className="inline-flex min-h-11 items-center gap-2 text-[13px] font-bold text-cc-muted">
+              <button type="button" onClick={() => setStep("map")} className={`${ghostClass} -ml-4`}>
                 <ArrowLeft size={15} aria-hidden="true" /> Back to columns
               </button>
               <button
                 type="button"
                 onClick={() => void runImport()}
                 disabled={busy || counts.ready === 0}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--cc-cta)] px-5 text-[13px] font-bold text-white disabled:opacity-40"
+                className={ctaClass}
               >
                 {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
                 {counts.ready === 0 ? "Nothing ready to import" : copy.action(counts.ready)}
@@ -484,12 +481,12 @@ export default function DataImportPage() {
         )}
 
         {step === "done" && (
-          <section className="rounded-xl border border-cc-border bg-cc-surface p-6">
+          <section className="max-w-4xl rounded-2xl border border-cc-border bg-cc-surface p-6">
             <span className="flex h-11 w-11 items-center justify-center rounded-full" style={{ background: "var(--cc-status-success-bg)", color: "var(--cc-status-success)" }}>
               <Check size={20} strokeWidth={3} aria-hidden="true" />
             </span>
-            <h2 className="mt-4 text-lg font-black text-cc-text">{copy.done(imported)}</h2>
-            <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-cc-muted">
+            <h2 className="mt-4 text-lg font-semibold text-cc-text">{copy.done(imported)}</h2>
+            <p className="mt-1 max-w-xl text-sm leading-relaxed text-cc-muted">
               {results.length - imported > 0
                 ? `${results.length - imported} ${results.length - imported === 1 ? "row was" : "rows were"} skipped. `
                 : ""}
@@ -499,11 +496,11 @@ export default function DataImportPage() {
               <button
                 type="button"
                 onClick={() => navigate(copy.next.href)}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--cc-cta)] px-5 text-[13px] font-bold text-white"
+                className={ctaClass}
               >
                 {copy.next.label} <ArrowRight size={15} aria-hidden="true" />
               </button>
-              <button type="button" onClick={() => reset()} className="inline-flex min-h-11 items-center rounded-lg border border-cc-border px-5 text-[13px] font-bold text-cc-text hover:bg-cc-soft">
+              <button type="button" onClick={() => reset()} className={outlineClass}>
                 Import another file
               </button>
             </div>
