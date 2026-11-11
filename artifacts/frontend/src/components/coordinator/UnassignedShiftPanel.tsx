@@ -2,15 +2,14 @@ import { PersonPreview } from "./PersonPreview";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { Phone, Mail, Target, CalendarClock, Ban } from "lucide-react";
+import { Phone, Mail, Target, CalendarClock, Ban, UserSearch } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { datetimeLocalValueToUtcIso, utcIsoToDatetimeLocalValue } from "@/lib/datetime";
-import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
-} from "@/components/ui/sheet";
+import { SidePanel } from "@/components/layout/SidePanel";
+import { ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { ConflictModal, type PendingDrop } from "@/components/coordinator/ConflictModal";
 import { WorkerMatchBadge } from "@/components/coordinator/WorkerMatchBadge";
@@ -40,8 +39,7 @@ export interface UnassignedShiftPanelProps {
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
-const BORDER = "var(--cc-border)";
-const PLUM = "var(--cc-plum)";
+const DANGER = "var(--cc-danger-text)";
 
 /** Opens from clicking an unassigned shift card on the roster — shift and
  * participant context, that participant's goals/tasks, and ranked worker
@@ -194,162 +192,152 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>{shift?.participant_name || translate("common.participant")}</SheetTitle>
-            <SheetDescription>
-              {start && format(start, "EEE d MMM, h:mm a")}{end ? ` – ${format(end, "h:mm a")}` : ""}
-              {shift?.shift_type ? ` · ${shift.shift_type.replace(/_/g, " ")}` : ""}
-            </SheetDescription>
-          </SheetHeader>
-          {shift ? <div className="mt-4 space-y-3 rounded-xl border border-cc-border p-3">
-            <div><p className="text-xs text-cc-muted">Participant</p><PersonPreview id={shift.participant_id} name={shift.participant_name || "Participant"} kind="participant" className="text-sm font-semibold" /></div>
-            <div><p className="text-xs text-cc-muted">Assigned worker</p><PersonPreview id={shift.worker_id} name={shift.worker_name || workers.find(w => w.id === shift.worker_id)?.full_name || "Unassigned"} kind="worker" worker={workers.find(w => w.id === shift.worker_id)} className="text-sm font-semibold" /></div>
-          </div> : null}
+      <SidePanel
+        open={open}
+        onOpenChange={onOpenChange}
+        icon={UserSearch}
+        title={shift?.participant_name || translate("common.participant")}
+        description={
+          <>
+            {start && format(start, "EEE d MMM, h:mm a")}{end ? ` – ${format(end, "h:mm a")}` : ""}
+            {shift?.shift_type ? ` · ${shift.shift_type.replace(/_/g, " ")}` : ""}
+          </>
+        }
+      >
+        {shift ? (
+          <dl className="grid gap-3 rounded-xl border border-cc-border p-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs text-cc-muted">Participant</dt>
+              <dd><PersonPreview id={shift.participant_id} name={shift.participant_name || "Participant"} kind="participant" className="text-sm font-semibold" /></dd>
+            </div>
+            <div>
+              <dt className="text-xs text-cc-muted">Assigned worker</dt>
+              {/* An unfilled shift can carry a placeholder worker name with no worker behind it. */}
+              <dd>
+                {shift.worker_id && shift.worker_id !== "00000000-0000-0000-0000-000000000000" ? (
+                  <PersonPreview id={shift.worker_id} name={shift.worker_name || workers.find(w => w.id === shift.worker_id)?.full_name || "Unassigned"} kind="worker" worker={workers.find(w => w.id === shift.worker_id)} className="text-sm font-semibold" />
+                ) : (
+                  <span className="text-sm" style={{ color: MUTED }}>Not assigned yet</span>
+                )}
+              </dd>
+            </div>
+          </dl>
+        ) : null}
 
-          {/* Reschedule / cancel - the only edit actions this shift has, since
-              it's still unassigned (no worker to conflict-check against). */}
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={openReschedule}
-              disabled={rescheduling || cancelMut.isPending}
-              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-bold disabled:opacity-50"
-              style={{ borderColor: BORDER, color: TEXT }}
-            >
-              <CalendarClock size={13} /> {translate("coordinator.shiftAssign.reschedule")}
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelShift}
-              disabled={rescheduling || cancelMut.isPending}
-              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-bold disabled:opacity-50"
-              style={{ borderColor: "#FCA5A5", color: "#DC2626" }}
-            >
-              <Ban size={13} /> {translate("coordinator.shiftAssign.cancelShift")}
-            </button>
+        {/* Reschedule / cancel - the only edit actions this shift has, since
+            it's still unassigned (no worker to conflict-check against). */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={openReschedule} disabled={rescheduling || cancelMut.isPending} className={outlineClass}>
+            <CalendarClock size={15} /> {translate("coordinator.shiftAssign.reschedule")}
+          </button>
+          <button
+            type="button"
+            onClick={handleCancelShift}
+            disabled={rescheduling || cancelMut.isPending}
+            className={`${outlineClass} hover:bg-[var(--cc-status-danger-bg)]`}
+            style={{ color: DANGER }}
+          >
+            <Ban size={15} /> {translate("coordinator.shiftAssign.cancelShift")}
+          </button>
+        </div>
+
+        {rescheduling && (
+          <div className="space-y-3 rounded-xl border border-cc-border p-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.start")}</label>
+              <DateTimePicker value={draftStart} onChange={setDraftStart} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.end")}</label>
+              <DateTimePicker value={draftEnd} onChange={setDraftEnd} />
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button type="button" onClick={() => setRescheduling(false)} disabled={rescheduleMut.isPending} className={ghostClass}>
+                {translate("coordinator.shiftAssign.rescheduleDiscard")}
+              </button>
+              <button type="button" onClick={handleSaveReschedule} disabled={!draftStart || rescheduleMut.isPending} className={ctaClass}>
+                {translate("coordinator.shiftAssign.rescheduleSave")}
+              </button>
+            </div>
           </div>
+        )}
 
-          {rescheduling && (
-            <div className="mt-3 space-y-3 rounded-xl border p-3" style={{ borderColor: BORDER }}>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.start")}</label>
-                <DateTimePicker value={draftStart} onChange={setDraftStart} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.end")}</label>
-                <DateTimePicker value={draftEnd} onChange={setDraftEnd} />
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSaveReschedule}
-                  disabled={!draftStart || rescheduleMut.isPending}
-                  className="rounded-full px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
-                  style={{ background: PLUM }}
-                >
-                  {translate("coordinator.shiftAssign.rescheduleSave")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRescheduling(false)}
-                  disabled={rescheduleMut.isPending}
-                  className="rounded-full border px-3.5 py-1.5 text-[12px] font-bold disabled:opacity-50"
-                  style={{ borderColor: BORDER, color: MUTED }}
-                >
-                  {translate("coordinator.shiftAssign.rescheduleDiscard")}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {shift?.cannot_attend_reason && (
-            <div
-              className="mt-4 rounded-xl border p-3"
-              style={{ borderColor: "#FCA5A5", background: "#FEF2F2" }}
-            >
-              <p className="text-[11px] font-black uppercase" style={{ color: "#DC2626" }}>
-                {translate("coordinator.shiftAssign.cannotAttendReason")}
-              </p>
-              <p className="mt-1 text-[12px]" style={{ color: TEXT }}>
-                {shift.cannot_attend_reason}
-              </p>
-            </div>
-          )}
-
-          {goalsWithTasks.length > 0 && (
-            <div className="mt-4 space-y-2">
-              <p className="flex items-center gap-1.5 text-[12px] font-black" style={{ color: TEXT }}>
-                <Target size={13} /> {translate("coordinator.shiftAssign.tasksOptional")}
-              </p>
-              <div className="space-y-2 max-h-40 overflow-y-auto rounded-xl border p-3" style={{ borderColor: BORDER }}>
-                {goalsWithTasks.map(({ goal, tasks }) => (
-                  <div key={goal.id}>
-                    <p className="text-[11px] font-bold" style={{ color: TEXT }}>{goal.name}</p>
-                    <p className="text-[11px]" style={{ color: MUTED }}>{tasks.map((t) => t.name).join(", ")}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="mt-5 space-y-2">
-            <p className="text-[12px] font-black" style={{ color: TEXT }}>
-              {translate("coordinator.shiftAssign.supportWorker")}
+        {shift?.cannot_attend_reason && (
+          <div className="rounded-xl p-4" style={{ background: "var(--cc-status-danger-bg)" }}>
+            <p className="text-xs font-semibold" style={{ color: DANGER }}>
+              {translate("coordinator.shiftAssign.cannotAttendReason")}
             </p>
-            {availableWorkersQuery.isLoading && (
-              <p className="text-[12px]" style={{ color: MUTED }}>{translate("common.loading")}</p>
-            )}
-            {availableWorkersQuery.isError && (
-              <p className="text-[12px]" style={{ color: "#DC2626" }}>
-                {(availableWorkersQuery.error as Error)?.message || translate("common.error")}
-              </p>
-            )}
-            <div className="space-y-2">
-              {(availableWorkersQuery.data ?? []).map((w) => (
-                <div
-                  key={w.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border p-3"
-                  style={{ borderColor: BORDER }}
-                >
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-black" style={{ color: TEXT }}>{w.full_name}</p>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]" style={{ color: MUTED }}>
-                      {w.phone && <ContactLink icon={Phone} value={w.phone} href={`tel:${w.phone.replace(/\s/g, "")}`} />}
-                      {w.email && <ContactLink icon={Mail} value={w.email} href={`mailto:${w.email}`} />}
-                    </div>
-                    <div className="mt-1"><WorkerMatchBadge worker={w} /></div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-stretch gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleAssign(w)}
-                      disabled={assignMut.isPending || offerMut.isPending}
-                      className="rounded-full px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
-                      style={{ background: PLUM }}
-                    >
-                      {translate("common.assign")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSendOffer(w)}
-                      disabled={assignMut.isPending || offerMut.isPending}
-                      className="rounded-full border px-3.5 py-1.5 text-[12px] font-bold disabled:opacity-50"
-                      style={{ borderColor: PLUM, color: PLUM }}
-                    >
-                      {translate("coordinator.shiftAssign.sendOffer")}
-                    </button>
-                  </div>
+            <p className="mt-1 text-sm" style={{ color: TEXT }}>
+              {shift.cannot_attend_reason}
+            </p>
+          </div>
+        )}
+
+        {goalsWithTasks.length > 0 && (
+          <section className="space-y-2">
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: TEXT }}>
+              <Target size={15} className="text-[var(--cc-brand-purple)]" /> {translate("coordinator.shiftAssign.tasksOptional")}
+            </h3>
+            <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-cc-border p-3">
+              {goalsWithTasks.map(({ goal, tasks }) => (
+                <div key={goal.id}>
+                  <p className="text-sm font-medium" style={{ color: TEXT }}>{goal.name}</p>
+                  <p className="text-xs" style={{ color: MUTED }}>{tasks.map((t) => t.name).join(", ")}</p>
                 </div>
               ))}
-              {!availableWorkersQuery.isLoading && (availableWorkersQuery.data ?? []).length === 0 && (
-                <p className="text-[12px]" style={{ color: MUTED }}>{translate("common.noResults")}</p>
-              )}
             </div>
+          </section>
+        )}
+
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold" style={{ color: TEXT }}>
+            {translate("coordinator.shiftAssign.supportWorker")}
+          </h3>
+          {availableWorkersQuery.isLoading && (
+            <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>
+          )}
+          {availableWorkersQuery.isError && (
+            <p className="text-sm" style={{ color: DANGER }}>
+              {(availableWorkersQuery.error as Error)?.message || translate("common.error")}
+            </p>
+          )}
+          <div className="space-y-2">
+            {(availableWorkersQuery.data ?? []).map((w) => (
+              <div key={w.id} className="flex items-center justify-between gap-3 rounded-xl border border-cc-border p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold" style={{ color: TEXT }}>{w.full_name}</p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs" style={{ color: MUTED }}>
+                    {w.phone && <ContactLink icon={Phone} value={w.phone} href={`tel:${w.phone.replace(/\s/g, "")}`} />}
+                    {w.email && <ContactLink icon={Mail} value={w.email} href={`mailto:${w.email}`} />}
+                  </div>
+                  <div className="mt-1"><WorkerMatchBadge worker={w} /></div>
+                </div>
+                <div className="flex shrink-0 flex-col items-stretch gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleAssign(w)}
+                    disabled={assignMut.isPending || offerMut.isPending}
+                    className={`${ctaClass} !min-h-9 !px-4`}
+                  >
+                    {translate("common.assign")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSendOffer(w)}
+                    disabled={assignMut.isPending || offerMut.isPending}
+                    className={`${outlineClass} !min-h-9`}
+                  >
+                    {translate("coordinator.shiftAssign.sendOffer")}
+                  </button>
+                </div>
+              </div>
+            ))}
+            {!availableWorkersQuery.isLoading && (availableWorkersQuery.data ?? []).length === 0 && (
+              <p className="text-sm" style={{ color: MUTED }}>{translate("common.noResults")}</p>
+            )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </section>
+      </SidePanel>
 
       {pendingDrop && (
         <ConflictModal

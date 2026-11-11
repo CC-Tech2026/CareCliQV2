@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { FileSignature, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SidePanel } from "@/components/layout/SidePanel";
+import { ctaClass, outlineClass } from "@/components/layout/PageKit";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -213,16 +214,23 @@ export function ServiceAgreementBuilder({
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
-        <SheetHeader>
-          <SheetTitle>{agreementId ? "Edit draft agreement" : "New service agreement"}</SheetTitle>
-          <SheetDescription>
-            For {participantName}. Rates default to the NDIS price limit for the start date; you can agree a lower rate.
-          </SheetDescription>
-        </SheetHeader>
-
-        <div className="mt-5 space-y-6 text-sm">
+    <SidePanel
+      open={open}
+      onOpenChange={onOpenChange}
+      wide
+      icon={FileSignature}
+      title={agreementId ? "Edit draft agreement" : "New service agreement"}
+      description={<>For {participantName}. Rates default to the NDIS price limit for the start date; you can agree a lower rate.</>}
+      footer={
+        <>
+          <button type="button" className={outlineClass} onClick={() => onOpenChange(false)}>Cancel</button>
+          <button type="button" className={ctaClass} onClick={save} disabled={saving || problems.length > 0}>
+            {saving ? "Saving..." : agreementId ? "Save draft" : "Create draft"}
+          </button>
+        </>
+      }
+    >
+        <div className="space-y-6 text-sm">
           <section className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1">
               <span className="text-xs text-cc-muted">Starts</span>
@@ -356,15 +364,7 @@ export function ServiceAgreementBuilder({
               {problems.map((p) => <li key={p}>• {p}</li>)}
             </ul>
           )}
-
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving || problems.length > 0}>
-              {saving ? "Saving…" : agreementId ? "Save draft" : "Create draft"}
-            </Button>
-          </div>
         </div>
-      </SheetContent>
-    </Sheet>
+    </SidePanel>
   );
 }

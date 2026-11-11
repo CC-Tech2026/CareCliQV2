@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Loader2, Upload, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Archive, HeartHandshake, History, Loader2, Upload, Users, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SidePanel } from "@/components/layout/SidePanel";
+import { ctaClass, outlineClass } from "@/components/layout/PageKit";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -21,40 +21,9 @@ import {
   type DirectorOverview,
   type ParticipantDocument,
 } from "@/services/directorParticipantService";
-import { AuditList, BAD, MUTED, PLUM, SOFT, TEXT, formatDate } from "./DirectorParticipantSections";
+import { AuditList, BAD, MUTED, SOFT, TEXT, formatDate } from "./DirectorParticipantSections";
 
 // The director-only actions on a participant, each in a right-side panel.
-
-function Panel({
-  open,
-  onOpenChange,
-  title,
-  description,
-  children,
-  footer,
-  wide = false,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  description?: string;
-  children: ReactNode;
-  footer?: ReactNode;
-  wide?: boolean;
-}) {
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className={`flex w-full flex-col gap-0 p-0 ${wide ? "sm:max-w-2xl" : "sm:max-w-lg"}`}>
-        <SheetHeader className="border-b border-cc-border p-5 pr-12">
-          <SheetTitle>{title}</SheetTitle>
-          {description && <SheetDescription>{description}</SheetDescription>}
-        </SheetHeader>
-        <div className="flex-1 space-y-5 overflow-y-auto p-5">{children}</div>
-        {footer && <SheetFooter className="border-t border-cc-border p-4">{footer}</SheetFooter>}
-      </SheetContent>
-    </Sheet>
-  );
-}
 
 const NONE = "__none__";
 
@@ -110,17 +79,18 @@ export function TeamSheet({
   }
 
   return (
-    <Panel
+    <SidePanel
+      icon={Users}
       open={open}
       onOpenChange={onOpenChange}
       title="Change the care team"
       description={`Who looks after ${overview.participant.full_name.split(" ")[0]}. The roster isn't changed; future shifts keep their worker until you reassign them.`}
       footer={
         <>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving || staff.isLoading} style={{ background: PLUM }} className="text-white">
-            {saving && <Loader2 size={14} className="mr-1.5 animate-spin" />}Save team
-          </Button>
+          <button type="button" className={outlineClass} onClick={() => onOpenChange(false)}>Cancel</button>
+          <button type="button" className={ctaClass} onClick={save} disabled={saving || staff.isLoading}>
+            {saving && <Loader2 size={14} className="animate-spin" />}Save team
+          </button>
         </>
       }
     >
@@ -173,7 +143,7 @@ export function TeamSheet({
           </fieldset>
         </>
       )}
-    </Panel>
+    </SidePanel>
   );
 }
 
@@ -264,22 +234,24 @@ export function ServicesSheet({
   }
 
   return (
-    <Panel
+    <SidePanel
+      icon={HeartHandshake}
       open={open}
       onOpenChange={onOpenChange}
       title={copy.title}
       description={copy.description}
       footer={
         <>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button
+          <button type="button" className={outlineClass} onClick={() => onOpenChange(false)}>Cancel</button>
+          <button
+            type="button"
             onClick={save}
             disabled={!canSave}
-            className="text-white"
-            style={{ background: mode === "resume" ? "var(--cc-green)" : mode === "end" ? BAD : PLUM }}
+            className={ctaClass}
+            style={mode === "resume" ? { background: "var(--cc-green)" } : mode === "end" ? { background: BAD } : undefined}
           >
-            {saving && <Loader2 size={14} className="mr-1.5 animate-spin" />}{copy.button}
-          </Button>
+            {saving && <Loader2 size={14} className="animate-spin" />}{copy.button}
+          </button>
         </>
       }
     >
@@ -329,7 +301,7 @@ export function ServicesSheet({
           </div>
         </>
       )}
-    </Panel>
+    </SidePanel>
   );
 }
 
@@ -390,17 +362,18 @@ export function UploadSheet({
   }
 
   return (
-    <Panel
+    <SidePanel
+      icon={Upload}
       open={open}
       onOpenChange={onOpenChange}
       title="Import a document"
       description="PDF, Word or a photo of the page, up to 20 MB."
       footer={
         <>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={!file || saving} className="text-white" style={{ background: PLUM }}>
-            {saving && <Loader2 size={14} className="mr-1.5 animate-spin" />}File document
-          </Button>
+          <button type="button" className={outlineClass} onClick={() => onOpenChange(false)}>Cancel</button>
+          <button type="button" className={ctaClass} onClick={save} disabled={!file || saving}>
+            {saving && <Loader2 size={14} className="animate-spin" />}File document
+          </button>
         </>
       }
     >
@@ -479,7 +452,7 @@ export function UploadSheet({
           </div>
         </>
       )}
-    </Panel>
+    </SidePanel>
   );
 }
 
@@ -515,15 +488,16 @@ export function ArchiveSheet({
   }
 
   return (
-    <Panel
+    <SidePanel
+      icon={Archive}
       open={!!doc}
       onOpenChange={onOpenChange}
       title="Archive this document"
       description={doc ? `${doc.title}. It leaves this list but is kept for the retention period, with the reason, in the audit trail.` : undefined}
       footer={
         <>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={!reason.trim() || saving} className="text-white" style={{ background: PLUM }}>Archive</Button>
+          <button type="button" className={outlineClass} onClick={() => onOpenChange(false)}>Cancel</button>
+          <button type="button" className={ctaClass} onClick={save} disabled={!reason.trim() || saving}>Archive</button>
         </>
       }
     >
@@ -531,7 +505,7 @@ export function ArchiveSheet({
         <Label htmlFor="archive-reason">Reason</Label>
         <Input id="archive-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="For example: uploaded to the wrong participant" />
       </div>
-    </Panel>
+    </SidePanel>
   );
 }
 
@@ -542,7 +516,7 @@ export function AuditSheet({ open, onOpenChange, participantId }: { open: boolea
   const [show, setShow] = useState<"all" | "change" | "view">("all");
   const entries = (trail.data?.entries ?? []).filter((e) => show === "all" || e.kind === show);
   return (
-    <Panel open={open} onOpenChange={onOpenChange} title="Audit trail" description="Every change to this record and every time it was opened, newest first. Kept as NDIS audit evidence and can't be edited." wide>
+    <SidePanel icon={History} open={open} onOpenChange={onOpenChange} title="Audit trail" description="Every change to this record and every time it was opened, newest first. Kept as NDIS audit evidence and can't be edited." wide>
       <div className="flex gap-2" role="group" aria-label="Filter the audit trail">
         {([["all", "Everything"], ["change", "Changes"], ["view", "Views"]] as const).map(([value, label]) => (
           <button
@@ -567,6 +541,6 @@ export function AuditSheet({ open, onOpenChange, participantId }: { open: boolea
           <p className="text-xs" style={{ color: MUTED }}>Showing {entries.length} entries. Oldest shown: {formatDate(entries[entries.length - 1]?.when)}.</p>
         </>
       )}
-    </Panel>
+    </SidePanel>
   );
 }
