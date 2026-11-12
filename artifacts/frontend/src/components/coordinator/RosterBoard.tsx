@@ -31,7 +31,6 @@ import {
   type CoordinatorShiftRecord,
   type WorkerStats,
   type ConflictItem,
-  type WorkerAvailability,
   type BlackoutDate,
 } from "@/services/coordinatorService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -44,6 +43,16 @@ import { PersonPreview } from "./PersonPreview";
 import { PersonPhoto } from "@/components/ui/person-photo";
 import { sharedNames } from "@/lib/person-identity";
 import { ShiftHoverCard, shiftLiveStatus } from "./ShiftHoverCard";
+import {
+  FIT_COLORS,
+  OPEN_ROW_ID,
+  UNASSIGNED_PLACEHOLDER_ID,
+  dayAvailability,
+  workerFit,
+  type AvailabilityMap,
+  type Fit,
+} from "./rosterShared";
+import { CALENDAR_LEGEND, RosterCalendar } from "./RosterCalendar";
 import { appLocalDateKey, formatAppTime } from "@/lib/datetime";
 
 const PLUM   = "var(--cc-plum)";
@@ -52,12 +61,6 @@ const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
-
-const UNASSIGNED_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
-// Drop target id for the open shifts row (dropping there unassigns).
-const OPEN_ROW_ID = "__open_shifts__";
-
-type AvailabilityMap = Record<string, WorkerAvailability & { blackout_dates?: BlackoutDate[] }>;
 
 const STATUS_COLORS: Record<string, { bg: string; color: string; border: string }> = {
   unassigned:  { bg: "#FEF2F2", color: "#DC2626", border: "#FCA5A5" },
@@ -226,8 +229,11 @@ function ShiftDragClone({ shift }: { shift: CoordinatorShiftRecord }) {
 
 // ── Droppable worker × day cell ───────────────────────────────────────────────
 function DayCell({
-  workerId, dayIso, disabled, cellBg, children, style,
+  workerId, dayIso, disabled, cellBg, children, style, minWidth = 132, fit,
 }: {
+  minWidth?: number;
+  /** While a shift is dragged: how this worker suits it, which colours the drop. */
+  fit?: Fit;
   workerId: string;
   dayIso: string;
   disabled: boolean;
@@ -245,9 +251,10 @@ function DayCell({
       ref={setNodeRef}
       className="px-1.5 py-1.5 align-top transition-colors"
       style={{
-        background: isOver && !disabled ? "var(--cc-plum-soft)" : cellBg,
+        background: isOver && !disabled ? (fit ? FIT_COLORS[fit.tone].bg : "var(--cc-plum-soft)") : cellBg,
+        boxShadow: isOver && !disabled && fit ? `inset 0 0 0 2px ${FIT_COLORS[fit.tone].border}` : undefined,
         opacity: disabled ? 0.4 : 1,
-        minWidth: 132,
+        minWidth,
         minHeight: 56,
         ...style,
       }}
@@ -321,11 +328,21 @@ interface RosterBoardProps {
   colorBy?: "status" | "worker";
   /** False hides the "+" add-shift buttons, for viewers who can't create shifts. */
   allowCreate?: boolean;
+  /** Seven days from weekStart, fourteen, or one day as a calendar. */
+  view?: "week" | "fortnight" | "day";
+  /** The day view's day, yyyy-MM-dd. */
+  dayKey?: string;
+  /** Day view: add a shift at a time, for a worker or (null) as an open shift. */
+  onCreateAt?: (worker: WorkerStats | null, dateKey: string, time: string) => void;
+  /** Week and fortnight: a day's heading opens that day on its own. */
+  onOpenDay?: (dateKey: string) => void;
+  /** Week and fortnight as an hour calendar (day by day, a column per worker), or as cards per day. The day view is always a calendar. */
+  layout?: "calendar" | "grid";
 }
 
 export function RosterBoard({
   newShiftId, weekStart, shifts, workers, availMap, loadingAvail, onCellClick, onOpenShiftCreate, onRefresh,
-  colorBy = "status", allowCreate = true,
+  colorBy = "status", allowCreate = true, view = "week", dayKey, onCreateAt, onOpenDay, layout = "grid",
 }: RosterBoardProps) {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
@@ -357,7 +374,10 @@ export function RosterBoard({
     window.history.replaceState({}, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
   }, [shifts]);
 
-  const days = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
+  const dayCount = view === "fortnight" ? 14 : 7;
+  const days = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, dayCount - 1) });
+  const colWidth = view === "fortnight" ? 96 : 132;
+  const calendar = view === "day" ? !!dayKey : layout === "calendar";
 
   const byWorkerDay = useMemo(() => {
     const map = new Map<string, CoordinatorShiftRecord[]>();
@@ -494,7 +514,26 @@ export function RosterBoard({
     setPendingUnassign({ shift, workerName, warning });
   }
 
-  const activeDayIso = activeShift ? (() => { const d = parseStart(activeShift); return d ? format(d, "yyyy-MM-dd") : null; })() : null;
+  const activeDayIso = activeShift?.scheduled_start ? appLocalDateKey(activeShift.scheduled_start, activeShift.timezone) : null;
+
+  // While a shift is dragged: how each worker suits it, shown on their row.
+  const shiftsByWorker = useMemo(() => {
+    const map = new Map<string, CoordinatorShiftRecord[]>();
+    for (const s of shifts) {
+      if (!s.worker_id || s.worker_id === UNASSIGNED_PLACEHOLDER_ID) continue;
+      map.set(s.worker_id, [...(map.get(s.worker_id) ?? []), s]);
+    }
+    return map;
+  }, [shifts]);
+  const fits = useMemo(() => {
+    const map = new Map<string, Fit>();
+    if (!activeShift) return map;
+    for (const w of workers) {
+      if (w.id === activeShift.worker_id) continue;
+      map.set(w.id, workerFit({ shift: activeShift, avail: availMap[w.id], workerShifts: shiftsByWorker.get(w.id) ?? [] }));
+    }
+    return map;
+  }, [activeShift, workers, availMap, shiftsByWorker]);
 
   return (
     <div className="space-y-3">
@@ -530,12 +569,12 @@ export function RosterBoard({
           drag to assign" instructional copy (that's onboarding-style text
           that just becomes noise once a coordinator already knows the UI). */}
       <div className="flex flex-wrap items-center gap-3 px-1">
-        {[
+        {(calendar ? CALENDAR_LEGEND : [
           { color: "#86EFAC", label: translate("coordinator.rostering.legend.available") },
           { color: "#F3A8C4", label: translate("coordinator.rostering.legend.assigned") },
           { color: "#FCD34D", label: translate("coordinator.rostering.legend.onLeave") },
           { color: "#CBD5E1", label: translate("coordinator.rostering.legend.notRostered") },
-        ].map((l) => (
+        ]).map((l) => (
           <div key={l.label} className="flex items-center gap-1">
             <span className="h-2 w-2 rounded-full" style={{ background: l.color }} />
             <span className="text-[10.5px] font-medium" style={{ color: MUTED }}>{l.label}</span>
@@ -545,7 +584,22 @@ export function RosterBoard({
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        {/* Worker × day grid */}
+        {calendar ? (
+          <RosterCalendar
+            dayKeys={view === "day" && dayKey ? [dayKey] : weekKeys}
+            onOpenDay={onOpenDay}
+            workers={rosterRows}
+            shifts={shifts}
+            availMap={availMap}
+            allowCreate={allowCreate && !!onCreateAt}
+            newShiftId={newShiftId}
+            activeShift={activeShift}
+            fits={fits}
+            onCreateAt={(worker, date, time) => onCreateAt?.(worker, date, time)}
+            onSelect={setDetailShift}
+          />
+        ) : (
+        /* Worker × day grid */
         <div className="rounded-2xl border bg-white overflow-auto" style={{ borderColor: BORDER }}>
           <table className="w-full border-separate border-spacing-0">
             <thead>
@@ -559,18 +613,27 @@ export function RosterBoard({
                 {days.map((d) => (
                   <th
                     key={d.toISOString()}
-                    className="min-w-[132px] px-2 py-2.5 text-center"
-                    style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "var(--cc-today-header)" : "var(--cc-grid-header)" }}
+                    className="px-1.5 py-2.5 text-center"
+                    style={{ minWidth: colWidth, borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "var(--cc-today-header)" : "var(--cc-grid-header)" }}
                   >
-                    <div className="text-[10px] font-black uppercase tracking-wider" style={{ color: isToday(d) ? PLUM : MUTED }}>
-                      {format(d, "EEE")}
-                    </div>
-                    <div
-                      className="mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-black"
-                      style={{ background: isToday(d) ? "var(--cc-text)" : "transparent", color: isToday(d) ? "var(--cc-bg)" : TEXT }}
+                    <button
+                      type="button"
+                      disabled={!onOpenDay}
+                      onClick={() => onOpenDay?.(format(d, "yyyy-MM-dd"))}
+                      aria-label={onOpenDay ? `Open ${format(d, "EEEE d MMMM")} as a day calendar` : undefined}
+                      title={onOpenDay ? "See this day hour by hour" : undefined}
+                      className="w-full rounded-lg py-0.5 transition-colors enabled:hover:bg-cc-soft disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
                     >
-                      {format(d, "d")}
-                    </div>
+                      <span className="block text-[10px] font-black uppercase tracking-wider" style={{ color: isToday(d) ? PLUM : MUTED }}>
+                        {format(d, "EEE")}
+                      </span>
+                      <span
+                        className="mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-black"
+                        style={{ background: isToday(d) ? "var(--cc-text)" : "transparent", color: isToday(d) ? "var(--cc-bg)" : TEXT }}
+                      >
+                        {format(d, "d")}
+                      </span>
+                    </button>
                   </th>
                 ))}
               </tr>
@@ -608,6 +671,7 @@ export function RosterBoard({
                     return (
                       <DayCell
                         key={d.toISOString()}
+                        minWidth={colWidth}
                         workerId={OPEN_ROW_ID}
                         dayIso={dayKey}
                         disabled={dropDisabled}
@@ -646,7 +710,9 @@ export function RosterBoard({
                 const avatar = avatarColor(worker.full_name);
                 const weekHrs = weekHoursByWorker.get(worker.id) ?? 0;
                 const maxHrs = avail?.max_hours_per_week;
-                const overCap = maxHrs != null && weekHrs > maxHrs;
+                // A fortnight is measured against two weeks of the weekly cap.
+                const capHrs = maxHrs != null ? maxHrs * (dayCount / 7) : null;
+                const overCap = capHrs != null && weekHrs > capHrs;
                 return (
                   <tr key={worker.id}>
                     <td className="sticky left-0 z-10 bg-white px-3 py-2.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
@@ -670,7 +736,7 @@ export function RosterBoard({
                               </span>
                             )}
                             <span className="text-[10px] font-medium" style={{ color: overCap ? CORAL : MUTED }}>
-                              {weekHrs.toFixed(1)}h{maxHrs != null ? ` / ${maxHrs}h` : ""}
+                              {weekHrs.toFixed(1)}h{capHrs != null ? ` / ${capHrs}h` : ""}
                             </span>
                             {sameNames.has(worker.full_name.trim().toLowerCase()) && (worker.suburb || worker.employee_id) && (
                               <span className="truncate text-[10px] font-medium" style={{ color: MUTED }}>
@@ -710,7 +776,28 @@ export function RosterBoard({
                       const assignLabel = translateParams("coordinator.rostering.assignShiftTo", { worker: worker.full_name, date: format(d, "d MMM") });
 
                       return (
-                        <DayCell key={d.toISOString()} workerId={worker.id} dayIso={dayKey} disabled={dropDisabled} cellBg={cellBg}>
+                        <DayCell key={d.toISOString()} minWidth={colWidth} workerId={worker.id} dayIso={dayKey} disabled={dropDisabled} cellBg={cellBg} fit={activeDayIso === dayKey ? fits.get(worker.id) : undefined}>
+                          {activeDayIso === dayKey && fits.get(worker.id) && (() => {
+                            const fit = fits.get(worker.id)!;
+                            return (
+                              <div
+                                className="mb-1 flex items-center justify-center rounded-md px-1.5 py-1 text-[11px] font-semibold"
+                                style={{ background: FIT_COLORS[fit.tone].bg, color: FIT_COLORS[fit.tone].fg, boxShadow: `inset 0 0 0 1px ${FIT_COLORS[fit.tone].border}` }}
+                              >
+                                {fit.label}
+                              </div>
+                            );
+                          })()}
+                          {/* When they're free, in words (days off and leave already say so). */}
+                          {(cellState === "available" || cellState === "assigned") && isWorkDay && !onBlackout && (() => {
+                            const usual = dayAvailability(avail, dayKey);
+                            if (usual.start == null) return null;
+                            return (
+                              <p className="mb-1 truncate px-0.5 text-[11px] font-medium" style={{ color: MUTED }} title={`Usually works ${usual.text}`}>
+                                {view === "fortnight" ? usual.text : `Free ${usual.text}`}
+                              </p>
+                            );
+                          })()}
                           {cellState === "loading" && (
                             <div className="flex h-10 items-center justify-center">
                               <div className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: BORDER }} />
@@ -782,7 +869,7 @@ export function RosterBoard({
               })}
               {workers.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-16 text-center text-[13px]" style={{ color: MUTED }}>
+                  <td colSpan={dayCount + 1} className="py-16 text-center text-[13px]" style={{ color: MUTED }}>
                     {translate("coordinator.rostering.noShiftsWeek")}
                   </td>
                 </tr>
@@ -790,6 +877,7 @@ export function RosterBoard({
             </tbody>
           </table>
         </div>
+        )}
 
         <DragOverlay dropAnimation={null}>
           {activeShift ? <ShiftDragClone shift={activeShift} /> : null}

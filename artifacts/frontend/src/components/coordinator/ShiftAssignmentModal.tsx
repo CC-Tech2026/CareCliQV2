@@ -88,6 +88,8 @@ interface ShiftAssignmentModalProps {
   initialWorkerId?: string;
   onAssigned?: (id: string) => void;
   initialDate?: string; // "YYYY-MM-DD" — pre-fills the start time to 08:00 on that date
+  /** "HH:MM" on initialDate, e.g. where the day calendar was clicked. Defaults to 09:00. */
+  initialTime?: string;
 }
 
 export function ShiftAssignmentModal({
@@ -99,6 +101,7 @@ export function ShiftAssignmentModal({
   onAssigned,
   initialParticipantId,
   initialDate,
+  initialTime,
 }: ShiftAssignmentModalProps) {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
@@ -153,10 +156,15 @@ export function ShiftAssignmentModal({
 
   useEffect(() => {
     if (open) {
-      setScheduledStart(initialDate ? `${initialDate}T09:00` : "");
-      setScheduledEnd(initialDate ? `${initialDate}T13:00` : "");
+      // Four hours from the chosen time, ending by midnight at the latest.
+      const start = initialTime ?? "09:00";
+      const [h, m] = start.split(":").map(Number);
+      const endMin = Math.min(h * 60 + (m || 0) + 240, 23 * 60 + 59);
+      const end = `${String(Math.floor(endMin / 60)).padStart(2, "0")}:${String(endMin % 60).padStart(2, "0")}`;
+      setScheduledStart(initialDate ? `${initialDate}T${start}` : "");
+      setScheduledEnd(initialDate ? `${initialDate}T${end}` : "");
     }
-  }, [initialDate, open]);
+  }, [initialDate, initialTime, open]);
 
   const participants = useGetParticipants();
   const { zoneFor } = useBranches();

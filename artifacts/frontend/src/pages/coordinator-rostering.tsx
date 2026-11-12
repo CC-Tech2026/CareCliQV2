@@ -60,7 +60,11 @@ const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
-type ViewMode = "roster" | "month";
+// "roster" is the week grid (the original view's name, kept for links).
+type ViewMode = "day" | "roster" | "fortnight" | "month";
+const VIEW_LABELS: Record<ViewMode, string> = { day: "Day", roster: "Week", fortnight: "Fortnight", month: "Month" };
+// The view each person last used, on this device only.
+const VIEW_STORAGE_KEY = "carecliq.roster.view";
 
 const STATUS_CFG: Record<string, { labelKey: string; bg: string; color: string }> = {
   scheduled:   { labelKey: "coordinator.rostering.status.scheduled", bg: "#FCE3EB", color: "#E8457A" },
@@ -303,7 +307,18 @@ export default function CoordinatorRosteringPage() {
   }, [newShiftId]);
   const [liveSearch, setLiveSearch] = useState("");
   const [pageTab,      setPageTab]      = useState<ScheduleTab>("roster");
-  const [viewMode,     setViewMode]     = useState<ViewMode>("roster");
+  const [viewMode,     setViewModeState] = useState<ViewMode>(() => {
+    try {
+      const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+      return saved && saved in VIEW_LABELS ? (saved as ViewMode) : "roster";
+    } catch {
+      return "roster";
+    }
+  });
+  const setViewMode = (mode: ViewMode) => {
+    setViewModeState(mode);
+    try { localStorage.setItem(VIEW_STORAGE_KEY, mode); } catch { /* private window */ }
+  };
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [weekStart,    setWeekStart]    = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [selectedDay,  setSelectedDay]  = useState(new Date());
@@ -315,19 +330,24 @@ export default function CoordinatorRosteringPage() {
   const [findWorkerFor, setFindWorkerFor] = useState<CoordinatorShiftRecord | null>(null);
   const [availWorker,  setAvailWorker]  = useState<WorkerStats | null>(null);
   const [teamPanelOpen, setTeamPanelOpen] = useState(false);
-  const [assignTarget, setAssignTarget] = useState<{ worker: WorkerStats | null; date: string } | null>(null);
+  const [assignTarget, setAssignTarget] = useState<{ worker: WorkerStats | null; date: string; time?: string } | null>(null);
   const [availMap,     setAvailMap]     = useState<AvailabilityMap>({});
   const [loadingAvail, setLoadingAvail] = useState(false);
 
   const participantsQuery = useGetParticipants();
   const participantList   = (participantsQuery.data as Array<{ id: string; full_name: string }> | undefined) ?? [];
 
-  const rangeStart = viewMode === "roster"
-    ? format(weekStart, "yyyy-MM-dd")
-    : format(startOfMonth(currentMonth), "yyyy-MM-dd");
-  const rangeEnd = viewMode === "roster"
-    ? format(addDays(weekStart, 6), "yyyy-MM-dd")
-    : format(endOfMonth(currentMonth), "yyyy-MM-dd");
+  const selectedDayKey = format(selectedDay, "yyyy-MM-dd");
+  const rangeStart = viewMode === "month"
+    ? format(startOfMonth(currentMonth), "yyyy-MM-dd")
+    : viewMode === "day" ? selectedDayKey : format(weekStart, "yyyy-MM-dd");
+  const rangeEnd = viewMode === "month"
+    ? format(endOfMonth(currentMonth), "yyyy-MM-dd")
+    : viewMode === "day" ? selectedDayKey : format(addDays(weekStart, viewMode === "fortnight" ? 13 : 6), "yyyy-MM-dd");
+  // The API filters by UTC midnight, which is mid-morning in Australia, so ask
+  // for a day either side and keep the shifts whose local day is in range.
+  const queryStart = format(addDays(parseISO(rangeStart), -1), "yyyy-MM-dd");
+  const queryEnd = format(addDays(parseISO(rangeEnd), 1), "yyyy-MM-dd");
 
   const workersQuery = useOrgQuery(["coordinator", "worker-stats"], {
     queryFn: getCoordinatorWorkerStats,
@@ -335,12 +355,12 @@ export default function CoordinatorRosteringPage() {
   });
 
   const shiftsQuery = useOrgQuery(
-    ["coordinator", "roster-shifts", rangeStart, rangeEnd, workerFilter, statusFilter],
+    ["coordinator", "roster-shifts", queryStart, queryEnd, workerFilter, statusFilter],
     {
       queryFn: () =>
         listCoordinatorShifts({
-          start_date: `${rangeStart}T00:00:00Z`,
-          end_date:   `${rangeEnd}T23:59:59Z`,
+          start_date: `${queryStart}T00:00:00Z`,
+          end_date:   `${queryEnd}T23:59:59Z`,
           worker_id:  workerFilter === "all" ? undefined : workerFilter,
           status:     statusFilter === "all" ? undefined : statusFilter,
           limit: 2000,
@@ -375,7 +395,11 @@ export default function CoordinatorRosteringPage() {
 
   const workers = workersQuery.data ?? [];
   const sharedWorkerNames = sharedNames(workers.map((w) => w.full_name));
-  const shifts  = shiftsQuery.data  ?? [];
+  const shifts  = (shiftsQuery.data ?? []).filter((s) => {
+    if (!s.scheduled_start) return true;
+    const key = appLocalDateKey(s.scheduled_start, s.timezone);
+    return key >= rangeStart && key <= rangeEnd;
+  });
   const overdueUnassignedShifts = overdueUnassignedQuery.data ?? [];
 
   // Load availability for all workers when the list changes
@@ -401,13 +425,32 @@ export default function CoordinatorRosteringPage() {
   const activeShifts   = shifts.filter((s) => s.status === "in_progress" || s.status === "clocked_in");
   const scheduledCount = shifts.filter((s) => s.status === "scheduled").length;
 
+  const step = viewMode === "fortnight" ? 14 : 7;
   const handlePrev = () => {
     if (viewMode === "month") setCurrentMonth((m) => subMonths(m, 1));
-    else setWeekStart((w) => addDays(w, -7));
+    else if (viewMode === "day") setSelectedDay((d) => addDays(d, -1));
+    else setWeekStart((w) => addDays(w, -step));
   };
   const handleNext = () => {
     if (viewMode === "month") setCurrentMonth((m) => addMonths(m, 1));
-    else setWeekStart((w) => addDays(w, 7));
+    else if (viewMode === "day") setSelectedDay((d) => addDays(d, 1));
+    else setWeekStart((w) => addDays(w, step));
+  };
+  // Switching views keeps the same stretch of time: a day inside the week on
+  // screen, the week of the day on screen.
+  const switchView = (mode: ViewMode) => {
+    if (mode === "day" && (viewMode === "roster" || viewMode === "fortnight")) {
+      const weekEnd = addDays(weekStart, step - 1);
+      if (selectedDay < weekStart || selectedDay > addDays(weekEnd, 1)) setSelectedDay(weekStart);
+    }
+    if ((mode === "roster" || mode === "fortnight") && viewMode === "day") {
+      setWeekStart(startOfWeek(selectedDay, { weekStartsOn: 1 }));
+    }
+    setViewMode(mode);
+  };
+  const openDay = (dateKey: string) => {
+    setSelectedDay(parseISO(dateKey));
+    setViewMode("day");
   };
   const handleToday = () => {
     const now = new Date();
@@ -461,7 +504,9 @@ export default function CoordinatorRosteringPage() {
   const assignWorker   = workers.find((w) => w.id === workerFilter) ?? null;
   const periodLabel    = viewMode === "month"
     ? format(currentMonth, "MMMM yyyy")
-    : `${format(weekStart, "d MMM")} to ${format(addDays(weekStart, 6), "d MMM yyyy")}`;
+    : viewMode === "day"
+    ? format(selectedDay, "EEEE d MMMM yyyy")
+    : `${format(weekStart, "d MMM")} to ${format(addDays(weekStart, step - 1), "d MMM yyyy")}`;
 
   const rosterLoading = shiftsQuery.isLoading || workersQuery.isLoading;
   const rosterError = shiftsQuery.isError || workersQuery.isError;
@@ -594,16 +639,16 @@ export default function CoordinatorRosteringPage() {
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-0.5 rounded-full border bg-cc-surface p-1" style={{ borderColor: BORDER }}>
-          {(["roster", "month"] as ViewMode[]).map((mode) => (
+          {(["day", "roster", "fortnight", "month"] as ViewMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
-              onClick={() => setViewMode(mode)}
+              onClick={() => switchView(mode)}
               aria-pressed={viewMode === mode}
               className="h-8 rounded-full px-3.5 text-sm font-medium capitalize transition-colors"
               style={{ background: viewMode === mode ? "var(--cc-text)" : "transparent", color: viewMode === mode ? "var(--cc-bg)" : MUTED }}
             >
-              {translate(`coordinator.rostering.view.${mode}`)}
+              {VIEW_LABELS[mode]}
             </button>
           ))}
         </div>
@@ -687,8 +732,16 @@ export default function CoordinatorRosteringPage() {
         </div>
       )}
 
-      {!rosterLoading && !rosterError && viewMode === "roster" && (
+      {!rosterLoading && !rosterError && viewMode !== "month" && (
         <RosterBoard
+          view={viewMode === "fortnight" ? "fortnight" : viewMode === "day" ? "day" : "week"}
+          layout="calendar"
+          dayKey={selectedDayKey}
+          onOpenDay={openDay}
+          onCreateAt={(worker, date, time) => {
+            setAssignTarget({ worker, date, time });
+            setAssignOpen(true);
+          }}
           newShiftId={newShiftId}
           weekStart={weekStart}
           shifts={shifts}
@@ -763,6 +816,7 @@ export default function CoordinatorRosteringPage() {
         initialWorkerId={assignTarget?.worker?.id}
         workers={workers}
         initialDate={assignTarget?.date}
+        initialTime={assignTarget?.time}
       />
 
       {/* -- Every open shift, across weeks ---------------------------------- */}

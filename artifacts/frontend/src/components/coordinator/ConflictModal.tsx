@@ -2,7 +2,6 @@ import { AlertTriangle, ChevronRight, Loader2 } from "lucide-react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import type { CoordinatorShiftRecord, ConflictItem } from "@/services/coordinatorService";
 
-const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
 const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
@@ -65,7 +64,7 @@ export function ConflictModal({
             onClick={onConfirm}
             disabled={confirming}
             className="flex items-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-bold text-white"
-            style={{ background: hard.length > 0 ? CORAL : PLUM, opacity: confirming ? 0.65 : 1 }}
+            style={{ background: hard.length > 0 ? CORAL : "var(--cc-cta)", opacity: confirming ? 0.65 : 1 }}
           >
             {confirming ? (<><Loader2 size={12} className="animate-spin" /> {translate("coordinator.dnd.assigning")}</>) : (<><ChevronRight size={12} /> {translate("coordinator.dnd.assignAnyway")}</>)}
           </button>
