@@ -1,6 +1,6 @@
 import { PersonDetailsButton, usePersonContact } from "./PersonDetails";
 import { Portal as HoverCardPortal } from "@radix-ui/react-hover-card";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { formatAppDate, formatAppTime } from "@/lib/datetime";
 import type { CoordinatorShiftRecord } from "@/services/coordinatorService";
@@ -89,9 +89,17 @@ export function ShiftHoverDetails({ shift }: { shift: CoordinatorShiftRecord }) 
 }
 
 /** Hovering (or focusing) a shift shows scheduled vs actual times. */
-export function ShiftHoverCard({ shift, children }: { shift: CoordinatorShiftRecord; children: ReactNode }) {
+export function ShiftHoverCard({
+  shift, children, disabled = false,
+}: {
+  shift: CoordinatorShiftRecord;
+  children: ReactNode;
+  /** Keeps the card shut, e.g. while a shift is being dragged. */
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
   return (
-    <HoverCard openDelay={250} closeDelay={80}>
+    <HoverCard openDelay={250} closeDelay={80} open={open && !disabled} onOpenChange={setOpen}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       <HoverCardPortal><HoverCardContent side="right" align="start" className="w-64 rounded-lg p-3">
         <ShiftHoverDetails shift={shift} />
