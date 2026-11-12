@@ -51,6 +51,9 @@ const MUTED  = "var(--cc-muted)";
 const TEXT   = "var(--cc-text)";
 const BORDER = "var(--cc-border)";
 const ACTIVE = "var(--cc-active-bg)";
+// CareCliQ Purple marks where you are, as in the director header. The fixed
+// hex: --cc-brand-purple turns light lilac in dark mode and white text fails on it.
+const NAV_PURPLE = "#7C3AED";
 
 type NavRole = "support_coordinator" | "support_worker" | "managing_director";
 type NavIconProps = { size?: number; strokeWidth?: number; className?: string; style?: React.CSSProperties };
@@ -494,7 +497,7 @@ function SidebarContents({
                         !active && "hover:bg-white/8",
                       )}
                       style={{
-                        background: active ? CORAL : undefined,
+                        background: active ? NAV_PURPLE : undefined,
                         color: active ? "#fff" : TEXT,
                         fontWeight: active ? 600 : 500,
                       }}
@@ -535,7 +538,7 @@ function SidebarContents({
                 !isActive(location, "/settings") && "hover:bg-white/8",
               )}
               style={{
-                background: isActive(location, "/settings") ? CORAL : undefined,
+                background: isActive(location, "/settings") ? NAV_PURPLE : undefined,
                 color: isActive(location, "/settings") ? "#fff" : TEXT,
                 fontWeight: isActive(location, "/settings") ? 600 : 500,
               }}
@@ -715,7 +718,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
       <aside
         className="hidden md:flex flex-col h-full shrink-0 transition-all duration-300 ease-in-out relative"
         style={{color: TEXT,                                                                                                                                                                                                  
-                                                                                                                                                                                                          width: isExpanded ? 220 : 64,
+                                                                                                                                                                                                          width: isExpanded ? 240 : 64,
           borderRight: "1px solid rgba(255,255,255,0.06)",
           background: "var(--cc-sidebar-bg)",
           "--cc-text":       "rgba(255,255,255,0.88)",
@@ -743,8 +746,8 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
             width: 18,
             height: 52,
             borderRadius: "0 8px 8px 0",
-            background: CORAL,
-            boxShadow: "3px 0 10px rgba(110,121,194,0.4)",
+            background: NAV_PURPLE,
+            boxShadow: "3px 0 12px rgba(124,58,237,0.34)",
             color: "#fff",
           }}
         >
@@ -797,7 +800,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
                     <div
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] whitespace-nowrap transition-all duration-150 cursor-pointer"
                       style={{
-                        background: active ? CORAL : "transparent",
+                        background: active ? NAV_PURPLE : "transparent",
                         color: active ? "#fff" : MUTED,
                         fontWeight: active ? 600 : 500,
                       }}

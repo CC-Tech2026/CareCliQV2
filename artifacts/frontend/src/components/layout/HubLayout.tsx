@@ -1023,7 +1023,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       {/* Main Canvas Area */}
       {isMD && sidebarMode ? (
         <div
-          className={`mx-auto flex items-start gap-0 ${
+          className={`mx-auto flex items-start ${dockedSidebar ? "gap-0" : "gap-4"} ${
             dockedSidebar ? "w-full" : `py-2 ${isMD || location === "/billing" ? "w-full px-3 sm:px-4" : "max-w-[1600px] px-4 sm:px-6"}`
           }`}
         >
@@ -1168,7 +1168,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
           <main id="management-main" tabIndex={-1}
             className={`min-w-0 flex-1 py-2 ${
-              dockedSidebar ? "px-3 sm:px-4 xl:px-6" : `px-0 ${isMD || location === "/billing" ? "xl:pl-3" : "lg:px-6"}`
+              dockedSidebar ? "px-3 sm:px-4 xl:px-6" : "px-0"
             }`}
           >
             {workspace && <WorkspaceTabs item={workspace} location={location} />}
