@@ -18,7 +18,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Field, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass } from "@/pages/md/vault/components/PanelKit";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { formatAppDate } from "@/lib/datetime";
+import { formatAppDate, appTodayKey } from "@/lib/datetime";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { LoadError, PageHeader, StatusText, SummaryStrip, ctaClass, outlineClass, type Tone } from "@/components/layout/PageKit";
 
@@ -498,7 +498,7 @@ function FinanceSettingsDialog({ open, onOpenChange, data, onSaved }: { open: bo
   const [asOf, setAsOf] = useState("");
   const [overheads, setOverheads] = useState("");
   const [saving, setSaving] = useState(false);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = appTodayKey();
 
   useEffect(() => {
     if (!open) return;

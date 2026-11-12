@@ -455,7 +455,7 @@ export function WorkerAvailabilityPanel({
                   disabled={!newBlackout.start_date || !newBlackout.end_date}
                   className="flex items-center gap-1 rounded-lg px-3 py-1 text-sm font-bold text-white"
                   style={{
-                    background: PLUM,
+                    background: "var(--cc-cta)",
                     opacity: !newBlackout.start_date ? 0.5 : 1,
                   }}
                   title={translate("coordinator.availability.addDate")}
@@ -472,7 +472,7 @@ export function WorkerAvailabilityPanel({
               disabled={saveMut.isPending}
               className="rounded-xl px-4 py-1.5 text-sm font-semibold text-white"
               style={{
-                background: PLUM,
+                background: "var(--cc-cta)",
                 opacity: saveMut.isPending ? 0.65 : 1,
               }}
             >

@@ -103,10 +103,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SidePanel } from "@/components/layout/SidePanel";
 import {
   Sheet,
   SheetContent,
-  SheetFooter,
   SheetHeader,
   SheetTitle,
   SheetDescription,
@@ -120,7 +120,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
-import { datetimeLocalValueToUtcIso } from "@/lib/datetime";
+import { datetimeLocalValueToUtcIso, appTodayKey } from "@/lib/datetime";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -2180,7 +2180,7 @@ function WorkerTagsSection({ workerId }: { workerId: string }) {
           disabled={!selectedTagId || addMutation.isPending}
           onClick={() => selectedTagId && addMutation.mutate(selectedTagId)}
           className="rounded-lg px-3 text-xs font-bold text-white disabled:opacity-50"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           Add
         </button>
@@ -2469,26 +2469,29 @@ function AddDocumentDialog({
   });
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-md overflow-y-auto"
-        style={{ background: SURFACE }}
-      >
-        <SheetHeader>
-          <SheetTitle
-            className="flex items-center gap-2"
-            style={{ color: TEXT }}
+    <SidePanel
+      open={open}
+      onOpenChange={onOpenChange}
+      icon={FileText}
+      title={translate("team.documents.dialogTitle").replace("{name}", worker.full_name)}
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {translate("common.cancel")}
+          </Button>
+          <Button
+            variant="navy"
+            onClick={() => saveMut.mutate()}
+            disabled={saveMut.isPending || !title.trim()}
           >
-            <FileText size={18} style={{ color: PLUM }} />{" "}
-            {translate("team.documents.dialogTitle").replace(
-              "{name}",
-              worker.full_name,
-            )}
-          </SheetTitle>
-        </SheetHeader>
-
-        <div className="space-y-3 py-1">
+            {saveMut.isPending
+              ? translate("common.saving")
+              : translate("team.documents.save")}
+          </Button>
+        </>
+      }
+    >
+        <div className="space-y-3">
           <div className="space-y-1.5">
             <label
               className="text-xs font-semibold"
@@ -2565,23 +2568,7 @@ function AddDocumentDialog({
             />
           </div>
         </div>
-
-        <SheetFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {translate("common.cancel")}
-          </Button>
-          <Button
-            variant="navy"
-            onClick={() => saveMut.mutate()}
-            disabled={saveMut.isPending || !title.trim()}
-          >
-            {saveMut.isPending
-              ? translate("common.saving")
-              : translate("team.documents.save")}
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+    </SidePanel>
   );
 }
 
@@ -2679,7 +2666,7 @@ function CredentialsTab({
       requireReAuth(() =>
         reviewCredential(credential.id, {
           status: "valid",
-          last_checked_against_nwsd: new Date().toISOString().slice(0, 10),
+          last_checked_against_nwsd: appTodayKey(),
         }),
       ),
     onSuccess: () => {
@@ -4709,7 +4696,7 @@ function ShiftMatchFeedbackForm({ shiftId }: { shiftId: string }) {
           disabled={saveMutation.isPending}
           onClick={() => saveMutation.mutate()}
           className="rounded-lg px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-50"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           Save
         </button>
@@ -4965,25 +4952,31 @@ function AssignTrainingDialog({
   const pending = createModuleMut.isPending || assignMut.isPending;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-md overflow-y-auto"
-        style={{ background: SURFACE }}
-      >
-        <SheetHeader>
-          <SheetTitle
-            className="flex items-center gap-2"
-            style={{ color: TEXT }}
+    <SidePanel
+      open={open}
+      onOpenChange={onOpenChange}
+      icon={GraduationCap}
+      title={translate("team.training.assignTo").replace("{name}", worker.full_name)}
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {translate("common.cancel")}
+          </Button>
+          <Button
+            variant="navy"
+            onClick={handleAssign}
+            disabled={
+              pending ||
+              (mode === "existing" ? !selectedModuleId : !newTitle.trim())
+            }
           >
-            <GraduationCap size={18} style={{ color: PLUM }} />{" "}
-            {translate("team.training.assignTo").replace(
-              "{name}",
-              worker.full_name,
-            )}
-          </SheetTitle>
-        </SheetHeader>
-
+            {pending
+              ? translate("common.saving")
+              : translate("team.training.assign")}
+          </Button>
+        </>
+      }
+    >
         <div className="flex gap-1 rounded-xl p-1" style={{ background: SOFT }}>
           {(["existing", "new"] as const).map((m) => (
             <button
@@ -5066,25 +5059,6 @@ function AssignTrainingDialog({
             </div>
           </div>
         )}
-
-        <SheetFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {translate("common.cancel")}
-          </Button>
-          <Button
-            variant="navy"
-            onClick={handleAssign}
-            disabled={
-              pending ||
-              (mode === "existing" ? !selectedModuleId : !newTitle.trim())
-            }
-          >
-            {pending
-              ? translate("common.saving")
-              : translate("team.training.assign")}
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+    </SidePanel>
   );
 }

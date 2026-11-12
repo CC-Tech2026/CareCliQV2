@@ -48,7 +48,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatAppDate } from "@/lib/datetime";
+import { formatAppDate, appTodayKey } from "@/lib/datetime";
 import {
   AREA_LABELS,
   AUDIT_READINESS_KEY,
@@ -956,7 +956,7 @@ function AuditPacks({ items }: { items: AuditItem[] }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `outstanding-audit-items-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `outstanding-audit-items-${appTodayKey()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

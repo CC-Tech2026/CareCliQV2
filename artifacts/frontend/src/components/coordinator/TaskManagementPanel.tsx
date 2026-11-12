@@ -136,7 +136,7 @@ function TaskFormModal({ goal, task, onClose, onSaved }: TaskFormModalProps) {
           </Button>
           <Button
             className="flex-1 rounded-xl"
-            style={{ background: PLUM, color: "#fff" }}
+            style={{ background: "var(--cc-cta)", color: "#fff" }}
             disabled={!form.name.trim() || mut.isPending}
             onClick={() => mut.mutate()}
           >

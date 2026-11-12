@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { appTodayKey } from "@/lib/datetime";
 
 // Design tokens aligned with billing.tsx
 const PLUM   = "var(--cc-plum)";
@@ -27,7 +28,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
   
   const [itemCode, setItemCode] = useState("");
   const [priceNational, setPriceNational] = useState("");
-  const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().split("T")[0]);
+  const [effectiveDate, setEffectiveDate] = useState(appTodayKey());
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<NdisPriceItem[]>([]);
@@ -89,7 +90,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
       // Reset form
       setItemCode("");
       setPriceNational("");
-      setEffectiveDate(new Date().toISOString().split("T")[0]);
+      setEffectiveDate(appTodayKey());
       setReason("");
       setHistory([]);
       setShowHistory(false);
@@ -128,7 +129,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
                 onClick={loadHistory}
                 disabled={loading || !itemCode.trim()}
                 className="px-4 py-2 rounded-full text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50"
-                style={{ background: PLUM }}
+                style={{ background: "var(--cc-cta)" }}
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" />  : translate("coordinator.ndis.price.viewHistory")}
               </button>

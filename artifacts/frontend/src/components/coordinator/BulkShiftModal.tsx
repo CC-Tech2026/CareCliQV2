@@ -526,7 +526,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
               <button
                 onClick={handleClose}
                 className="rounded-full px-4 py-2 text-[12px] font-bold text-white"
-                style={{ background: PLUM }}
+                style={{ background: "var(--cc-cta)" }}
               >
                 <Check size={12} className="inline mr-1.5" />{translate("coordinator.bulkShift.done")}
               </button>

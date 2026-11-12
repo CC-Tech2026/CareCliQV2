@@ -141,7 +141,7 @@ export default function AdminProvidersPage() {
       <div className="space-y-5">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-xl font-black" style={{ color: TEXT }}>Providers</h1>
-          <button onClick={() => navigate("/admin/onboarding")} className="rounded-xl px-4 py-2 text-sm font-bold" style={{ background: "var(--cc-plum)", color: "white" }}>Create provider account</button>
+          <button onClick={() => navigate("/admin/onboarding")} className="rounded-xl px-4 py-2 text-sm font-bold" style={{ background: "var(--cc-cta)", color: "white" }}>Create provider account</button>
         </div>
 
         <div className="grid grid-cols-3 gap-3">

@@ -582,7 +582,7 @@ export function GovernanceTriage({
             <button
               onClick={() => onNavigate(viewAllHref)}
               className="flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[11.5px] font-black text-white transition-all hover:-translate-y-0.5"
-              style={{ background: "var(--cc-plum)" }}
+              style={{ background: "var(--cc-cta)" }}
             >
               Review all <ArrowRight size={13} />
             </button>

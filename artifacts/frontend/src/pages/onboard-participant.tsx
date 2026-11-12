@@ -4,7 +4,7 @@ import {
   ArrowLeft, HeartHandshake, ClipboardCheck, FileUp, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users,
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
-  SlidersHorizontal, X, AlertTriangle, ArrowUp, ArrowDown, Accessibility, HeartPulse, Link2, Check,
+  SlidersHorizontal, X, AlertTriangle, ArrowUp, ArrowDown, Accessibility, HeartPulse, Link2, Check, MessageSquareWarning,
 } from "lucide-react";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SidePanel } from "@/components/layout/SidePanel";
 import { ChoiceCard, Field as PanelField, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass } from "@/pages/md/vault/components/PanelKit";
 import { SectionInfo } from "@/components/ui/section-info";
 import {
@@ -73,6 +74,7 @@ import {
   type GrantResult,
   type PortalIdentityMethod,
 } from "@/services/participantPortalAccessService";
+import { appTodayKey } from "@/lib/datetime";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -1205,7 +1207,7 @@ function LogComplaintSheet({
 }) {
   const { toast } = useToast();
   const OTHER = "__other__";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = appTodayKey();
   const [participantId, setParticipantId] = useState("");
   const [otherName, setOtherName] = useState("");
   const [raisedBy, setRaisedBy] = useState("");
@@ -1219,7 +1221,7 @@ function LogComplaintSheet({
     setParticipantId("");
     setOtherName("");
     setRaisedBy("");
-    setFiledOn(new Date().toISOString().slice(0, 10));
+    setFiledOn(appTodayKey());
     setSubject("");
     setDescription("");
   }, [open]);
@@ -1251,12 +1253,21 @@ function LogComplaintSheet({
 
   const label = "block text-sm font-medium text-cc-text";
   return (
-    <Sheet open={open} onOpenChange={(next) => { if (!saving) onOpenChange(next); }}>
-      <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>Log a complaint</SheetTitle>
-        </SheetHeader>
-        <form id="log-complaint-form" onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-4 flex-1 space-y-4">
+    <SidePanel
+      open={open}
+      onOpenChange={(next) => { if (!saving) onOpenChange(next); }}
+      icon={MessageSquareWarning}
+      title="Log a complaint"
+      footer={
+        <>
+          <button type="button" className={kitOutlineClass} onClick={() => onOpenChange(false)} disabled={saving}>Cancel</button>
+          <button type="submit" form="log-complaint-form" className={kitCtaClass} disabled={!ready || saving}>
+            {saving && <Loader2 size={15} className="animate-spin" />} Log complaint
+          </button>
+        </>
+      }
+    >
+        <form id="log-complaint-form" onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-4">
           <div className="space-y-1.5">
             <label className={label} htmlFor="complaint-participant">Who is it about?</label>
             <Select value={participantId} onValueChange={setParticipantId}>
@@ -1289,14 +1300,7 @@ function LogComplaintSheet({
             <Textarea id="complaint-description" rows={5} placeholder="What happened, in the words of the person who raised it." value={description} onChange={(e) => setDescription(e.target.value)} className="rounded-xl" />
           </div>
         </form>
-        <SheetFooter className="mt-4 gap-2">
-          <button type="button" className={kitOutlineClass} onClick={() => onOpenChange(false)} disabled={saving}>Cancel</button>
-          <button type="submit" form="log-complaint-form" className={kitCtaClass} disabled={!ready || saving}>
-            {saving && <Loader2 size={15} className="animate-spin" />} Log complaint
-          </button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+    </SidePanel>
   );
 }
 
@@ -1938,7 +1942,7 @@ export default function ParticipantOnboardingBoard() {
                   <input
                     id="referral-dob"
                     type="date"
-                    max={new Date().toISOString().slice(0, 10)}
+                    max={appTodayKey()}
                     value={dob}
                     onChange={(e) => setDob(e.target.value)}
                     onBlur={() => touch("dob")}

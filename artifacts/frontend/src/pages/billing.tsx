@@ -960,7 +960,10 @@ export default function Billing() {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
     const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    // Local calendar date: toISOString() would turn local midnight on the 1st
+    // into the last day of the previous month in UTC.
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     return { period_start: iso(start), period_end: iso(end) };
   }
 

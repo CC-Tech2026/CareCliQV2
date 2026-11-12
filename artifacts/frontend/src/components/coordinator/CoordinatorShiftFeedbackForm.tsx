@@ -150,7 +150,7 @@ export function CoordinatorShiftFeedbackForm({ shiftId, onSuccess, onCancel }: P
           disabled={!canSubmit || submitMut.isPending}
           onClick={() => submitMut.mutate()}
           className="inline-flex flex-1 items-center justify-center gap-2 rounded-full py-2.5 text-sm font-black text-white disabled:opacity-50"
-          style={{ background: PLUM }}
+          style={{ background: "var(--cc-cta)" }}
         >
           {submitMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
           {translate("coordinator.feedback.submit")}

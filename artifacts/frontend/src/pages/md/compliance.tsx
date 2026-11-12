@@ -4,10 +4,7 @@ import { Link, useLocation } from "wouter";
 import {
   AlertTriangle,
   ArrowRight,
-  CheckCircle2,
   ShieldCheck,
-  ShieldAlert,
-  Users,
   ChevronRight,
   FolderLock,
 } from "lucide-react";
@@ -24,6 +21,7 @@ import {
 } from "recharts";
 import { HubLayout } from "@/components/layout/HubLayout";
 import {
+  EmptyState,
   LoadError,
   PageHeader,
   RowList,
@@ -34,13 +32,13 @@ import {
   Surface,
   ctaClass,
   ghostClass,
-  rowClass,
   toneColor,
   type Tone,
 } from "@/components/layout/PageKit";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
-import { AUDIT_READINESS_KEY, fetchChecklist, type Area } from "@/services/auditReadinessService";
+import { AUDIT_READINESS_KEY, fetchChecklist } from "@/services/auditReadinessService";
+import { GapAnalysis, buildGaps } from "./compliance-gaps";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -127,7 +125,7 @@ function getAuditStatus(
 }
 
 const AUDIT_STATUS: Record<AuditStatus, { tone: Tone; overall: string; item: string }> = {
-  ready: { tone: "good", overall: "Ready", item: "Complete" },
+  ready: { tone: "good", overall: "Quality target met", item: "Complete" },
   attention: { tone: "danger", overall: "Attention required", item: "Review" },
   pending: { tone: "warning", overall: "Pending", item: "Pending" },
 };
@@ -172,179 +170,55 @@ function WorkerRow({ worker, tone }: { worker: MDData["worker_rankings"][number]
   );
 }
 
-type EvidenceArea = { ready: number; total: number; gaps: number };
-
-/** The numbers people call "compliance" measure different things. Side by
- *  side, each with what it counts and where to act, so a documentation score
- *  is never read as a credentials or participant-file figure. */
-function ComplianceMeasures({ data, workersBelow }: { data: MDData; workersBelow: number }) {
-  const checklist = useOrgQuery([...AUDIT_READINESS_KEY, "checklist"], { queryFn: fetchChecklist, retry: false });
-  const summary = checklist.data?.summary;
-  const area = (key: Area): EvidenceArea | undefined => summary?.by_area?.find((a) => a.area === key);
-  const percentOf = (a: EvidenceArea | undefined) => (a && a.total ? Math.round((100 * a.ready) / a.total) : null);
-  const evidenceValue = (a: EvidenceArea | undefined) => {
-    if (checklist.isLoading) return "...";
-    const pct = percentOf(a);
-    return pct == null ? "N/A" : `${pct}%`;
-  };
-  const evidenceTone = (a: EvidenceArea | undefined): Tone => {
-    const pct = percentOf(a);
-    return pct == null ? "neutral" : scoreTone(pct);
-  };
-  const evidenceDetail = (a: EvidenceArea | undefined) => {
-    if (checklist.isError) return "Evidence figures couldn't be loaded.";
-    if (!a || !a.total) return "";
-    return `${a.ready} of ${a.total} requirements have current evidence${a.gaps ? `, ${a.gaps} missing or overdue` : ""}.`;
-  };
-  const staff = area("staff");
-  const participant = area("participant");
-  const overall = summary?.readiness_percent ?? null;
-
-  const rows: Array<{ label: string; value: string; tone: Tone; measures: string; detail: string; href: string; action: string }> = [
-    {
-      label: "Documentation",
-      value: `${data.compliance_score}%`,
-      tone: scoreTone(data.compliance_score),
-      measures: "How well shift notes evidence the support delivered.",
-      detail: `Average score of the most recent scored shift notes, up to 400. Target ${data.compliance_target}%.`,
-      href: "/sessions",
-      action: "Shift notes",
-    },
-    {
-      label: "Staff documentation",
-      value: String(workersBelow),
-      tone: workersBelow ? "warning" : "good",
-      measures: workersBelow === 1 ? "Worker whose notes average under 85%." : "Workers whose notes average under 85%.",
-      detail: "Each worker's score is the average of their own shift note scores. It doesn't cover credentials.",
-      href: "/md/staff",
-      action: "Staff",
-    },
-    {
-      label: "Staff files",
-      value: evidenceValue(staff),
-      tone: evidenceTone(staff),
-      measures: "Screening, Working with Children Check, first aid, induction and other staff requirements.",
-      detail: evidenceDetail(staff),
-      href: "/md/compliance?view=checklist&area=staff",
-      action: "Staff evidence",
-    },
-    {
-      label: "Participant files",
-      value: evidenceValue(participant),
-      tone: evidenceTone(participant),
-      measures: "Service agreements, plans, risk assessments and other participant requirements.",
-      detail: evidenceDetail(participant),
-      href: "/md/compliance?view=checklist&area=participant",
-      action: "Participant evidence",
-    },
-    {
-      label: "Participant goals",
-      value:
-        data.goals_active && data.active_goals_supported_30d != null
-          ? `${Math.round((data.active_goals_supported_30d / data.goals_active) * 100)}%`
-          : "N/A",
-      tone:
-        data.goals_active && data.active_goals_supported_30d != null
-          ? scoreTone(Math.round((data.active_goals_supported_30d / data.goals_active) * 100))
-          : "neutral",
-      measures: "Active goals with support recorded against them in the last 30 days.",
-      detail: data.goals_active
-        ? `${data.active_goals_supported_30d ?? 0} of ${data.goals_active} active goals had a shift note written under one of their tasks.`
-        : "No active goals recorded for participants yet.",
-      href: "/onboard-participant/active",
-      action: "Participants",
-    },
-    {
-      label: "Audit evidence overall",
-      value: checklist.isLoading ? "..." : overall == null ? "N/A" : `${overall}%`,
-      tone: overall == null ? "neutral" : scoreTone(overall),
-      measures: "Every requirement that applies to you: staff, participants, governance, quality and insurance.",
-      detail: checklist.isError
-        ? "Evidence figures couldn't be loaded."
-        : summary
-          ? `${summary.counts.current + summary.counts.due_soon} of ${summary.applicable} have current evidence (in date, or due within 60 days).`
-          : "",
-      href: "/md/compliance?view=overview",
-      action: "Evidence overview",
-    },
-  ];
-
-  return (
-    <Section
-      title="What each score measures"
-      description="Documentation scores come from shift notes. Staff and participant files come from the evidence checklist. They move independently."
-    >
-      <Surface>
-        <RowList>
-          {rows.map((row) => (
-            <li key={row.label}>
-              <Link href={row.href} className={`${rowClass} items-start`}>
-                <span
-                  className="w-16 shrink-0 text-lg font-semibold tabular-nums"
-                  style={{ color: row.tone === "neutral" ? MUTED : toneColor(row.tone) }}
-                >
-                  {row.value}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold" style={{ color: TEXT }}>{row.label}</span>
-                  <span className="block text-sm" style={{ color: TEXT }}>{row.measures}</span>
-                  {row.detail && <span className="mt-0.5 block text-xs leading-5" style={{ color: MUTED }}>{row.detail}</span>}
-                </span>
-                <span className="hidden shrink-0 items-center gap-1 text-xs font-semibold sm:inline-flex" style={{ color: PLUM }}>
-                  {row.action}
-                  <ChevronRight size={14} />
-                </span>
-              </Link>
-            </li>
-          ))}
-        </RowList>
-      </Surface>
-    </Section>
-  );
-}
-
-/** How one shift note gets its score (sessions.py, compliance_engine.py). */
+/** How one shift note gets its score (sessions.py, compliance_engine.py),
+ *  folded away so it explains a low documentation score without taking the page. */
 function ScoreExplainer() {
   return (
     <Section
       title="How a shift note is scored"
       description="Every submitted shift note gets a score out of 100. The documentation figures on this page are averages of these."
     >
-      <Surface className="p-5 sm:p-6">
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <p className="text-sm font-semibold" style={{ color: TEXT }}>70% from CareCliQ's rule checks</p>
-            <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>
-              Session time and duration, written within 48 hours, note detail, support type, goals referenced, objective
-              language, person-first language, scope of practice, incident triggers, restrictive practice reported, not
-              copied from earlier notes, and the participant's response. Budget, shift-length and long-shift checks are
-              added when they apply.
-            </p>
-            <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>
-              A pass earns the full share, a warning half, a fail nothing. A note whose times don't match the shift loses
-              10 points, and a note too short to evidence the support can't score above 50%.
-            </p>
+      <Surface>
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-semibold" style={{ color: TEXT }}>
+            Show the scoring rules
+            <ChevronRight size={16} className="transition-transform group-open:rotate-90" style={{ color: MUTED }} />
+          </summary>
+          <div className="grid gap-6 border-t px-5 pb-5 pt-4 lg:grid-cols-2" style={{ borderColor: BORDER }}>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: TEXT }}>70% from CareCliQ's rule checks</p>
+              <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>
+                Session time and duration, written within 48 hours, note detail, support type, goals referenced, objective
+                language, person-first language, scope of practice, incident triggers, restrictive practice reported, not
+                copied from earlier notes, and the participant's response. Budget, shift-length and long-shift checks are
+                added when they apply.
+              </p>
+              <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>
+                A pass earns the full share, a warning half, a fail nothing. A note whose times don't match the shift loses
+                10 points, and a note too short to evidence the support can't score above 50%.
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: TEXT }}>30% from the AI review</p>
+              <ul className="mt-1 space-y-0.5 text-sm leading-6" style={{ color: MUTED }}>
+                <li>Documentation completeness, 30 points</li>
+                <li>Goal alignment, 25 points</li>
+                <li>NDIS language, 20 points</li>
+                <li>Risk detection, 15 points</li>
+                <li>Audit readiness, 10 points</li>
+              </ul>
+              <p className="mt-3 text-sm font-semibold" style={{ color: TEXT }}>Bands</p>
+              <ul className="mt-1 space-y-0.5 text-sm leading-6" style={{ color: MUTED }}>
+                <li><span className="font-semibold" style={{ color: GREEN }}>85% and above</span>: compliant</li>
+                <li><span className="font-semibold" style={{ color: AMBER }}>60% to 84%</span>: at risk, needs review</li>
+                <li><span className="font-semibold" style={{ color: RED }}>Under 60%</span>: non-compliant, priority review</li>
+              </ul>
+              <p className="mt-2 text-xs leading-5" style={{ color: MUTED }}>
+                Notes not yet submitted aren't scored and aren't counted.
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-semibold" style={{ color: TEXT }}>30% from the AI review</p>
-            <ul className="mt-1 space-y-0.5 text-sm leading-6" style={{ color: MUTED }}>
-              <li>Documentation completeness, 30 points</li>
-              <li>Goal alignment, 25 points</li>
-              <li>NDIS language, 20 points</li>
-              <li>Risk detection, 15 points</li>
-              <li>Audit readiness, 10 points</li>
-            </ul>
-            <p className="mt-3 text-sm font-semibold" style={{ color: TEXT }}>Bands</p>
-            <ul className="mt-1 space-y-0.5 text-sm leading-6" style={{ color: MUTED }}>
-              <li><span className="font-semibold" style={{ color: GREEN }}>85% and above</span>: compliant</li>
-              <li><span className="font-semibold" style={{ color: AMBER }}>60% to 84%</span>: at risk, needs review</li>
-              <li><span className="font-semibold" style={{ color: RED }}>Under 60%</span>: non-compliant, priority review</li>
-            </ul>
-            <p className="mt-2 text-xs leading-5" style={{ color: MUTED }}>
-              Notes not yet submitted aren't scored and aren't counted.
-            </p>
-          </div>
-        </div>
+        </details>
       </Surface>
     </Section>
   );
@@ -398,6 +272,8 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
     };
   }, [retryKey]);
 
+  const checklist = useOrgQuery([...AUDIT_READINESS_KEY, "checklist"], { queryFn: fetchChecklist, retry: false });
+
   const chartData = trend
     .filter((point) => point.avg_score !== null)
     .slice(-13)
@@ -428,20 +304,23 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
       (alert) => alert.severity === "high",
     ).length;
 
-    const readiness = getAuditStatus(
+    const readiness = total === 0 ? "pending" : getAuditStatus(
       data.compliance_score,
       data.compliance_target,
       highAlerts,
       breakdown.non_compliant,
     );
 
-    const strongestWorkers = [...data.worker_rankings]
-      .sort((a, b) => b.compliance_score - a.compliance_score)
-      .slice(0, 5);
-
     const attentionWorkers = [...data.worker_rankings]
       .filter((worker) => worker.compliance_score < 85)
       .sort((a, b) => a.compliance_score - b.compliance_score)
+      .slice(0, 5);
+
+    // Strongest performers only from those on target, so a small team doesn't
+    // show the same worker as both needing support and strongest.
+    const strongestWorkers = [...data.worker_rankings]
+      .filter((worker) => worker.compliance_score >= 85)
+      .sort((a, b) => b.compliance_score - a.compliance_score)
       .slice(0, 5);
 
     const topIssues = [...data.common_issues]
@@ -460,6 +339,19 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
       topIssues,
     };
   }, [data]);
+
+  const gapReport = useMemo(
+    () =>
+      data && derived
+        ? buildGaps({
+            data,
+            checklist: checklist.data,
+            attentionWorkers: derived.attentionWorkers,
+            workersBelow: data.workers_at_risk_count ?? data.workers_at_risk?.length ?? derived.attentionWorkers.length,
+          })
+        : null,
+    [data, derived, checklist.data],
+  );
 
   return (
     <Layout>
@@ -492,6 +384,13 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
               <span style={{ color: MUTED }}>We could not load the organisation quality data.</span>
             </span>
           </LoadError>
+        ) : derived.total === 0 ? (
+          <EmptyState
+            icon={ShieldCheck}
+            title="No scored shift notes yet"
+            body="Documentation quality will appear when submitted shift notes have been scored. You can review audit evidence separately."
+            action={<Link href="/md/compliance?view=overview" className={ctaClass}>Review audit evidence <ArrowRight size={15} /></Link>}
+          />
         ) : (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -587,136 +486,44 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
               </div>
             </Surface>
 
-            <div className="grid gap-8 lg:grid-cols-2">
-              <Section
-                title="What needs attention"
-                description="The signals with the most impact on quality right now."
-                action={
-                  <button type="button" onClick={() => navigate("/md/staff")} className={ghostClass}>
-                    Review staff <ArrowRight size={14} />
-                  </button>
-                }
-              >
-                <Surface>
-                  {derived.topIssues.length === 0 &&
-                  derived.attentionWorkers.length === 0 &&
-                  derived.highAlerts === 0 ? (
-                    <div className="flex items-center gap-3 px-5 py-6">
-                      <CheckCircle2 size={18} style={{ color: GREEN }} />
-                      <div>
-                        <p className="text-sm font-semibold" style={{ color: TEXT }}>No immediate quality risks</p>
-                        <p className="text-xs" style={{ color: MUTED }}>Compliance signals are within the expected range.</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <RowList>
-                      {derived.highAlerts > 0 && (
-                        <li>
-                          <button type="button" onClick={() => navigate("/md/staff")} className={rowClass}>
-                            <IconTile icon={ShieldAlert} tone="danger" />
-                            <span className="min-w-0 flex-1">
-                              <span className="block text-sm font-semibold" style={{ color: TEXT }}>High-priority compliance alerts</span>
-                              <span className="block text-xs" style={{ color: MUTED }}>
-                                {derived.highAlerts} {derived.highAlerts === 1 ? "alert needs" : "alerts need"} review.
-                              </span>
-                            </span>
-                            <ChevronRight size={16} style={{ color: MUTED }} />
-                          </button>
-                        </li>
-                      )}
-                      {derived.topIssues.slice(0, 3).map((issue, index) => (
-                        <li key={`${issue.issue}-${index}`} className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
-                          <IconTile icon={AlertTriangle} tone={index === 0 ? "danger" : "warning"} />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold" style={{ color: TEXT }}>{issue.issue}</span>
-                            <span className="block text-xs" style={{ color: MUTED }}>Appeared {issue.count} times</span>
-                          </span>
-                          <StatusText tone={index === 0 ? "danger" : "neutral"}>Priority {index + 1}</StatusText>
-                        </li>
-                      ))}
-                      {derived.attentionWorkers.length > 0 && (
-                        <li className="px-4 py-3.5 sm:px-5">
-                          <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: TEXT }}>
-                            <Users size={15} style={{ color: AMBER }} />
-                            {derived.attentionWorkers.length} {derived.attentionWorkers.length === 1 ? "worker" : "workers"} below the 85% quality threshold
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {derived.attentionWorkers.map((worker) => (
-                              <span key={worker.id} className="rounded-full px-2.5 py-1 text-xs" style={{ background: SOFT, color: TEXT }}>
-                                {worker.full_name} · <span className="font-semibold tabular-nums">{worker.compliance_score}%</span>
-                              </span>
-                            ))}
-                          </div>
-                        </li>
-                      )}
-                    </RowList>
-                  )}
-                </Surface>
-              </Section>
-
-              <ComplianceMeasures data={data} workersBelow={data.workers_at_risk_count ?? data.workers_at_risk?.length ?? derived.attentionWorkers.length} />
-            </div>
-
-            <ScoreExplainer />
+            {gapReport && (
+              <GapAnalysis
+                report={gapReport}
+                checklistState={checklist.isLoading ? "loading" : checklist.isError ? "error" : "ready"}
+              />
+            )}
 
             {trendError && (
               <p role="status" className="rounded-2xl bg-cc-surface px-5 py-4 text-sm" style={{ color: MUTED }}>
                 The compliance trend could not be loaded. Refresh to try again; the other records are still available.
               </p>
             )}
-            {chartData.length > 1 && (
-              <Section title="Compliance trajectory" description="Weekly average score for the last quarter. The dashed line is your target.">
-                <Surface className="p-5">
-                  <div className="h-[230px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartData} margin={{ top: 5, right: 15, bottom: 0, left: -20 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
-                        <XAxis dataKey="week" tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} />
-                        <YAxis domain={[50, 100]} tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} />
-                        <ReferenceLine y={data.compliance_target} stroke={AMBER} strokeDasharray="4 3" />
-                        <Tooltip
-                          contentStyle={{ borderRadius: 12, border: `1px solid ${BORDER}`, fontSize: 12 }}
-                          formatter={(value: number) => [`${value}%`, "Weekly score"]}
-                        />
-                        <Line type="monotone" dataKey="score" stroke={PLUM} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: PLUM }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Surface>
-              </Section>
-            )}
-
-            <div className="grid gap-8 lg:grid-cols-2">
-              <Section title="Recurring quality issues" description="Where the same compliance failures keep happening.">
-                <Surface className="p-5">
-                  {derived.topIssues.length === 0 ? (
-                    <p className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
-                      <CheckCircle2 size={16} style={{ color: GREEN }} />
-                      No recurring issues detected.
-                    </p>
-                  ) : (
-                    <div className="space-y-4">
-                      {derived.topIssues.map((issue, index) => {
-                        const max = derived.topIssues[0]?.count || 1;
-                        return (
-                          <div key={`${issue.issue}-${index}`}>
-                            <div className="mb-1.5 flex items-center justify-between gap-3">
-                              <span className="truncate text-sm font-semibold" style={{ color: TEXT }}>{issue.issue}</span>
-                              <span className="shrink-0 text-xs tabular-nums" style={{ color: MUTED }}>{issue.count} times</span>
-                            </div>
-                            <div className="h-2 overflow-hidden rounded-full" style={{ background: SOFT }}>
-                              <div
-                                className="h-full rounded-full"
-                                style={{ width: `${(issue.count / max) * 100}%`, background: index === 0 ? RED : index === 1 ? AMBER : MUTED }}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
+            <div className={`grid gap-8 ${chartData.length > 1 ? "lg:grid-cols-3" : ""}`}>
+              {chartData.length > 1 && (
+                <Section
+                  className="lg:col-span-2"
+                  title="Compliance trajectory"
+                  description="Weekly average score for the last quarter. The dashed line is your target."
+                >
+                  <Surface className="p-5">
+                    <div className="h-[260px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData} margin={{ top: 5, right: 15, bottom: 0, left: -20 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
+                          <XAxis dataKey="week" tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} />
+                          <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} />
+                          <ReferenceLine y={data.compliance_target} stroke={AMBER} strokeDasharray="4 3" />
+                          <Tooltip
+                            contentStyle={{ borderRadius: 12, border: `1px solid ${BORDER}`, fontSize: 12 }}
+                            formatter={(value: number) => [`${value}%`, "Weekly score"]}
+                          />
+                          <Line type="monotone" dataKey="score" stroke={PLUM} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: PLUM }} />
+                        </LineChart>
+                      </ResponsiveContainer>
                     </div>
-                  )}
-                </Surface>
-              </Section>
+                  </Surface>
+                </Section>
+              )}
 
               <Section
                 title="Worker quality signals"
@@ -744,22 +551,33 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
               </Section>
             </div>
 
+            <ScoreExplainer />
+
             <Surface className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
-                <IconTile icon={ShieldCheck} tone={AUDIT_STATUS[derived.readiness].tone} />
+                <IconTile icon={ShieldCheck} tone={gapReport?.gaps.length ? (gapReport.criticalTotal ? "danger" : "warning") : "good"} />
                 <div>
                   <p className="text-sm font-semibold" style={{ color: TEXT }}>Executive quality decision</p>
                   <p className="mt-0.5 max-w-2xl text-sm leading-6" style={{ color: MUTED }}>
-                    {derived.readiness === "ready"
-                      ? "The organisation is positioned for audit. Keep watching recurring issues and evidence quality."
-                      : "Some quality signals need attention before the organisation is fully audit ready."}
+                    {!gapReport?.gaps.length
+                      ? "Audit ready. Every measure is on target and every requirement has current evidence."
+                      : `${gapReport.gaps.length} ${gapReport.gaps.length === 1 ? "gap" : "gaps"} to close before an audit${
+                          gapReport.criticalTotal ? `, ${gapReport.criticalTotal} of them critical` : ""
+                        }. Start with ${gapReport.gaps[0].title.toLowerCase()}.`}
                   </p>
                 </div>
               </div>
-              <button type="button" onClick={() => navigate("/md/staff")} className={`${ctaClass} shrink-0`}>
-                Review quality team
-                <ArrowRight size={15} />
-              </button>
+              {gapReport?.gaps.length ? (
+                <Link href={gapReport.gaps[0].action.href} className={`${ctaClass} shrink-0`}>
+                  {gapReport.gaps[0].action.label}
+                  <ArrowRight size={15} />
+                </Link>
+              ) : (
+                <button type="button" onClick={() => navigate("/md/staff")} className={`${ctaClass} shrink-0`}>
+                  Review quality team
+                  <ArrowRight size={15} />
+                </button>
+              )}
             </Surface>
           </>
         )}

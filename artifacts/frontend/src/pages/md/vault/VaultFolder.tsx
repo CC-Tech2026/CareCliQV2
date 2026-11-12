@@ -58,7 +58,8 @@ function presetToDateFrom(preset: string): string | undefined {
   if (!d) return undefined;
   const date = new Date();
   date.setDate(date.getDate() - d);
-  return date.toISOString().slice(0, 10);
+  // Local calendar date, not UTC (which is a day behind on Adelaide mornings).
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 export default function VaultFolderPage({ category }: { category: string }) {

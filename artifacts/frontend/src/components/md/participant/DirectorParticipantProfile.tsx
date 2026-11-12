@@ -279,7 +279,7 @@ export function DirectorParticipantProfile({
               type="button"
               onClick={() => setCareRecordTab("overview")}
               className="inline-flex min-h-11 items-center gap-2 rounded-full px-5 text-sm font-medium text-white transition hover:opacity-90"
-              style={{ background: PLUM }}
+              style={{ background: "var(--cc-cta)" }}
             >
               <ClipboardList size={16} aria-hidden /> Open care record
             </button>

@@ -384,7 +384,7 @@ export function DocumentsSection({
             type="button"
             onClick={onUpload}
             className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-4 text-sm font-medium text-white transition hover:opacity-90"
-            style={{ background: PLUM }}
+            style={{ background: "var(--cc-cta)" }}
           >
             <Upload size={14} aria-hidden /> Import a document
           </button>

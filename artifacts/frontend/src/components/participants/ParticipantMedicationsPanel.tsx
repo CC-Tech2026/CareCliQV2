@@ -4,7 +4,7 @@ import { CheckCircle2, ChevronLeft, FileText, Loader2, Paperclip, Pencil, Pill, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileDropzone } from "@/components/ui/file-dropzone";
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SidePanel } from "@/components/layout/SidePanel";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -473,16 +473,47 @@ function AddMedicationSheet({
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <Pill className="h-4 w-4 text-cc-plum" />
-            {translate("participants.medications.addTitle")}
-          </SheetTitle>
-        </SheetHeader>
-
-        <div className="mt-2 flex gap-1.5">
+    <SidePanel
+      open={open}
+      onOpenChange={onOpenChange}
+      icon={Pill}
+      title={translate("participants.medications.addTitle")}
+      footer={
+        <>
+          {step > 1 && (
+            <Button type="button" variant="outline" onClick={() => setStep((s) => (s - 1) as 1 | 2)} className="mr-auto gap-1">
+              <ChevronLeft className="h-3.5 w-3.5" /> {translate("common.back")}
+            </Button>
+          )}
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {translate("common.cancel")}
+          </Button>
+          {step < 3 && (
+            <Button
+              type="button"
+              disabled={step === 2 && !draft.name.trim()}
+              onClick={() => setStep((s) => (s + 1) as 2 | 3)}
+              className="cc-btn-primary"
+            >
+              {translate("common.next")}
+            </Button>
+          )}
+          {step === 3 && (
+            <>
+              <Button type="button" variant="outline" disabled={saving !== null} onClick={() => finalize("draft")} className="gap-1.5">
+                {saving === "draft" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {translate("participants.medications.saveDraft")}
+              </Button>
+              <Button type="button" disabled={saving !== null} onClick={() => finalize("submit")} className="cc-btn-primary gap-1.5">
+                {saving === "submit" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                {translate("participants.medications.submitForVerification")}
+              </Button>
+            </>
+          )}
+        </>
+      }
+    >
+        <div className="flex gap-1.5">
           {STEP_LABEL_KEYS.map((key, i) => (
             <div key={key} className="flex-1 space-y-1">
               <div
@@ -540,7 +571,7 @@ function AddMedicationSheet({
         )}
 
         {step === 2 && (
-          <div className="space-y-4 py-4">
+          <div className="space-y-4">
             {pendingDocument && (
               <p className="flex items-center gap-1.5 text-[11px] text-cc-muted">
                 <ShieldCheck className="h-3 w-3 shrink-0 text-cc-plum" />
@@ -597,7 +628,7 @@ function AddMedicationSheet({
         )}
 
         {step === 3 && (
-          <div className="space-y-4 py-4">
+          <div className="space-y-4">
             <p className="text-[12px] text-cc-muted">{translate("participants.medications.confirmHint")}</p>
             <div className="rounded-xl border border-cc-border bg-cc-soft p-3 space-y-1.5">
               <p className="text-[13px] font-bold text-cc-text">{draft.name || translate("common.emDash")}{draft.strength ? ` · ${draft.strength}` : ""}</p>
@@ -617,41 +648,7 @@ function AddMedicationSheet({
             </div>
           </div>
         )}
-
-        <SheetFooter className="gap-2 sm:gap-2">
-          {step > 1 && (
-            <Button type="button" variant="outline" onClick={() => setStep((s) => (s - 1) as 1 | 2)} className="mr-auto gap-1">
-              <ChevronLeft className="h-3.5 w-3.5" /> {translate("common.back")}
-            </Button>
-          )}
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            {translate("common.cancel")}
-          </Button>
-          {step < 3 && (
-            <Button
-              type="button"
-              disabled={step === 2 && !draft.name.trim()}
-              onClick={() => setStep((s) => (s + 1) as 2 | 3)}
-              className="cc-btn-primary"
-            >
-              {translate("common.next")}
-            </Button>
-          )}
-          {step === 3 && (
-            <>
-              <Button type="button" variant="outline" disabled={saving !== null} onClick={() => finalize("draft")} className="gap-1.5">
-                {saving === "draft" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {translate("participants.medications.saveDraft")}
-              </Button>
-              <Button type="button" disabled={saving !== null} onClick={() => finalize("submit")} className="cc-btn-primary gap-1.5">
-                {saving === "submit" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                {translate("participants.medications.submitForVerification")}
-              </Button>
-            </>
-          )}
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+    </SidePanel>
   );
 }
 
@@ -703,17 +700,29 @@ function EditMedicationSheet({
   };
 
   return (
-    <Sheet open={!!medication} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <Pencil className="h-4 w-4 text-cc-plum" />
-            {translate("participants.medications.editTitle")}
-          </SheetTitle>
-        </SheetHeader>
-
+    <SidePanel
+      open={!!medication}
+      onOpenChange={onOpenChange}
+      icon={Pencil}
+      title={translate("participants.medications.editTitle")}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {translate("common.cancel")}
+          </Button>
+          <Button type="button" variant="outline" disabled={saving !== null || !draft.name.trim()} onClick={() => save("draft")} className="gap-1.5">
+            {saving === "draft" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {translate("participants.medications.saveDraft")}
+          </Button>
+          <Button type="button" disabled={saving !== null || !draft.name.trim()} onClick={() => save("submit")} className="cc-btn-primary gap-1.5">
+            {saving === "submit" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            {translate("participants.medications.submitForVerification")}
+          </Button>
+        </>
+      }
+    >
         {medication && (
-          <div className="space-y-4 py-4">
+          <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <LabeledInput label={translate("participants.medications.name")} value={draft.name} onChange={(v) => setDraft((d) => ({ ...d, name: v }))} />
               <LabeledInput label={translate("participants.medications.strength")} value={draft.strength} onChange={(v) => setDraft((d) => ({ ...d, strength: v }))} />
@@ -762,22 +771,7 @@ function EditMedicationSheet({
             </div>
           </div>
         )}
-
-        <SheetFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            {translate("common.cancel")}
-          </Button>
-          <Button type="button" variant="outline" disabled={saving !== null || !draft.name.trim()} onClick={() => save("draft")} className="gap-1.5">
-            {saving === "draft" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {translate("participants.medications.saveDraft")}
-          </Button>
-          <Button type="button" disabled={saving !== null || !draft.name.trim()} onClick={() => save("submit")} className="cc-btn-primary gap-1.5">
-            {saving === "submit" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-            {translate("participants.medications.submitForVerification")}
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+    </SidePanel>
   );
 }
 
@@ -861,17 +855,25 @@ function VerifyMedicationSheet({
   };
 
   return (
-    <Sheet open={!!medication} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-cc-plum" />
-            {translate("participants.medications.verifyTitle")}
-          </SheetTitle>
-        </SheetHeader>
-
+    <SidePanel
+      open={!!medication}
+      onOpenChange={onOpenChange}
+      icon={ShieldCheck}
+      title={translate("participants.medications.verifyTitle")}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {translate("common.cancel")}
+          </Button>
+          <Button type="button" disabled={saving || !fields.name.trim()} onClick={confirm} className="cc-btn-primary gap-1.5">
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+            {translate("participants.medications.confirmAndActivate")}
+          </Button>
+        </>
+      }
+    >
         {medication && (
-          <div className="space-y-4 py-2">
+          <div className="space-y-4">
             <div className="rounded-lg border border-cc-border bg-cc-soft p-3">
               <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">
                 {translate("participants.medications.sourceDocument")}
@@ -960,18 +962,7 @@ function VerifyMedicationSheet({
             </div>
           </div>
         )}
-
-        <SheetFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            {translate("common.cancel")}
-          </Button>
-          <Button type="button" disabled={saving || !fields.name.trim()} onClick={confirm} className="cc-btn-primary gap-1.5">
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-            {translate("participants.medications.confirmAndActivate")}
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+    </SidePanel>
   );
 }
 

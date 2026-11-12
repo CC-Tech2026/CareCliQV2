@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   appLocalDateKey,
   datetimeLocalValueToUtcIso,
@@ -25,6 +25,18 @@ describe("datetime timezone helpers", () => {
     const correctUtc = "2026-06-30T10:00:00.000Z";
     expect(appLocalDateKey(wrongUtc)).toBe("2026-07-01");
     expect(appLocalDateKey(correctUtc)).toBe(adelaideDay);
+  });
+
+  it("gives today in Adelaide early in the morning, when UTC is still yesterday", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-11T22:00:00.000Z")); // 8:30 am on the 12th in Adelaide
+      const { appTodayKey } = await import("@/lib/datetime");
+      expect(new Date().toISOString().slice(0, 10)).toBe("2026-11-11");
+      expect(appTodayKey()).toBe("2026-11-12");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

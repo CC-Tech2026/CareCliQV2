@@ -77,7 +77,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
-import { formatAppDate, formatAppTimeWithZone } from "@/lib/datetime";
+import { formatAppDate, formatAppTimeWithZone, appTodayKey } from "@/lib/datetime";
 import { scanNoteHighlights, buildHighlightedHtml, type Highlight } from "@/lib/note-scanner";
 import { shiftNoteTimes, type ShiftNoteLike } from "@/lib/shift-note-title";
 
@@ -571,7 +571,7 @@ export default function SessionDetail({ id }: { id?: string }) {
       const data = await res.json();
       const participantName = (data.participant?.full_name || "unknown")
         .toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-      const date = (data.session?.date || new Date().toISOString().slice(0, 10)).replace(/-/g, "_");
+      const date = (data.session?.date || appTodayKey()).replace(/-/g, "_");
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

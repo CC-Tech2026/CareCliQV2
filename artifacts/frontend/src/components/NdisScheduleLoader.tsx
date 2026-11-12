@@ -195,7 +195,7 @@ export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) 
               onClick={handleLoadSchedule}
               disabled={loading || !jsonContent}
               className="flex-1 inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
-              style={{ background: PLUM }}
+              style={{ background: "var(--cc-cta)" }}
             >
               {loading ? (
                 <>

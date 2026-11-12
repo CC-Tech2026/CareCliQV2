@@ -370,7 +370,7 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
           </Button>
           <Button
             className="flex-1 rounded-xl"
-            style={{ background: PLUM, color: "#fff" }}
+            style={{ background: "var(--cc-cta)", color: "#fff" }}
             disabled={!form.name.trim() || mut.isPending}
             onClick={() => mut.mutate()}
           >
@@ -421,7 +421,7 @@ export function TaskTemplatePanel({
           <Button
             size="sm"
             className="rounded-lg gap-1"
-            style={{ background: PLUM, color: "#fff" }}
+            style={{ background: "var(--cc-cta)", color: "#fff" }}
             onClick={() => {
               setEditTemplate(null);
               setFormOpen(true);
