@@ -2570,7 +2570,7 @@ export const en: Dict = {
 
   "common.remove": "Remove",
 
-  "settings.title": "Workspace Settings",
+  "settings.title": "Workspace settings",
   "settings.subtitle": "Manage your account, provider details, session defaults and compliance rules",
   "settings.navigation": "Navigation",
   "settings.loading": "Loading settings…",

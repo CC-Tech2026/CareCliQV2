@@ -1,4 +1,5 @@
 import { SettingsNavigation, resolveSettingsSection } from "@/components/settings/SettingsNavigation";
+import { PageHeader } from "@/components/layout/PageKit";
 import { BillingSection } from "@/components/settings/BillingSection";
 import { DelegatedAccessSection } from "@/components/settings/DelegatedAccessSection";
 import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
@@ -2040,23 +2041,21 @@ export default function Settings() {
 
   // -- Render -----------------------------------------------------------------
   return (
-    <div className="mx-auto flex min-h-full w-full min-w-0 flex-col gap-2 pb-6">
+    <div className="mx-auto flex min-h-full w-full max-w-[1760px] min-w-0 flex-col gap-4 pb-8">
       {modal}
 
       {/* -- Page header ------------------------------------------------------- */}
-      <div className="relative overflow-hidden rounded-2xl border border-cc-border bg-cc-surface px-4 py-3">
-        <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-cc-plum" />
-        <h1 className="text-[26px] font-semibold tracking-tight" style={{ color: "var(--cc-text)" }}>{translate("settings.title")}</h1>
-        <p className="text-[13px] mt-1" style={{ color: "var(--cc-muted)" }}>
-          {isMD ? "Manage your account, organisation and subscription in one place." : isCoordinator ? "Manage your account, team preferences and organisation details." : "Manage your profile, sign-in security and work preferences."}
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Settings"
+        title={translate("settings.title")}
+        description={isMD ? "Manage your account, organisation and subscription in one place." : isCoordinator ? "Manage your account, team preferences and organisation details." : "Manage your profile, sign-in security and work preferences."}
+      />
 
-      <div className="flex min-w-0 flex-col items-start gap-3 rounded-xl border border-cc-border bg-cc-surface p-3 lg:flex-row lg:gap-4">
+      <div className="flex min-w-0 flex-col items-stretch gap-4 rounded-2xl border border-cc-border bg-cc-surface p-3 sm:p-4 lg:flex-row lg:gap-5">
         <SettingsNavigation<SectionId> items={visibleNavItems.map(item=>({...item,label:translate(item.labelKey),description:SETTINGS_DESCRIPTIONS[item.id]}))} active={activeSection} onChange={selectSection} />
 
       {/* -- Content panel ----------------------------------------------------- */}
-      <main ref={contentRef} tabIndex={-1} aria-label={translate(visibleNavItems.find(item => item.id === activeSection)?.labelKey || "settings.nav.account")} className="w-full min-w-0 flex-1 scroll-mt-28 space-y-2 outline-none">
+      <main ref={contentRef} tabIndex={-1} aria-label={translate(visibleNavItems.find(item => item.id === activeSection)?.labelKey || "settings.nav.account")} className="w-full min-w-0 flex-1 scroll-mt-28 space-y-4 outline-none">
 
         {/* -- Account section ----------------------------------------------- */}
         {activeSection === "account" && (

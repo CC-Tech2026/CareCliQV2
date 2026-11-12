@@ -36,7 +36,7 @@ export function SettingsNavigation<T extends string>({
   return (
     <nav
       aria-label="Settings sections"
-      className="w-full min-w-0 space-y-3 lg:sticky lg:top-24 lg:w-56 lg:shrink-0 lg:self-start"
+      className="w-full min-w-0 space-y-3 lg:sticky lg:top-24 lg:w-[17rem] lg:shrink-0 lg:self-start"
     >
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-cc-muted" />
@@ -46,7 +46,7 @@ export function SettingsNavigation<T extends string>({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Find a setting"
-            className="h-11 w-full rounded-lg border border-cc-border bg-cc-surface pl-9 pr-2 text-sm text-cc-text"
+            className="h-11 w-full rounded-lg border border-cc-border bg-cc-surface pl-9 pr-3 text-sm text-cc-text transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
           />
         </div>
       <div
@@ -77,7 +77,7 @@ export function SettingsNavigation<T extends string>({
         </select>
       </div>
       <div
-        className={(search.trim() ? "block " : "hidden lg:block ") + "max-h-[calc(100dvh-220px)] space-y-3 overflow-y-auto rounded-xl border border-cc-border p-3"}
+        className={(search.trim() ? "block " : "hidden lg:block ") + "max-h-[calc(100dvh-220px)] space-y-4 overflow-y-auto rounded-xl border border-cc-border p-3"}
         style={{ background: "var(--cc-surface)" }}
       >
         {groups.map((group) => {
@@ -87,7 +87,7 @@ export function SettingsNavigation<T extends string>({
           if (!visible.length) return null;
           return (
             <div key={group.title}>
-              <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-cc-muted">
+              <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-cc-muted">
                 {group.title}
               </p>
               <div className="space-y-0.5">
@@ -97,12 +97,11 @@ export function SettingsNavigation<T extends string>({
                     type="button"
                     aria-current={active === id ? "page" : undefined}
                     onClick={() => onChange(id)}
-                    className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-cc-soft"
+                    className="group relative flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum"
                     style={{
-                      background:
-                        active === id ? "var(--cc-active-bg)" : undefined,
-                      color:
-                        active === id ? "var(--cc-plum)" : "var(--cc-text)",
+                      // CareCliQ Purple marks where you are, as in the header menus.
+                      background: active === id ? "var(--cc-brand-purple-soft)" : undefined,
+                      color: active === id ? "var(--cc-brand-purple)" : "var(--cc-text)",
                     }}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
