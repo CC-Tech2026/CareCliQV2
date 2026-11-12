@@ -30,7 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SectionInfo } from "@/components/ui/section-info";
 import { getOrgAcknowledgementContent, updateOrgAcknowledgementContent } from "@/services/coordinatorService";
 import { KpiCard, KpiGrid, type StatTone } from "@/components/ui/stat-card";
-import { formatAppTimeWithZone } from "@/lib/datetime";
+import { appLocalDateKey, appTodayKey, formatAppTimeWithZone } from "@/lib/datetime";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -176,7 +176,7 @@ function exportComplianceSummaryPDF(overview: ComplianceCentreOverview | undefin
   if (!overview) {
     pdf.setTextColor("#1A1A2E");
     pdf.text("No compliance data was loaded yet — open the Overview tab first.", margin, y);
-    pdf.save(`compliance-summary-${new Date().toISOString().slice(0, 10)}.pdf`);
+    pdf.save(`compliance-summary-${appTodayKey()}.pdf`);
     return;
   }
 
@@ -219,7 +219,7 @@ function exportComplianceSummaryPDF(overview: ComplianceCentreOverview | undefin
     });
   }
 
-  pdf.save(`compliance-summary-${new Date().toISOString().slice(0, 10)}.pdf`);
+  pdf.save(`compliance-summary-${appTodayKey()}.pdf`);
 }
 
 function ComplianceActionsMenu({ overview }: { overview: ComplianceCentreOverview | undefined }) {
@@ -955,7 +955,7 @@ function ParticipantsPanel() {
   const [dateRange, setDateRange] = useState<"30" | "90" | "180">("30");
   const dateFrom = useMemo(() => {
     const days = { "30": 30, "90": 90, "180": 180 }[dateRange];
-    return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    return appLocalDateKey(new Date(Date.now() - days * 86400000).toISOString());
   }, [dateRange]);
 
   const { data, isLoading } = useQuery({

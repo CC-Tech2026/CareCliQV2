@@ -120,7 +120,7 @@ it("offers retry when compliance records fail to load", async () => {
   expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
 });
 
-it("separates documentation, staff files and participant files", async () => {
+it("lays out each gap to audit ready with what to fix", async () => {
   const checklist = {
     summary: {
       applicable: 20,
@@ -146,16 +146,18 @@ it("separates documentation, staff files and participant files", async () => {
     }),
   );
   render(<MDCompliancePage />);
-  const measures = await screen.findByRole("heading", { name: "What each score measures" });
-  const section = measures.closest("section") as HTMLElement;
-  expect(await within(section).findByText("90%")).toBeTruthy();
-  expect(within(section).getByText("3")).toBeTruthy();
-  expect(await within(section).findByText(/8 of 10 requirements have current evidence, 2 missing or overdue/)).toBeTruthy();
-  expect(within(section).getByText(/4 of 8 requirements have current evidence, 4 missing or overdue/)).toBeTruthy();
-  expect(within(section).getByText("70%")).toBeTruthy();
-  expect(within(section).getByRole("link", { name: /Participant files/ }).getAttribute("href")).toBe(
-    "/md/compliance?view=checklist&area=participant",
+  const heading = await screen.findByRole("heading", { name: "Gap analysis" });
+  const section = heading.closest("section") as HTMLElement;
+  expect(await within(section).findByText("2 requirements missing or overdue out of 10.")).toBeTruthy();
+  expect(within(section).getByText("4 requirements missing or overdue out of 8.")).toBeTruthy();
+  expect(within(section).getByText("3 workers whose notes average under 85%.")).toBeTruthy();
+  expect(within(section).getByRole("link", { name: /Open participant evidence/ }).getAttribute("href")).toBe(
+    "/md/compliance?view=checklist&area=participant&status=gaps",
   );
+  // Documentation is above target with nothing non-compliant, so it is on target, not a gap.
+  expect(within(section).getByText("On target")).toBeTruthy();
+  expect(within(section).getByText("90%")).toBeTruthy();
+  expect(within(section).queryByRole("heading", { name: "Shift note documentation" })).toBeNull();
   expect(screen.getByRole("heading", { name: "How a shift note is scored" })).toBeTruthy();
 });
 
