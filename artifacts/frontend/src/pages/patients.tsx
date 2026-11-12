@@ -16,6 +16,7 @@ import { ParticipantInvoicesPanel } from "@/components/participants/ParticipantI
 import { ParticipantServiceAgreementSection } from "@/components/participants/ParticipantServiceAgreementSection";
 import { ParticipantMeetGreetSummary } from "@/components/onboarding/MeetGreetSummaryPanel";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
+import { AddShiftMenu } from "@/components/coordinator/AddShiftMenu";
 import { TaskTemplatePanel } from "@/components/coordinator/TaskTemplatePanel";
 import { SectionInfo } from "@/components/ui/section-info";
 import { useGetParticipants } from "@workspace/api-client-react";
@@ -67,6 +68,7 @@ import {
   UserRoundPen,
   ListChecks,
   Contact,
+  CalendarPlus,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -1451,6 +1453,18 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
 
           {/* Action buttons — desktop: inline right */}
           <div className="hidden sm:flex items-center gap-2 shrink-0">
+            {isCoordinator && (
+              <AddShiftMenu participant={{ id, full_name: participant.full_name }}>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ background: "var(--cc-cta)" }}
+                >
+                  <CalendarPlus size={13} />
+                  Add shift
+                </button>
+              </AddShiftMenu>
+            )}
             {onToggleFullScreen && (
               <button
                 type="button"
@@ -1517,6 +1531,18 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
 
             {/* Action buttons — mobile: below stat cards */}
             <div className="flex sm:hidden flex-wrap items-center gap-2 mb-3">
+              {isCoordinator && (
+                <AddShiftMenu participant={{ id, full_name: participant.full_name }}>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+                    style={{ background: "var(--cc-cta)" }}
+                  >
+                    <CalendarPlus size={13} />
+                    Add shift
+                  </button>
+                </AddShiftMenu>
+              )}
               {isCoordinator && (
                 <button
                   type="button"
@@ -2302,7 +2328,7 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
                   </button>
                   <button type="button" onClick={() => setShiftModalOpen(true)}
                     className="flex items-center gap-1.5 h-9 px-3 text-[12px] font-bold rounded-lg bg-[#E8457A] text-white hover:bg-[#312E81]">
-                    <CalendarClock size={13} /> Assign Shift
+                    <CalendarClock size={13} /> Add shift
                   </button>
                 </div>
               </div>
@@ -2661,6 +2687,8 @@ const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export default function Patients() {
   const { translate, translateParams } = useAccessibility();
+  const { user: listUser } = useAuth();
+  const canAddShifts = listUser?.role === "support_coordinator" || listUser?.role === "managing_director";
   const [search, setSearch]           = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortOrder, setSortOrder]     = useState<"asc" | "desc">("asc");
@@ -2893,13 +2921,13 @@ export default function Patients() {
               const inits = p.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
               const isSelected = selectedId === p.id;
               return (
+                <div key={p.id} className="group/row flex items-center gap-1">
                 <button
-                  key={p.id}
                   type="button"
                   onClick={() => { setSelectedId(p.id); setShowMobileDetail(true); }}
                   data-testid={`button-participant-${p.id}`}
                   aria-pressed={isSelected}
-                  className="w-full text-left rounded-xl transition-all duration-150 flex items-center gap-3 px-3 py-2.5 border"
+                  className="min-w-0 flex-1 text-left rounded-xl transition-all duration-150 flex items-center gap-3 px-3 py-2.5 border"
                   style={{
                     background: isSelected ? "var(--cc-active-bg)" : "transparent",
                     borderColor: isSelected ? "rgba(55,48,163,0.18)" : "transparent",
@@ -2941,6 +2969,20 @@ export default function Patients() {
                     </div>
                   </div>
                 </button>
+                {canAddShifts && (
+                  <AddShiftMenu participant={{ id: p.id, full_name: p.full_name }}>
+                    <button
+                      type="button"
+                      aria-label={`Add a shift for ${p.full_name}`}
+                      title="Add a shift"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-cc-surface opacity-100 transition-opacity hover:bg-cc-soft focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100"
+                      style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
+                    >
+                      <CalendarPlus size={15} />
+                    </button>
+                  </AddShiftMenu>
+                )}
+                </div>
               );
             })
           )}

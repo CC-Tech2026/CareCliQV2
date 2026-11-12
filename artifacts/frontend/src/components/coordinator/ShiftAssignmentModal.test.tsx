@@ -112,7 +112,7 @@ describe("ShiftAssignmentModal", () => {
     );
 
     expect(screen.getByText("Create shift")).toBeTruthy();
-    expect(screen.getByText("Assign a shift to a support worker")).toBeTruthy();
+    expect(screen.getByText("Choose a worker now, or leave it open to fill later")).toBeTruthy();
     // The footer says what's still needed.
     expect(screen.getByText("Choose a participant")).toBeTruthy();
   });

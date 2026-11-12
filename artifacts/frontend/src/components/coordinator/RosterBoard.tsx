@@ -22,7 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { format, addDays, isToday, parseISO, differenceInMinutes, eachDayOfInterval, getDay } from "date-fns";
 import {
   AlertTriangle, ChevronRight, Clock3, GripVertical,
-  Loader2, Minus, Plus, User2, Users, XCircle, MinusCircle,
+  Loader2, Minus, Plus, User2, Users, XCircle, MinusCircle, CalendarPlus,
 } from "lucide-react";
 import {
   assignExistingShift,
@@ -54,6 +54,8 @@ const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
 const UNASSIGNED_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
+// Drop target id for the open shifts row (dropping there unassigns).
+const OPEN_ROW_ID = "__open_shifts__";
 
 type AvailabilityMap = Record<string, WorkerAvailability & { blackout_dates?: BlackoutDate[] }>;
 
@@ -224,13 +226,14 @@ function ShiftDragClone({ shift }: { shift: CoordinatorShiftRecord }) {
 
 // ── Droppable worker × day cell ───────────────────────────────────────────────
 function DayCell({
-  workerId, dayIso, disabled, cellBg, children,
+  workerId, dayIso, disabled, cellBg, children, style,
 }: {
   workerId: string;
   dayIso: string;
   disabled: boolean;
   cellBg: string;
   children?: React.ReactNode;
+  style?: React.CSSProperties;
 }) {
   const { isOver, setNodeRef } = useDroppable({
     id: `${workerId}|${dayIso}`,
@@ -246,6 +249,7 @@ function DayCell({
         opacity: disabled ? 0.4 : 1,
         minWidth: 132,
         minHeight: 56,
+        ...style,
       }}
     >
       {children}
@@ -310,6 +314,8 @@ interface RosterBoardProps {
   availMap: AvailabilityMap;
   loadingAvail: boolean;
   onCellClick: (worker: WorkerStats, dateKey: string) => void;
+  /** Adds an open (unassigned) shift on a day, from the open shifts row. */
+  onOpenShiftCreate?: (dateKey: string) => void;
   onRefresh: () => void;
   /** "worker" gives each worker's shifts their own colour (Master Schedule). */
   colorBy?: "status" | "worker";
@@ -318,7 +324,7 @@ interface RosterBoardProps {
 }
 
 export function RosterBoard({
-  newShiftId, weekStart, shifts, workers, availMap, loadingAvail, onCellClick, onRefresh,
+  newShiftId, weekStart, shifts, workers, availMap, loadingAvail, onCellClick, onOpenShiftCreate, onRefresh,
   colorBy = "status", allowCreate = true,
 }: RosterBoardProps) {
   const { translate, translateParams } = useAccessibility();
@@ -369,6 +375,19 @@ export function RosterBoard({
     () => shifts.filter((s) => !s.worker_id || s.worker_id === UNASSIGNED_PLACEHOLDER_ID).sort((a, b) => (a.scheduled_start ?? "").localeCompare(b.scheduled_start ?? "")),
     [shifts]
   );
+
+  const openByDay = useMemo(() => {
+    const map = new Map<string, CoordinatorShiftRecord[]>();
+    for (const s of unassigned) {
+      if (!s.scheduled_start) continue;
+      const key = appLocalDateKey(s.scheduled_start, s.timezone);
+      map.set(key, [...(map.get(key) ?? []), s]);
+    }
+    return map;
+  }, [unassigned]);
+  const weekKeys = days.map((d) => format(d, "yyyy-MM-dd"));
+  const openThisWeek = weekKeys.reduce((n, key) => n + (openByDay.get(key)?.length ?? 0), 0);
+  const openOtherWeeks = unassigned.length - openThisWeek;
 
   const sameNames = useMemo(() => sharedNames(workers.map((w) => w.full_name)), [workers]);
   // Support workers first: they're who gets rostered. Office staff (who can
@@ -431,6 +450,10 @@ export function RosterBoard({
     if (!over || !active.data.current?.shift) return;
     const shift = active.data.current.shift as CoordinatorShiftRecord;
     const { workerId } = over.data.current as { workerId: string; dayIso: string };
+    if (workerId === OPEN_ROW_ID) {
+      if (shift.worker_id && shift.worker_id !== UNASSIGNED_PLACEHOLDER_ID) handleUnassignClick(shift);
+      return;
+    }
     if (!workerId || shift.worker_id === workerId) return;
 
     const worker = workers.find((w) => w.id === workerId);
@@ -457,9 +480,10 @@ export function RosterBoard({
       setCheckingConflicts(false);
       assignMut.mutate({ shiftId: shift.id, workerId, confirm: true });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workers, assignMut, translate]);
 
-  const handleUnassignClick = (shift: CoordinatorShiftRecord) => {
+  function handleUnassignClick(shift: CoordinatorShiftRecord) {
     const worker = workers.find((w) => w.id === shift.worker_id);
     const workerName = worker?.full_name ?? translate("common.worker");
     const start = parseStart(shift);
@@ -468,7 +492,7 @@ export function RosterBoard({
       ? (minsUntil < 60 ? translateParams("coordinator.dnd.shiftStartsInMins", { mins: String(minsUntil) }) : translateParams("coordinator.dnd.shiftStartsInHours", { hours: String(Math.round(minsUntil / 60)) }))
       : undefined;
     setPendingUnassign({ shift, workerName, warning });
-  };
+  }
 
   const activeDayIso = activeShift ? (() => { const d = parseStart(activeShift); return d ? format(d, "yyyy-MM-dd") : null; })() : null;
 
@@ -521,23 +545,6 @@ export function RosterBoard({
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        {/* Unassigned tray — horizontal shelf */}
-        {unassigned.length > 0 && (
-          <div
-            className="rounded-2xl border p-3"
-            style={{ borderColor: "#F3A8C4", background: "#FFF9FB" }}
-          >
-            <div className="mb-2 flex items-center gap-2">
-              <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
-                {translateParams("coordinator.dnd.unassigned", { count: String(unassigned.length) })}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {unassigned.map((s) => <div key={s.id} className="w-52"><ShiftCard shift={s} colorBy={colorBy} onClick={() => setDetailShift(s)} /></div>)}
-            </div>
-          </div>
-        )}
-
         {/* Worker × day grid */}
         <div className="rounded-2xl border bg-white overflow-auto" style={{ borderColor: BORDER }}>
           <table className="w-full border-separate border-spacing-0">
@@ -569,6 +576,71 @@ export function RosterBoard({
               </tr>
             </thead>
             <tbody>
+              {(allowCreate || unassigned.length > 0) && (
+                <tr>
+                  <td className="sticky left-0 z-10 bg-white px-3 py-2.5" style={{ borderBottom: `2px solid ${BORDER}` }}>
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                        style={{ background: "var(--cc-status-danger-bg)", color: "var(--cc-danger-text)" }}
+                        aria-hidden="true"
+                      >
+                        <CalendarPlus size={16} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-bold leading-tight" style={{ color: TEXT }}>Open shifts</p>
+                        <p className="mt-0.5 text-[10px] font-medium" style={{ color: openThisWeek ? "var(--cc-danger-text)" : MUTED }}>
+                          {openThisWeek ? `${openThisWeek} to fill` : "None to fill"}
+                          {openOtherWeeks > 0 && <span style={{ color: MUTED }}> · {openOtherWeeks} in other weeks</span>}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  {days.map((d) => {
+                    const dayKey = format(d, "yyyy-MM-dd");
+                    const dayOpen = openByDay.get(dayKey) ?? [];
+                    const canCreateHere = allowCreate && !!onOpenShiftCreate && dayKey >= appLocalDateKey(new Date().toISOString());
+                    // While dragging, only an assigned shift from this day can be
+                    // dropped here (to take its worker off).
+                    const dropDisabled =
+                      activeShift != null &&
+                      (activeDayIso !== dayKey || !activeShift.worker_id || activeShift.worker_id === UNASSIGNED_PLACEHOLDER_ID);
+                    return (
+                      <DayCell
+                        key={d.toISOString()}
+                        workerId={OPEN_ROW_ID}
+                        dayIso={dayKey}
+                        disabled={dropDisabled}
+                        cellBg={isToday(d) ? "var(--cc-today-col)" : "var(--cc-surface)"}
+                        style={{ borderBottom: `2px solid ${BORDER}` }}
+                      >
+                        <div className="space-y-1">
+                          {dayOpen.map((s) => (
+                            <div key={s.id} className={"rounded-lg " + (newShiftId === s.id ? "outline-dashed outline-2 outline-offset-2 outline-[#E8457A] animate-in fade-in zoom-in-95 duration-500" : "")}>
+                              <ShiftCard shift={s} colorBy={colorBy} onClick={() => setDetailShift(s)} />
+                            </div>
+                          ))}
+                          {canCreateHere && (
+                            <button
+                              type="button"
+                              aria-label={`Add an open shift on ${format(d, "EEEE d MMMM")}`}
+                              onClick={() => onOpenShiftCreate!(dayKey)}
+                              className={`group/open flex w-full items-center justify-center rounded-lg border-[1.5px] border-dashed border-transparent text-xs font-semibold transition-colors hover:border-cc-border hover:bg-cc-soft focus-visible:border-cc-plum focus-visible:outline-none ${dayOpen.length ? "h-7" : "min-h-12"}`}
+                              style={{ color: MUTED }}
+                            >
+                              {/* Shown on hover and keyboard focus so the row stays calm; always shown on touch screens. */}
+                              <span className="flex items-center gap-1 transition-opacity [@media(hover:hover)]:opacity-0 group-hover/open:opacity-100 group-focus-visible/open:opacity-100">
+                                <Plus size={13} /> Open shift
+                              </span>
+                            </button>
+                          )}
+                          {!canCreateHere && !dayOpen.length && <div className="h-12" />}
+                        </div>
+                      </DayCell>
+                    );
+                  })}
+                </tr>
+              )}
               {rosterRows.map((worker) => {
                 const avail = availMap[worker.id];
                 const avatar = avatarColor(worker.full_name);
