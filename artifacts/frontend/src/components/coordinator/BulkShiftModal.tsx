@@ -11,7 +11,7 @@ import {
   Calendar, Clock, Check, AlertTriangle, Loader2, X, Plus,
 } from "lucide-react";
 import {
-  Dialog, DialogContent,
+  Dialog, DialogContent, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -67,16 +67,18 @@ interface BulkShiftModalProps {
   onOpenChange: (open: boolean) => void;
   participants: Array<{ id: string; full_name: string }>;
   workers: WorkerStats[];
+  /** Opened from a participant: start with them chosen. */
+  initialParticipantId?: string;
 }
 
-export function BulkShiftModal({ open, onOpenChange, participants, workers }: BulkShiftModalProps) {
+export function BulkShiftModal({ open, onOpenChange, participants, workers, initialParticipantId }: BulkShiftModalProps) {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__";
   const qc = useQueryClient();
 
-  const [participantId, setParticipantId] = useState("");
+  const [participantId, setParticipantId] = useState(initialParticipantId ?? "");
   const [workerId,       setWorkerId]       = useState("");
   const [shiftType,      setShiftType]      = useState("standard_support");
   const [startDate,      setStartDate]      = useState(() => format(new Date(), "yyyy-MM-dd"));
@@ -171,7 +173,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
       setTimeout(() => {
         setResult(null);
         setConfirmed(false);
-        setParticipantId("");
+        setParticipantId(initialParticipantId ?? "");
         setWorkerId("");
         setExpectedPriceItemCode("");
         setAgreementSupportId("");
@@ -185,11 +187,11 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md rounded-2xl p-0 overflow-hidden gap-0" style={{ borderColor: BORDER }}>
+      <DialogContent hideCloseButton className="max-w-md rounded-2xl p-0 overflow-hidden gap-0" style={{ borderColor: BORDER }}>
         {/* Header */}
         <div className="px-6 pt-5 pb-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <div>
-            <h2 className="text-[18px] font-black" style={{ color: PLUM }}>{translate("coordinator.bulkShift.title")}</h2>
+            <DialogTitle className="text-[18px] font-black" style={{ color: TEXT }}>{translate("coordinator.bulkShift.title")}</DialogTitle>
             <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>{translate("coordinator.bulkShift.subtitle")}</p>
           </div>
           <button onClick={handleClose} className="rounded-lg p-1.5 hover:bg-gray-100" title={translate("coordinator.bulkShift.closeModal")} aria-label={translate("coordinator.bulkShift.closeModal")}>
@@ -283,12 +285,13 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                 <label className="text-[12px] font-black" style={{ color: TEXT }}>
                   Auto-assign Worker <span className="font-normal">({translate("common.optional")})</span>
                 </label>
-                <Select value={workerId} onValueChange={setWorkerId}>
+                {/* Radix Select can't have an empty-string item; "__none__" means open shifts. */}
+                <Select value={workerId || "__none__"} onValueChange={(v) => setWorkerId(v === "__none__" ? "" : v)}>
                   <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
                     <SelectValue placeholder={translate("coordinator.bulkShift.selectWorker")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">{translate("coordinator.bulkShift.noAutoAssign")}</SelectItem>
+                    <SelectItem value="__none__">{translate("coordinator.bulkShift.noAutoAssign")}</SelectItem>
                     {workers.map((w) => (
                       <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>
                     ))}
@@ -541,7 +544,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                 disabled={!canSubmit || mutation.isPending}
                 className="flex items-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-bold text-white"
                 style={{
-                  background: canSubmit && !mutation.isPending ? PLUM : MUTED,
+                  background: canSubmit && !mutation.isPending ? "var(--cc-cta)" : MUTED,
                 }}
               >
                 {mutation.isPending ? (

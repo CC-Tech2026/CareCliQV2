@@ -4364,7 +4364,7 @@ export const en: Dict = {
   "coordinator.bulkShift.selectParticipant": "Select participant…",
   "coordinator.bulkShift.autoAssignWorker": "Auto-assign Worker",
   "coordinator.bulkShift.selectWorker": "Select worker (optional)…",
-  "coordinator.bulkShift.noAutoAssign": "No auto-assign",
+  "coordinator.bulkShift.noAutoAssign": "No worker yet (open shifts)",
   "coordinator.bulkShift.shiftType": "Shift Type",
   "coordinator.bulkShift.repeatDays": "Repeat Days *",
   "coordinator.bulkShift.startTime": "Start Time *",

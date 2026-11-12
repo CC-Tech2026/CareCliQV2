@@ -8,7 +8,7 @@ import { isoWeekday } from "@/components/coordinator/RosterBoard";
 vi.useFakeTimers({ toFake: ["Date"] });
 vi.setSystemTime(new Date("2026-09-30T02:00:00Z"));
 
-const state = vi.hoisted(() => ({ availability: {} as unknown, loading: false }));
+const state = vi.hoisted(() => ({ availability: {} as unknown, loading: false, openShifts: [] as unknown[] }));
 const monday = "2026-09-28T00:30:00Z"; // 10am Monday in Adelaide
 
 vi.mock("@/lib/api-fetch", () => ({
@@ -21,7 +21,8 @@ vi.mock("@/lib/api-fetch", () => ({
         ? state.availability
         : u.includes("/coordinator/shifts?")
           ? [{ id: "s1", worker_id: "w-1", worker_name: "Alice Worker", participant_name: "Liam Carter",
-               scheduled_start: monday, scheduled_end: "2026-09-28T02:30:00Z", status: "scheduled", timezone: "Australia/Adelaide" }]
+               scheduled_start: monday, scheduled_end: "2026-09-28T02:30:00Z", status: "scheduled", timezone: "Australia/Adelaide" },
+             ...state.openShifts]
           : [];
     return { ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body), headers: new Headers() };
   }),
@@ -39,7 +40,7 @@ vi.mock("@/contexts/AccessibilityContext", async () => {
   };
 });
 
-afterEach(() => { cleanup(); state.loading = false; });
+afterEach(() => { cleanup(); state.loading = false; state.openShifts = []; });
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -74,7 +75,8 @@ it("Create shift opens from the header and from an empty day", async () => {
   // Saturday is outside her usual days but can still be rostered.
   fireEvent.click(screen.getByLabelText(/3 Oct.*outside usual availability/));
   expect(await screen.findByRole("dialog")).toBeTruthy();
-});
+  // Opens the full shift form three times, so more than the default 5s.
+}, 15_000);
 
 it("a worker with no availability days doesn't break the board", async () => {
   state.availability = { availability: { user_id: "w-1", available_days: null }, blackout_dates: null };
@@ -99,4 +101,23 @@ it("does not present an empty roster while shifts are loading", () => {
   expect(screen.getByRole("status")).toBeTruthy();
   expect(screen.queryByRole("table")).toBeNull();
   expect(screen.queryByText("All assigned")).toBeNull();
+});
+
+it("shows open shifts under their day, and adds one from the open shifts row", async () => {
+  state.availability = { availability: { user_id: "w-1", available_days: [1, 2, 3, 4, 5] }, blackout_dates: [] };
+  state.openShifts = [{
+    id: "open-1", worker_id: "00000000-0000-0000-0000-000000000000", participant_name: "Priya Singh",
+    scheduled_start: "2026-10-01T23:30:00Z", scheduled_end: "2026-10-02T02:30:00Z", status: "unassigned", timezone: "Australia/Adelaide",
+  }];
+  renderPage();
+  const board = await screen.findByRole("table");
+  // Friday 2 Oct, 9am in Adelaide.
+  expect(await within(board).findByText("Priya Singh")).toBeTruthy();
+  expect(within(board).getByText("Open shifts")).toBeTruthy();
+  expect(within(board).getByText("1 to fill")).toBeTruthy();
+  // Past days can't take a new open shift; Thursday can.
+  expect(screen.queryByLabelText("Add an open shift on Tuesday 29 September")).toBeNull();
+  fireEvent.click(screen.getByLabelText("Add an open shift on Thursday 1 October"));
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).queryByText("Alice Worker")).toBeNull();
 });

@@ -11,7 +11,7 @@ import {
 import {
   CalendarDays, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Clock3, Loader2,
   Plus, Users2, User2, AlertCircle, AlertTriangle, LayoutGrid, Settings2,
-  Activity, Search, RefreshCw, ClipboardCheck,
+  Activity, Search, RefreshCw, ClipboardCheck, CalendarPlus,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
@@ -38,6 +38,8 @@ import {
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { RosterBoard }           from "@/components/coordinator/RosterBoard";
 import { BulkShiftModal }         from "@/components/coordinator/BulkShiftModal";
+import { OpenShiftsPanel }        from "@/components/coordinator/OpenShiftsPanel";
+import { UnassignedShiftPanel }   from "@/components/coordinator/UnassignedShiftPanel";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -309,9 +311,11 @@ export default function CoordinatorRosteringPage() {
   const [workerFilter, setWorkerFilter] = useState("all");
   const [assignOpen,   setAssignOpen]   = useState(false);
   const [bulkOpen,     setBulkOpen]     = useState(false);
+  const [openListOpen, setOpenListOpen] = useState(false);
+  const [findWorkerFor, setFindWorkerFor] = useState<CoordinatorShiftRecord | null>(null);
   const [availWorker,  setAvailWorker]  = useState<WorkerStats | null>(null);
   const [teamPanelOpen, setTeamPanelOpen] = useState(false);
-  const [assignTarget, setAssignTarget] = useState<{ worker: WorkerStats; date: string } | null>(null);
+  const [assignTarget, setAssignTarget] = useState<{ worker: WorkerStats | null; date: string } | null>(null);
   const [availMap,     setAvailMap]     = useState<AvailabilityMap>({});
   const [loadingAvail, setLoadingAvail] = useState(false);
 
@@ -348,6 +352,22 @@ export default function CoordinatorRosteringPage() {
   // covers the currently-viewed week/month, so an unassigned shift whose
   // time has passed silently falls out of view once the coordinator moves
   // on. This stays visible regardless of what's currently shown.
+  // Every open shift from the last fortnight to three months ahead, whatever
+  // week is on screen: the "Open shifts" list and its count.
+  const openShiftsQuery = useOrgQuery(["coordinator", "open-shifts"], {
+    queryFn: () =>
+      listCoordinatorShifts({
+        start_date: `${format(addDays(new Date(), -14), "yyyy-MM-dd")}T00:00:00Z`,
+        end_date: `${format(addDays(new Date(), 91), "yyyy-MM-dd")}T23:59:59Z`,
+        status: "unassigned",
+        limit: 1000,
+      }),
+    staleTime: 30_000,
+  });
+  const openShifts = (openShiftsQuery.data ?? []).filter(
+    (s) => !s.worker_id || s.worker_id === "00000000-0000-0000-0000-000000000000",
+  );
+
   const overdueUnassignedQuery = useOrgQuery(
     ["coordinator", "overdue-unassigned-shifts"],
     { queryFn: getOverdueUnassignedShifts, refetchInterval: 5 * 60_000 }
@@ -418,6 +438,17 @@ export default function CoordinatorRosteringPage() {
     return () => { cancelled = true; };
   }, []);
 
+  const showShiftOnRoster = (shift: CoordinatorShiftRecord) => {
+    if (!shift.scheduled_start) return;
+    const target = parseISO(shift.scheduled_start);
+    setOpenListOpen(false);
+    setPageTab("roster");
+    setViewMode("roster");
+    setCurrentMonth(target);
+    setWeekStart(startOfWeek(target, { weekStartsOn: 1 }));
+    setSelectedDay(target);
+  };
+
   const handleJumpToOverdueShift = (shift: OverdueUnassignedShift) => {
     setPageTab("roster");
     setViewMode("roster");
@@ -440,7 +471,24 @@ export default function CoordinatorRosteringPage() {
     <div className="min-w-0 space-y-4 pb-12">
       <PageHeader eyebrow="Operations & Care" title={pageTab === "live" ? "Live shifts" : "Roster"} actions={<>
         {pageTab === "roster" ? (
-        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:items-center">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+          <Button
+            onClick={() => setOpenListOpen(true)}
+            variant="outline"
+            aria-label={`Open shifts, ${openShifts.length} without a worker`}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold"
+            style={{ borderColor: BORDER, color: TEXT }}
+          >
+            <CalendarPlus size={14} /> Open shifts
+            {openShifts.length > 0 && (
+              <span
+                className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold"
+                style={{ background: "var(--cc-status-danger-bg)", color: "var(--cc-danger-text)" }}
+              >
+                {openShifts.length}
+              </span>
+            )}
+          </Button>
           <Button
             onClick={() => setTeamPanelOpen(true)}
             variant="outline"
@@ -651,6 +699,10 @@ export default function CoordinatorRosteringPage() {
             setAssignTarget({ worker, date });
             setAssignOpen(true);
           }}
+          onOpenShiftCreate={(date) => {
+            setAssignTarget({ worker: null, date });
+            setAssignOpen(true);
+          }}
           onRefresh={() => shiftsQuery.refetch?.()}
         />
       )}
@@ -708,9 +760,31 @@ export default function CoordinatorRosteringPage() {
         open={assignOpen}
         onOpenChange={(open) => { setAssignOpen(open); if (!open) setAssignTarget(null); }}
         worker={assignTarget ? null : assignWorker}
-        initialWorkerId={assignTarget?.worker.id}
+        initialWorkerId={assignTarget?.worker?.id}
         workers={workers}
         initialDate={assignTarget?.date}
+      />
+
+      {/* -- Every open shift, across weeks ---------------------------------- */}
+      <OpenShiftsPanel
+        open={openListOpen}
+        onOpenChange={setOpenListOpen}
+        shifts={openShifts}
+        loading={openShiftsQuery.isLoading}
+        onShowOnRoster={showShiftOnRoster}
+        onFindWorker={(shift) => { setOpenListOpen(false); setFindWorkerFor(shift); }}
+        onAddOpenShift={() => {
+          setOpenListOpen(false);
+          setAssignTarget({ worker: null, date: format(new Date(), "yyyy-MM-dd") });
+          setAssignOpen(true);
+        }}
+      />
+      <UnassignedShiftPanel
+        shift={findWorkerFor}
+        open={!!findWorkerFor}
+        onOpenChange={(open) => { if (!open) setFindWorkerFor(null); }}
+        workers={workers}
+        onAssigned={() => { shiftsQuery.refetch?.(); openShiftsQuery.refetch?.(); }}
       />
 
       {/* -- Bulk/Recurring shift modal ------------------------------------- */}

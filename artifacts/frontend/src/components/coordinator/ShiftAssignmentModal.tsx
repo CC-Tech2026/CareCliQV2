@@ -500,6 +500,17 @@ export function ShiftAssignmentModal({
       return null;
     }
   })();
+  // Any length, for what the shift takes from the agreed hours.
+  const shiftLengthHours = (() => {
+    if (!scheduledStart || !scheduledEnd) return null;
+    try {
+      const ms = new Date(datetimeLocalValueToUtcIso(scheduledEnd, participantZone)).getTime()
+        - new Date(datetimeLocalValueToUtcIso(scheduledStart, participantZone)).getTime();
+      return ms > 0 ? ms / 3_600_000 : null;
+    } catch {
+      return null;
+    }
+  })();
 
   const selectedWorkerData = workers.find((w) => w.id === selectedWorkerId);
   const workerAlerts = (credAlertsQuery.data?.alerts ?? []).filter(
@@ -659,7 +670,7 @@ export function ShiftAssignmentModal({
             Create shift
           </DialogTitle>
           <DialogDescription className="mt-0.5 text-[13px]">
-            Assign a shift to a support worker
+            Choose a worker now, or leave it open to fill later
           </DialogDescription>
         </div>
 
@@ -902,6 +913,15 @@ export function ShiftAssignmentModal({
                           </span>
                           <AgreementHours line={line} />
                         </button>
+                        {on && line.counted && line.left_hours != null && shiftLengthHours != null && (() => {
+                          const after = line.left_hours - shiftLengthHours;
+                          return (
+                            <p className="mt-1.5 px-1 text-[12px]" style={{ color: after < 0 ? "var(--cc-danger-text)" : MUTED }}>
+                              This shift uses {hoursText(shiftLengthHours)}, leaving{" "}
+                              {after < 0 ? `${hoursText(-after)} over the agreed hours` : `${hoursText(after)} on this support`}.
+                            </p>
+                          );
+                        })()}
                         {on && line.warnings.length > 0 && (
                           <ul className="mt-1.5 space-y-1 rounded-lg px-3 py-2 text-[12px]" style={{ background: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" }}>
                             {line.warnings.map((w) => (
@@ -1099,7 +1119,7 @@ export function ShiftAssignmentModal({
               onClick={() => assignMut.mutate()}
               disabled={!canSubmit}
               className="gap-2 rounded-lg text-white hover:opacity-90"
-              style={{ background: "#E8457A", opacity: canSubmit ? 1 : 0.45 }}
+              style={{ background: "var(--cc-cta)", opacity: canSubmit ? 1 : 0.45 }}
             >
               {assignMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={14} />}
               {assignMut.isPending
