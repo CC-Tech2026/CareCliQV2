@@ -13,7 +13,10 @@
  * Rendered inside RosterBoard's DndContext, so drops go through the board's
  * conflict checks.
  */
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState,
+  type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent,
+} from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { format, parseISO } from "date-fns";
 import { CalendarPlus, Moon, Plus } from "lucide-react";
@@ -44,6 +47,21 @@ const DAY_HEAD_PX = 64;
 const COL_HEAD_PX = 52;
 /** Clicking an empty time picks the half hour under the pointer. */
 const PICK = 30;
+/** Moving or stretching a shift goes in quarter hours. */
+export const SNAP = 15;
+export const CALENDAR_MINUTE_PX = MIN_PX;
+
+export function snapMinutes(minutes: number) {
+  return Math.round(minutes / SNAP) * SNAP;
+}
+
+/** After a drag ends, the browser still sends a click to whatever is under
+ *  the pointer; without this it would open "add a shift" on that column. */
+export function swallowNextClick() {
+  const stop = (e: MouseEvent) => { e.stopPropagation(); e.preventDefault(); };
+  window.addEventListener("click", stop, { capture: true });
+  window.setTimeout(() => window.removeEventListener("click", stop, { capture: true }), 0);
+}
 
 /** Solid block colours, white text on each. */
 const BLOCK_COLORS: Record<string, string> = {
@@ -133,18 +151,59 @@ function minutesOf(shift: CoordinatorShiftRecord) {
 }
 
 function ShiftBlock({
-  block, onSelect, highlighted, dragging,
-}: { block: Placed; onSelect: () => void; highlighted: boolean; /** Any shift is being dragged. */ dragging: boolean }) {
+  block, onSelect, highlighted, dragging, editable, onResize, onResizingChange,
+}: {
+  /** Tells the column a stretch is under way, so it hides its "add a shift" hint. */
+  onResizingChange: (resizing: boolean) => void;
+  block: Placed;
+  onSelect: () => void;
+  highlighted: boolean;
+  /** Any shift is being dragged. */
+  dragging: boolean;
+  /** Its times can still change: moved up or down, or stretched. */
+  editable: boolean;
+  /** The new end, in minutes from midnight (1440 is midnight after). */
+  onResize: (endMinute: number) => void;
+}) {
   const { shift } = block;
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: shift.id, data: { shift } });
+  const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({ id: shift.id, data: { shift } });
+  const [resizeEnd, setResizeEnd] = useState<number | null>(null);
   const open = isOpenShift(shift);
   const live = shiftLiveStatus(shift);
   const color = BLOCK_COLORS[open ? "unassigned" : shift.status ?? "scheduled"] ?? BLOCK_COLORS.scheduled;
-  const height = (block.end - block.start) * MIN_PX;
-  const times = `${clock(block.start)} – ${clock(block.end % DAY)}`;
+  const end = resizeEnd ?? block.end;
+  // Up or down moves it in quarter hours, within the day. A shift whose times
+  // can't change only moves sideways (to another worker).
+  const shiftBy = editable && transform
+    ? Math.max(-block.start, Math.min(DAY - end, snapMinutes(transform.y / MIN_PX)))
+    : 0;
+  const height = (end - block.start) * MIN_PX;
+  const times = `${clock(block.start + shiftBy)} – ${clock((end + shiftBy) % DAY)}`;
+
+  const startResize = (e: ReactPointerEvent<HTMLSpanElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const originY = e.clientY;
+    let latest = block.end;
+    onResizingChange(true);
+    const move = (ev: PointerEvent) => {
+      latest = Math.min(DAY, Math.max(block.start + SNAP, block.end + snapMinutes((ev.clientY - originY) / MIN_PX)));
+      setResizeEnd(latest);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      swallowNextClick();
+      setResizeEnd(null);
+      onResizingChange(false);
+      if (latest !== block.end) onResize(latest);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
   const detail = open ? "Needs a worker" : shift.is_sleepover ? "Sleepover" : humanise(shift.duty_type || shift.shift_type);
   return (
-    <ShiftHoverCard shift={shift} disabled={dragging}>
+    <ShiftHoverCard shift={shift} disabled={dragging || resizeEnd != null}>
       <div
         ref={setNodeRef}
         {...listeners}
@@ -152,14 +211,17 @@ function ShiftBlock({
         onClick={(e) => { e.stopPropagation(); onSelect(); }}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSelect(); } else listeners?.onKeyDown?.(e); }}
         aria-label={`${shift.participant_name || "Participant"}, ${open ? "open shift" : shift.worker_name || "worker"}, ${times}`}
-        className={`absolute z-[2] cursor-grab select-none overflow-hidden rounded-md px-2 py-1.5 text-white shadow-sm transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum ${highlighted ? "outline-dashed outline-2 outline-offset-2 outline-[#E8457A]" : ""}`}
+        className={`group/block absolute cursor-grab select-none overflow-hidden rounded-md px-2 py-1.5 text-white shadow-sm transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum ${highlighted ? "outline-dashed outline-2 outline-offset-2 outline-[#E8457A]" : ""}`}
         style={{
           top: block.start * MIN_PX + 1,
           height: Math.max(22, height - 2),
           left: `calc(${(block.lane / block.lanes) * 100}% + 3px)`,
           width: `calc(${100 / block.lanes}% - 6px)`,
           background: color,
-          opacity: isDragging ? 0.35 : live === "cancelled" ? 0.6 : 1,
+          opacity: live === "cancelled" ? 0.6 : 1,
+          transform: transform ? `translate3d(${transform.x}px, ${shiftBy * MIN_PX}px, 0)` : undefined,
+          zIndex: isDragging || resizeEnd != null ? 25 : 2,
+          boxShadow: isDragging || resizeEnd != null ? "0 10px 24px rgba(26,26,46,0.28)" : undefined,
         }}
       >
         <span className="block truncate text-[12px] font-bold leading-tight" style={{ textDecoration: live === "cancelled" ? "line-through" : undefined }}>
@@ -170,6 +232,22 @@ function ShiftBlock({
           <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] leading-snug opacity-90">
             {shift.is_sleepover && <Moon size={11} className="shrink-0" />}
             {detail}
+          </span>
+        )}
+        {resizeEnd != null && (
+          <span className="absolute bottom-3.5 left-2 rounded bg-white/90 px-1.5 text-[11px] font-semibold tabular-nums" style={{ color }}>
+            Ends {clock(resizeEnd % DAY)}
+          </span>
+        )}
+        {editable && (
+          <span
+            role="presentation"
+            title="Drag to change when it ends"
+            onPointerDown={startResize}
+            onClick={(e) => e.stopPropagation()}
+            className="absolute inset-x-0 bottom-0 flex h-2.5 cursor-ns-resize items-center justify-center opacity-0 transition-opacity group-hover/block:opacity-100"
+          >
+            <span className="h-0.5 w-6 rounded-full bg-white/80" />
           </span>
         )}
       </div>
@@ -193,9 +271,11 @@ interface ColumnSpec {
 }
 
 function CalendarColumn({
-  column, nowMin, canCreate, dropDisabled, fit, landing, newShiftId, onCreate, onSelect, dragging,
+  column, nowMin, canCreate, dropDisabled, fit, landing, own = false, newShiftId, onCreate, onSelect, dragging, canEditTimes, onResize,
 }: {
   dragging: boolean;
+  canEditTimes: (shift: CoordinatorShiftRecord) => boolean;
+  onResize: (shift: CoordinatorShiftRecord, endMinute: number) => void;
   column: ColumnSpec;
   nowMin: number | null;
   canCreate: boolean;
@@ -203,6 +283,8 @@ function CalendarColumn({
   fit?: Fit;
   /** While dragging over this column: where the shift would sit. */
   landing?: { start: number; end: number } | null;
+  /** The dragged shift is already in this column (moving it up or down). */
+  own?: boolean;
   newShiftId?: string | null;
   onCreate: (time: string) => void;
   onSelect: (shift: CoordinatorShiftRecord) => void;
@@ -213,6 +295,7 @@ function CalendarColumn({
     disabled: dropDisabled,
   });
   const [hover, setHover] = useState<number | null>(null);
+  const [resizing, setResizing] = useState(false);
 
   const minuteAt = (e: ReactMouseEvent<HTMLDivElement>) => {
     const top = e.currentTarget.getBoundingClientRect().top;
@@ -220,7 +303,8 @@ function CalendarColumn({
   };
   const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 
-  const over = isOver && !dropDisabled;
+  // Moving a shift up or down its own column doesn't light the column up.
+  const over = isOver && !dropDisabled && !own;
   return (
     <div
       ref={setNodeRef}
@@ -258,7 +342,7 @@ function CalendarColumn({
       {nowMin != null && (
         <span aria-hidden className="pointer-events-none absolute inset-x-0 z-[3] h-0.5" style={{ top: nowMin * MIN_PX, background: "#7C3AED" }} />
       )}
-      {hover != null && (
+      {hover != null && !resizing && (
         <span
           aria-hidden
           className="pointer-events-none absolute inset-x-1 z-[1] flex items-center gap-1 overflow-hidden whitespace-nowrap rounded-md border border-dashed px-1.5 text-[11px] font-semibold"
@@ -281,7 +365,16 @@ function CalendarColumn({
         />
       )}
       {column.blocks.map((block) => (
-        <ShiftBlock key={block.shift.id} block={block} onSelect={() => onSelect(block.shift)} highlighted={newShiftId === block.shift.id} dragging={dragging} />
+        <ShiftBlock
+          key={block.shift.id}
+          block={block}
+          onSelect={() => onSelect(block.shift)}
+          highlighted={newShiftId === block.shift.id}
+          dragging={dragging}
+          editable={canEditTimes(block.shift)}
+          onResize={(endMinute) => onResize(block.shift, endMinute)}
+          onResizingChange={setResizing}
+        />
       ))}
     </div>
   );
@@ -289,7 +382,12 @@ function CalendarColumn({
 
 export function RosterCalendar({
   dayKeys, workers, shifts, availMap, allowCreate, newShiftId, activeShift, fits, onCreateAt, onSelect, onOpenDay,
+  canEditTimes, onResize,
 }: {
+  /** Whether a shift's times can still change (it hasn't started, isn't done or cancelled). */
+  canEditTimes: (shift: CoordinatorShiftRecord) => boolean;
+  /** Its bottom edge was dragged: the shift's day and the new end in minutes (1440 = midnight after). */
+  onResize: (shift: CoordinatorShiftRecord, dayKey: string, endMinute: number) => void;
   /** yyyy-MM-dd for each day on screen: one, seven or fourteen. */
   dayKeys: string[];
   workers: WorkerStats[];
@@ -511,13 +609,16 @@ export function RosterCalendar({
                   column={c}
                   nowMin={dayKey === todayKey ? nowMin : null}
                   canCreate={allowCreate && dayKey >= todayKey && activeShift == null}
-                  // A shift moves between workers on its own day. The open column
-                  // only takes a shift that has a worker (to take them off).
-                  dropDisabled={otherDay || (c.kind === "open" && (activeShift == null || isOpenShift(activeShift)))}
+                  // A shift moves between workers on its own day, or up and down
+                  // its own column.
+                  dropDisabled={otherDay}
                   fit={c.kind === "worker" && !otherDay ? fits.get(c.id) : undefined}
                   landing={c.kind === "worker" && c.id !== activeShift?.worker_id ? landing : null}
+                  own={activeShift != null && (c.kind === "open" ? isOpenShift(activeShift) : activeShift.worker_id === c.id)}
                   newShiftId={newShiftId}
                   dragging={activeShift != null}
+                  canEditTimes={canEditTimes}
+                  onResize={(shift, endMinute) => onResize(shift, dayKey, endMinute)}
                   onCreate={(time) => onCreateAt(c.kind === "open" ? null : c.worker!, dayKey, time)}
                   onSelect={onSelect}
                 />
