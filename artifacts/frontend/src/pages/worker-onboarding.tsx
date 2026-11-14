@@ -421,7 +421,9 @@ export default function WorkerOnboarding() {
         }
       />
 
-      <div className="grid items-start gap-5 lg:grid-cols-[248px_minmax(0,1fr)] lg:gap-8">
+      {/* minmax(0,1fr) on phones: keeps the column to the screen's width, so the
+          step row scrolls sideways inside it instead of widening the page. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-[248px_minmax(0,1fr)] lg:gap-8">
         <StepNav current={current} states={states} onSelect={goTo} />
 
         <section aria-labelledby="onboarding-step-title" className="min-w-0 max-w-3xl">
