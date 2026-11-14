@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Mail, Phone, UserRound } from "lucide-react";
+import { AlertTriangle, Check, Mail, Phone } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { getMyBuddy, getMyPipeline } from "@/services/inductionService";
 
@@ -63,21 +63,18 @@ export function MyOnboardingProgress() {
 
       {buddy?.full_name && (
         <div className="flex items-center gap-3 rounded-xl border p-4" style={{ borderColor: BORDER }}>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cc-soft)" }}>
-            <UserRound size={18} style={{ color: PLUM }} />
-          </div>
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: MUTED }}>Your buddy</p>
             <p className="text-sm font-black" style={{ color: "#1A1A2E" }}>{buddy.full_name}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {buddy.email && (
-              <a href={`mailto:${buddy.email}`} className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "var(--cc-soft)", color: PLUM }}>
+              <a href={`mailto:${buddy.email}`} aria-label={`Email ${buddy.full_name}`} className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "var(--cc-soft)", color: PLUM }}>
                 <Mail size={14} />
               </a>
             )}
             {buddy.phone && (
-              <a href={`tel:${buddy.phone.replace(/\s/g, "")}`} className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "var(--cc-soft)", color: PLUM }}>
+              <a href={`tel:${buddy.phone.replace(/\s/g, "")}`} aria-label={`Call ${buddy.full_name}`} className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "var(--cc-soft)", color: PLUM }}>
                 <Phone size={14} />
               </a>
             )}
