@@ -450,7 +450,8 @@ export function RosterCalendar({
               : usual.start != null && usual.end != null
                 ? [{ start: 0, end: usual.start }, { start: usual.end, end: DAY }]
                 : [],
-            dayNote: wholeDay ? { text: oneDay ? usual.text : usual.state === "leave" ? "Leave" : "Off", leave: usual.state === "leave" } : undefined,
+            // A day off already says "Off" under their name; leave keeps its dark tag.
+            dayNote: usual.state === "leave" ? { text: oneDay ? usual.text : "Leave", leave: true } : undefined,
           };
         });
         return { dayKey, columns: [open, ...people] };
