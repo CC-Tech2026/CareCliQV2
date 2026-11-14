@@ -27,6 +27,7 @@ import {
 import {
   assignExistingShift,
   getWorkerConflicts,
+  rescheduleShift,
   unassignShift,
   type CoordinatorShiftRecord,
   type WorkerStats,
@@ -48,12 +49,14 @@ import {
   OPEN_ROW_ID,
   UNASSIGNED_PLACEHOLDER_ID,
   dayAvailability,
+  isOpenShift,
   workerFit,
   type AvailabilityMap,
   type Fit,
 } from "./rosterShared";
-import { CALENDAR_LEGEND, RosterCalendar } from "./RosterCalendar";
-import { appLocalDateKey, formatAppTime } from "@/lib/datetime";
+import { CALENDAR_LEGEND, CALENDAR_MINUTE_PX, RosterCalendar, snapMinutes, swallowNextClick } from "./RosterCalendar";
+import { appLocalDateKey, appMinutesOfDay, datetimeLocalValueToUtcIso, formatAppTime } from "@/lib/datetime";
+import { clock } from "./rosterShared";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -460,16 +463,79 @@ export function RosterBoard({
     },
   });
 
+  /** Times can change until the shift starts, and not once it's done or cancelled. */
+  const canEditTimes = useCallback((shift: CoordinatorShiftRecord) => {
+    if (!allowCreate) return false;
+    if (!["scheduled", "unassigned", "offered"].includes(shift.status ?? "scheduled")) return false;
+    return !!shift.scheduled_start && new Date(shift.scheduled_start).getTime() > Date.now();
+  }, [allowCreate]);
+
+  // Moves or stretches a shift. A clash for its worker (another shift then,
+  // leave) stops it; softer warnings (overtime, outside their hours) go
+  // through and are said in the confirmation.
+  const retimeShift = useCallback(async (shift: CoordinatorShiftRecord, start: string, end: string) => {
+    const label = `${clock(appMinutesOfDay(start, shift.timezone))} to ${clock(appMinutesOfDay(end, shift.timezone))}`;
+    let warning: string | undefined;
+    try {
+      if (!isOpenShift(shift)) {
+        const check = await getWorkerConflicts(shift.worker_id!, start, end, { participantId: shift.participant_id, excludeShiftId: shift.id });
+        const hard = check.conflicts.find((c) => c.severity === "error");
+        if (hard) {
+          toast({ title: "Couldn't change the time", description: hard.message, variant: "destructive" });
+          return;
+        }
+        warning = [...check.conflicts, ...check.skill_warnings][0]?.message;
+      }
+      await rescheduleShift(shift.id, { scheduled_start: start, scheduled_end: end });
+      qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
+      toast({
+        title: `${shift.participant_name ?? "Shift"} now ${label}`,
+        description: warning ?? (isOpenShift(shift) ? undefined : `${shift.worker_name ?? "The worker"} has been told.`),
+      });
+      onRefresh();
+    } catch (err) {
+      toast({ title: "Couldn't change the time", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+    }
+  }, [qc, orgId, toast, onRefresh]);
+
+  const moveShiftBy = useCallback((shift: CoordinatorShiftRecord, minutes: number) => {
+    if (!shift.scheduled_start || !shift.scheduled_end) return;
+    const ms = minutes * 60_000;
+    void retimeShift(
+      shift,
+      new Date(new Date(shift.scheduled_start).getTime() + ms).toISOString(),
+      new Date(new Date(shift.scheduled_end).getTime() + ms).toISOString(),
+    );
+  }, [retimeShift]);
+
+  const resizeShift = useCallback((shift: CoordinatorShiftRecord, dayKey: string, endMinute: number) => {
+    if (!shift.scheduled_start) return;
+    const endDay = endMinute >= 24 * 60 ? format(addDays(parseISO(dayKey), 1), "yyyy-MM-dd") : dayKey;
+    const m = endMinute % (24 * 60);
+    const hhmm = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+    void retimeShift(shift, shift.scheduled_start, datetimeLocalValueToUtcIso(`${endDay}T${hhmm}`, shift.timezone));
+  }, [retimeShift]);
+
   const handleDragStart = useCallback(({ active }: DragStartEvent) => {
     const shift = active.data.current?.shift as CoordinatorShiftRecord | undefined;
     if (shift) setActiveShift(shift);
   }, []);
 
-  const handleDragEnd = useCallback(async ({ active, over }: DragEndEvent) => {
+  const handleDragEnd = useCallback(async ({ active, over, delta }: DragEndEvent) => {
     setActiveShift(null);
+    if (calendar) swallowNextClick();
     if (!over || !active.data.current?.shift) return;
     const shift = active.data.current.shift as CoordinatorShiftRecord;
     const { workerId } = over.data.current as { workerId: string; dayIso: string };
+    // Calendar: dropped back in its own column, up or down is a new time.
+    if (calendar) {
+      const ownColumn = workerId === OPEN_ROW_ID ? isOpenShift(shift) : shift.worker_id === workerId;
+      if (ownColumn) {
+        const minutes = snapMinutes(delta.y / CALENDAR_MINUTE_PX);
+        if (minutes !== 0 && canEditTimes(shift)) moveShiftBy(shift, minutes);
+        return;
+      }
+    }
     if (workerId === OPEN_ROW_ID) {
       if (shift.worker_id && shift.worker_id !== UNASSIGNED_PLACEHOLDER_ID) handleUnassignClick(shift);
       return;
@@ -501,7 +567,7 @@ export function RosterBoard({
       assignMut.mutate({ shiftId: shift.id, workerId, confirm: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workers, assignMut, translate]);
+  }, [workers, assignMut, translate, calendar, canEditTimes, moveShiftBy]);
 
   function handleUnassignClick(shift: CoordinatorShiftRecord) {
     const worker = workers.find((w) => w.id === shift.worker_id);
@@ -597,6 +663,8 @@ export function RosterBoard({
             fits={fits}
             onCreateAt={(worker, date, time) => onCreateAt?.(worker, date, time)}
             onSelect={setDetailShift}
+            canEditTimes={canEditTimes}
+            onResize={resizeShift}
           />
         ) : (
         /* Worker × day grid */
@@ -880,7 +948,8 @@ export function RosterBoard({
         )}
 
         <DragOverlay dropAnimation={null}>
-          {activeShift ? <ShiftDragClone shift={activeShift} /> : null}
+          {/* In the calendar the block itself moves. */}
+          {activeShift && !calendar ? <ShiftDragClone shift={activeShift} /> : null}
         </DragOverlay>
       </DndContext>
 
