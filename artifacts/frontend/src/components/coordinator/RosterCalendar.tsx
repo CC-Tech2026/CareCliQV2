@@ -606,18 +606,20 @@ export function RosterCalendar({
           <Fragment key={dayKey}>
             {dayColumns.map((c) => {
               const otherDay = draggingDay != null && draggingDay !== dayKey;
+              // The dragged shift's own column: the same worker, or open shifts.
+              const sameColumn = activeShift != null && (c.kind === "open" ? isOpenShift(activeShift) : activeShift.worker_id === c.id);
               return (
                 <CalendarColumn
                   key={`${c.id}|${dayKey}`}
                   column={c}
                   nowMin={dayKey === todayKey ? nowMin : null}
                   canCreate={allowCreate && dayKey >= todayKey && activeShift == null}
-                  // A shift moves between workers on its own day, or up and down
-                  // its own column.
-                  dropDisabled={otherDay}
+                  // On its own day a shift moves to another worker or up and down;
+                  // to another day it moves in its own column (from today on).
+                  dropDisabled={otherDay && !(sameColumn && dayKey >= todayKey && canEditTimes(activeShift!))}
                   fit={c.kind === "worker" && !otherDay ? fits.get(c.id) : undefined}
                   landing={c.kind === "worker" && c.id !== activeShift?.worker_id ? landing : null}
-                  own={activeShift != null && (c.kind === "open" ? isOpenShift(activeShift) : activeShift.worker_id === c.id)}
+                  own={sameColumn && !otherDay}
                   newShiftId={newShiftId}
                   dragging={activeShift != null}
                   canEditTimes={canEditTimes}

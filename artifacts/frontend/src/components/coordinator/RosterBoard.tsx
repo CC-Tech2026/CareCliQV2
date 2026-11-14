@@ -474,7 +474,9 @@ export function RosterBoard({
   // leave) stops it; softer warnings (overtime, outside their hours) go
   // through and are said in the confirmation.
   const retimeShift = useCallback(async (shift: CoordinatorShiftRecord, start: string, end: string) => {
-    const label = `${clock(appMinutesOfDay(start, shift.timezone))} to ${clock(appMinutesOfDay(end, shift.timezone))}`;
+    const newDay = appLocalDateKey(start, shift.timezone);
+    const movedDay = !!shift.scheduled_start && newDay !== appLocalDateKey(shift.scheduled_start, shift.timezone);
+    const label = `${movedDay ? `${format(parseISO(newDay), "EEE d MMM")}, ` : ""}${clock(appMinutesOfDay(start, shift.timezone))} to ${clock(appMinutesOfDay(end, shift.timezone))}`;
     let warning: string | undefined;
     try {
       if (!isOpenShift(shift)) {
@@ -498,15 +500,20 @@ export function RosterBoard({
     }
   }, [qc, orgId, toast, onRefresh]);
 
-  const moveShiftBy = useCallback((shift: CoordinatorShiftRecord, minutes: number) => {
+  // Moves a shift to a day and start time (minutes from midnight), keeping its
+  // length. Worked out on the participant's clock, so a move across a daylight
+  // saving change still starts at the time it was dropped on.
+  const moveShiftTo = useCallback((shift: CoordinatorShiftRecord, dayKey: string, startMinute: number) => {
     if (!shift.scheduled_start || !shift.scheduled_end) return;
-    const ms = minutes * 60_000;
-    void retimeShift(
-      shift,
-      new Date(new Date(shift.scheduled_start).getTime() + ms).toISOString(),
-      new Date(new Date(shift.scheduled_end).getTime() + ms).toISOString(),
-    );
-  }, [retimeShift]);
+    const length = new Date(shift.scheduled_end).getTime() - new Date(shift.scheduled_start).getTime();
+    const hhmm = `${String(Math.floor(startMinute / 60)).padStart(2, "0")}:${String(startMinute % 60).padStart(2, "0")}`;
+    const start = datetimeLocalValueToUtcIso(`${dayKey}T${hhmm}`, shift.timezone);
+    if (new Date(start).getTime() <= Date.now()) {
+      toast({ title: "Couldn't move the shift", description: "That time has already passed.", variant: "destructive" });
+      return;
+    }
+    void retimeShift(shift, start, new Date(new Date(start).getTime() + length).toISOString());
+  }, [retimeShift, toast]);
 
   const resizeShift = useCallback((shift: CoordinatorShiftRecord, dayKey: string, endMinute: number) => {
     if (!shift.scheduled_start) return;
@@ -526,15 +533,21 @@ export function RosterBoard({
     if (calendar) swallowNextClick();
     if (!over || !active.data.current?.shift) return;
     const shift = active.data.current.shift as CoordinatorShiftRecord;
-    const { workerId } = over.data.current as { workerId: string; dayIso: string };
-    // Calendar: dropped back in its own column, up or down is a new time.
-    if (calendar) {
+    const { workerId, dayIso } = over.data.current as { workerId: string; dayIso: string };
+    // Calendar: dropped in its own column (the same worker, or open shifts),
+    // on its own day or another, is a new time. Up or down changes the time.
+    if (calendar && shift.scheduled_start && shift.scheduled_end) {
       const ownColumn = workerId === OPEN_ROW_ID ? isOpenShift(shift) : shift.worker_id === workerId;
+      const fromDay = appLocalDateKey(shift.scheduled_start, shift.timezone);
       if (ownColumn) {
-        const minutes = snapMinutes(delta.y / CALENDAR_MINUTE_PX);
-        if (minutes !== 0 && canEditTimes(shift)) moveShiftBy(shift, minutes);
+        const length = (new Date(shift.scheduled_end).getTime() - new Date(shift.scheduled_start).getTime()) / 60_000;
+        const from = appMinutesOfDay(shift.scheduled_start, shift.timezone);
+        const to = Math.max(0, Math.min(24 * 60 - Math.min(length, 24 * 60), from + snapMinutes(delta.y / CALENDAR_MINUTE_PX)));
+        if ((to !== from || dayIso !== fromDay) && canEditTimes(shift)) moveShiftTo(shift, dayIso, to);
         return;
       }
+      // Another worker takes it only on its own day.
+      if (dayIso !== fromDay) return;
     }
     if (workerId === OPEN_ROW_ID) {
       if (shift.worker_id && shift.worker_id !== UNASSIGNED_PLACEHOLDER_ID) handleUnassignClick(shift);
@@ -567,7 +580,7 @@ export function RosterBoard({
       assignMut.mutate({ shiftId: shift.id, workerId, confirm: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workers, assignMut, translate, calendar, canEditTimes, moveShiftBy]);
+  }, [workers, assignMut, translate, calendar, canEditTimes, moveShiftTo]);
 
   function handleUnassignClick(shift: CoordinatorShiftRecord) {
     const worker = workers.find((w) => w.id === shift.worker_id);
