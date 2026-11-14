@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
-import { Eye, EyeOff, Heart, Plus, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -69,10 +69,7 @@ export function MyInterestsCard() {
   return (
     <div className="space-y-4 rounded-2xl border border-[#E8E8EA] bg-white p-5">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[#1A1A2E]">
-          <Heart className="h-5 w-5 text-[#E8457A]" />
-          <h2 className="font-black">My skills & interests</h2>
-        </div>
+        <h2 className="font-black text-[#1A1A2E]">My skills & interests</h2>
       </div>
 
       <p className="text-xs leading-relaxed" style={{ color: MUTED }}>
@@ -135,7 +132,7 @@ export function MyInterestsCard() {
           className="h-10 shrink-0 gap-2 rounded-xl"
           style={{ background: "var(--cc-cta)" }}
         >
-          <Plus className="h-4 w-4" /> Add
+          Add
         </Button>
       </div>
 
@@ -159,7 +156,6 @@ export function MyInterestsCard() {
                 className="h-8 gap-1.5 rounded-lg px-2.5 text-[11px] font-bold"
                 style={{ color: tag.visible_to_coordinator_only ? PLUM : MUTED }}
               >
-                {tag.visible_to_coordinator_only ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 {tag.visible_to_coordinator_only ? "Private to coordinators" : "Visible"}
               </Button>
               <Button
@@ -167,6 +163,7 @@ export function MyInterestsCard() {
                 variant="ghost"
                 size="sm"
                 onClick={() => removeMutation.mutate(tag.tag_id)}
+                aria-label={`Remove ${tag.label}`}
                 className="h-8 gap-1 rounded-lg px-2 text-[#7C3AED]"
               >
                 <Trash2 className="h-3.5 w-3.5" />

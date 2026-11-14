@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Camera, Loader2, Trash2, Upload } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -112,12 +112,11 @@ export function ProfilePhotoUpload({ currentUrl, cropCircle = false }: Props) {
             disabled={busy}
             className="gap-2 rounded-xl"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : preview ? <Camera className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             {preview ? translate("profile.photo.replace") : translate("profile.photo.upload")}
           </Button>
           {preview && (
             <Button type="button" variant="ghost" onClick={removePhoto} disabled={busy} className="gap-2 rounded-xl text-[#7C3AED]">
-              <Trash2 className="h-4 w-4" />
               {translate("profile.photo.remove")}
             </Button>
           )}

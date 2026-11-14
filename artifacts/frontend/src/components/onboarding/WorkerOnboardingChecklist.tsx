@@ -1,4 +1,3 @@
-import { CheckCircle2, Circle } from "lucide-react";
 import type { ChecklistItem } from "@/services/onboardingService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -28,23 +27,28 @@ export function WorkerOnboardingChecklist({
   const { translate } = useAccessibility();
 
   return (
-    <div className="divide-y divide-[#EDE3FC] rounded-2xl border border-[#E8E8EA] bg-white">
-      {items.map((item) => (
-        <label key={item.key} className="flex cursor-pointer items-center gap-3 px-4 py-3 transition hover:bg-[#F8F6FE]">
-          <input
-            type="checkbox"
-            className="sr-only"
-            checked={item.completed}
-            onChange={(event) => onToggle(item.key, event.target.checked)}
-          />
-          {item.completed ? (
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-          ) : (
-            <Circle className="h-5 w-5 text-[#6A6A77]" />
-          )}
-          <span className="text-sm font-bold text-[#1A1A2E]">{checklistLabel(item, translate)}</span>
-        </label>
-      ))}
-    </div>
+    <fieldset className="min-w-0 overflow-hidden rounded-xl border border-cc-border bg-cc-surface">
+      <legend className="sr-only">Onboarding checklist</legend>
+      {items.map((item) => {
+        const label = checklistLabel(item, translate);
+        return (
+          <label
+            key={item.key}
+            className="flex min-h-14 cursor-pointer items-center gap-3 border-b border-cc-border px-4 py-3 transition-colors last:border-b-0 hover:bg-cc-soft focus-within:bg-cc-soft"
+          >
+            <input
+              type="checkbox"
+              checked={item.completed}
+              aria-label={label}
+              onChange={(event) => onToggle(item.key, event.target.checked)}
+              className="h-5 w-5 shrink-0 cursor-pointer rounded accent-[#7C3AED] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7C3AED]"
+            />
+            <span className={`min-w-0 flex-1 break-words text-sm leading-snug ${item.completed ? "text-cc-muted line-through" : "font-medium text-cc-text"}`}>
+              {label}
+            </span>
+          </label>
+        );
+      })}
+    </fieldset>
   );
 }

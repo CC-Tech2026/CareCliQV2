@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
-import { AlertCircle, BadgeCheck, ChevronDown, ExternalLink, FileUp, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertCircle, ChevronDown, ExternalLink, FileUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -124,7 +124,6 @@ function CredentialRow({
             clicking it always 403'd. */}
         {!credential.verified_at && (
           <Button variant="ghost" size="sm" className="gap-1 text-[#7C3AED]" onClick={() => onDelete(credential)}>
-            <Trash2 className="h-3.5 w-3.5" />
             {translate("credentials.delete")}
           </Button>
         )}
@@ -238,14 +237,11 @@ export function MyCredentialsCard() {
   return (
     <div className="space-y-4 rounded-2xl border border-[#E8E8EA] bg-white p-5">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[#1A1A2E]">
-          <BadgeCheck className="h-5 w-5 text-[#E8457A]" />
-          <h2 className="font-black">{translate("credentials.title")}</h2>
-        </div>
+        <h2 className="font-black text-[#1A1A2E]">{translate("credentials.title")}</h2>
         {!isLoading && data.length > 0 && (
           allGood ? (
             <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-black" style={{ background: "var(--cc-status-success-bg)", color: "var(--cc-status-success)" }}>
-              <ShieldCheck className="h-3 w-3" /> All up to date
+              All up to date
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-black" style={{ background: "var(--cc-status-warning-bg)", color: "var(--cc-status-warning)" }}>
@@ -272,7 +268,7 @@ export function MyCredentialsCard() {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <p className="text-sm font-black" style={{ color: "#1A1A2E" }}>{meta.label}</p>
                   <Button size="sm" variant="ghost" className="h-7 gap-1 rounded-lg px-2.5 text-xs font-bold text-[#E8457A]" onClick={() => startAdding(meta.type)}>
-                    <Plus className="h-3.5 w-3.5" /> Add
+                    Add
                   </Button>
                 </div>
                 <p className="mt-1 text-xs leading-relaxed" style={{ color: MUTED }}>{meta.guidance}</p>
@@ -299,8 +295,8 @@ export function MyCredentialsCard() {
           className="flex w-full items-center justify-between gap-2 p-4 text-left"
         >
           <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>
-            {addOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
             {translate("credentials.add")}
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${addOpen ? "" : "-rotate-90"}`} aria-hidden />
           </span>
         </button>
         {addOpen && (
@@ -375,7 +371,7 @@ export function MyCredentialsCard() {
         </div>
         <div className="mt-3 flex justify-end">
           <Button disabled={createMutation.isPending} className="gap-2 rounded-xl" style={{ background: "var(--cc-cta)" }}>
-            {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BadgeCheck className="h-4 w-4" />}
+            {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             {translate("credentials.save")}
           </Button>
         </div>
