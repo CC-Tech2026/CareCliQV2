@@ -872,6 +872,8 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
         xero_service.invoice_status_changed({**existing, **updated}, existing.get("status"))
         # Or to MYOB, when that's the organisation's accounting system.
         myob_service.invoice_status_changed({**existing, **updated}, existing.get("status"))
+        # And, when the organisation has it on, straight to the plan manager.
+        updated = await _auto_email_plan_manager({**existing, **updated}, existing.get("status"), user)
     else:
         await audit_service.log_action(
             action_type="invoice.updated",
@@ -935,6 +937,7 @@ async def send_invoice(
     to_email: str | None = None,
     note: str | None = None,
     reminder: bool = False,
+    automatic: bool = False,
 ) -> dict:
     """Email an approved invoice, with its PDF, to the plan manager or
     participant who pays it, and record it as sent. A reminder re-sends a
@@ -1031,17 +1034,113 @@ async def send_invoice(
         )
 
     updated = {**invoice, **with_pdf, "recipient_email": email}
+    if invoice.get("auto_email_error"):
+        supabase.table("invoices").update({"auto_email_error": None}).eq("id", invoice_id).eq(
+            "organization_id", org_id
+        ).execute()
+        updated["auto_email_error"] = None
     if status_now in {"finalized", "issued"}:
-        updated = await update_invoice(invoice_id, user, {"status": "sent"})
+        updated = {**await update_invoice(invoice_id, user, {"status": "sent"}), "auto_email_error": None}
     await audit_service.log_action(
         action_type="invoice.reminder_sent" if reminder else "invoice.emailed",
         entity_type="invoice",
         entity_id=invoice_id,
         user_id=get_user_id(user),
         organization_id=org_id,
-        after_state={"to": email, "days_overdue": days_overdue if reminder else None},
+        after_state={
+            "to": email,
+            "days_overdue": days_overdue if reminder else None,
+            "automatic": automatic,
+        },
     )
     return _with_signed_pdf_url(updated)
+
+
+# ── Plan manager invoices go out on approval (migration 258) ─────────────────
+
+def plan_manager_auto_email_enabled(org_id: str) -> bool:
+    """Whether approving a plan-managed invoice emails it to the plan
+    manager straight away. Off when the setting (or its column) isn't there."""
+    try:
+        rows = (
+            get_supabase_admin().table("organizations").select("auto_email_plan_managers")
+            .eq("organization_id", org_id).limit(1).execute().data
+            or []
+        )
+    except Exception:
+        return False
+    # Strictly true: anything else (null, a missing column) keeps it off, so
+    # nothing reaches a plan manager without the setting really being on.
+    return bool(rows) and isinstance(rows[0], dict) and rows[0].get("auto_email_plan_managers") is True
+
+
+async def get_plan_manager_auto_email(user: dict) -> dict:
+    _require_billing_role(user)
+    return {"enabled": plan_manager_auto_email_enabled(_require_org(user))}
+
+
+async def set_plan_manager_auto_email(user: dict, enabled: bool) -> dict:
+    _require_billing_role(user)
+    org_id = _require_org(user)
+    before = plan_manager_auto_email_enabled(org_id)
+    try:
+        get_supabase_admin().table("organizations").update({"auto_email_plan_managers": bool(enabled)}).eq(
+            "organization_id", org_id
+        ).execute()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail="This setting needs database migration 258. Apply it first."
+        ) from exc
+    await audit_service.log_action(
+        action_type="organization.plan_manager_auto_email_updated",
+        entity_type="organization",
+        entity_id=org_id,
+        user_id=get_user_id(user),
+        organization_id=org_id,
+        before_state={"enabled": before},
+        after_state={"enabled": bool(enabled)},
+    )
+    return {"enabled": bool(enabled)}
+
+
+def _note_auto_email_error(invoice_id: str, org_id: str, message: str) -> None:
+    try:
+        get_supabase_admin().table("invoices").update({"auto_email_error": message[:500]}).eq(
+            "id", invoice_id
+        ).eq("organization_id", org_id).execute()
+    except Exception:
+        logger.warning("Couldn't record the automatic email problem on invoice %s", invoice_id, exc_info=True)
+
+
+async def _auto_email_plan_manager(invoice: dict, previous_status: str | None, user: dict) -> dict:
+    """Right after a plan-managed invoice is approved, email it to the plan
+    manager, when the organisation has that on. Never undoes the approval:
+    if it can't go (no address, email not set up, the send failed), the
+    reason is kept on the invoice, which stays approved and waiting to be
+    emailed by hand. Returns the invoice as it now stands."""
+    if (previous_status or "draft") != "draft" or invoice.get("status") not in {"finalized", "issued"}:
+        return invoice
+    org_id = str(invoice.get("organization_id") or "")
+    invoice_id = str(invoice.get("id") or "")
+    if not org_id or not invoice_id or not plan_manager_auto_email_enabled(org_id):
+        return invoice
+    enriched = (await _enrich_with_service_category(get_supabase_admin(), [dict(invoice)]))[0]
+    if enriched.get("plan_management_type") != "plan-managed":
+        return invoice
+
+    message: str
+    if "@" not in str(invoice.get("recipient_email") or ""):
+        message = "There's no plan manager email on this invoice, so it wasn't emailed. Add their address and press Email."
+    else:
+        try:
+            return await send_invoice(invoice_id, user, automatic=True)
+        except HTTPException as exc:
+            message = f"It wasn't emailed to the plan manager on its own: {exc.detail}"
+        except Exception:
+            logger.exception("Automatic plan manager email for invoice %s failed", invoice_id)
+            message = "It wasn't emailed to the plan manager on its own. Press Email to send it."
+    _note_auto_email_error(invoice_id, org_id, message)
+    return {**invoice, "auto_email_error": message}
 
 
 async def cancel_invoice(invoice_id: str, user: dict) -> dict:

@@ -198,6 +198,27 @@ async def send_invoice(
     return await billing_service.send_invoice(invoice_id, current_user, to_email=body.to_email, note=body.note)
 
 
+class PlanManagerAutoEmail(BaseModel):
+    enabled: bool
+
+
+@router.get("/plan-manager-auto-email")
+async def get_plan_manager_auto_email(current_user: dict = Depends(get_current_user)):
+    """Whether approving a plan-managed invoice emails it to the plan manager."""
+    return await billing_service.get_plan_manager_auto_email(current_user)
+
+
+@router.put("/plan-manager-auto-email")
+async def set_plan_manager_auto_email(
+    body: PlanManagerAutoEmail,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Turn automatic plan manager emails on or off for the organisation."""
+    require_recent_reauth(request, current_user)
+    return await billing_service.set_plan_manager_auto_email(current_user, body.enabled)
+
+
 @router.post("/invoices/{invoice_id}/remind")
 async def send_invoice_reminder(
     invoice_id: str,

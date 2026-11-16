@@ -53,8 +53,26 @@ async def create_calendar_feed_token(current_user: dict = Depends(get_current_us
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     token = result["token"]
-    feed_path = f"/api/public/calendar/feed/{token}"
+    # Clients put their own API origin in front: the website and the API are
+    # on different hosts, so the website's origin would serve the web app.
+    feed_path = f"/api/public/calendar/feed/{token}.ics"
     return {"feed_path": feed_path, "token": token, "regenerated": result.get("regenerated", False)}
+
+
+@router.get("/calendar/feed")
+async def calendar_feed_status(current_user: dict = Depends(get_current_user)):
+    """Whether the worker's calendar link is working, and when their calendar
+    app last fetched it."""
+    _require_worker(current_user)
+    return worker_calendar_service.get_feed_status(get_user_id(current_user))
+
+
+@router.delete("/calendar/feed")
+async def stop_calendar_feed(current_user: dict = Depends(get_current_user)):
+    """Stop the worker's calendar link, so shifts stop reaching that calendar."""
+    _require_worker(current_user)
+    worker_calendar_service.revoke_feed_token(get_user_id(current_user))
+    return {"active": False}
 
 
 # ── Schedule requests (283) ───────────────────────────────────────────────────

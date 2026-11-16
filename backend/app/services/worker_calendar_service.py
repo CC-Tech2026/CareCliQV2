@@ -6,7 +6,7 @@ import hashlib
 import logging
 import re
 import secrets
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Optional
 
 from ..core.timezone import APP_TIMEZONE as DEFAULT_TZ
@@ -205,18 +205,21 @@ def _hash_token(raw: str) -> str:
 
 
 def get_or_create_feed_token(worker_id: str, organization_id: str) -> dict[str, Any]:
-    """Return a new feed token (stored as hash only; raw token returned to client once)."""
+    """Make a new private calendar link for the worker.
+
+    Only the hash is stored, so the raw token is returned once. A worker has
+    one link at a time: making a new one stops the old one working."""
     supabase = get_supabase_admin()
     had_existing = False
     try:
         existing = (
             supabase.table("worker_calendar_feed_tokens")
-            .select("id")
+            .select("id, revoked_at")
             .eq("user_id", worker_id)
             .limit(1)
             .execute()
         )
-        had_existing = bool(existing.data)
+        had_existing = any(not row.get("revoked_at") for row in existing.data or [])
     except Exception as exc:
         if _is_missing_schema_error(exc):
             raise ValueError("Calendar feed unavailable. Run migration 060_worker_calendar.") from exc
@@ -229,9 +232,45 @@ def get_or_create_feed_token(worker_id: str, organization_id: str) -> dict[str, 
         "organization_id": organization_id,
         "token_hash": token_hash,
         "revoked_at": None,
+        "last_accessed_at": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }, on_conflict="user_id").execute()
     return {"token": raw, "regenerated": had_existing}
+
+
+def get_feed_status(worker_id: str) -> dict[str, Any]:
+    """Whether the worker has a working calendar link, and when their
+    calendar app last fetched it (the link itself can't be shown again)."""
+    inactive = {"active": False, "created_at": None, "last_accessed_at": None}
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("worker_calendar_feed_tokens")
+            .select("created_at, last_accessed_at, revoked_at")
+            .eq("user_id", worker_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return inactive
+        raise
+    row = (resp.data or [None])[0]
+    if not row or row.get("revoked_at"):
+        return inactive
+    return {"active": True, "created_at": row.get("created_at"), "last_accessed_at": row.get("last_accessed_at")}
+
+
+def revoke_feed_token(worker_id: str) -> None:
+    """Stop the worker's calendar link. Their calendar app keeps what it last
+    fetched but gets no new shifts."""
+    try:
+        get_supabase_admin().table("worker_calendar_feed_tokens").update(
+            {"revoked_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("user_id", worker_id).is_("revoked_at", "null").execute()
+    except Exception as exc:
+        if not _is_missing_schema_error(exc):
+            raise
 
 
 def resolve_feed_user(token: str) -> Optional[dict[str, Any]]:
@@ -239,9 +278,9 @@ def resolve_feed_user(token: str) -> Optional[dict[str, Any]]:
         return None
     token_hash = _hash_token(token)
     try:
+        supabase = get_supabase_admin()
         resp = (
-            get_supabase_admin()
-            .table("worker_calendar_feed_tokens")
+            supabase.table("worker_calendar_feed_tokens")
             .select("user_id, organization_id")
             .eq("token_hash", token_hash)
             .is_("revoked_at", "null")
@@ -251,59 +290,171 @@ def resolve_feed_user(token: str) -> Optional[dict[str, Any]]:
         row = (resp.data or [None])[0]
         if not row:
             return None
+        # A worker who has left (deactivated, or moved to another
+        # organisation) stops getting shifts in their calendar.
+        user_rows = (
+            supabase.table("users")
+            .select("id, organization_id, is_active")
+            .eq("id", str(row["user_id"]))
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        user = user_rows[0] if user_rows else None
+        if not user or user.get("is_active") is False:
+            return None
+        if str(user.get("organization_id") or "") != str(row.get("organization_id") or ""):
+            return None
         now = datetime.now(timezone.utc).isoformat()
-        get_supabase_admin().table("worker_calendar_feed_tokens").update(
+        supabase.table("worker_calendar_feed_tokens").update(
             {"last_accessed_at": now}
         ).eq("token_hash", token_hash).execute()
         return row
     except Exception:
+        logger.warning("Calendar feed lookup failed", exc_info=True)
         return None
 
 
+# How much of the roster the feed carries: recent shifts stay visible for a
+# while (so a calendar doesn't wipe last week), and the next six months.
+FEED_PAST_DAYS = 30
+FEED_FUTURE_DAYS = 183
+FEED_MAX_EVENTS = 1000
+
+
+def _ical_escape(value: str) -> str:
+    """TEXT value escaping (RFC 5545 3.3.11)."""
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace("\r\n", "\\n")
+        .replace("\n", "\\n")
+        .replace("\r", "\\n")
+    )
+
+
+def _ical_fold(line: str) -> list[str]:
+    """Lines longer than 75 octets are folded (RFC 5545 3.1); strict
+    calendar apps reject feeds that don't."""
+    parts: list[str] = []
+    current = ""
+    size = 0
+    for char in line:
+        width = len(char.encode("utf-8"))
+        limit = 75 if not parts else 74  # continuation lines start with a space
+        if size + width > limit:
+            parts.append(current)
+            current, size = char, width
+        else:
+            current += char
+            size += width
+    parts.append(current)
+    return [parts[0], *(" " + part for part in parts[1:])]
+
+
+def _ical_utc(value: Any) -> str:
+    """An ISO timestamp as an iCalendar UTC time, '' if it can't be read.
+    UTC means every calendar shows the shift at the right local time,
+    whichever state the worker or participant is in."""
+    if not value:
+        return ""
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=DEFAULT_TZ)
+    return dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _feed_shifts(worker_id: str, organization_id: str) -> list[dict[str, Any]]:
+    """The worker's shifts for the feed, in one query. The participant's
+    name and address are copied onto each shift, so nothing else is read."""
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=FEED_PAST_DAYS)).isoformat()
+    end = (now + timedelta(days=FEED_FUTURE_DAYS)).isoformat()
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("shifts")
+            .select(
+                "id, participant_name, participant_address, scheduled_start, scheduled_end, "
+                "status, confirmation_status, updated_at"
+            )
+            .eq("organization_id", organization_id)
+            .eq("worker_id", worker_id)
+            .gte("scheduled_start", start)
+            .lte("scheduled_start", end)
+            .order("scheduled_start")
+            .limit(FEED_MAX_EVENTS)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        raise
+    return resp.data or []
+
+
 def build_ical_feed(worker_id: str, organization_id: str) -> str:
-    """Generate iCal document for confirmed upcoming shifts."""
-    today = date.today()
-    end = date(today.year + 1, today.month, today.day)
-    shifts = list_shifts_for_calendar(worker_id, organization_id, today, end)
+    """The worker's roster as an iCalendar feed, for Google Calendar,
+    Outlook and Apple Calendar to subscribe to.
+
+    Each event carries the participant's first name and suburb only: the
+    feed lives in the worker's personal calendar account, outside CareCliQ,
+    so the full address, notes and health details stay in the app.
+    Cancelled shifts are left out, which removes them from the calendar on
+    its next refresh."""
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//CareCliQ//Worker Schedule//EN",
+        "PRODID:-//CareCliQ//Worker Shifts//EN",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
-        "X-WR-CALNAME:CareCliQ Shifts",
+        "X-WR-CALNAME:CareCliQ shifts",
+        "X-WR-CALDESC:Your rostered shifts from CareCliQ",
         "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
+        "X-PUBLISHED-TTL:PT1H",
     ]
-    for shift in shifts:
-        if shift.get("calendar_status") != "confirmed":
-            continue
+    for shift in _feed_shifts(worker_id, organization_id):
         if (shift.get("status") or "").lower() == "cancelled":
             continue
-        uid = shift.get("id", "")
-        start = shift.get("scheduled_start", "")
-        end_dt = shift.get("scheduled_end", "")
-        if not start or not end_dt:
+        dtstart = _ical_utc(shift.get("scheduled_start"))
+        dtend = _ical_utc(shift.get("scheduled_end"))
+        if not dtstart or not dtend or dtend <= dtstart:
             continue
-        name = shift.get("participant_first_name") or "Shift"
-        def _ical_dt(iso: str) -> str:
-            try:
-                dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-                return dt.astimezone(DEFAULT_TZ).strftime("%Y%m%dT%H%M%S")
-            except ValueError:
-                return ""
-
-        dtstart = _ical_dt(start)
-        dtend = _ical_dt(end_dt)
-        if not dtstart or not dtend:
-            continue
-        lines.extend([
+        tentative = _calendar_display_status(shift) == "tentative"
+        first_name = (str(shift.get("participant_name") or "").split() or ["a participant"])[0]
+        summary = f"Shift with {first_name}"
+        if tentative:
+            summary += " (to be confirmed)"
+        event = [
             "BEGIN:VEVENT",
-            f"UID:{uid}@carecliq",
-            f"DTSTART;TZID=Australia/Adelaide:{dtstart}",
-            f"DTEND;TZID=Australia/Adelaide:{dtend}",
-            f"SUMMARY:Shift with {name}",
+            f"UID:{shift.get('id')}@carecliq",
+            f"DTSTAMP:{stamp}",
+            f"DTSTART:{dtstart}",
+            f"DTEND:{dtend}",
+            f"SUMMARY:{_ical_escape(summary)}",
+        ]
+        modified = _ical_utc(shift.get("updated_at"))
+        if modified:
+            event.append(f"LAST-MODIFIED:{modified}")
+        suburb = extract_suburb(shift.get("participant_address"))
+        if suburb:
+            event.append(f"LOCATION:{_ical_escape(suburb)}")
+        event.extend([
+            "DESCRIPTION:"
+            + _ical_escape("Open the CareCliQ app for the address, tasks and notes for this shift."),
+            f"STATUS:{'TENTATIVE' if tentative else 'CONFIRMED'}",
+            "TRANSP:OPAQUE",
             "END:VEVENT",
         ])
+        for line in event:
+            lines.extend(_ical_fold(line))
     lines.append("END:VCALENDAR")
     return "\r\n".join(lines) + "\r\n"
 

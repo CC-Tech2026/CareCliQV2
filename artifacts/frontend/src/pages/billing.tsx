@@ -54,6 +54,12 @@ import { PanelHeader, PrimaryButton } from "@/pages/md/vault/components/PanelKit
 import { useReAuth } from "@/hooks/useReAuth";
 import { NdiaClaimsPanel } from "@/components/billing/NdiaClaimsPanel";
 import { InvoiceMyobLine } from "@/components/billing/InvoiceMyobLine";
+import {
+  InvoiceAutoEmailLine,
+  PlanManagerAutoEmailSetting,
+  PlanManagerEmailNeedsAttention,
+  approvalToast,
+} from "@/components/billing/PlanManagerAutoEmail";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,6 +102,8 @@ export interface Invoice {
   plan_management_type?: string | null;
   claim_submitted_at?: string | null;
   participant_id?: string | null;
+  /** Why approving it didn't email it to the plan manager (migration 258). */
+  auto_email_error?: string | null;
   /** The Xero sales invoice it became, its status there, and the last sync problem. */
   xero_invoice_id?: string | null;
   xero_status?: string | null;
@@ -431,6 +439,7 @@ function InvoiceRecord({ invoice }: { invoice: Invoice }) {
           </div>
         </dl>
       )}
+      <InvoiceAutoEmailLine invoice={invoice} />
       <InvoiceXeroLine invoice={invoice} />
       <InvoiceMyobLine invoice={invoice} />
     </div>
@@ -1493,7 +1502,9 @@ export default function Billing() {
       setInvoices((prev) =>
         prev.map((i) => (i.id === updated.id ? { ...i, ...updated } : i)),
       );
-      toast({
+      const approved = action === "finalize" ? approvalToast(updated) : null;
+      if (approved) toast(approved);
+      else toast({
         title:
           action === "send"
             ? "Invoice emailed"
@@ -2347,6 +2358,15 @@ export default function Billing() {
 
           {/* Invoice register + revenue */}
           <div className="min-w-0 space-y-4" hidden={workspace !== "invoices"}>
+            <PlanManagerAutoEmailSetting />
+            <PlanManagerEmailNeedsAttention
+              invoices={invoices}
+              onOpen={(invoice) => {
+                setInvoiceFilter("all");
+                setInvoiceSearch(invoice.invoice_number);
+                setOpenInvoiceId(invoice.id);
+              }}
+            />
             <XeroNeedsAttention
               invoices={invoices}
               onOpen={(invoice) => {
