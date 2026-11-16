@@ -50,15 +50,16 @@ export function ProfileDropdown({
               {displayName.split(" ")[0]}
             </p>
             <p className="text-xs font-medium capitalize" style={{ color: DS.TEXT.muted }}>
-              {displayRole.split(" ")[0]}
+              {displayRole}
             </p>
           </div>
           <div
-            className="w-10 h-10 overflow-hidden rounded-full flex items-center justify-center text-xs font-black shrink-0 border-2 transition-all"
+            className="w-10 h-10 overflow-hidden rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-shadow"
             style={{
-              background: DS.BACKGROUND.section,
-              color: DS.BRAND.primary,
-              borderColor: open ? DS.BRAND.primary : DS.BORDER.light,
+              // CareCliQ Purple, as in the sidebar.
+              background: "#7C3AED",
+              color: "#fff",
+              boxShadow: open ? "0 0 0 3px var(--cc-brand-purple-ring)" : undefined,
             }}
           >
             {user?.profile_photo_url ? (

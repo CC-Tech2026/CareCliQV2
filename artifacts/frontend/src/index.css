@@ -230,7 +230,7 @@
   /* ── Nav state ── */
   --cc-active-bg:  #E5E5E5;   /* Light Grey — was warm cream #FCFBF0 */
   /* ── Sidebar ── */
-  --cc-sidebar-bg: #1a1a18;   /* Deep dark navy — matches reference image */
+  --cc-sidebar-bg: #1E1640;   /* CareCliQ deep purple: app sidebar, as on the signing pages and login panel */
   /* ── Alert pill ── */
   --cc-alert-bg:   #F5EFFE;
   /* ── Status badges ── */

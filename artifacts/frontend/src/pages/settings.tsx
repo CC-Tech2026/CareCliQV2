@@ -206,22 +206,19 @@ function SettingRow({
 function Section({
   title,
   description,
-  icon: Icon,
   children,
 }: {
   title: string;
   description: string;
-  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  /** Kept for callers; the heading is text only. */
+  icon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-start gap-3 border-b border-cc-border pb-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cc-soft text-cc-plum"><Icon className="h-5 w-5" /></span>
-        <div className="min-w-0">
-        <h2 className="text-xl font-semibold tracking-tight" style={{ color: "var(--cc-text)" }}>{title}</h2>
-        <p className="text-[13px] mt-1 leading-relaxed" style={{ color: "var(--cc-muted)" }}>{description}</p>
-        </div>
+    <div className="space-y-4">
+      <div className="border-b border-cc-border pb-4">
+        <h2 className="text-[22px] font-semibold tracking-tight" style={{ color: "var(--cc-text)", fontFamily: "var(--app-font-display)" }}>{title}</h2>
+        <p className="mt-1 max-w-2xl text-sm leading-relaxed" style={{ color: "var(--cc-muted)" }}>{description}</p>
       </div>
       {children}
     </div>
@@ -242,12 +239,12 @@ function PanelCard({
 }) {
   return (
     <div
-      className={cn("min-w-0 rounded-xl overflow-hidden shadow-sm", className)}
+      className={cn("min-w-0 rounded-xl overflow-hidden", className)}
       style={{ border: "1px solid var(--cc-border)", background: "var(--cc-surface)" }}
     >
-      <div className="p-4 sm:p-5">
+      <div className="p-5 sm:p-6">
         {label && (
-          <p className="text-sm font-semibold mb-4" style={{ color: "var(--cc-text)" }}>{label}</p>
+          <h3 className="mb-4 text-[15px] font-semibold" style={{ color: "var(--cc-text)" }}>{label}</h3>
         )}
         {children}
       </div>
@@ -2051,7 +2048,7 @@ export default function Settings() {
         description={isMD ? "Manage your account, organisation and subscription in one place." : isCoordinator ? "Manage your account, team preferences and organisation details." : "Manage your profile, sign-in security and work preferences."}
       />
 
-      <div className="flex min-w-0 flex-col items-stretch gap-4 rounded-2xl border border-cc-border bg-cc-surface p-3 sm:p-4 lg:flex-row lg:gap-5">
+      <div className="flex min-w-0 flex-col items-stretch gap-5 lg:flex-row lg:gap-10">
         <SettingsNavigation<SectionId> items={visibleNavItems.map(item=>({...item,label:translate(item.labelKey),description:SETTINGS_DESCRIPTIONS[item.id]}))} active={activeSection} onChange={selectSection} />
 
       {/* -- Content panel ----------------------------------------------------- */}
@@ -2064,7 +2061,7 @@ export default function Settings() {
             description={translate("settings.account.subtitle")}
             icon={User}
           >
-            <div className="grid min-w-0 gap-2 xl:grid-cols-2 xl:items-start">
+            <div className="grid min-w-0 gap-4 xl:grid-cols-2 xl:items-start">
             {/* Personal details card */}
             <PanelCard label={translate("settings.practitioner.label")}>
               {isLoadingSettings ? (
@@ -2077,22 +2074,21 @@ export default function Settings() {
 
                   <ProfilePhotoUpload cropCircle />
 
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-3" style={{ background: "var(--cc-soft)" }}>
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>{translate("profile.email")}</p>
-                      <p className="mt-0.5 text-[14px] font-medium break-all" style={{ color: "var(--cc-text)" }}>{user?.email || "N/A"}</p>
+                  <dl className="divide-y divide-cc-border rounded-lg border border-cc-border text-sm">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 px-4 py-3">
+                      <dt style={{ color: "var(--cc-muted)" }}>{translate("profile.email")}</dt>
+                      <dd className="min-w-0 break-all text-right font-medium" style={{ color: "var(--cc-text)" }}>
+                        {user?.email || "N/A"}
+                        <span className="ml-2 text-xs font-normal" style={{ color: "var(--cc-muted)" }}>{translate("settings.practitioner.fromAccount")}</span>
+                      </dd>
                     </div>
-                    <span className="shrink-0 text-[11px] font-semibold" style={{ color: "var(--cc-muted)" }}>{translate("settings.practitioner.fromAccount")}</span>
-                  </div>
-
-                  {employeeId && (
-                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-3" style={{ background: "var(--cc-soft)" }}>
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--cc-muted)" }}>Employee ID</p>
-                        <p className="mt-0.5 text-[14px] font-bold tracking-wide" style={{ color: "var(--cc-text)" }}>{employeeId}</p>
+                    {employeeId && (
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 px-4 py-3">
+                        <dt style={{ color: "var(--cc-muted)" }}>Employee ID</dt>
+                        <dd className="font-medium tabular-nums tracking-wide" style={{ color: "var(--cc-text)" }}>{employeeId}</dd>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </dl>
 
                   <div className={cn("grid grid-cols-1 gap-4", !isMD && "sm:grid-cols-2")}>
                     <div className="space-y-1.5">

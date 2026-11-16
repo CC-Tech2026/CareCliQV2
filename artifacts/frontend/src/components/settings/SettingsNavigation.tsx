@@ -36,17 +36,17 @@ export function SettingsNavigation<T extends string>({
   return (
     <nav
       aria-label="Settings sections"
-      className="w-full min-w-0 space-y-3 lg:sticky lg:top-24 lg:w-[17rem] lg:shrink-0 lg:self-start"
+      className="w-full min-w-0 space-y-4 lg:sticky lg:top-4 lg:w-60 lg:shrink-0 lg:self-start"
     >
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-cc-muted" />
+          <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-cc-muted" />
           <input
             aria-label="Find a setting"
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Find a setting"
-            className="h-11 w-full rounded-lg border border-cc-border bg-cc-surface pl-9 pr-3 text-sm text-cc-text transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+            className="h-10 w-full rounded-lg border border-cc-border bg-cc-surface pl-9 pr-3 text-sm text-cc-text transition focus-visible:border-[var(--cc-brand-purple)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-brand-purple-ring)]"
           />
         </div>
       <div
@@ -77,8 +77,7 @@ export function SettingsNavigation<T extends string>({
         </select>
       </div>
       <div
-        className={(search.trim() ? "block " : "hidden lg:block ") + "max-h-[calc(100dvh-220px)] space-y-4 overflow-y-auto rounded-xl border border-cc-border p-3"}
-        style={{ background: "var(--cc-surface)" }}
+        className={(search.trim() ? "block " : "hidden lg:block ") + "max-h-[calc(100dvh-180px)] space-y-5 overflow-y-auto"}
       >
         {groups.map((group) => {
           const visible = group.items.filter((item) =>
@@ -87,7 +86,7 @@ export function SettingsNavigation<T extends string>({
           if (!visible.length) return null;
           return (
             <div key={group.title}>
-              <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-cc-muted">
+              <p className="px-3 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-cc-muted">
                 {group.title}
               </p>
               <div className="space-y-0.5">
@@ -97,14 +96,17 @@ export function SettingsNavigation<T extends string>({
                     type="button"
                     aria-current={active === id ? "page" : undefined}
                     onClick={() => onChange(id)}
-                    className="group relative flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum"
+                    className={"group relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--cc-brand-purple)] " + (active === id ? "font-semibold" : "font-medium hover:bg-cc-soft")}
                     style={{
-                      // CareCliQ Purple marks where you are, as in the header menus.
+                      // CareCliQ Purple marks where you are, as in the app's sidebar.
                       background: active === id ? "var(--cc-brand-purple-soft)" : undefined,
                       color: active === id ? "var(--cc-brand-purple)" : "var(--cc-text)",
                     }}
                   >
-                    <Icon className="h-4 w-4 shrink-0" />
+                    {active === id && (
+                      <span aria-hidden className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full" style={{ background: "var(--cc-brand-purple)" }} />
+                    )}
+                    <Icon className="h-4 w-4 shrink-0" style={{ color: active === id ? "var(--cc-brand-purple)" : "var(--cc-muted)" }} />
                     <span className="min-w-0 break-words"><span className="block">{label}</span>{description && search.trim() && <span className="mt-0.5 block text-xs font-normal leading-relaxed text-cc-muted">{description}</span>}</span>
                   </button>
                 ))}

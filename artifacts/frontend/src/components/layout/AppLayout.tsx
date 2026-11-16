@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { PageErrorBoundary } from "@/components/ErrorBoundary";
 import { useState, useEffect, useMemo } from "react";
 import {
-  Menu, X, ChevronLeft, ChevronRight, ArrowLeft,
+  Menu, X, ChevronLeft, ChevronRight, ArrowLeft, PanelLeftClose, PanelLeftOpen,
   LayoutDashboard, Users, UserRound, CalendarDays, Clock,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, BadgeCheck, Wrench, Target, ClipboardList,
@@ -55,6 +55,70 @@ const ACTIVE = "var(--cc-active-bg)";
 // hex: --cc-brand-purple turns light lilac in dark mode and white text fails on it.
 const NAV_PURPLE = "#7C3AED";
 
+// The sidebar sits on CareCliQ deep purple (--cc-sidebar-bg) in light and dark
+// mode alike, so its text, icons and lines are set here once, for the desktop
+// rail and the phone drawer.
+const SIDEBAR_VARS = {
+  "--cc-text":       "rgba(255,255,255,0.86)",
+  "--cc-muted":      "rgba(205,193,250,0.62)",
+  "--cc-border":     "rgba(255,255,255,0.08)",
+  "--cc-soft":       "rgba(255,255,255,0.05)",
+  "--cc-coral-soft": "rgba(255,255,255,0.04)",
+  "--cc-coral-ring": "rgba(255,255,255,0.14)",
+} as React.CSSProperties;
+// Where you are: a soft purple wash, a lilac marker and white text.
+const NAV_ACTIVE_BG = "rgba(167,139,250,0.20)";
+const NAV_ACTIVE_MARK = "#A78BFA";
+const NAV_ACTIVE_ICON = "#D8CCFF";
+const NAV_GROUP_LABEL = "rgba(205,193,250,0.55)";
+
+/** One sidebar link: icon, label, and an optional count. */
+function SidebarLink({
+  href, label, icon: Icon, active, compact, onNav, badge,
+}: {
+  href: string;
+  label: string;
+  icon: React.ComponentType<NavIconProps>;
+  active: boolean;
+  compact: boolean;
+  onNav?: () => void;
+  badge?: { count: number; tone: "danger" | "purple" } | null;
+}) {
+  return (
+    <Link href={href} onClick={onNav} title={compact ? label : undefined} aria-current={active ? "page" : undefined}>
+      <div
+        className={cn(
+          "relative flex h-10 cursor-pointer items-center rounded-lg text-[13px] transition-colors duration-150",
+          compact ? "mx-auto w-10 justify-center" : "gap-3 px-3",
+          !active && "hover:bg-white/[0.06]",
+        )}
+        style={{
+          background: active ? NAV_ACTIVE_BG : undefined,
+          color: active ? "#fff" : TEXT,
+          fontWeight: active ? 600 : 500,
+        }}
+      >
+        {active && !compact && (
+          <span aria-hidden className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full" style={{ background: NAV_ACTIVE_MARK }} />
+        )}
+        <Icon size={17} strokeWidth={active ? 2.1 : 1.8} style={{ color: active ? NAV_ACTIVE_ICON : MUTED }} />
+        {!compact && <span className="flex-1 truncate">{label}</span>}
+        {!compact && badge && badge.count > 0 && (
+          <span
+            className="ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums"
+            style={{ background: badge.tone === "danger" ? "#E24B4A" : NAV_PURPLE, color: "#fff" }}
+          >
+            {badge.count}
+          </span>
+        )}
+        {compact && badge && badge.count > 0 && (
+          <span aria-hidden className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full" style={{ background: badge.tone === "danger" ? "#E24B4A" : "#A78BFA" }} />
+        )}
+      </div>
+    </Link>
+  );
+}
+
 type NavRole = "support_coordinator" | "support_worker" | "managing_director";
 type NavIconProps = { size?: number; strokeWidth?: number; className?: string; style?: React.CSSProperties };
 
@@ -82,12 +146,6 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/incidents",             label: "Incident Management",  icon: AlertTriangle },
         { href: "/billing",               label: "Invoices",           icon: CreditCard   },
         { href: "/reports",               label: "Reports",            icon: FileBarChart2 },
-      ],
-    },
-    {
-      group: "Settings",
-      items: [
-        { href: "/toolkit", label: "Toolkit", icon: Wrench },
       ],
     },
   ],
@@ -310,12 +368,12 @@ function GlobalSearch({ userRole }: { userRole: NavRole | undefined }) {
       <div
         className="flex items-center gap-2 h-9 px-3.5 rounded-xl transition-all duration-200"
         style={{
-          border: `1px solid ${focused ? "var(--cc-coral)" : "rgba(0,0,0,0.11)"}`,
-          background: "#fff",
-          boxShadow: focused ? "0 0 0 3px var(--cc-coral-soft)" : "0 1px 3px rgba(0,0,0,0.06)",
+          border: `1px solid ${focused ? "var(--cc-brand-purple)" : "var(--cc-border)"}`,
+          background: "var(--cc-surface)",
+          boxShadow: focused ? "0 0 0 3px var(--cc-brand-purple-soft)" : undefined,
         }}
       >
-        <Search size={13} strokeWidth={2.5} style={{ color: focused ? CORAL : MUTED, flexShrink: 0, transition: "color 150ms" }} />
+        <Search size={14} strokeWidth={2.2} style={{ color: focused ? "var(--cc-brand-purple)" : MUTED, flexShrink: 0, transition: "color 150ms" }} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -398,8 +456,12 @@ function SidebarContents({
   location, collapsed, isDrawer,
   alertCount, incidentOpenCount, displayName, displayRole, initials,
   onNav, onLogout, translate, translateParams,
-  branding,
+  branding, onToggleCollapse, pinnedCollapsed,
 }: {
+  /** Desktop only: pins the rail open or closed. */
+  onToggleCollapse?: () => void;
+  /** The rail is pinned closed (it opens while hovered). */
+  pinnedCollapsed?: boolean;
   location: string; collapsed: boolean; isDrawer: boolean;
   alertCount: number; incidentOpenCount: number;
   displayName: string; displayRole: string; initials: string;
@@ -424,7 +486,7 @@ function SidebarContents({
     <div className="flex flex-col h-full select-none overflow-hidden">
       {/* Logo row — top of sidebar for both desktop and mobile drawer */}
       <div
-        className={cn("flex items-center shrink-0 h-14", compact ? "justify-center px-2" : "px-5")}
+        className={cn("flex items-center shrink-0 h-14 gap-1", compact ? "justify-center px-2" : "pl-3 pr-2")}
         style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}
       >
         <Link
@@ -434,7 +496,7 @@ function SidebarContents({
           title={branding?.logo_url ? (branding.display_name || translate("nav.home")) : translate("nav.home")}
           className={cn(
             "flex items-center rounded-lg transition-all hover:bg-white/8 active:opacity-70",
-            compact ? "h-10 w-10 justify-center" : "h-10 px-2 gap-2 w-full",
+            compact ? "h-10 w-10 justify-center" : "h-10 px-2 gap-2 min-w-0 flex-1",
           )}
         >
           {branding?.logo_url ? (
@@ -459,14 +521,26 @@ function SidebarContents({
             </span>
           )}
         </Link>
+        {!compact && onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={pinnedCollapsed ? translate("layout.sidebar.expand") : translate("layout.sidebar.collapse")}
+            title={pinnedCollapsed ? translate("layout.sidebar.expand") : translate("layout.sidebar.collapse")}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#A78BFA]"
+            style={{ color: MUTED }}
+          >
+            {pinnedCollapsed ? <PanelLeftOpen size={17} strokeWidth={1.8} /> : <PanelLeftClose size={17} strokeWidth={1.8} />}
+          </button>
+        )}
       </div>
 
       {/* Nav */}
-      <nav className={cn("flex-1 overflow-y-auto scrollbar-none py-2", compact ? "px-1.5" : "px-2")}>
+      <nav className={cn("flex-1 overflow-y-auto scrollbar-none py-3", compact ? "px-1.5" : "px-3")}>
         {sections.map((section, si) => (
-          <div key={si} className={si > 0 ? "mt-4" : ""}>
+          <div key={si} className={si > 0 ? "mt-5" : ""}>
             {section.group && !compact && (
-              <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.1em] opacity-50" style={{ color: TEXT }}>
+              <p className="mb-1.5 px-3 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: NAV_GROUP_LABEL }}>
                 {groupLabelForName(section.group, translate)}
               </p>
             )}
@@ -475,78 +549,49 @@ function SidebarContents({
             )}
             <div className="space-y-0.5">
               {section.items.map((item) => {
-                const active = isActive(location, item.href);
-                const Icon = item.icon;
-                const label = navLabelForHref(item.href, item.label, translate);
                 const isCompliance = item.href === "/compliance" || item.href === "/my-compliance" || item.href === "/md/compliance";
                 const isIncidents = item.href === "/incidents";
-                const hasAlert     = alertCount > 0 && isCompliance;
-                const hasIncidentBadge = incidentOpenCount > 0 && isIncidents;
                 return (
-                  <Link
+                  <SidebarLink
                     key={item.href}
                     href={item.href}
-                    onClick={onNav}
-                    title={compact ? label : undefined}
-                    aria-current={active ? "page" : undefined}
-                  >
-                    <div
-                      className={cn(
-                        "flex items-center h-10 text-[13px] transition-all duration-150 cursor-pointer rounded-xl",
-                        compact ? "w-10 justify-center mx-auto" : "gap-2.5 px-3",
-                        !active && "hover:bg-white/8",
-                      )}
-                      style={{
-                        background: active ? NAV_PURPLE : undefined,
-                        color: active ? "#fff" : TEXT,
-                        fontWeight: active ? 600 : 500,
-                      }}
-                    >
-                      <Icon size={17} strokeWidth={active ? 2.2 : 1.8} style={{ color: active ? "#fff" : MUTED }} />
-                      {!compact && <span className="flex-1 truncate">{label}</span>}
-                      {!compact && hasIncidentBadge && (
-                        <span
-                          className="ml-auto min-w-[17px] h-[17px] px-1 rounded-full text-[9px] font-black flex items-center justify-center"
-                          style={{ background: active ? "rgba(255,255,255,0.3)" : "#E24B4A", color: "#fff" }}
-                        >
-                          {incidentOpenCount}
-                        </span>
-                      )}
-                      {!compact && hasAlert && (
-                        <span
-                          className="ml-auto min-w-[17px] h-[17px] px-1 rounded-full text-[9px] font-black flex items-center justify-center"
-                          style={{ background: active ? "rgba(255,255,255,0.3)" : CORAL, color: "#fff" }}
-                        >
-                          {alertCount}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
+                    label={navLabelForHref(item.href, item.label, translate)}
+                    icon={item.icon}
+                    active={isActive(location, item.href)}
+                    compact={compact}
+                    onNav={onNav}
+                    badge={isIncidents && incidentOpenCount > 0
+                      ? { count: incidentOpenCount, tone: "danger" }
+                      : isCompliance && alertCount > 0
+                        ? { count: alertCount, tone: "purple" }
+                        : null}
+                  />
                 );
               })}
             </div>
           </div>
         ))}
 
-        {/* Settings */}
-        <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${BORDER}` }}>
-          <Link href="/settings" onClick={onNav} title={compact ? translate("common.settings") : undefined} aria-current={isActive(location, "/settings") ? "page" : undefined}>
-            <div
-              className={cn(
-                "flex items-center h-10 text-[13px] transition-all duration-150 cursor-pointer rounded-xl",
-                compact ? "w-10 justify-center mx-auto" : "gap-2.5 px-3",
-                !isActive(location, "/settings") && "hover:bg-white/8",
-              )}
-              style={{
-                background: isActive(location, "/settings") ? NAV_PURPLE : undefined,
-                color: isActive(location, "/settings") ? "#fff" : TEXT,
-                fontWeight: isActive(location, "/settings") ? 600 : 500,
-              }}
-            >
-              <Settings size={17} strokeWidth={isActive(location, "/settings") ? 2.2 : 1.8} style={{ color: isActive(location, "/settings") ? "#fff" : MUTED }} />
-              {!compact && <span>{translate("common.settings")}</span>}
-            </div>
-          </Link>
+        {/* Tools and settings, at the foot of the menu. */}
+        <div className="mt-4 space-y-0.5 pt-3" style={{ borderTop: `1px solid ${BORDER}` }}>
+          {role === "support_coordinator" && (
+            <SidebarLink
+              href="/toolkit"
+              label={navLabelForHref("/toolkit", "Toolkit", translate)}
+              icon={Wrench}
+              active={isActive(location, "/toolkit")}
+              compact={compact}
+              onNav={onNav}
+            />
+          )}
+          <SidebarLink
+            href="/settings"
+            label={translate("common.settings")}
+            icon={Settings}
+            active={isActive(location, "/settings")}
+            compact={compact}
+            onNav={onNav}
+          />
         </div>
       </nav>
 
@@ -555,14 +600,14 @@ function SidebarContents({
         <div className="px-3 pb-2 shrink-0">
           <Link href="/incidents/new" onClick={onNav}>
             <div
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-semibold transition-all duration-150 cursor-pointer hover:opacity-90 active:scale-[0.98]"
+              className="flex h-10 cursor-pointer items-center gap-2.5 rounded-lg px-3 text-[13px] font-semibold transition-colors duration-150 hover:bg-white/[0.08]"
               style={{
                 background: "var(--cc-coral-soft)",
-                color: CORAL,
+                color: "rgba(255,255,255,0.9)",
                 border: "1px solid var(--cc-coral-ring)",
               }}
             >
-              <AlertTriangle size={13} strokeWidth={2.2} />
+              <AlertTriangle size={15} strokeWidth={2} style={{ color: "#F9A8D4" }} />
               <span>{translate("nav.reportIncident")}</span>
             </div>
           </Link>
@@ -570,12 +615,12 @@ function SidebarContents({
       )}
 
       {/* User footer */}
-      <div className={cn("shrink-0 py-3", compact ? "px-2" : "px-3")} style={{ borderTop: `1px solid ${BORDER}`, background: "color-mix(in srgb, var(--cc-soft) 80%, transparent)" }}>
+      <div className={cn("shrink-0 py-3", compact ? "px-2" : "px-3")} style={{ borderTop: `1px solid ${BORDER}` }}>
         {compact ? (
           <div className="relative mx-auto w-fit">
             <div
               className="h-10 w-10 overflow-hidden rounded-full flex items-center justify-center text-[12px] font-black"
-              style={{ background: CORAL, color: "#fff" }}
+              style={{ background: NAV_PURPLE, color: "#fff" }}
               title={displayName}
             >
               {user?.profile_photo_url ? (
@@ -589,7 +634,7 @@ function SidebarContents({
               className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
               style={{
                 background: alertCount > 0 ? "var(--cc-status-warning)" : "var(--cc-status-success)",
-                borderColor: "var(--cc-bg)",
+                borderColor: "var(--cc-sidebar-bg)",
               }}
               title={alertCount > 0
                 ? translateParams("layout.compliance.actionsPending", { count: String(alertCount) })
@@ -602,7 +647,7 @@ function SidebarContents({
             <div className="relative shrink-0">
               <div
                 className="h-9 w-9 overflow-hidden rounded-full flex items-center justify-center text-[12px] font-black"
-                style={{ background: CORAL, color: "#fff" }}
+                style={{ background: NAV_PURPLE, color: "#fff" }}
               >
                 {user?.profile_photo_url ? (
                   <img src={user.profile_photo_url} alt="" className="h-full w-full object-cover" />
@@ -614,7 +659,7 @@ function SidebarContents({
                 className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
                 style={{
                   background: alertCount > 0 ? "var(--cc-status-warning)" : "var(--cc-status-success)",
-                  borderColor: "var(--cc-bg)",
+                  borderColor: "var(--cc-sidebar-bg)",
                 }}
                 title={alertCount > 0
                 ? translateParams("layout.compliance.actionsPending", { count: String(alertCount) })
@@ -622,12 +667,12 @@ function SidebarContents({
               />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-bold truncate" style={{ color: TEXT }}>{displayName}</p>
+              <p className="text-[13px] font-semibold truncate" style={{ color: "#fff" }}>{displayName}</p>
               <p className="text-[11px] font-medium capitalize truncate" style={{ color: MUTED }}>
                 {displayRole}
               </p>
             </div>
-            <button type="button" onClick={onLogout} title={translate("common.signOut")} className="p-1.5 rounded-md hover:bg-black/5 transition-colors" style={{ color: MUTED }}>
+            <button type="button" onClick={onLogout} title={translate("common.signOut")} aria-label={translate("common.signOut")} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.08]" style={{ color: MUTED }}>
               <LogOut size={15} strokeWidth={2} />
             </button>
           </div>
@@ -717,45 +762,23 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
       {/* ── Desktop sidebar — full-height left rail ── */}
       <aside
         className="hidden md:flex flex-col h-full shrink-0 transition-all duration-300 ease-in-out relative"
-        style={{color: TEXT,                                                                                                                                                                                                  
-                                                                                                                                                                                                          width: isExpanded ? 240 : 64,
+        style={{
+          ...SIDEBAR_VARS,
+          color: "var(--cc-text)",
+          width: isExpanded ? 240 : 64,
           borderRight: "1px solid rgba(255,255,255,0.06)",
           background: "var(--cc-sidebar-bg)",
-          "--cc-text":       "rgba(255,255,255,0.88)",
-          "--cc-muted":      "rgba(255,255,255,0.46)",
-          "--cc-border":     "rgba(255,255,255,0.09)",
-          "--cc-soft":       "rgba(255,255,255,0.06)",
-          "--cc-coral-soft": "rgba(110,121,194,0.22)",
-          "--cc-coral-ring": "rgba(110,121,194,0.42)",
-        } as React.CSSProperties}
+        }}
         onMouseEnter={() => collapsed && setSidebarHovered(true)}
         onMouseLeave={() => setSidebarHovered(false)}
       >
-        <SidebarContents {...sharedProps} collapsed={!isExpanded} isDrawer={false} />
-
-        {/* Collapse handle — coloured tab sticking out from the sidebar edge */}
-        <button
-          type="button"
-          onClick={toggleCollapse}
-          title={isExpanded ? translate("layout.sidebar.collapse") : translate("layout.sidebar.expand")}
-          className="absolute z-10 flex flex-col items-center justify-center gap-0.5 transition-all duration-150 hover:brightness-110 active:scale-95"
-          style={{
-            right: -18,
-            top: "50%",
-            transform: "translateY(-50%)",
-            width: 18,
-            height: 52,
-            borderRadius: "0 8px 8px 0",
-            background: NAV_PURPLE,
-            boxShadow: "3px 0 12px rgba(124,58,237,0.34)",
-            color: "#fff",
-          }}
-        >
-          {isExpanded
-            ? <ChevronLeft  size={11} strokeWidth={2.5} />
-            : <ChevronRight size={11} strokeWidth={2.5} />
-          }
-        </button>
+        <SidebarContents
+          {...sharedProps}
+          collapsed={!isExpanded}
+          isDrawer={false}
+          onToggleCollapse={toggleCollapse}
+          pinnedCollapsed={collapsed}
+        />
       </aside>
 
       {/* ── Right column: desktop topbar + content ── */}
@@ -1039,7 +1062,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
           "md:hidden fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform duration-300 ease-out",
           drawerOpen ? "translate-x-0" : "-translate-x-full",
         )}
-        style={{ borderRight: `1px solid rgba(255,255,255,0.06)`, background: "var(--cc-sidebar-bg)" }}
+        style={{ ...SIDEBAR_VARS, color: "var(--cc-text)", borderRight: `1px solid rgba(255,255,255,0.06)`, background: "var(--cc-sidebar-bg)" }}
       >
         <div className="absolute top-3 right-3 z-10">
           <button
@@ -1047,7 +1070,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
             onClick={() => setDrawerOpen(false)}
             aria-label={translate("layout.aria.closeMenu")}
             title={translate("layout.aria.closeMenu")}
-            className="p-1.5 rounded-xl hover:bg-black/5 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-white/[0.08] transition-colors"
             style={{ color: MUTED }}
           >
             <X size={18} />
