@@ -263,3 +263,21 @@ async def test_events_go_only_to_subscribed_endpoints_and_failures_are_retried()
         assert await wh.deliver(db.tables["webhook_deliveries"][0], endpoints[0]) is True
     assert db.tables["webhook_deliveries"][0]["status"] == "delivered"
     assert db.tables["webhook_endpoints"][0]["failure_count"] == 0
+
+
+def test_a_malformed_encryption_key_never_breaks_saving_a_secret(monkeypatch):
+    import base64
+    import os
+
+    from backend.app.services import pii_service
+    from backend.app.services import xero_service as xero
+
+    monkeypatch.setenv("PII_ENCRYPTION_KEY", "not-a-32-byte-key")
+    assert wh._seal("whsec_abc") == "whsec_abc"
+    assert xero._seal("refresh-token") == "refresh-token"
+    assert pii_service.decrypt_field("whsec_abc") == "whsec_abc"
+
+    monkeypatch.setenv("PII_ENCRYPTION_KEY", base64.b64encode(os.urandom(32)).decode())
+    sealed = wh._seal("whsec_abc")
+    assert sealed.startswith("ENC:") and pii_service.decrypt_field(sealed) == "whsec_abc"
+    assert xero._seal("refresh-token").startswith("ENC:")

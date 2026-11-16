@@ -62,6 +62,30 @@ def _get_key() -> bytes:
     return key
 
 
+_bad_key_logged = False
+
+
+def encryption_key_usable() -> bool:
+    """True when PII_ENCRYPTION_KEY is set AND is a valid 32-byte base64 key.
+
+    Integrations (Xero tokens, webhook secrets) encrypt when this is true and
+    otherwise store as they would with no key, so a malformed key never breaks
+    a save. A key that is set but malformed is logged once as an error so it
+    gets fixed. decrypt_field reads both encrypted and plain values.
+    """
+    global _bad_key_logged
+    if not os.environ.get("PII_ENCRYPTION_KEY", "").strip():
+        return False
+    try:
+        _get_key()
+        return True
+    except ValueError as exc:
+        if not _bad_key_logged:
+            logger.error("%s; integration secrets are being stored unencrypted until it is fixed.", exc)
+            _bad_key_logged = True
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Encryption helpers
 # ---------------------------------------------------------------------------

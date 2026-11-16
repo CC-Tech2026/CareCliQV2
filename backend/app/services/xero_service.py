@@ -42,7 +42,7 @@ from ..core.access import get_user_id, get_user_organization_id, get_user_role
 from .supabase_client import get_supabase_admin
 from ..core.timezone import head_office_timezone, shift_local_date, app_today
 from . import audit_service
-from .pii_service import decrypt_field, encrypt_field
+from .pii_service import decrypt_field, encrypt_field, encryption_key_usable
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ def parse_xero_date(value: Any) -> Optional[str]:
 
 
 def _encryption_ready() -> bool:
-    return bool(os.environ.get("PII_ENCRYPTION_KEY", "").strip())
+    return encryption_key_usable()
 
 
 def _seal(token: str) -> str:

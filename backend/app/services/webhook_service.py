@@ -42,7 +42,7 @@ from fastapi import HTTPException
 
 from ..core.access import get_user_id
 from . import audit_service
-from .pii_service import decrypt_field, encrypt_field
+from .pii_service import decrypt_field, encrypt_field, encryption_key_usable
 from .public_api_service import _require_director, _schema_missing
 from .supabase_client import get_supabase_admin
 
@@ -79,7 +79,7 @@ def _allow_private() -> bool:
 
 
 def _seal(secret: str) -> str:
-    return encrypt_field(secret) if os.environ.get("PII_ENCRYPTION_KEY", "").strip() else secret
+    return encrypt_field(secret) if encryption_key_usable() else secret
 
 
 def check_url(url: str) -> str:
