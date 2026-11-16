@@ -2,6 +2,7 @@ import { SettingsNavigation, resolveSettingsSection } from "@/components/setting
 import { PageHeader } from "@/components/layout/PageKit";
 import { BillingSection } from "@/components/settings/BillingSection";
 import { DelegatedAccessSection } from "@/components/settings/DelegatedAccessSection";
+import { MyTemporaryAccess } from "@/components/settings/MyTemporaryAccess";
 import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
 import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 import { useRef, useState, useEffect, useCallback } from "react";
@@ -169,7 +170,7 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   // vendor isn't a delegable capability, and letting a coordinator grant
   // *more* delegated access would be a privilege-escalation hole).
   { id: "improvementFeedback", labelKey: "settings.nav.improvementFeedback", icon: Lightbulb, mdOnly: true },
-  { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true },
+  { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true, requiredCapability: "platform_billing" },
   { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true, requiredCapability: "org_branding" },
   { id: "integrations",  labelKey: "settings.nav.integrations",      icon: Plug, mdOnly: true },
   // "branches" intentionally left out of NAV_ITEMS for now — multi-office
@@ -1454,10 +1455,15 @@ export default function Settings() {
   const { requireReAuth, modal } = useReAuth();
   const isCoordinator = user?.role === "support_coordinator";
   const isMD = user?.role === "managing_director";
-  const { hasCapability: hasDelegatedCapability, grantFor: delegatedGrantFor } = useMyAccessGrants();
+  const { hasCapability: hasDelegatedCapability, grantFor: delegatedGrantFor, grants: myGrants } = useMyAccessGrants();
+  // A coordinator holding any grant sees Delegated Access as a read-only list
+  // of what they can do and until when; only a director can give access.
+  const seesOwnGrants = isCoordinator && myGrants.length > 0;
   const visibleNavItems = NAV_ITEMS.filter((item) =>
     (!item.coordinatorOrMdOnly || isCoordinator || isMD) &&
-    (!item.mdOnly || isMD || (item.requiredCapability ? hasDelegatedCapability(item.requiredCapability) : false)),
+    (!item.mdOnly || isMD ||
+      (item.id === "delegatedAccess" && seesOwnGrants) ||
+      (item.requiredCapability ? hasDelegatedCapability(item.requiredCapability) : false)),
   );
 
   const allowedSectionsKey = visibleNavItems.map(item => item.id).join(",");
@@ -2765,7 +2771,7 @@ export default function Settings() {
           </Section>
         )}
 
-        {activeSection === "billing" && isMD && (
+        {activeSection === "billing" && (isMD || hasDelegatedCapability("platform_billing")) && (
           <BillingSection />
         )}
 
@@ -2782,6 +2788,8 @@ export default function Settings() {
         {activeSection === "delegatedAccess" && isMD && (
           <DelegatedAccessSection />
         )}
+
+        {activeSection === "delegatedAccess" && !isMD && seesOwnGrants && <MyTemporaryAccess />}
 
       </main>
 

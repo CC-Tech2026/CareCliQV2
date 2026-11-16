@@ -13,11 +13,26 @@ MD = {"id": "m-1", "role": "managing_director", "organization_id": "org-1"}
 
 
 def test_coordinator_cannot_read_revenue_report():
-    with patch.object(billing_service, "get_supabase_admin") as db:
+    from backend.app.services import financial_summary_service as fin
+
+    with patch.object(billing_service, "get_supabase_admin") as db,          patch.object(fin, "get_supabase_admin"),          patch.object(fin, "has_active_grant", return_value=False):
         with pytest.raises(HTTPException) as error:
             asyncio.run(billing_service.get_revenue_report(COORDINATOR))
     assert error.value.status_code == 403
     db.assert_not_called()
+
+
+def test_coordinator_with_temporary_finance_access_can_read_revenue_report():
+    from backend.app.services import financial_summary_service as fin
+
+    db = MagicMock()
+    chain = db.table.return_value.select.return_value
+    chain.eq.return_value = chain
+    chain.order.return_value = chain
+    chain.execute.return_value = MagicMock(data=[])
+    with patch.object(billing_service, "get_supabase_admin", return_value=db),          patch.object(fin, "get_supabase_admin", return_value=db),          patch.object(fin, "has_active_grant", return_value=True):
+        result = asyncio.run(billing_service.get_revenue_report(COORDINATOR))
+    assert isinstance(result, dict)
 
 
 def test_managing_director_can_read_revenue_report():

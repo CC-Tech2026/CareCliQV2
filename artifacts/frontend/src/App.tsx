@@ -405,7 +405,7 @@ function Router() {
       </Route>
 
       <Route path="/md/financial">
-        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+        <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="financial_overview" capabilityLabel="Finances and wages">
           <MDFinancialPage />
         </ProtectedRoute>
       </Route>

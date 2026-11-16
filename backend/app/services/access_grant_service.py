@@ -43,6 +43,10 @@ CAPABILITIES: dict[str, str] = {
     "staff_invitations": "Send a staff invitation",
     "org_branding": "Organisation branding",
     "platform_billing": "Platform subscription billing (Stripe)",
+    # Financial page (revenue, costs, wages, net profit, runway, its cash and
+    # overhead settings) and the revenue report on Invoices. Invoicing and
+    # NDIA claims themselves are already open to every coordinator.
+    "financial_overview": "Finances, wages and revenue reports",
 }
 
 MAX_GRANT_DURATION_DAYS = 90
@@ -136,7 +140,17 @@ async def create_grant(
         "expires_at": expires_dt.isoformat(),
         "reason": (reason or "").strip() or None,
     }
-    result = supabase.table("access_grants").insert(payload).execute()
+    try:
+        result = supabase.table("access_grants").insert(payload).execute()
+    except Exception as exc:
+        # A capability added to the catalog before its migration (which
+        # widens access_grants_capability_check) has run on this database.
+        if "access_grants_capability_check" in str(exc):
+            raise HTTPException(
+                status_code=503,
+                detail="This kind of access isn't switched on for your organisation yet. Please try again later.",
+            ) from exc
+        raise
     if not result.data:
         raise HTTPException(status_code=500, detail="Could not create the access grant.")
     grant = result.data[0]

@@ -33,7 +33,7 @@ from typing import Any, Iterable, Literal, Optional
 
 from fastapi import HTTPException
 
-from ..core.access import is_managing_director
+from ..core.access import has_active_grant, is_managing_director
 from ..core.timezone import app_today, request_timezone
 from .supabase_client import get_supabase_admin
 
@@ -218,7 +218,7 @@ def _cents(value: Optional[float]) -> Optional[int]:
 async def save_settings(
     user: dict, *, cash_on_hand: Optional[float], cash_as_of: Optional[date], monthly_overheads: Optional[float],
 ) -> dict[str, Any]:
-    if not is_managing_director(user):
+    if not can_view_finances(user):
         raise HTTPException(status_code=403, detail="Only the managing director can change financial settings.")
     from . import audit_service
     from .billing_service import _require_org
@@ -318,8 +318,16 @@ def _participant_names(org_id: str, ids: list[str]) -> dict[str, str]:
     return names
 
 
+def can_view_finances(user: dict) -> bool:
+    """The director, or a coordinator the director has given temporary
+    "financial_overview" access (see access_grant_service.CAPABILITIES)."""
+    if is_managing_director(user):
+        return True
+    return has_active_grant(user, "financial_overview", get_supabase_admin())
+
+
 def get_financial_summary(user: dict, period: Period) -> dict[str, Any]:
-    if not is_managing_director(user):
+    if not can_view_finances(user):
         raise HTTPException(status_code=403, detail="Financial reports are available to the managing director only.")
     from .billing_service import _fetch_all, _require_org
 

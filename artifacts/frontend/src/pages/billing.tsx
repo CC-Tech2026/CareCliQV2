@@ -1,4 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useMyAccessGrants } from "@/hooks/useMyAccessGrants";
+import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 import { useSearch } from "wouter";
 import { getXeroSummary, refreshXeroPayments, sendInvoiceToXero, type XeroSummary } from "@/services/integrationsService";
 import {
@@ -1004,6 +1006,10 @@ export default function Billing() {
   const isCoordinator = user?.role === "support_coordinator";
   const isManagingDirector = user?.role === "managing_director";
   const canInvoice = isCoordinator || isManagingDirector;
+  // A coordinator the director has given temporary finance access also sees Revenue.
+  const { grantFor } = useMyAccessGrants();
+  const financeGrant = !isManagingDirector ? grantFor("financial_overview") : undefined;
+  const canSeeRevenue = isManagingDirector || Boolean(financeGrant);
   const priceRequest = useRef(0);
 
   // null until chosen: the page then opens on the first step with work.
@@ -1728,7 +1734,7 @@ export default function Billing() {
               ["pricing", "Price limits", BookOpen],
             ] as const
           )
-            .filter(([key]) => key !== "reports" || isManagingDirector)
+            .filter(([key]) => key !== "reports" || canSeeRevenue)
             .map(([key, label, icon]) => ({
               key,
               label,
@@ -2594,8 +2600,11 @@ export default function Billing() {
           </div>
         </div>
 
-        {workspace === "reports" && isManagingDirector && (
-          <RevenueReportPanel />
+        {workspace === "reports" && canSeeRevenue && (
+          <>
+            {financeGrant && <TemporaryAccessBanner grant={financeGrant} label="Finances and wages" />}
+            <RevenueReportPanel />
+          </>
         )}
         <section
           hidden={workspace !== "pricing"}

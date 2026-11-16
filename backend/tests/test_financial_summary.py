@@ -71,9 +71,22 @@ def test_labour_cost_nets_reversals_and_counts_costed_shifts():
 
 
 def test_only_managing_directors():
-    with pytest.raises(HTTPException) as err:
-        fin.get_financial_summary({"id": "c1", "role": "support_coordinator", "organization_id": "o"}, "month")
+    with patch.object(fin, "get_supabase_admin"), patch.object(fin, "has_active_grant", return_value=False):
+        with pytest.raises(HTTPException) as err:
+            fin.get_financial_summary({"id": "c1", "role": "support_coordinator", "organization_id": "o"}, "month")
     assert err.value.status_code == 403
+
+
+def test_a_coordinator_with_finance_access_passes_the_check():
+    coordinator = {"id": "c1", "role": "support_coordinator", "organization_id": "o"}
+    with patch.object(fin, "get_supabase_admin"), patch.object(fin, "has_active_grant", return_value=True) as grant:
+        assert fin.can_view_finances(coordinator) is True
+    assert grant.call_args.args[1] == "financial_overview"
+
+
+def test_a_worker_never_gets_finances_without_a_grant():
+    with patch.object(fin, "get_supabase_admin"), patch.object(fin, "has_active_grant", return_value=False):
+        assert fin.can_view_finances({"id": "w1", "role": "support_worker", "organization_id": "o"}) is False
 
 
 def _summary(settings=None, shift_months=None, wages=None, invoices=None, period="quarter"):
@@ -155,9 +168,10 @@ def test_a_profitable_business_has_no_runway_limit():
 
 @pytest.mark.asyncio
 async def test_settings_are_md_only_and_audited():
-    with pytest.raises(HTTPException) as err:
-        await fin.save_settings({"id": "c", "role": "support_coordinator", "organization_id": "o"},
-                                cash_on_hand=1, cash_as_of=None, monthly_overheads=None)
+    with patch.object(fin, "get_supabase_admin"), patch.object(fin, "has_active_grant", return_value=False):
+        with pytest.raises(HTTPException) as err:
+            await fin.save_settings({"id": "c", "role": "support_coordinator", "organization_id": "o"},
+                                    cash_on_hand=1, cash_as_of=None, monthly_overheads=None)
     assert err.value.status_code == 403
 
     client = MagicMock()

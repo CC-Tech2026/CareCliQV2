@@ -391,3 +391,40 @@ async def test_list_my_grants_only_returns_active_grants_for_that_coordinator():
     with patch.object(svc, "get_supabase_admin", return_value=supabase):
         result = await svc.list_my_grants(COORDINATOR)
     assert [r["id"] for r in result] == ["g1"]
+
+
+def test_every_capability_is_allowed_by_the_latest_capability_migration():
+    """The catalog and the access_grants_capability_check constraint must
+    list the same keys, or granting a new one fails at insert time."""
+    import re
+    from pathlib import Path
+
+    migrations = Path(__file__).resolve().parents[1] / "supabase" / "migrations"
+    latest = None
+    for path in sorted(migrations.glob("*.sql"), key=lambda p: int(p.name.split("_")[0])):
+        if "access_grants_capability_check CHECK" in path.read_text(encoding="utf-8"):
+            latest = path
+    assert latest is not None
+    block = latest.read_text(encoding="utf-8").split("access_grants_capability_check CHECK", 1)[1].split(")", 1)[0]
+    allowed = set(re.findall(r"'([a-z_]+)'", block))
+    assert allowed == set(svc.CAPABILITIES)
+
+
+@pytest.mark.asyncio
+async def test_create_grant_explains_a_capability_the_database_does_not_allow_yet():
+    mock_supabase = MagicMock()
+    mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = MagicMock(
+        data={"id": COORDINATOR_ID, "role": "support_coordinator", "organization_id": ORG_ID, "full_name": "Casey"}
+    )
+    mock_supabase.table.return_value.insert.return_value.execute.side_effect = Exception(
+        'new row for relation "access_grants" violates check constraint "access_grants_capability_check"'
+    )
+    with patch.object(svc, "get_supabase_admin", return_value=mock_supabase):
+        with pytest.raises(HTTPException) as exc:
+            await svc.create_grant(
+                MD,
+                granted_to_user_id=COORDINATOR_ID,
+                capability="financial_overview",
+                expires_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+            )
+    assert exc.value.status_code == 503

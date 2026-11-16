@@ -1460,11 +1460,12 @@ async def get_revenue_report(user: dict) -> dict:
     completed shifts — it used to be participant plan spending
     (budget_usage), which is revenue, so the "margin" it produced was
     meaningless."""
-    if not is_managing_director(user):
+    from . import financial_summary_service as fin
+
+    if not fin.can_view_finances(user):
         raise HTTPException(status_code=403, detail="Revenue reports are available to the managing director only.")
     org_id = _require_org(user)
     supabase = get_supabase_admin()
-    from . import financial_summary_service as fin
 
     try:
         invoices = _fetch_all(
