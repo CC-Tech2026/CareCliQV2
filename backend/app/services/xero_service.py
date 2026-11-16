@@ -738,6 +738,19 @@ async def _find_by_number(row: dict, number: str) -> Optional[dict]:
     return None
 
 
+def _not_the_same_invoice(xero_invoice: dict, invoice: dict, payer: str) -> Optional[str]:
+    """A Xero invoice found only by its number is ours only if the payer and
+    total match too; otherwise it's someone else's invoice with the same
+    number, and adopting it could mark ours paid wrongly. Returns why not."""
+    xero_payer = str((xero_invoice.get("Contact") or {}).get("Name") or "").strip().lower()
+    if xero_payer != payer.strip().lower():
+        return f"it's for {(xero_invoice.get('Contact') or {}).get('Name') or 'another contact'}"
+    ours = invoice.get("total_cents")
+    if ours is not None and round(float(xero_invoice.get("Total") or 0) * 100) != int(ours):
+        return f"its total is ${float(xero_invoice.get('Total') or 0):,.2f}"
+    return None
+
+
 async def push_invoice(org_id: str, invoice_id: str, *, row: Optional[dict] = None) -> dict:
     """Create or update the Xero copy of one approved invoice. Returns
     {"ok": bool, "message": str}; never raises for a Xero problem."""
@@ -762,6 +775,13 @@ async def push_invoice(org_id: str, invoice_id: str, *, row: Optional[dict] = No
             # A send that reached Xero but wasn't recorded here: pick it up
             # rather than make a second invoice with the same number.
             existing = await _find_by_number(row, str(invoice.get("invoice_number") or ""))
+            if existing:
+                clash = _not_the_same_invoice(existing, invoice, _payer_name(invoice, participant))
+                if clash:
+                    raise XeroError(
+                        f"Xero already has an invoice numbered {invoice.get('invoice_number')} that isn't this one "
+                        f"({clash}). Rename one of them, then send it again."
+                    )
             xero_id = existing.get("InvoiceID") if existing else None
         if existing and existing.get("Status") in {"PAID", "VOIDED", "DELETED"}:
             _mark_invoice(invoice_id, {

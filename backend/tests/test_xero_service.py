@@ -224,7 +224,8 @@ async def test_a_known_payer_and_an_already_sent_number_are_reused():
         xero_contacts=[{"organization_id": ORG, "payer_key": "name:plan partners", "xero_contact_id": "contact-1"}],
     )
     fake, calls = _api_for({
-        ("GET", "/Invoices"): {"Invoices": [{"InvoiceID": "xinv-7", "Type": "ACCREC", "Status": "DRAFT"}]},
+        ("GET", "/Invoices"): {"Invoices": [{"InvoiceID": "xinv-7", "Type": "ACCREC", "Status": "DRAFT",
+                                             "Contact": {"Name": "Plan Partners"}, "Total": 105.35}]},
         ("POST", "/Invoices"): {"Invoices": [{"InvoiceID": "xinv-7", "Status": "AUTHORISED"}]},
     })
     with patch.object(xs, "get_supabase_admin", return_value=db), patch.object(xs, "_api", fake):
@@ -344,3 +345,34 @@ async def test_a_name_xero_says_is_taken_uses_that_existing_contact():
     with patch.object(xs, "get_supabase_admin", return_value=db), patch.object(xs, "_api", fake):
         assert await xs._contact_id(CONNECTION, "Plan Partners", None) == "contact-already"
     assert db.tables["xero_contacts"][0]["xero_contact_id"] == "contact-already"
+
+
+@pytest.mark.asyncio
+async def test_a_paid_xero_invoice_that_only_shares_the_number_is_not_adopted():
+    invoice = {**INVOICE, "total_cents": 10535}
+    db = _DB(xero_connections=[dict(CONNECTION)], invoices=[invoice], participants=[PARTICIPANT], xero_contacts=[])
+    fake, calls = _api_for({
+        ("GET", "/Invoices"): {"Invoices": [{"InvoiceID": "someone-elses", "Type": "ACCREC", "Status": "PAID",
+                                             "Contact": {"Name": "NDIA"}, "Total": 1324.44}]},
+    })
+    with patch.object(xs, "get_supabase_admin", return_value=db), patch.object(xs, "_api", fake):
+        result = await xs.push_invoice(ORG, "inv-1")
+    assert result["ok"] is False and "isn't this one" in result["message"]
+    saved = db.tables["invoices"][0]
+    assert saved.get("xero_invoice_id") is None and saved.get("xero_status") is None
+    assert "isn't this one" in saved["xero_sync_error"]
+    assert not any(method == "POST" for method, *_ in calls)
+
+
+@pytest.mark.asyncio
+async def test_our_own_unrecorded_send_is_still_picked_up_by_number():
+    invoice = {**INVOICE, "total_cents": 10535}
+    db = _DB(xero_connections=[dict(CONNECTION)], invoices=[invoice], participants=[PARTICIPANT], xero_contacts=[])
+    fake, _calls = _api_for({
+        ("GET", "/Invoices"): {"Invoices": [{"InvoiceID": "ours", "Type": "ACCREC", "Status": "PAID",
+                                             "Contact": {"Name": "plan partners"}, "Total": 105.35}]},
+    })
+    with patch.object(xs, "get_supabase_admin", return_value=db), patch.object(xs, "_api", fake):
+        result = await xs.push_invoice(ORG, "inv-1")
+    assert result["ok"] is True
+    assert db.tables["invoices"][0]["xero_invoice_id"] == "ours"
