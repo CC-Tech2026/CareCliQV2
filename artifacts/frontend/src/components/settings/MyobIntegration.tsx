@@ -338,13 +338,9 @@ export function MyobTile() {
     }
   };
 
-  if (query.isLoading) {
-    return (
-      <div className="flex min-h-[220px] items-center justify-center gap-2 rounded-xl border border-cc-border bg-cc-surface text-sm" style={{ color: MUTED }}>
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading MYOB...
-      </div>
-    );
-  }
+  // Hidden until MYOB is switched on for the server (MYOB_CLIENT_ID and
+  // MYOB_CLIENT_SECRET set). An organisation already connected still sees it.
+  if (!status || (!status.available && !status.connected)) return null;
 
   const tileStatus: TileStatus = !status
     ? "unavailable"

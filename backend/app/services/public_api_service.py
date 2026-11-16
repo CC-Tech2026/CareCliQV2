@@ -46,6 +46,9 @@ MAX_LIMIT = 500
 RATE_LIMIT = 300
 # How often last_used_at is written (not on every request).
 TOUCH_EVERY = timedelta(minutes=5)
+# The database hands back at most 1,000 rows per request, so lists are read
+# a page at a time (see _all_rows).
+DB_PAGE = 1000
 
 
 def _now() -> datetime:
@@ -224,6 +227,21 @@ def authenticate(request: Request, scope: Optional[str]) -> dict:
 # The data, in the shapes the API and webhooks share
 # ---------------------------------------------------------------------------
 
+def _all_rows(make_query) -> list[dict]:
+    """Every matching row. Supabase stops at 1,000 rows a request without
+    saying so, which cut long credential and training lists short (and made
+    ``total`` wrong). ``make_query`` builds a fresh query for each page,
+    because ``.range()`` adds to a builder rather than replacing."""
+    rows: list[dict] = []
+    start = 0
+    while True:
+        page = make_query().order("id").range(start, start + DB_PAGE - 1).execute().data or []
+        rows.extend(page)
+        if len(page) < DB_PAGE:
+            return rows
+        start += DB_PAGE
+
+
 def _page(rows: list[dict], limit: int, offset: int) -> dict:
     limit = max(1, min(int(limit or 100), MAX_LIMIT))
     offset = max(0, int(offset or 0))
@@ -305,9 +323,9 @@ def serialize_completion(row: dict, module: Optional[dict]) -> dict:
 
 def _staff(org_id: str) -> list[tuple[dict, dict]]:
     db = get_supabase_admin()
-    members = (
-        db.table("organization_members").select("*").eq("organization_id", org_id).in_("role", list(STAFF_ROLES)).execute()
-    ).data or []
+    members = _all_rows(
+        lambda: db.table("organization_members").select("*").eq("organization_id", org_id).in_("role", list(STAFF_ROLES))
+    )
     ids = [m["user_id"] for m in members if m.get("user_id")]
     users: dict[str, dict] = {}
     for start in range(0, len(ids), 200):
@@ -349,14 +367,17 @@ def list_credentials(
     limit: int = 100,
     offset: int = 0,
 ) -> dict:
-    query = get_supabase_admin().table("credentials").select("*").eq("organization_id", org_id)
-    if worker_id:
-        query = query.eq("user_id", worker_id)
-    if status:
-        query = query.eq("status", status)
-    if type_:
-        query = query.eq("credential_type", type_)
-    rows = (query.execute()).data or []
+    def query():
+        q = get_supabase_admin().table("credentials").select("*").eq("organization_id", org_id)
+        if worker_id:
+            q = q.eq("user_id", worker_id)
+        if status:
+            q = q.eq("status", status)
+        if type_:
+            q = q.eq("credential_type", type_)
+        return q
+
+    rows = _all_rows(query)
     if expiring_before:
         rows = [r for r in rows if r.get("expiry_date") and str(r["expiry_date"])[:10] <= expiring_before.isoformat()]
     if updated_since:
@@ -368,7 +389,7 @@ def list_credentials(
 
 
 def _modules(org_id: str) -> dict[str, dict]:
-    rows = (get_supabase_admin().table("training_modules").select("*").eq("organization_id", org_id).execute()).data or []
+    rows = _all_rows(lambda: get_supabase_admin().table("training_modules").select("*").eq("organization_id", org_id))
     return {str(r["id"]): r for r in rows}
 
 
@@ -387,12 +408,15 @@ def list_training_completions(
     limit: int = 100,
     offset: int = 0,
 ) -> dict:
-    query = get_supabase_admin().table("worker_training_completions").select("*").eq("organization_id", org_id)
-    if worker_id:
-        query = query.eq("worker_id", worker_id)
-    if status:
-        query = query.eq("status", status)
-    rows = (query.execute()).data or []
+    def query():
+        q = get_supabase_admin().table("worker_training_completions").select("*").eq("organization_id", org_id)
+        if worker_id:
+            q = q.eq("worker_id", worker_id)
+        if status:
+            q = q.eq("status", status)
+        return q
+
+    rows = _all_rows(query)
     if completed_since:
         cutoff = completed_since.astimezone(timezone.utc).isoformat()
         rows = [r for r in rows if str(r.get("completed_at") or r.get("created_at") or "") >= cutoff]
@@ -407,9 +431,11 @@ def organisation(org_id: str, key: dict) -> dict:
     name = None
     try:
         rows = (
-            get_supabase_admin().table("organizations").select("organization_id, name").eq("organization_id", org_id).limit(1).execute()
+            get_supabase_admin().table("organizations").select("organization_id, organization_name, name")
+            .eq("organization_id", org_id).limit(1).execute()
         ).data or []
-        name = (rows[0] if rows else {}).get("name")
+        row = rows[0] if rows else {}
+        name = row.get("organization_name") or row.get("name")
     except Exception:
         name = None
     return {"organization_id": org_id, "name": name, "scopes": key.get("scopes") or []}
