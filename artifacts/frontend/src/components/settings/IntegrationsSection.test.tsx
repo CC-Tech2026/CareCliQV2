@@ -38,7 +38,7 @@ describe("Settings > Integrations", () => {
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, assign });
     renderSection();
-    expect(await screen.findByText(/payments made there mark them paid here/)).toBeTruthy();
+    expect(await screen.findByText(/payments sync both ways/)).toBeTruthy();
     expect(screen.getAllByText("Not connected")).toHaveLength(2); // Xero, and the API with no keys yet
     expect(screen.getByText("API and webhooks")).toBeTruthy();
     expect(await screen.findByRole("button", { name: "Set up" })).toBeTruthy();
@@ -79,7 +79,7 @@ describe("Settings > Integrations", () => {
     expect(screen.getByText("Needs attention")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Manage" }));
     expect(await screen.findByText("12")).toBeTruthy();
-    expect(screen.getByText("Couldn't be sent")).toBeTruthy();
+    expect(screen.getByText("Need attention")).toBeTruthy();
     // Recent invoices: their state in Xero, and why one didn't go.
     expect(screen.getByText("Paid in Xero")).toBeTruthy();
     expect(screen.getByText("$2,200.04")).toBeTruthy();
@@ -94,5 +94,35 @@ describe("Settings > Integrations", () => {
       expect(integrations.saveXeroSettings).toHaveBeenCalledWith({ ...SETTINGS, invoice_status: "DRAFT" }),
     );
     // Opens the side panel and its selects, so more than the default 5s.
+  }, 15_000);
+
+  it("asks once about invoices from before connecting, and sends them when told to", async () => {
+    vi.mocked(integrations.getXeroStatus).mockResolvedValue({
+      available: true, connected: true, redirect_uri: "x", settings: { ...SETTINGS },
+      tenant_name: "Sunrise Supports", connected_at: "2026-11-16T01:00:00Z",
+      counts: { in_xero: 0, waiting: 0, failed: 0, earlier: 2 },
+      earlier: {
+        count: 2, total_cents: 30000,
+        invoices: [
+          { id: "o1", invoice_number: "INV-0007", payer: "Plan Partners", total_cents: 10000 },
+          { id: "o2", invoice_number: "INV-0008", payer: "NDIA", total_cents: 20000 },
+        ],
+      },
+    });
+    vi.mocked(integrations.getXeroOptions).mockResolvedValue({
+      accounts: [{ code: "200", name: "Sales" }], tax_rates: [],
+      bank_accounts: [{ id: "b1", code: "090", name: "Business Bank Account" }, { id: "b2", name: "Savings" }],
+    });
+    vi.mocked(integrations.sendEarlierToXero).mockResolvedValue({ sent: 2, failed: 0, status: {} as never });
+    renderSection();
+    expect(await screen.findByText(/2 older invoices need your answer/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
+    expect(await screen.findByText("2 invoices from before you connected aren't in Xero")).toBeTruthy();
+    expect(screen.getByText("INV-0007")).toBeTruthy();
+    // Two bank accounts and none chosen: payments marked here need one.
+    expect(await screen.findByText(/more than one bank account in Xero/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Send them to Xero" }));
+    await waitFor(() => expect(integrations.sendEarlierToXero).toHaveBeenCalled());
+    expect(integrations.dismissEarlierXero).not.toHaveBeenCalled();
   }, 15_000);
 });

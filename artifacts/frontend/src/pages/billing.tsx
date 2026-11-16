@@ -1,7 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearch } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
-import { getXeroSummary, sendInvoiceToXero } from "@/services/integrationsService";
+import { getXeroSummary, refreshXeroPayments, sendInvoiceToXero, type XeroSummary } from "@/services/integrationsService";
 import {
   Check,
   Loader2,
@@ -99,6 +98,9 @@ export interface Invoice {
   xero_status?: string | null;
   xero_synced_at?: string | null;
   xero_sync_error?: string | null;
+  /** Paid and still owing in Xero, in cents (part payments). */
+  xero_amount_paid_cents?: number | null;
+  xero_amount_due_cents?: number | null;
   id: string;
   invoice_number: string;
   recipient_name: string;
@@ -192,60 +194,153 @@ const XERO_STATUS_WORDS: Record<string, string> = {
   DELETED: "deleted",
 };
 
-/** Where the invoice is in Xero, when Xero is connected: sent (and its state
- *  there), couldn't be sent (and why), or waiting, with Send to Xero. */
-function InvoiceXeroLine({ invoice }: { invoice: Invoice }) {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [sending, setSending] = useState(false);
-  const summary = useOrgQuery(["integrations", "xero", "summary"], {
+/** Billing listens for this to reload the invoice list after a Xero action. */
+const BILLING_CHANGED = "carecliq:billing-changed";
+/** An approved invoice that hasn't reached Xero this long after approval
+ *  didn't go on its own, so the person can send it. */
+const XERO_SEND_GRACE_MS = 2 * 60_000;
+
+function useXeroSummary() {
+  return useOrgQuery(["integrations", "xero", "summary"], {
     queryFn: getXeroSummary,
     staleTime: 60_000,
     retry: false,
   });
-  if (!summary.data?.connected && !invoice.xero_invoice_id) return null;
-  const canSend = summary.data?.connected && XERO_SENDABLE.has(invoice.status);
+}
+
+function approvedAt(invoice: Invoice) {
+  return Date.parse(invoice.finalized_at || invoice.issued_at || invoice.created_at || "");
+}
+
+/** Approved before Xero was connected (and the director hasn't sent those). */
+function fromBeforeXero(invoice: Invoice, summary?: XeroSummary) {
+  if (!summary?.connected_at || summary.include_earlier) return false;
+  const approved = approvedAt(invoice);
+  return Number.isFinite(approved) && approved < Date.parse(summary.connected_at);
+}
+
+/** One sentence on where the invoice stands in Xero. */
+export function xeroLineText(invoice: Invoice, summary?: XeroSummary, now = Date.now()) {
+  const where = summary?.tenant_name ? ` (${summary.tenant_name})` : "";
+  if (invoice.xero_sync_error) return { tone: "danger" as const, text: invoice.xero_sync_error, action: "Try again" };
+  if (invoice.xero_invoice_id) {
+    const paid = invoice.xero_amount_paid_cents || 0;
+    if (invoice.xero_status === "PAID")
+      return { tone: "success" as const, text: `Paid, and recorded in Xero${where}.` };
+    if (invoice.xero_status === "AUTHORISED" && paid > 0) {
+      const owing = invoice.xero_amount_due_cents ?? Math.max(0, invoice.total_cents - paid);
+      return {
+        tone: "warning" as const,
+        text: `Part paid in Xero: ${cents(paid, invoice.currency)} of ${cents(invoice.total_cents, invoice.currency)}. ${cents(owing, invoice.currency)} still owing.`,
+      };
+    }
+    const state = invoice.xero_status ? XERO_STATUS_WORDS[invoice.xero_status] ?? invoice.xero_status.toLowerCase() : null;
+    return { tone: "muted" as const, text: `In Xero${state ? `, ${state}` : ""}${where}.` };
+  }
+  if (invoice.status === "draft") return { tone: "muted" as const, text: "Goes to Xero on its own once it's approved." };
+  if (!XERO_SENDABLE.has(invoice.status)) return { tone: "muted" as const, text: "Not in Xero." };
+  if (fromBeforeXero(invoice, summary))
+    return { tone: "muted" as const, text: "Approved before Xero was connected, so it wasn't sent.", action: "Send to Xero" };
+  if (!summary?.auto_send) return { tone: "muted" as const, text: "Not in Xero yet.", action: "Send to Xero" };
+  const approved = approvedAt(invoice);
+  if (Number.isFinite(approved) && now - approved < XERO_SEND_GRACE_MS)
+    return { tone: "muted" as const, text: "On its way to Xero." };
+  return { tone: "muted" as const, text: "Didn't reach Xero on its own.", action: "Send to Xero" };
+}
+
+const XERO_TONE: Record<"danger" | "success" | "warning" | "muted", string> = {
+  danger: "var(--cc-danger-text)",
+  success: "var(--cc-status-success)",
+  warning: "var(--cc-status-warning, #B45309)",
+  muted: "var(--cc-text-muted)",
+};
+
+function XeroActionButton({ invoice, label }: { invoice: Invoice; label: string }) {
+  const { toast } = useToast();
+  const [sending, setSending] = useState(false);
   const send = async () => {
     setSending(true);
     try {
       const result = await sendInvoiceToXero(invoice.id);
       toast({ title: result.message });
     } catch (err) {
-      toast({ title: "Couldn't send to Xero", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+      toast({ title: "Xero didn't accept it", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
     } finally {
       setSending(false);
-      void qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("billing") });
+      window.dispatchEvent(new Event(BILLING_CHANGED));
     }
   };
-  const state = invoice.xero_status ? XERO_STATUS_WORDS[invoice.xero_status] ?? invoice.xero_status.toLowerCase() : null;
+  return (
+    <button
+      type="button"
+      onClick={() => void send()}
+      disabled={sending}
+      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-cc-border px-3 text-[13px] font-medium transition-colors hover:bg-cc-soft disabled:opacity-60"
+    >
+      {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+      {label}
+    </button>
+  );
+}
+
+/** Where the invoice is in Xero, when Xero is connected. Sending and payments
+ *  happen on their own; a button shows only when something needs a person. */
+function InvoiceXeroLine({ invoice }: { invoice: Invoice }) {
+  const summary = useXeroSummary();
+  if (!summary.data?.connected && !invoice.xero_invoice_id) return null;
+  const line = xeroLineText(invoice, summary.data);
   return (
     <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-cc-border p-3">
       <div className="min-w-0">
         <p className="font-medium">Xero</p>
-        {invoice.xero_sync_error ? (
-          <p className="text-[13px]" style={{ color: "var(--cc-danger-text)" }}>{invoice.xero_sync_error}</p>
-        ) : invoice.xero_invoice_id ? (
-          <p className="text-[13px] text-cc-muted">
-            In Xero{state ? `, ${state}` : ""}{summary.data?.tenant_name ? ` (${summary.data.tenant_name})` : ""}.
-          </p>
-        ) : (
-          <p className="text-[13px] text-cc-muted">
-            {XERO_SENDABLE.has(invoice.status) ? "Not in Xero yet." : invoice.status === "draft" ? "Goes to Xero once it's approved." : "Not sent to Xero."}
-          </p>
-        )}
+        <p className="text-[13px]" style={{ color: XERO_TONE[line.tone] }}>{line.text}</p>
       </div>
-      {canSend && invoice.xero_status !== "PAID" && (
-        <button
-          type="button"
-          onClick={() => void send()}
-          disabled={sending}
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-cc-border px-3 text-[13px] font-medium transition-colors hover:bg-cc-soft disabled:opacity-60"
-        >
-          {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          {invoice.xero_invoice_id || invoice.xero_sync_error ? "Send again" : "Send to Xero"}
+      {line.action && summary.data?.connected && <XeroActionButton invoice={invoice} label={line.action} />}
+    </div>
+  );
+}
+
+/** Invoices that couldn't reach Xero (or whose payment couldn't be recorded
+ *  there), gathered at the top of the register so none go unnoticed. */
+function XeroNeedsAttention({ invoices, onOpen }: { invoices: Invoice[]; onOpen: (invoice: Invoice) => void }) {
+  const summary = useXeroSummary();
+  const [showAll, setShowAll] = useState(false);
+  if (!summary.data?.connected) return null;
+  const stuck = invoices.filter((invoice) => invoice.xero_sync_error && !["cancelled", "void", "draft"].includes(invoice.status));
+  if (!stuck.length) return null;
+  const shown = showAll ? stuck : stuck.slice(0, 3);
+  return (
+    <section
+      aria-label="Xero needs attention"
+      className="rounded-2xl border bg-white p-4"
+      style={{ borderColor: "var(--cc-danger-border, #FECACA)" }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold">
+          {stuck.length === 1 ? "1 invoice needs attention in Xero" : `${stuck.length} invoices need attention in Xero`}
+        </p>
+        <p className="text-[12px] text-cc-muted">Fix the cause, then press Try again. Everything else syncs on its own.</p>
+      </div>
+      <ul className="mt-3 divide-y divide-cc-border">
+        {shown.map((invoice) => (
+          <li key={invoice.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+            <div className="min-w-0">
+              <button type="button" onClick={() => onOpen(invoice)} className="text-[13px] font-semibold hover:underline">
+                {invoice.invoice_number}
+              </button>
+              <span className="text-[13px] text-cc-muted"> · {invoice.recipient_name} · {cents(invoice.total_cents, invoice.currency)}</span>
+              <p className="text-[13px]" style={{ color: "var(--cc-danger-text)" }}>{invoice.xero_sync_error}</p>
+            </div>
+            <XeroActionButton invoice={invoice} label="Try again" />
+          </li>
+        ))}
+      </ul>
+      {stuck.length > 3 && (
+        <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-1 text-[13px] font-medium text-cc-muted hover:underline">
+          {showAll ? "Show fewer" : `Show all ${stuck.length}`}
         </button>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -1255,6 +1350,32 @@ export default function Billing() {
     if (canInvoice) void loadBilling();
   }, [canInvoice]);
 
+  // A Xero action on an invoice (Try again, Send to Xero) reloads the list.
+  useEffect(() => {
+    const reload = () => void loadBilling({ silent: true });
+    window.addEventListener(BILLING_CHANGED, reload);
+    return () => window.removeEventListener(BILLING_CHANGED, reload);
+  }, []);
+
+  // Opening Billing asks Xero about payments (the server does this at most
+  // every few minutes), so payments show without anyone pressing Sync.
+  const xeroSummary = useXeroSummary();
+  const xeroConnected = Boolean(xeroSummary.data?.connected);
+  useEffect(() => {
+    if (!canInvoice || !xeroConnected) return;
+    let cancelled = false;
+    refreshXeroPayments()
+      .then((result) => {
+        if (cancelled || !result.paid) return;
+        toast({ title: result.paid === 1 ? "1 payment came in from Xero" : `${result.paid} payments came in from Xero` });
+        void loadBilling({ silent: true });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [canInvoice, xeroConnected]);
+
   async function createInvoice() {
     if (!canCreateDraft || creatingInvoice) return;
     setCreatingInvoice(true);
@@ -2213,6 +2334,14 @@ export default function Billing() {
 
           {/* Invoice register + revenue */}
           <div className="min-w-0 space-y-4" hidden={workspace !== "invoices"}>
+            <XeroNeedsAttention
+              invoices={invoices}
+              onOpen={(invoice) => {
+                setInvoiceFilter("all");
+                setInvoiceSearch(invoice.invoice_number);
+                setOpenInvoiceId(invoice.id);
+              }}
+            />
             <section className="rounded-2xl border border-cc-border bg-white" aria-label={translate("billing.invoiceRegister")}>
               <div className="flex flex-col gap-3 border-b border-cc-border p-4 sm:flex-row sm:items-center">
                 <div className="relative min-w-0 flex-1">

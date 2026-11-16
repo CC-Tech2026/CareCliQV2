@@ -39,11 +39,13 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { formatAppDate, formatAppTime } from "@/lib/datetime";
 import { ApiAccessPanel } from "./ApiAccessPanel";
 import {
+  dismissEarlierXero,
   disconnectXero,
   getApiOverview,
   getXeroOptions,
   getXeroStatus,
   saveXeroSettings,
+  sendEarlierToXero,
   startXeroConnect,
   syncXeroNow,
   type XeroSettings,
@@ -183,6 +185,7 @@ function XeroPanel({
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [answeringEarlier, setAnsweringEarlier] = useState<"send" | "skip" | null>(null);
   useEffect(() => setDraft(status.settings), [status.settings]);
 
   const optionsQuery = useOrgQuery(["integrations", "xero", "options"], {
@@ -221,6 +224,27 @@ function XeroPanel({
       setSaving(false);
     }
   };
+  const answerEarlier = async (answer: "send" | "skip") => {
+    setAnsweringEarlier(answer);
+    try {
+      if (answer === "send") {
+        const result = await sendEarlierToXero();
+        toast({
+          title: result.failed
+            ? `${result.sent} sent to Xero, ${result.failed} need attention`
+            : `${result.sent} ${result.sent === 1 ? "invoice" : "invoices"} sent to Xero`,
+        });
+      } else {
+        await dismissEarlierXero();
+        toast({ title: "Only invoices approved from now on will go to Xero" });
+      }
+      refresh();
+    } catch (err) {
+      toast({ title: "Couldn't do that", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+    } finally {
+      setAnsweringEarlier(null);
+    }
+  };
   const disconnect = async () => {
     try {
       await disconnectXero();
@@ -243,6 +267,12 @@ function XeroPanel({
     ? taxRates
     : [{ type: draft.tax_type, name: draft.tax_type === "EXEMPTOUTPUT" ? "GST Free Income" : draft.tax_type }, ...taxRates];
   const recent = status.recent ?? [];
+  const banks = optionsQuery.data?.bank_accounts ?? [];
+  const bankChoices =
+    draft.payment_account_id && !banks.some((b) => b.id === draft.payment_account_id)
+      ? [{ id: draft.payment_account_id, code: null, name: draft.payment_account_name || "Saved account" }, ...banks]
+      : banks;
+  const earlier = status.earlier;
 
   return (
     <>
@@ -284,6 +314,47 @@ function XeroPanel({
           </div>
         )}
 
+        {earlier && earlier.count > 0 && (
+          <section className="space-y-3 rounded-xl border border-cc-border p-4" aria-label="Invoices from before you connected">
+            <PanelHeading>
+              {earlier.count === 1
+                ? "1 invoice from before you connected isn't in Xero"
+                : `${earlier.count} invoices from before you connected aren't in Xero`}
+            </PanelHeading>
+            <p className="text-[13px]" style={{ color: MUTED }}>
+              {money(earlier.total_cents)} in all, approved before {status.connected_at ? formatAppDate(status.connected_at) : "you connected"}.
+              Send them if Xero should have them too. Leave them out if they're already in your books.
+            </p>
+            <ul className="space-y-1 text-[13px]">
+              {earlier.invoices.slice(0, 5).map((row) => (
+                <li key={row.id} className="flex justify-between gap-3">
+                  <span className="min-w-0 truncate">
+                    <span className="font-medium tabular-nums">{row.invoice_number}</span>
+                    {row.payer ? <span style={{ color: MUTED }}> · {row.payer}</span> : null}
+                  </span>
+                  <span className="shrink-0 tabular-nums">{money(row.total_cents)}</span>
+                </li>
+              ))}
+              {earlier.count > 5 && <li style={{ color: MUTED }}>and {earlier.count - 5} more</li>}
+            </ul>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                className="gap-1.5"
+                disabled={answeringEarlier !== null}
+                onClick={() => void answerEarlier("send")}
+                style={{ background: "var(--cc-cta)", color: "#fff" }}
+              >
+                {answeringEarlier === "send" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Send them to Xero
+              </Button>
+              <Button size="sm" variant="outline" disabled={answeringEarlier !== null} onClick={() => void answerEarlier("skip")}>
+                Leave them out
+              </Button>
+            </div>
+          </section>
+        )}
+
         {/* How syncing is going */}
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -297,7 +368,7 @@ function XeroPanel({
             {[
               { label: "In Xero", value: status.counts?.in_xero ?? 0 },
               { label: "Waiting to send", value: status.counts?.waiting ?? 0 },
-              { label: "Couldn't be sent", value: status.counts?.failed ?? 0, danger: true },
+              { label: "Need attention", value: status.counts?.failed ?? 0, danger: true },
             ].map((s) => (
               <div key={s.label} className="px-4 py-3">
                 <dd className="text-xl font-semibold tabular-nums" style={{ color: s.danger && s.value > 0 ? "var(--cc-danger-text)" : TEXT }}>{s.value}</dd>
@@ -307,8 +378,8 @@ function XeroPanel({
           </dl>
           <p className="text-xs" style={{ color: MUTED }}>
             {status.last_payment_check_at
-              ? `Payments last checked ${when(status.last_payment_check_at)}. Xero is checked every 30 minutes.`
-              : "Payments are checked every 30 minutes, or press Sync now."}
+              ? `Payments last checked ${when(status.last_payment_check_at)}. Xero is checked every 30 minutes, and whenever someone opens Billing.`
+              : "Payments are checked every 30 minutes, and whenever someone opens Billing."}
           </p>
         </section>
 
@@ -409,6 +480,45 @@ function XeroPanel({
           </div>
           <p className="text-xs" style={{ color: MUTED }}>Cancelling an invoice here voids it in Xero.</p>
         </section>
+
+        <section className="space-y-4">
+          <PanelHeading>Payments</PanelHeading>
+          <p className="text-[13px]" style={{ color: MUTED }}>
+            Payments recorded in Xero mark the invoice paid here. Pressing Mark paid here records the payment in Xero too,
+            so it's only ever entered once.
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="xero-bank" className="text-[13px]">Bank account for payments marked here</Label>
+            <Select
+              value={draft.payment_account_id || "auto"}
+              onValueChange={(v) => {
+                const bank = bankChoices.find((b) => b.id === v);
+                setDraft({
+                  ...draft,
+                  payment_account_id: v === "auto" ? null : v,
+                  payment_account_name: v === "auto" ? null : bank?.name ?? null,
+                });
+              }}
+            >
+              <SelectTrigger id="xero-bank"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">
+                  {banks.length === 1 ? `${banks[0].name} (your only bank account)` : "Choose an account"}
+                </SelectItem>
+                {bankChoices.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.code ? `${b.code} · ${b.name}` : b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs" style={{ color: banks.length > 1 && !draft.payment_account_id ? "var(--cc-danger-text)" : MUTED }}>
+              {optionsQuery.isLoading
+                ? "Loading your Xero bank accounts..."
+                : banks.length > 1 && !draft.payment_account_id
+                  ? "You have more than one bank account in Xero. Choose one, or payments marked here won't reach Xero."
+                  : "The account the money is paid into, so it matches in bank reconciliation."}
+            </p>
+          </div>
+        </section>
       </SidePanel>
 
       <AlertDialog open={confirmDisconnect} onOpenChange={setConfirmDisconnect}>
@@ -461,9 +571,17 @@ function XeroTile({ status }: { status: XeroStatus }) {
         logoIsName
         name="Xero"
         category="Accounting"
-        description="Approved invoices go to Xero automatically, and payments made there mark them paid here."
+        description="Approved invoices go to Xero on their own, and payments sync both ways."
         status={tileStatus}
-        detail={status.connected ? <>Connected to <span className="font-semibold">{status.tenant_name || "your Xero organisation"}</span></> : undefined}
+        detail={
+          status.connected ? (
+            status.earlier?.count ? (
+              <>{status.earlier.count} older {status.earlier.count === 1 ? "invoice needs" : "invoices need"} your answer. Open Manage.</>
+            ) : (
+              <>Connected to <span className="font-semibold">{status.tenant_name || "your Xero organisation"}</span></>
+            )
+          ) : undefined
+        }
         action={
           status.connected ? (
             <Button variant="outline" size="sm" onClick={() => setPanelOpen(true)}>Manage</Button>

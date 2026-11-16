@@ -376,3 +376,136 @@ async def test_our_own_unrecorded_send_is_still_picked_up_by_number():
         result = await xs.push_invoice(ORG, "inv-1")
     assert result["ok"] is True
     assert db.tables["invoices"][0]["xero_invoice_id"] == "ours"
+
+
+# --- Less manual work: payments both ways, part payments, invoices from before connecting ---
+
+BANK_ACCOUNTS = {"Accounts": [
+    {"AccountID": "bank-1", "Code": "090", "Name": "Business Bank Account", "Type": "BANK", "Status": "ACTIVE"},
+    {"AccountID": "rev-1", "Code": "200", "Name": "Sales", "Type": "REVENUE", "Class": "REVENUE", "Status": "ACTIVE"},
+]}
+
+
+@pytest.mark.asyncio
+async def test_marked_paid_here_is_recorded_in_xero_into_the_only_bank_account():
+    paid = {**INVOICE, "status": "paid", "xero_invoice_id": "xinv-1", "xero_status": "AUTHORISED",
+            "payment_date": "2026-11-20", "payment_reference": "EFT-8001"}
+    db = _DB(xero_connections=[dict(CONNECTION)], invoices=[paid])
+    fake, calls = _api_for({
+        ("GET", "/Invoices/xinv-1"): {"Invoices": [{"InvoiceID": "xinv-1", "Status": "AUTHORISED", "AmountDue": 105.35, "Total": 105.35}]},
+        ("GET", "/Accounts"): BANK_ACCOUNTS,
+        ("PUT", "/Payments"): {"Payments": [{"PaymentID": "pay-1", "Status": "AUTHORISED"}]},
+    })
+    with patch.object(xs, "get_supabase_admin", return_value=db), patch.object(xs, "_api", fake):
+        result = await xs.record_payment(ORG, "inv-1")
+    assert result == {"ok": True, "message": "Payment recorded in Xero."}
+    sent = [j for m, p, _q, j in calls if (m, p) == ("PUT", "/Payments")][0]["Payments"][0]
+    assert sent == {"Invoice": {"InvoiceID": "xinv-1"}, "Account": {"AccountID": "bank-1"}, "Date": "2026-11-20",
+                    "Amount": 105.35, "Reference": "EFT-8001"}
+    saved = db.tables["invoices"][0]
+    assert saved["xero_status"] == "PAID" and saved["xero_amount_due_cents"] == 0 and saved["xero_sync_error"] is None
+
+
+@pytest.mark.asyncio
+async def test_with_several_bank_accounts_the_director_is_asked_to_choose():
+    paid = {**INVOICE, "status": "paid", "xero_invoice_id": "xinv-1"}
+    db = _DB(xero_connections=[dict(CONNECTION)], invoices=[dict(paid)])
+    two = {"Accounts": BANK_ACCOUNTS["Accounts"] + [{"AccountID": "bank-2", "Name": "Savings", "Type": "BANK", "Status": "ACTIVE"}]}
+    fake, calls = _api_for({
+        ("GET", "/Invoices/xinv-1"): {"Invoices": [{"InvoiceID": "xinv-1", "Status": "AUTHORISED", "AmountDue": 105.35}]},
+        ("GET", "/Accounts"): two,
+    })
+    with patch.object(xs, "get_supabase_admin", return_value=db), patch.object(xs, "_api", fake):
+        result = await xs.record_payment(ORG, "inv-1")
+    assert result["ok"] is False
+    assert "Choose which bank account" in db.tables["invoices"][0]["xero_sync_error"]
+    assert not any(m == "PUT" for m, *_ in calls)
+
+    chosen = {**CONNECTION, "settings": {"payment_account_id": "bank-2"}}
+    db = _DB(xero_connections=[chosen], invoices=[dict(paid)])
+    fake, calls = _api_for({
+        ("GET", "/Invoices/xinv-1"): {"Invoices": [{"InvoiceID": "xinv-1", "Status": "AUTHORISED", "AmountDue": 105.35}]},
+        ("PUT", "/Payments"): {"Payments": [{"PaymentID": "pay-1"}]},
+    })
+    with patch.object(xs, "get_supabase_admin", return_value=db), patch.object(xs, "_api", fake):
+        assert (await xs.record_payment(ORG, "inv-1", row=chosen))["ok"] is True
+    assert [j for m, p, _q, j in calls if m == "PUT"][0]["Payments"][0]["Account"] == {"AccountID": "bank-2"}
+
+
+@pytest.mark.asyncio
+async def test_already_paid_in_xero_is_not_paid_twice():
+    paid = {**INVOICE, "status": "paid", "xero_invoice_id": "xinv-1"}
+    db = _DB(xero_connections=[dict(CONNECTION)], invoices=[paid])
+    fake, calls = _api_for({
+        ("GET", "/Invoices/xinv-1"): {"Invoices": [{"InvoiceID": "xinv-1", "Status": "PAID", "AmountDue": 0, "AmountPaid": 105.35}]},
+    })
+    with patch.object(xs, "get_supabase_admin", return_value=db), patch.object(xs, "_api", fake):
+        assert (await xs.record_payment(ORG, "inv-1"))["message"] == "Already paid in Xero."
+    assert [m for m, *_ in calls] == ["GET"]
+
+
+def test_marking_paid_here_sends_the_payment_but_only_for_invoices_in_xero():
+    spawned = []
+    with patch.object(xs, "_spawn", lambda coro: (spawned.append(coro), coro.close())):
+        xs.invoice_status_changed({**INVOICE, "status": "paid", "xero_invoice_id": "xinv-1"}, "sent")
+        xs.invoice_status_changed({**INVOICE, "status": "paid"}, "sent")  # never in Xero
+    assert len(spawned) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_part_payment_in_xero_shows_as_amounts():
+    open_invoice = {**INVOICE, "status": "sent", "xero_invoice_id": "xinv-1", "xero_status": "AUTHORISED"}
+    db = _DB(xero_connections=[dict(CONNECTION)], invoices=[open_invoice])
+    fake, _calls = _api_for({
+        ("GET", "/Invoices"): {"Invoices": [{"InvoiceID": "xinv-1", "Status": "AUTHORISED", "AmountPaid": 50, "AmountDue": 55.35}]},
+    })
+    with patch.object(xs, "get_supabase_admin", return_value=db), patch.object(xs, "_api", fake):
+        assert (await xs.check_payments(ORG))["paid"] == 0
+    saved = db.tables["invoices"][0]
+    assert saved["status"] == "sent"
+    assert saved["xero_amount_paid_cents"] == 5000 and saved["xero_amount_due_cents"] == 5535
+
+
+@pytest.mark.asyncio
+async def test_invoices_from_before_connecting_wait_until_the_director_says_so():
+    row = {**CONNECTION, "connected_at": "2026-11-10T00:00:00+00:00"}
+    before = {**INVOICE, "id": "old", "invoice_number": "OLD-1", "status": "sent", "finalized_at": "2026-11-01T00:00:00+00:00"}
+    after = {**INVOICE, "id": "new", "invoice_number": "NEW-1", "status": "finalized", "finalized_at": "2026-11-12T00:00:00+00:00"}
+    db = _DB(xero_connections=[row], invoices=[before, after], participants=[PARTICIPANT], xero_contacts=[])
+    pushed = []
+
+    async def fake_push(org_id, invoice_id, *, row=None):
+        pushed.append(invoice_id)
+        return {"ok": True, "message": "Sent to Xero."}
+
+    with patch.object(xs, "get_supabase_admin", return_value=db), patch.object(xs, "push_invoice", fake_push):
+        await xs._retry_unsent(ORG, row)
+        assert pushed == ["new"]
+        offer = xs._earlier_offer(ORG, row)
+        assert offer["count"] == 1 and offer["invoices"][0]["invoice_number"] == "OLD-1"
+        assert xs._invoice_counts(ORG, row)["earlier"] == 1
+
+        pushed.clear()
+        with patch.object(xs.audit_service, "log_action", AsyncMock()):
+            result = await xs.send_earlier(DIRECTOR)
+        assert pushed == ["old"] and result["sent"] == 1
+        assert db.tables["xero_connections"][0]["settings"]["include_earlier"] is True
+
+
+@pytest.mark.asyncio
+async def test_opening_billing_checks_for_payments_at_most_every_few_minutes():
+    fresh = {**CONNECTION, "last_payment_check_at": datetime.now(timezone.utc).isoformat()}
+    stale = {**CONNECTION, "last_payment_check_at": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()}
+    for row, expect in ((fresh, False), (stale, True)):
+        db = _DB(xero_connections=[row], invoices=[])
+        with patch.object(xs, "get_supabase_admin", return_value=db), \
+             patch.object(xs, "check_payments", AsyncMock(return_value={"paid": 0, "checked": 0})) as check:
+            result = await xs.refresh_payments({**COORDINATOR})
+        assert result["checked"] is expect and check.await_count == int(expect)
+
+
+def test_xero_wont_connect_while_myob_is():
+    with patch.object(xs, "_myob_connected", lambda _org: True):
+        with pytest.raises(HTTPException) as exc:
+            xs.create_connect_url(DIRECTOR)
+    assert exc.value.status_code == 409 and "MYOB" in exc.value.detail

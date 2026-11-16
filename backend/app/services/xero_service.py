@@ -13,9 +13,16 @@ How it fits together
   the background: the payer (plan manager, participant or the NDIA) as the
   contact, one line per support with its NDIS item code, GST-free by default.
   Reopening and re-approving updates the same Xero invoice; cancelling voids it.
-- Every 30 minutes (and on "Sync now") we ask Xero about the invoices it has
-  that CareCliQ hasn't seen paid, and mark the paid ones paid here, with the
-  payment date and reference. Invoices that failed to send are retried then too.
+- Every 30 minutes, on "Sync now", and when someone opens Billing (at most
+  every 5 minutes) we ask Xero about the invoices it has that CareCliQ hasn't
+  seen paid: paid ones are marked paid here with the payment date and
+  reference, and part payments are shown as amounts. Invoices that failed to
+  send are retried in the 30-minute pass and on Sync now.
+- A payment marked in CareCliQ (Mark paid) is recorded against the Xero
+  invoice too, into the bank account chosen in the settings (or the only one
+  there is), so nobody enters a payment twice and the two always agree.
+- Invoices approved before Xero was connected don't go on their own: the
+  director is asked once whether to send them.
 
 Nothing here ever blocks CareCliQ's own invoicing: if Xero is down or the
 connection has lapsed, the invoice is saved as usual and the error is shown on
@@ -60,6 +67,14 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "invoice_status": "AUTHORISED",
     # Send each invoice when it's approved, without pressing anything.
     "auto_send": True,
+    # The Xero bank account (AccountID) payments marked in CareCliQ go into.
+    # Unset and Xero has exactly one bank account: that one is used.
+    "payment_account_id": None,
+    "payment_account_name": None,
+    # Invoices approved before Xero was connected go only once the director
+    # says so (or one at a time with Send to Xero).
+    "include_earlier": False,
+    "earlier_dismissed": False,
 }
 INVOICE_STATUSES_IN_XERO = {"AUTHORISED", "DRAFT"}
 # CareCliQ statuses that mean "approved, so it belongs in Xero".
@@ -72,6 +87,10 @@ TOKEN_SKEW = timedelta(minutes=2)
 ID_BATCH = 40
 # Invoices retried per organisation per pass, so one bad file can't stall the rest.
 RETRY_LIMIT = 25
+# Opening Billing checks Xero for payments at most this often per organisation.
+REFRESH_AFTER = timedelta(minutes=5)
+# Invoices from before connecting sent in one go, at most.
+EARLIER_LIMIT = 200
 
 
 class XeroError(Exception):
@@ -253,9 +272,23 @@ def _token_fields(tokens: dict) -> dict:
     }
 
 
+def _myob_connected(org_id: str) -> bool:
+    try:
+        from . import myob_service  # local import: optional, and imports billing
+    except ImportError:
+        return False
+    try:
+        return bool(myob_service.is_connected(org_id))
+    except Exception:
+        return False
+
+
 def create_connect_url(user: dict) -> dict:
     org_id = _require_director(user)
     _require_configured()
+    if _myob_connected(org_id):
+        # One accounting system per organisation, so no invoice is booked twice.
+        raise HTTPException(status_code=409, detail="MYOB is connected. Disconnect MYOB first: invoices go to one accounting system.")
     state = secrets.token_urlsafe(32)
     db = get_supabase_admin()
     # Clear out abandoned attempts, then remember this one.
@@ -321,7 +354,9 @@ async def complete_connection(user: dict, code: str, state: str) -> dict:
         "xero_connection_id": tenant.get("id"),
         **_token_fields(tokens),
         "connected_by": str(get_user_id(user)),
-        "connected_at": _iso(_now()),
+        # Reconnecting keeps the original date: it decides which invoices
+        # count as "from before Xero was connected".
+        "connected_at": (existing or {}).get("connected_at") or _iso(_now()),
         "settings": _settings_of(existing),
         "last_error": None,
         "last_error_at": None,
@@ -425,25 +460,52 @@ async def _api(
 # Status and settings
 # ---------------------------------------------------------------------------
 
-def _invoice_counts(org_id: str) -> dict:
+def _invoice_counts(org_id: str, row: Optional[dict] = None) -> dict:
     try:
         rows = (
             get_supabase_admin()
             .table("invoices")
-            .select("status, xero_invoice_id, xero_sync_error")
+            .select("status, xero_invoice_id, xero_sync_error, finalized_at, issued_at, created_at")
             .eq("organization_id", org_id)
             .execute()
         ).data or []
     except Exception as exc:
         if _schema_missing(exc):
-            return {"in_xero": 0, "waiting": 0, "failed": 0}
+            return {"in_xero": 0, "waiting": 0, "failed": 0, "earlier": 0}
         raise
+    row = row or {}
     in_xero = sum(1 for r in rows if r.get("xero_invoice_id"))
     failed = sum(1 for r in rows if r.get("xero_sync_error") and r.get("status") not in CLOSED_STATUSES)
-    waiting = sum(
-        1 for r in rows if r.get("status") in APPROVED_STATUSES and not r.get("xero_invoice_id") and not r.get("xero_sync_error")
-    )
-    return {"in_xero": in_xero, "waiting": waiting, "failed": failed}
+    unsent = [
+        r for r in rows if r.get("status") in APPROVED_STATUSES and not r.get("xero_invoice_id") and not r.get("xero_sync_error")
+    ]
+    earlier = sum(1 for r in unsent if row and _is_earlier(row, r))
+    return {"in_xero": in_xero, "waiting": len(unsent) - earlier, "failed": failed, "earlier": earlier}
+
+
+def _earlier_offer(org_id: str, row: dict) -> Optional[dict]:
+    """Invoices approved before connecting that aren't in Xero, for the
+    one-time "Send these too?" question. None once answered."""
+    conn_settings = _settings_of(row)
+    if conn_settings.get("include_earlier") or conn_settings.get("earlier_dismissed"):
+        return None
+    try:
+        earlier = [r for r in _unsent(org_id) if _is_earlier(row, r)]
+    except Exception as exc:
+        if _schema_missing(exc):
+            return None
+        raise
+    if not earlier:
+        return None
+    return {
+        "count": len(earlier),
+        "total_cents": sum(int(r.get("total_cents") or 0) for r in earlier),
+        "invoices": [
+            {"id": r["id"], "invoice_number": r.get("invoice_number"), "payer": r.get("recipient_name"),
+             "total_cents": r.get("total_cents") or 0, "approved_at": r.get("finalized_at") or r.get("issued_at")}
+            for r in earlier[:12]
+        ],
+    }
 
 
 def _recent_activity(org_id: str, limit: int = 8) -> list[dict]:
@@ -504,8 +566,9 @@ def get_status(user: dict) -> dict:
         "last_payment_check_at": row.get("last_payment_check_at"),
         "last_error": row.get("last_error"),
         "last_error_at": row.get("last_error_at"),
-        "counts": _invoice_counts(org_id),
+        "counts": _invoice_counts(org_id, row),
         "recent": _recent_activity(org_id),
+        "earlier": _earlier_offer(org_id, row),
     }
 
 
@@ -517,7 +580,13 @@ def get_summary(user: dict) -> dict:
     if get_user_role(user) not in BILLING_ROLES:
         raise HTTPException(status_code=403, detail="Billing access is not available for this role.")
     row = _load_connection(str(get_user_organization_id(user))) if is_configured() else None
-    return {"connected": bool(row), "tenant_name": (row or {}).get("tenant_name")}
+    return {
+        "connected": bool(row),
+        "tenant_name": (row or {}).get("tenant_name"),
+        "auto_send": bool(_settings_of(row).get("auto_send")) if row else False,
+        "connected_at": (row or {}).get("connected_at"),
+        "include_earlier": bool(_settings_of(row).get("include_earlier")) if row else False,
+    }
 
 
 def update_settings(user: dict, data: dict) -> dict:
@@ -543,6 +612,12 @@ def update_settings(user: dict, data: dict) -> dict:
         merged["invoice_status"] = status
     if "auto_send" in data:
         merged["auto_send"] = bool(data["auto_send"])
+    if "payment_account_id" in data:
+        account = str(data["payment_account_id"] or "").strip()
+        if len(account) > 64:
+            raise HTTPException(status_code=422, detail="Choose the bank account payments go into.")
+        merged["payment_account_id"] = account or None
+        merged["payment_account_name"] = (str(data.get("payment_account_name") or "").strip()[:120] or None) if account else None
     _save_connection(org_id, {"settings": merged})
     return get_status(user)
 
@@ -569,7 +644,28 @@ async def list_options(user: dict) -> dict:
         for t in taxes.get("TaxRates") or []
         if t.get("Status") == "ACTIVE" and t.get("CanApplyToRevenue") is not False
     ]
-    return {"accounts": revenue, "tax_rates": rates}
+    return {"accounts": revenue, "tax_rates": rates, "bank_accounts": _banks_from(accounts)}
+
+
+def _banks_from(accounts: dict) -> list[dict]:
+    return [
+        {"id": a.get("AccountID"), "code": a.get("Code"), "name": a.get("Name")}
+        for a in accounts.get("Accounts") or []
+        if a.get("Type") == "BANK" and a.get("AccountID") and a.get("Status", "ACTIVE") == "ACTIVE"
+    ]
+
+
+async def _payment_account(row: dict) -> str:
+    """The Xero bank account a payment marked in CareCliQ goes into."""
+    chosen = _settings_of(row).get("payment_account_id")
+    if chosen:
+        return str(chosen)
+    banks = _banks_from(await _api(row, "GET", "/Accounts", params={"where": 'Status=="ACTIVE"'}))
+    if len(banks) == 1:
+        return str(banks[0]["id"])
+    if not banks:
+        raise XeroError("Xero has no bank account to record the payment in. Add one in Xero, then press Try again.")
+    raise XeroError("Choose which bank account payments go into, in Settings > Integrations > Xero, then press Try again.")
 
 
 # ---------------------------------------------------------------------------
@@ -724,8 +820,63 @@ def build_invoice_payload(
     return {k: v for k, v in body.items() if v is not None}
 
 
+_AMOUNT_COLUMNS = ("xero_amount_paid_cents", "xero_amount_due_cents")
+_amounts_ready = True
+
+
 def _mark_invoice(invoice_id: str, data: dict) -> None:
-    get_supabase_admin().table("invoices").update(data).eq("id", invoice_id).execute()
+    global _amounts_ready
+    if not _amounts_ready:
+        data = {k: v for k, v in data.items() if k not in _AMOUNT_COLUMNS}
+    try:
+        get_supabase_admin().table("invoices").update(data).eq("id", invoice_id).execute()
+    except Exception as exc:
+        if not any(col in str(exc) for col in _AMOUNT_COLUMNS):
+            raise
+        _amounts_ready = False  # migration 257 not applied yet: carry on without amounts
+        data = {k: v for k, v in data.items() if k not in _AMOUNT_COLUMNS}
+        get_supabase_admin().table("invoices").update(data).eq("id", invoice_id).execute()
+
+
+def _cents(value: Any) -> int:
+    return int(round(float(value or 0) * 100))
+
+
+def _amounts(xero_invoice: dict) -> dict:
+    return {
+        "xero_amount_paid_cents": _cents(xero_invoice.get("AmountPaid")),
+        "xero_amount_due_cents": _cents(xero_invoice.get("AmountDue")),
+    }
+
+
+def _approved_on(invoice: dict) -> Optional[datetime]:
+    return _parse_ts(invoice.get("finalized_at") or invoice.get("issued_at") or invoice.get("created_at"))
+
+
+def _is_earlier(row: dict, invoice: dict) -> bool:
+    """Approved before Xero was connected, and the director hasn't said to
+    send those. Such invoices only go when asked."""
+    if _settings_of(row).get("include_earlier"):
+        return False
+    connected = _parse_ts(row.get("connected_at"))
+    approved = _approved_on(invoice)
+    return bool(connected and approved and approved < connected)
+
+
+def _unsent(org_id: str) -> list[dict]:
+    """Approved invoices with no Xero copy yet, oldest first."""
+    rows = (
+        get_supabase_admin()
+        .table("invoices")
+        .select("id, invoice_number, recipient_name, total_cents, currency, status, xero_invoice_id, "
+                "xero_sync_error, finalized_at, issued_at, created_at")
+        .eq("organization_id", org_id)
+        .in_("status", sorted(APPROVED_STATUSES))
+        .is_("xero_invoice_id", "null")
+        .execute()
+    ).data or []
+    rows.sort(key=lambda r: str(r.get("finalized_at") or r.get("issued_at") or r.get("created_at") or ""))
+    return rows
 
 
 async def _find_by_number(row: dict, number: str) -> Optional[dict]:
@@ -789,6 +940,7 @@ async def push_invoice(org_id: str, invoice_id: str, *, row: Optional[dict] = No
                 "xero_status": existing.get("Status"),
                 "xero_synced_at": _iso(_now()),
                 "xero_sync_error": None,
+                **_amounts(existing),
             })
             return {"ok": True, "message": f"Already {str(existing.get('Status')).lower()} in Xero."}
         if existing and float(existing.get("AmountPaid") or 0) > 0:
@@ -816,6 +968,7 @@ async def push_invoice(org_id: str, invoice_id: str, *, row: Optional[dict] = No
             "xero_status": result.get("Status"),
             "xero_synced_at": _iso(_now()),
             "xero_sync_error": None,
+            **_amounts(result),
         })
         _save_connection(org_id, {"last_sync_at": _iso(_now()), "last_error": None, "last_error_at": None})
         return {"ok": True, "message": "Sent to Xero."}
@@ -851,8 +1004,55 @@ async def void_invoice(org_id: str, invoice_id: str, *, row: Optional[dict] = No
         return {"ok": False, "message": str(exc)}
 
 
+async def record_payment(org_id: str, invoice_id: str, *, row: Optional[dict] = None) -> dict:
+    """A payment marked in CareCliQ: record it against the Xero invoice too,
+    so nobody enters it twice and the books agree. Never raises."""
+    row = row or _load_connection(org_id)
+    invoice = _load_invoice(org_id, invoice_id) if row else None
+    if not row or not invoice or invoice.get("status") != "paid" or not invoice.get("xero_invoice_id"):
+        return {"ok": True, "message": "Nothing in Xero to record."}
+    xero_id = str(invoice["xero_invoice_id"])
+    try:
+        got = await _api(row, "GET", f"/Invoices/{xero_id}")
+        current = (got.get("Invoices") or [{}])[0]
+        state = str(current.get("Status") or "")
+        due = float(current.get("AmountDue") or 0)
+        if state == "PAID" or (state == "AUTHORISED" and due <= 0):
+            _mark_invoice(invoice_id, {"xero_status": "PAID", "xero_synced_at": _iso(_now()), "xero_sync_error": None,
+                                       **_amounts(current)})
+            return {"ok": True, "message": "Already paid in Xero."}
+        if state in {"DRAFT", "SUBMITTED"}:
+            raise XeroError("It's still a draft in Xero, so the payment can't be recorded there yet. "
+                            "Approve it in Xero, then press Try again.")
+        if state != "AUTHORISED":
+            raise XeroError(f"It's {state.lower() or 'not open'} in Xero, so the payment can't be recorded there.")
+        account = await _payment_account(row)
+        tz = head_office_timezone(org_id)
+        paid = await _api(row, "PUT", "/Payments", json={"Payments": [{
+            "Invoice": {"InvoiceID": xero_id},
+            "Account": {"AccountID": account},
+            "Date": str(invoice.get("payment_date") or app_today(tz).isoformat())[:10],
+            "Amount": round(due, 2),
+            "Reference": str(invoice.get("payment_reference") or "Recorded in CareCliQ")[:255],
+        }]})
+        result = (paid.get("Payments") or [{}])[0]
+        if result.get("HasValidationErrors") or result.get("ValidationErrors"):
+            message = "; ".join(e.get("Message", "") for e in result.get("ValidationErrors") or []) or "Xero didn't accept it."
+            raise XeroError(message)
+        total = _cents(current.get("Total"))
+        _mark_invoice(invoice_id, {
+            "xero_status": "PAID", "xero_synced_at": _iso(_now()), "xero_sync_error": None,
+            "xero_amount_paid_cents": total, "xero_amount_due_cents": 0,
+        })
+        return {"ok": True, "message": "Payment recorded in Xero."}
+    except XeroError as exc:
+        _mark_invoice(invoice_id, {"xero_sync_error": f"Paid here, but not recorded in Xero: {exc}"[:500]})
+        _note_error(org_id, str(exc) if isinstance(exc, XeroAuthError) else None)
+        return {"ok": False, "message": str(exc)}
+
+
 async def push_invoice_for_user(user: dict, invoice_id: str) -> dict:
-    """The "Send to Xero" button on an invoice."""
+    """The "Send to Xero" / "Try again" button on an invoice."""
     from .billing_service import BILLING_ROLES  # local import: billing imports this module
 
     if get_user_role(user) not in BILLING_ROLES:
@@ -860,7 +1060,11 @@ async def push_invoice_for_user(user: dict, invoice_id: str) -> dict:
     org_id = str(get_user_organization_id(user))
     if not _load_connection(org_id):
         raise HTTPException(status_code=409, detail="Xero isn't connected. A managing director can connect it in Settings > Integrations.")
-    result = await push_invoice(org_id, invoice_id)
+    invoice = _load_invoice(org_id, invoice_id) or {}
+    if invoice.get("status") == "paid":
+        result = await record_payment(org_id, invoice_id)
+    else:
+        result = await push_invoice(org_id, invoice_id)
     if not result["ok"]:
         raise HTTPException(status_code=502, detail=result["message"])
     return result
@@ -893,7 +1097,7 @@ async def check_payments(org_id: str, *, row: Optional[dict] = None) -> dict:
     open_rows = (
         get_supabase_admin()
         .table("invoices")
-        .select("id, status, xero_invoice_id, xero_status, invoice_number")
+        .select("*")
         .eq("organization_id", org_id)
         .in_("status", sorted(APPROVED_STATUSES))
         .execute()
@@ -923,6 +1127,7 @@ async def check_payments(org_id: str, *, row: Optional[dict] = None) -> dict:
                     "xero_synced_at": now,
                     "xero_sync_error": None,
                     "updated_at": now,
+                    **_amounts(xero_invoice),
                 })
                 await audit_service.log_action(
                     action_type="invoice.status_changed",
@@ -934,11 +1139,15 @@ async def check_payments(org_id: str, *, row: Optional[dict] = None) -> dict:
                     details={"source": "xero", "payment_date": paid_on, "reference": reference},
                 )
                 paid += 1
-            elif state and state != ours.get("xero_status"):
+            elif state and (
+                state != ours.get("xero_status")
+                or _cents(xero_invoice.get("AmountPaid")) != int(ours.get("xero_amount_paid_cents") or 0)
+            ):
                 note = None
                 if state in {"VOIDED", "DELETED"}:
                     note = f"{state.capitalize()} in Xero but still open here. Cancel it in CareCliQ, or send it again."
-                _mark_invoice(str(ours["id"]), {"xero_status": state, "xero_sync_error": note})
+                _mark_invoice(str(ours["id"]), {"xero_status": state, "xero_sync_error": note,
+                                                "xero_synced_at": _iso(_now()), **_amounts(xero_invoice)})
     _save_connection(org_id, {"last_payment_check_at": _iso(_now())})
     return {"paid": paid, "checked": len(ids)}
 
@@ -946,16 +1155,7 @@ async def check_payments(org_id: str, *, row: Optional[dict] = None) -> dict:
 async def _retry_unsent(org_id: str, row: dict) -> dict:
     if not _settings_of(row).get("auto_send"):
         return {"sent": 0, "failed": 0}
-    rows = (
-        get_supabase_admin()
-        .table("invoices")
-        .select("id, status, xero_invoice_id")
-        .eq("organization_id", org_id)
-        .in_("status", sorted(APPROVED_STATUSES))
-        .is_("xero_invoice_id", "null")
-        .limit(RETRY_LIMIT)
-        .execute()
-    ).data or []
+    rows = [r for r in _unsent(org_id) if not _is_earlier(row, r)][:RETRY_LIMIT]
     sent = failed = 0
     for invoice in rows:
         result = await push_invoice(org_id, str(invoice["id"]), row=row)
@@ -992,6 +1192,69 @@ async def sync_now(user: dict) -> dict:
     except XeroError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {**result, "status": get_status(user)}
+
+
+async def refresh_payments(user: dict) -> dict:
+    """Opening Billing: check Xero for payments if nobody has in the last few
+    minutes, so payments show without anyone pressing anything."""
+    from .billing_service import BILLING_ROLES  # local import: billing imports this module
+
+    if get_user_role(user) not in BILLING_ROLES:
+        raise HTTPException(status_code=403, detail="Billing access is not available for this role.")
+    org_id = str(get_user_organization_id(user))
+    row = _load_connection(org_id) if is_configured() else None
+    if not row:
+        return {"checked": False, "paid": 0}
+    last = _parse_ts(row.get("last_payment_check_at"))
+    if last and _now() - last < REFRESH_AFTER:
+        return {"checked": False, "paid": 0}
+    _save_connection(org_id, {"last_payment_check_at": _iso(_now())})  # one check at a time
+    try:
+        result = await check_payments(org_id, row=row)
+    except XeroError as exc:
+        _note_error(org_id, str(exc))
+        return {"checked": False, "paid": 0, "error": str(exc)}
+    return {"checked": True, "paid": result["paid"]}
+
+
+async def send_earlier(user: dict) -> dict:
+    """ "Send them too": invoices approved before Xero was connected."""
+    org_id = _require_director(user)
+    row = _load_connection(org_id)
+    if not row:
+        raise HTTPException(status_code=409, detail="Connect Xero first.")
+    earlier = [r for r in _unsent(org_id) if _is_earlier(row, r)][:EARLIER_LIMIT]
+    merged = {**_settings_of(row), "include_earlier": True}
+    _save_connection(org_id, {"settings": merged})
+    row = {**row, "settings": merged}
+    sent = failed = 0
+    for invoice in earlier:
+        result = await push_invoice(org_id, str(invoice["id"]), row=row)
+        if result["ok"]:
+            sent += 1
+        else:
+            failed += 1
+            if "connection" in result["message"].lower() or "reconnect" in result["message"].lower():
+                break
+    await audit_service.log_action(
+        action_type="integration.xero_sent_earlier",
+        entity_type="organization",
+        entity_id=org_id,
+        user_id=str(get_user_id(user)),
+        organization_id=org_id,
+        details={"sent": sent, "failed": failed},
+    )
+    return {"sent": sent, "failed": failed, "status": get_status(user)}
+
+
+def dismiss_earlier(user: dict) -> dict:
+    """ "Not now": only invoices approved from now on go to Xero."""
+    org_id = _require_director(user)
+    row = _load_connection(org_id)
+    if not row:
+        raise HTTPException(status_code=409, detail="Connect Xero first.")
+    _save_connection(org_id, {"settings": {**_settings_of(row), "earlier_dismissed": True}})
+    return get_status(user)
 
 
 async def run_xero_pass() -> int:
@@ -1031,14 +1294,22 @@ def _spawn(coro) -> None:
     task.add_done_callback(_background.discard)
 
 
-async def _after_change(org_id: str, invoice_id: str, status: str) -> None:
+async def _after_change(org_id: str, invoice_id: str, status: str, previous_status: Optional[str] = None) -> None:
     try:
         row = _load_connection(org_id)
         if not row:
             return
         if status in CLOSED_STATUSES:
             await void_invoice(org_id, invoice_id, row=row)
+        elif status == "paid":
+            await record_payment(org_id, invoice_id, row=row)
         elif status in APPROVED_STATUSES and _settings_of(row).get("auto_send"):
+            if previous_status in APPROVED_STATUSES:
+                # Already approved before (e.g. sent -> overdue) and never in
+                # Xero: only if it isn't from before Xero was connected.
+                invoice = _load_invoice(org_id, invoice_id) or {}
+                if _is_earlier(row, invoice):
+                    return
             await push_invoice(org_id, invoice_id, row=row)
     except Exception as exc:  # never let Xero break invoicing
         logger.warning("Xero follow-up for invoice %s failed: %s", invoice_id, exc)
@@ -1054,6 +1325,10 @@ def invoice_status_changed(invoice: dict, previous_status: Optional[str]) -> Non
         return
     if status in CLOSED_STATUSES:
         relevant = bool(invoice.get("xero_invoice_id"))
+    elif status == "paid":
+        # Marked paid in CareCliQ: record it in Xero too. (Payments that come
+        # from Xero are saved without passing through here.)
+        relevant = bool(invoice.get("xero_invoice_id")) and previous_status in APPROVED_STATUSES
     elif status in APPROVED_STATUSES:
         # Newly approved (or re-approved after reopening), or approved but
         # never sent. Sent -> overdue and the like change nothing in Xero.
@@ -1064,4 +1339,4 @@ def invoice_status_changed(invoice: dict, previous_status: Optional[str]) -> Non
         return
     org_id = invoice.get("organization_id")
     if org_id and invoice.get("id"):
-        _spawn(_after_change(str(org_id), str(invoice["id"]), status))
+        _spawn(_after_change(str(org_id), str(invoice["id"]), status, previous_status))

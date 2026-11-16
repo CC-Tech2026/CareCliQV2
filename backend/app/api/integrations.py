@@ -56,6 +56,8 @@ class XeroSettings(BaseModel):
     tax_type: Optional[str] = Field(default=None, max_length=50)
     invoice_status: Optional[Literal["AUTHORISED", "DRAFT"]] = None
     auto_send: Optional[bool] = None
+    payment_account_id: Optional[str] = Field(default=None, max_length=64)
+    payment_account_name: Optional[str] = Field(default=None, max_length=120)
 
 
 @router.put("/xero/settings")
@@ -75,9 +77,27 @@ async def xero_sync(current_user: dict = Depends(get_current_user)):
     return await xero_service.sync_now(current_user)
 
 
+@router.post("/xero/refresh")
+async def xero_refresh(current_user: dict = Depends(get_current_user)):
+    """Opening Billing: check Xero for payments if it hasn't been checked lately."""
+    return await xero_service.refresh_payments(current_user)
+
+
+@router.post("/xero/earlier/send")
+async def xero_send_earlier(current_user: dict = Depends(get_current_user)):
+    """Send the invoices approved before Xero was connected."""
+    return await xero_service.send_earlier(current_user)
+
+
+@router.post("/xero/earlier/dismiss")
+async def xero_dismiss_earlier(current_user: dict = Depends(get_current_user)):
+    """Leave the invoices from before connecting out of Xero."""
+    return xero_service.dismiss_earlier(current_user)
+
+
 @router.post("/xero/invoices/{invoice_id}")
 async def xero_push_invoice(invoice_id: str, current_user: dict = Depends(get_current_user)):
-    """Send (or resend) one approved invoice to Xero."""
+    """Send (or resend) one approved invoice to Xero; for a paid one, record its payment there."""
     return await xero_service.push_invoice_for_user(current_user, invoice_id)
 
 

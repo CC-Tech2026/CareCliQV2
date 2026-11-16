@@ -9,6 +9,20 @@ export type XeroSettings = {
   invoice_status: "AUTHORISED" | "DRAFT";
   /** Send each invoice when it's approved in CareCliQ. */
   auto_send: boolean;
+  /** The Xero bank account payments marked in CareCliQ are recorded in.
+   *  Unset: the only bank account in Xero, if there's just one. */
+  payment_account_id?: string | null;
+  payment_account_name?: string | null;
+  /** Invoices approved before Xero was connected go too. */
+  include_earlier?: boolean;
+  earlier_dismissed?: boolean;
+};
+
+/** Invoices approved before Xero was connected that aren't in Xero: asked once. */
+export type XeroEarlierOffer = {
+  count: number;
+  total_cents: number;
+  invoices: Array<{ id: string; invoice_number: string; payer?: string | null; total_cents: number; approved_at?: string | null }>;
 };
 
 export type XeroStatus = {
@@ -24,7 +38,8 @@ export type XeroStatus = {
   last_payment_check_at?: string | null;
   last_error?: string | null;
   last_error_at?: string | null;
-  counts?: { in_xero: number; waiting: number; failed: number };
+  counts?: { in_xero: number; waiting: number; failed: number; earlier?: number };
+  earlier?: XeroEarlierOffer | null;
   /** The latest invoices to go to (or fail to reach) Xero, newest first. */
   recent?: Array<{
     id: string;
@@ -42,11 +57,37 @@ export type XeroStatus = {
 export type XeroOptions = {
   accounts: Array<{ code: string; name: string }>;
   tax_rates: Array<{ type: string; name: string; rate?: number | null }>;
+  bank_accounts?: Array<{ id: string; code?: string | null; name: string }>;
+};
+
+export type XeroSummary = {
+  connected: boolean;
+  tenant_name?: string | null;
+  /** Approved invoices go to Xero on their own. */
+  auto_send?: boolean;
+  connected_at?: string | null;
+  /** Invoices approved before connecting go too. */
+  include_earlier?: boolean;
 };
 
 /** Whether Xero is connected; for anyone who handles invoices. */
 export function getXeroSummary() {
-  return jsonFetch<{ connected: boolean; tenant_name?: string | null }>("/api/integrations/xero/summary");
+  return jsonFetch<XeroSummary>("/api/integrations/xero/summary");
+}
+
+/** Opening Billing: Xero is checked for payments if it hasn't been lately. */
+export function refreshXeroPayments() {
+  return jsonFetch<{ checked: boolean; paid: number; error?: string }>("/api/integrations/xero/refresh", { method: "POST" });
+}
+
+/** Send the invoices approved before Xero was connected. */
+export function sendEarlierToXero() {
+  return jsonFetch<{ sent: number; failed: number; status: XeroStatus }>("/api/integrations/xero/earlier/send", { method: "POST" });
+}
+
+/** Leave the invoices from before connecting out of Xero. */
+export function dismissEarlierXero() {
+  return jsonFetch<XeroStatus>("/api/integrations/xero/earlier/dismiss", { method: "POST" });
 }
 
 export function getXeroStatus() {
@@ -88,7 +129,7 @@ export function syncXeroNow() {
   });
 }
 
-/** Send (or resend) one approved invoice to Xero. */
+/** Send (or resend) one approved invoice to Xero; for a paid one, record the payment there. */
 export function sendInvoiceToXero(invoiceId: string) {
   return jsonFetch<{ ok: boolean; message: string }>(`/api/integrations/xero/invoices/${encodeURIComponent(invoiceId)}`, {
     method: "POST",
