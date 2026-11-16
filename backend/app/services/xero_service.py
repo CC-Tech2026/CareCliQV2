@@ -620,26 +620,50 @@ def _escape_where(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
+_contact_locks: dict[str, asyncio.Lock] = {}
+
+
+async def _find_contact(row: dict, name: str) -> Optional[str]:
+    found = await _api(row, "GET", "/Contacts", params={"where": f'Name=="{_escape_where(name)}"'})
+    contacts = found.get("Contacts") or []
+    return str(contacts[0]["ContactID"]) if contacts else None
+
+
 async def _contact_id(row: dict, name: str, email: Optional[str]) -> str:
-    """The Xero contact for this payer: remembered, found by name, or created."""
+    """The Xero contact for this payer: remembered, found by name, or created.
+
+    Two invoices for the same payer can be sent at once (approved together),
+    so lookups for one payer take turns; and if Xero still says the name is
+    taken (added in Xero meanwhile), that existing contact is used.
+    """
     org_id = str(row["organization_id"])
     key = f"name:{name.strip().lower()}"
+    lock = _contact_locks.setdefault(f"{org_id}|{key}", asyncio.Lock())
+    async with lock:
+        return await _contact_id_locked(row, org_id, key, name, email)
+
+
+async def _contact_id_locked(row: dict, org_id: str, key: str, name: str, email: Optional[str]) -> str:
     db = get_supabase_admin()
     known = (
         db.table("xero_contacts").select("xero_contact_id").eq("organization_id", org_id).eq("payer_key", key).limit(1).execute()
     ).data or []
     if known:
         return str(known[0]["xero_contact_id"])
-    found = await _api(row, "GET", "/Contacts", params={"where": f'Name=="{_escape_where(name)}"'})
-    contacts = found.get("Contacts") or []
-    if contacts:
-        contact_id = str(contacts[0]["ContactID"])
-    else:
+    contact_id = await _find_contact(row, name)
+    if not contact_id:
         body: dict[str, Any] = {"Name": name}
         if email:
             body["EmailAddress"] = email
-        created = await _api(row, "POST", "/Contacts", json={"Contacts": [body]})
-        contact_id = str((created.get("Contacts") or [{}])[0]["ContactID"])
+        try:
+            created = await _api(row, "POST", "/Contacts", json={"Contacts": [body]})
+            contact_id = str((created.get("Contacts") or [{}])[0]["ContactID"])
+        except XeroError as exc:
+            if "already assigned" not in str(exc).lower():
+                raise
+            contact_id = await _find_contact(row, name)
+            if not contact_id:
+                raise
     db.table("xero_contacts").upsert(
         {"organization_id": org_id, "payer_key": key, "xero_contact_id": contact_id, "contact_name": name},
         on_conflict="organization_id,payer_key",

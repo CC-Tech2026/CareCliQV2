@@ -310,3 +310,37 @@ def test_only_newly_approved_or_cancelled_invoices_reach_xero():
         xs.invoice_status_changed({**INVOICE, "status": "cancelled"}, "draft")  # never went to Xero
         xs.invoice_status_changed({**INVOICE, "status": "cancelled", "xero_invoice_id": "xinv-1"}, "sent")
     assert len(spawned) == 2
+
+
+@pytest.mark.asyncio
+async def test_two_invoices_for_one_payer_sent_together_share_one_contact():
+    import asyncio
+
+    db = _DB(xero_connections=[dict(CONNECTION)], xero_contacts=[])
+    made: list[str] = []
+
+    async def fake(row, method, path, *, params=None, json=None, _retried=False):
+        await asyncio.sleep(0.01)  # let the two sends overlap
+        if (method, path) == ("GET", "/Contacts"):
+            return {"Contacts": [{"ContactID": c} for c in made]}
+        made.append(f"contact-{len(made) + 1}")
+        return {"Contacts": [{"ContactID": made[-1]}]}
+
+    with patch.object(xs, "get_supabase_admin", return_value=db), patch.object(xs, "_api", fake):
+        first, second = await asyncio.gather(
+            xs._contact_id(CONNECTION, "Ruby Thompson", None), xs._contact_id(CONNECTION, "Ruby Thompson", None),
+        )
+    assert first == second == "contact-1" and made == ["contact-1"]
+
+
+@pytest.mark.asyncio
+async def test_a_name_xero_says_is_taken_uses_that_existing_contact():
+    db = _DB(xero_connections=[dict(CONNECTION)], xero_contacts=[])
+    lookups = iter([{"Contacts": []}, {"Contacts": [{"ContactID": "contact-already"}]}])
+    fake, _calls = _api_for({
+        ("GET", "/Contacts"): lambda _p, _j: next(lookups),
+        ("POST", "/Contacts"): xs.XeroError("The contact name Plan Partners is already assigned to another contact."),
+    })
+    with patch.object(xs, "get_supabase_admin", return_value=db), patch.object(xs, "_api", fake):
+        assert await xs._contact_id(CONNECTION, "Plan Partners", None) == "contact-already"
+    assert db.tables["xero_contacts"][0]["xero_contact_id"] == "contact-already"
