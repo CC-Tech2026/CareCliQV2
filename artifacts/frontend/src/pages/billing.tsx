@@ -1,5 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearch } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import { getXeroSummary, sendInvoiceToXero } from "@/services/integrationsService";
 import {
   Check,
   Loader2,
@@ -92,6 +94,11 @@ export interface Invoice {
   plan_management_type?: string | null;
   claim_submitted_at?: string | null;
   participant_id?: string | null;
+  /** The Xero sales invoice it became, its status there, and the last sync problem. */
+  xero_invoice_id?: string | null;
+  xero_status?: string | null;
+  xero_synced_at?: string | null;
+  xero_sync_error?: string | null;
   id: string;
   invoice_number: string;
   recipient_name: string;
@@ -175,6 +182,73 @@ export function invoiceReviewWarnings(invoice: Invoice) {
   return warnings;
 }
 
+const XERO_SENDABLE = new Set(["finalized", "issued", "sent", "overdue"]);
+const XERO_STATUS_WORDS: Record<string, string> = {
+  AUTHORISED: "awaiting payment",
+  DRAFT: "a draft",
+  SUBMITTED: "awaiting approval",
+  PAID: "paid",
+  VOIDED: "voided",
+  DELETED: "deleted",
+};
+
+/** Where the invoice is in Xero, when Xero is connected: sent (and its state
+ *  there), couldn't be sent (and why), or waiting, with Send to Xero. */
+function InvoiceXeroLine({ invoice }: { invoice: Invoice }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [sending, setSending] = useState(false);
+  const summary = useOrgQuery(["integrations", "xero", "summary"], {
+    queryFn: getXeroSummary,
+    staleTime: 60_000,
+    retry: false,
+  });
+  if (!summary.data?.connected && !invoice.xero_invoice_id) return null;
+  const canSend = summary.data?.connected && XERO_SENDABLE.has(invoice.status);
+  const send = async () => {
+    setSending(true);
+    try {
+      const result = await sendInvoiceToXero(invoice.id);
+      toast({ title: result.message });
+    } catch (err) {
+      toast({ title: "Couldn't send to Xero", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+    } finally {
+      setSending(false);
+      void qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("billing") });
+    }
+  };
+  const state = invoice.xero_status ? XERO_STATUS_WORDS[invoice.xero_status] ?? invoice.xero_status.toLowerCase() : null;
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-cc-border p-3">
+      <div className="min-w-0">
+        <p className="font-medium">Xero</p>
+        {invoice.xero_sync_error ? (
+          <p className="text-[13px]" style={{ color: "var(--cc-danger-text)" }}>{invoice.xero_sync_error}</p>
+        ) : invoice.xero_invoice_id ? (
+          <p className="text-[13px] text-cc-muted">
+            In Xero{state ? `, ${state}` : ""}{summary.data?.tenant_name ? ` (${summary.data.tenant_name})` : ""}.
+          </p>
+        ) : (
+          <p className="text-[13px] text-cc-muted">
+            {XERO_SENDABLE.has(invoice.status) ? "Not in Xero yet." : invoice.status === "draft" ? "Goes to Xero once it's approved." : "Not sent to Xero."}
+          </p>
+        )}
+      </div>
+      {canSend && invoice.xero_status !== "PAID" && (
+        <button
+          type="button"
+          onClick={() => void send()}
+          disabled={sending}
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-cc-border px-3 text-[13px] font-medium transition-colors hover:bg-cc-soft disabled:opacity-60"
+        >
+          {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          {invoice.xero_invoice_id || invoice.xero_sync_error ? "Send again" : "Send to Xero"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function InvoiceRecord({ invoice }: { invoice: Invoice }) {
   return (
     <div className="space-y-4 text-sm">
@@ -254,6 +328,7 @@ function InvoiceRecord({ invoice }: { invoice: Invoice }) {
           </div>
         </dl>
       )}
+      <InvoiceXeroLine invoice={invoice} />
     </div>
   );
 }
@@ -2288,6 +2363,7 @@ export default function Billing() {
                                       <span className="font-semibold tabular-nums">{cents(item.line_total_cents, invoice.currency)}</span>
                                     </div>
                                   ))}
+                                  <InvoiceXeroLine invoice={invoice} />
                                   <div className="flex flex-wrap items-center gap-2 border-t border-cc-border pt-3">
                                     {invoice.status === "draft" && (
                                       <Button

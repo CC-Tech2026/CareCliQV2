@@ -37,6 +37,7 @@ def _with_signed_pdf_url(invoice: dict) -> dict:
 from . import audit_service
 from . import billing_period_service
 from . import invoice_service
+from . import xero_service
 from ..core.timezone import app_today, participant_timezone, shift_local_date
 
 
@@ -866,6 +867,8 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
             before_state={"status": existing.get("status")},
             after_state={"status": updated.get("status")},
         )
+        # Approved invoices go to Xero (when it's connected), in the background.
+        xero_service.invoice_status_changed({**existing, **updated}, existing.get("status"))
     else:
         await audit_service.log_action(
             action_type="invoice.updated",
@@ -1082,6 +1085,8 @@ async def cancel_invoice(invoice_id: str, user: dict) -> dict:
         before_state={"status": existing.get("status")},
         after_state={"status": "cancelled", "released_completions": len(released.data or [])},
     )
+    # Its Xero copy, if it has one, is voided in the background.
+    xero_service.invoice_status_changed({**existing, **updated}, existing.get("status"))
     return updated
 
 

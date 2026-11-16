@@ -118,6 +118,20 @@ class Settings(BaseSettings):
     # NDIS participant funding in billing.py, which doesn't touch Stripe at all.
     stripe_secret_key: str = os.environ.get("STRIPE_SECRET_KEY", "")
     stripe_webhook_secret: str = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    # Xero (invoices and payments; see backend/app/services/xero_service.py).
+    # The app is created at developer.xero.com. Unset = the Integrations page
+    # says Xero isn't available yet; nothing else changes.
+    xero_client_id: str = os.environ.get("XERO_CLIENT_ID", "")
+    xero_client_secret: str = os.environ.get("XERO_CLIENT_SECRET", "")
+    # Must match a redirect URI on the Xero app exactly. Defaults to the
+    # website's /integrations/xero/callback page.
+    xero_redirect_uri: str = os.environ.get("XERO_REDIRECT_URI", "")
+    # Apps created from 2 March 2026 accept only Xero's granular scopes, which
+    # older apps can use too. offline_access gives the refresh token.
+    xero_scopes: str = os.environ.get(
+        "XERO_SCOPES",
+        "offline_access accounting.invoices accounting.payments accounting.contacts accounting.settings.read",
+    )
     # Jira auto-ticketing for bug reports / improvement feedback (see
     # backend/app/services/jira_service.py). Optional — everything using
     # this degrades to "no Jira link" rather than failing when unset.

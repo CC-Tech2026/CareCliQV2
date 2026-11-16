@@ -15,7 +15,7 @@ export function resolveSettingsSection<T extends string>(search: string, allowed
 
 const GROUPS = [
   { title: "Personal", ids: ["account", "security", "privacy", "accessibility"] },
-  { title: "Organisation", ids: ["provider", "branding", "billing", "branches", "team", "delegatedAccess"] },
+  { title: "Organisation", ids: ["provider", "branding", "billing", "integrations", "branches", "team", "delegatedAccess"] },
   { title: "Preferences", ids: ["defaults", "compliance", "notifications"] },
   { title: "Help & feedback", ids: ["bugReport", "improvementFeedback"] },
 ];

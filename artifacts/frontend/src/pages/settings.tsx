@@ -27,6 +27,7 @@ import {
 import { DeviceNotifications } from "@/components/notifications/DeviceNotifications";
 import { NotificationPreferencesEditor, type NotificationPrefGroup } from "@/components/notifications/NotificationPreferencesEditor";
 import { NavLayoutCard } from "@/components/settings/NavLayoutSettings";
+import { IntegrationsSection } from "@/components/settings/IntegrationsSection";
 import {
   PenLine,
   Upload,
@@ -63,6 +64,7 @@ import {
   Video,
   MapPin,
   Clock,
+  Plug,
 } from "lucide-react";
 import { AccessibilityPanel } from "@/components/AccessibilityPanel";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
@@ -138,7 +140,7 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "security" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "branches" | "bugReport" | "improvementFeedback" | "delegatedAccess";
+type SectionId = "account" | "security" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "branches" | "bugReport" | "improvementFeedback" | "delegatedAccess" | "integrations";
 
 const SETTINGS_DESCRIPTIONS: Partial<Record<SectionId, string>> = {
   account: "Profile and contact details", security: "Password, sign-in and devices",
@@ -147,6 +149,7 @@ const SETTINGS_DESCRIPTIONS: Partial<Record<SectionId, string>> = {
   privacy: "Your information and permissions", notifications: "Alerts and reminders",
   team: "Staff access and invitations", billing: "CareCliQ plan and subscription",
   branding: "Logo and organisation appearance", delegatedAccess: "Temporary access for staff",
+  integrations: "Xero and other connected systems",
   bugReport: "Get help with a technical issue", improvementFeedback: "Suggest an improvement",
 };
 
@@ -168,6 +171,7 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   { id: "improvementFeedback", labelKey: "settings.nav.improvementFeedback", icon: Lightbulb, mdOnly: true },
   { id: "billing",       labelKey: "settings.nav.billing",           icon: CreditCard, mdOnly: true },
   { id: "branding",      labelKey: "settings.nav.branding",          icon: ImageIcon, mdOnly: true, requiredCapability: "org_branding" },
+  { id: "integrations",  labelKey: "settings.nav.integrations",      icon: Plug, mdOnly: true },
   // "branches" intentionally left out of NAV_ITEMS for now — multi-office
   // management is deferred; single-office providers use the "Business
   // location" picker on the Provider tab instead. BranchesSection and the
@@ -2768,6 +2772,8 @@ export default function Settings() {
         {activeSection === "branding" && (isMD || hasDelegatedCapability("org_branding")) && (
           <OrganizationBrandingSection />
         )}
+
+        {activeSection === "integrations" && isMD && <IntegrationsSection onSuggest={() => selectSection("improvementFeedback")} />}
 
         {activeSection === "branches" && isMD && (
           <BranchesSection />

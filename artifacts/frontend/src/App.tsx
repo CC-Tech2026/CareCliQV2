@@ -43,6 +43,7 @@ import Compliance from "@/pages/compliance";
 import Reports from "@/pages/reports";
 import Billing from "@/pages/billing";
 import Settings from "@/pages/settings";
+import XeroCallbackPage from "@/pages/xero-callback";
 import MyClients from "@/pages/my-clients";
 import MyClientDetail from "@/pages/my-client-detail";
 import MyCompliance from "@/pages/my-compliance";
@@ -850,6 +851,13 @@ function Router() {
       <Route path="/settings">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <RoleAwareShell><Settings /></RoleAwareShell>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Xero sends the director back here after they choose their organisation. */}
+      <Route path="/integrations/xero/callback">
+        <ProtectedRoute allowedRoles={["managing_director"]}>
+          <RoleAwareShell><XeroCallbackPage /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 

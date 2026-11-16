@@ -41,6 +41,12 @@ vi.mock("@/hooks/useReAuth", () => ({
 vi.mock("@workspace/api-client-react", () => ({
   useGetParticipants: () => ({ data: [] }),
 }));
+// The page's queries are stubbed above, so there's no QueryClientProvider; the
+// Xero line on an invoice only uses the client to refresh after a send.
+vi.mock("@tanstack/react-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-query")>()),
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+}));
 vi.mock("@/hooks/useOrgQuery", () => ({
   useOrgQuery: () => ({
     data: queryState.data,
