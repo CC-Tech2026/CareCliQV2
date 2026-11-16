@@ -53,6 +53,7 @@ import { PageHeader, PillTabs, ctaClass, outlineClass } from "@/components/layou
 import { PanelHeader, PrimaryButton } from "@/pages/md/vault/components/PanelKit";
 import { useReAuth } from "@/hooks/useReAuth";
 import { NdiaClaimsPanel } from "@/components/billing/NdiaClaimsPanel";
+import { InvoiceMyobLine } from "@/components/billing/InvoiceMyobLine";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -100,6 +101,11 @@ export interface Invoice {
   xero_status?: string | null;
   xero_synced_at?: string | null;
   xero_sync_error?: string | null;
+  /** The MYOB invoice it became (MYOB's own number when ours is too long), its state there, and the last sync problem. */
+  myob_invoice_uid?: string | null;
+  myob_invoice_number?: string | null;
+  myob_status?: string | null;
+  myob_sync_error?: string | null;
   /** Paid and still owing in Xero, in cents (part payments). */
   xero_amount_paid_cents?: number | null;
   xero_amount_due_cents?: number | null;
@@ -426,6 +432,7 @@ function InvoiceRecord({ invoice }: { invoice: Invoice }) {
         </dl>
       )}
       <InvoiceXeroLine invoice={invoice} />
+      <InvoiceMyobLine invoice={invoice} />
     </div>
   );
 }
@@ -2499,6 +2506,7 @@ export default function Billing() {
                                     </div>
                                   ))}
                                   <InvoiceXeroLine invoice={invoice} />
+                                  <InvoiceMyobLine invoice={invoice} />
                                   <div className="flex flex-wrap items-center gap-2 border-t border-cc-border pt-3">
                                     {invoice.status === "draft" && (
                                       <Button

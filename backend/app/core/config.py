@@ -132,6 +132,23 @@ class Settings(BaseSettings):
         "XERO_SCOPES",
         "offline_access accounting.invoices accounting.payments accounting.contacts accounting.settings.read",
     )
+    # MYOB Business / AccountRight (invoices and payments; see
+    # backend/app/services/myob_service.py). The API key is created at
+    # my.myob.com.au > Developer. Unset = the Integrations page says MYOB
+    # isn't available yet; nothing else changes.
+    myob_client_id: str = os.environ.get("MYOB_CLIENT_ID", "")
+    myob_client_secret: str = os.environ.get("MYOB_CLIENT_SECRET", "")
+    # Must match the redirect URI on the MYOB API key exactly. Defaults to the
+    # website's /integrations/myob/callback page.
+    myob_redirect_uri: str = os.environ.get("MYOB_REDIRECT_URI", "")
+    # MYOB's granular scopes (the old "CompanyFile" scope was retired on
+    # 1 September 2026): the company file, sales invoices and payments,
+    # customers, and the accounts and tax codes to post to.
+    myob_scopes: str = os.environ.get(
+        "MYOB_SCOPES",
+        "sme-company-file sme-sales sme-contacts-customer sme-general-ledger",
+    )
+    myob_api_base: str = os.environ.get("MYOB_API_BASE", "https://api.myob.com/accountright")
     # Jira auto-ticketing for bug reports / improvement feedback (see
     # backend/app/services/jira_service.py). Optional — everything using
     # this degrades to "no Jira link" rather than failing when unset.

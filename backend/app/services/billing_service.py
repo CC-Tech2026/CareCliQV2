@@ -38,6 +38,7 @@ from . import audit_service
 from . import billing_period_service
 from . import invoice_service
 from . import xero_service
+from . import myob_service
 from ..core.timezone import app_today, participant_timezone, shift_local_date
 
 
@@ -869,6 +870,8 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
         )
         # Approved invoices go to Xero (when it's connected), in the background.
         xero_service.invoice_status_changed({**existing, **updated}, existing.get("status"))
+        # Or to MYOB, when that's the organisation's accounting system.
+        myob_service.invoice_status_changed({**existing, **updated}, existing.get("status"))
     else:
         await audit_service.log_action(
             action_type="invoice.updated",
@@ -1087,6 +1090,8 @@ async def cancel_invoice(invoice_id: str, user: dict) -> dict:
     )
     # Its Xero copy, if it has one, is voided in the background.
     xero_service.invoice_status_changed({**existing, **updated}, existing.get("status"))
+    # Its MYOB copy, if it has one, is deleted there in the background.
+    myob_service.invoice_status_changed({**existing, **updated}, existing.get("status"))
     return updated
 
 

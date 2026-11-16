@@ -150,7 +150,7 @@ const SETTINGS_DESCRIPTIONS: Partial<Record<SectionId, string>> = {
   privacy: "Your information and permissions", notifications: "Alerts and reminders",
   team: "Staff access and invitations", billing: "CareCliQ plan and subscription",
   branding: "Logo and organisation appearance", delegatedAccess: "Temporary access for staff",
-  integrations: "Xero and other connected systems",
+  integrations: "Xero, MYOB and other connected systems",
   bugReport: "Get help with a technical issue", improvementFeedback: "Suggest an improvement",
 };
 

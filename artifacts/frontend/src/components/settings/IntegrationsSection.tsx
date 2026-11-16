@@ -38,6 +38,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { formatAppDate, formatAppTime } from "@/lib/datetime";
 import { ApiAccessPanel } from "./ApiAccessPanel";
+import { MyobTile } from "./MyobIntegration";
 import {
   dismissEarlierXero,
   disconnectXero,
@@ -72,7 +73,7 @@ function money(cents: number, currency = "AUD") {
 // Tiles
 // ---------------------------------------------------------------------------
 
-type TileStatus = "connected" | "available" | "attention" | "soon" | "unavailable";
+export type TileStatus = "connected" | "available" | "attention" | "soon" | "unavailable";
 
 const STATUS_LOOK: Record<TileStatus, { label: string; fg: string; bg: string; dot?: string }> = {
   connected: { label: "Connected", fg: "var(--cc-status-success)", bg: "var(--cc-status-success-bg)", dot: "var(--cc-status-success)" },
@@ -102,7 +103,7 @@ function XeroWordmark() {
 }
 
 /** A square logo slot: the official logo when it's been added, otherwise the name. */
-function LogoSlot({ src, name, icon }: { src?: string; name: string; icon?: ReactNode }) {
+export function LogoSlot({ src, name, icon }: { src?: string; name: string; icon?: ReactNode }) {
   const [failed, setFailed] = useState(!src);
   return (
     <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-cc-border bg-cc-surface">
@@ -115,7 +116,7 @@ function LogoSlot({ src, name, icon }: { src?: string; name: string; icon?: Reac
   );
 }
 
-function IntegrationTile({
+export function IntegrationTile({
   logo, name, category, description, status, detail, action, logoIsName = false,
 }: {
   logo: ReactNode;
@@ -166,7 +167,7 @@ function xeroState(row: NonNullable<XeroStatus["recent"]>[number]) {
   }
 }
 
-function PanelHeading({ children }: { children: ReactNode }) {
+export function PanelHeading({ children }: { children: ReactNode }) {
   return <h4 className="text-[13px] font-semibold" style={{ color: TEXT }}>{children}</h4>;
 }
 
@@ -664,6 +665,8 @@ export function IntegrationsSection({ onSuggest }: { onSuggest?: () => void } = 
         ) : statusQuery.data ? (
           <XeroTile status={statusQuery.data} />
         ) : null}
+
+        <MyobTile />
 
         <ApiTile />
 

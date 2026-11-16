@@ -35,6 +35,7 @@ _long_shift_task: Optional[asyncio.Task] = None
 _random_checkin_task: Optional[asyncio.Task] = None
 _stripe_reconciliation_task: Optional[asyncio.Task] = None
 _xero_sync_task: Optional[asyncio.Task] = None
+_myob_sync_task: Optional[asyncio.Task] = None
 _webhook_task: Optional[asyncio.Task] = None
 _overdue_shift_autoend_task: Optional[asyncio.Task] = None
 
@@ -240,7 +241,7 @@ async def _scheduler_loop() -> None:
 
 def start_notification_scheduler() -> None:
     global _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task
-    global _overdue_shift_autoend_task, _xero_sync_task, _webhook_task
+    global _overdue_shift_autoend_task, _xero_sync_task, _webhook_task, _myob_sync_task
     if not settings.notification_scheduler_enabled:
         return
     if _scheduler_task and not _scheduler_task.done():
@@ -251,6 +252,7 @@ def start_notification_scheduler() -> None:
     _stripe_reconciliation_task = asyncio.create_task(_stripe_reconciliation_loop())
     _overdue_shift_autoend_task = asyncio.create_task(_overdue_shift_autoend_loop())
     _xero_sync_task = asyncio.create_task(_xero_sync_loop())
+    _myob_sync_task = asyncio.create_task(_myob_sync_loop())
     _webhook_task = asyncio.create_task(_webhook_retry_loop())
 
 
@@ -282,6 +284,22 @@ async def _xero_sync_loop() -> None:
                 logger.info("Xero sync: %s invoice(s) marked paid", paid)
         except Exception as exc:
             logger.warning("Xero sync loop failed: %s", exc)
+        await asyncio.sleep(1800)
+
+
+async def _myob_sync_loop() -> None:
+    """Every 30 minutes: invoices paid in MYOB are marked paid here, and
+    approved invoices that didn't reach MYOB are sent again."""
+    from .myob_service import run_myob_pass
+
+    logger.info("MYOB sync loop started (every 30 min)")
+    while True:
+        try:
+            paid = await run_myob_pass()
+            if paid:
+                logger.info("MYOB sync: %s invoice(s) marked paid", paid)
+        except Exception as exc:
+            logger.warning("MYOB sync loop failed: %s", exc)
         await asyncio.sleep(1800)
 
 
@@ -357,10 +375,10 @@ async def _stripe_reconciliation_loop() -> None:
 
 async def stop_notification_scheduler() -> None:
     global _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task
-    global _overdue_shift_autoend_task, _xero_sync_task, _webhook_task
+    global _overdue_shift_autoend_task, _xero_sync_task, _webhook_task, _myob_sync_task
     for task in (
         _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task,
-        _overdue_shift_autoend_task, _xero_sync_task, _webhook_task,
+        _overdue_shift_autoend_task, _xero_sync_task, _webhook_task, _myob_sync_task,
     ):
         if not task:
             continue
@@ -375,4 +393,5 @@ async def stop_notification_scheduler() -> None:
     _stripe_reconciliation_task = None
     _overdue_shift_autoend_task = None
     _xero_sync_task = None
+    _myob_sync_task = None
     _webhook_task = None
