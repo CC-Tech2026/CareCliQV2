@@ -15,12 +15,10 @@ import {
   differenceInMinutes,
 } from "date-fns";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
-import { useMutation } from "@tanstack/react-query";
 import {
-  CalendarDays, ChevronLeft, ChevronRight, Clock3, Link2, List, Loader2, MapPin, Printer,
+  CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, List, Loader2, MapPin, Printer,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { SectionInfo } from "@/components/ui/section-info";
 import { appLocalDateKey } from "@/lib/datetime";
@@ -30,8 +28,8 @@ import {
   shiftBlockStyle,
 } from "@/components/shifts/ShiftCalendarDetailSheet";
 import { WorkerShiftConfirmDialog } from "@/components/shifts/WorkerShiftConfirmDialog";
+import { CalendarSyncSheet } from "@/components/calendar/CalendarSyncSheet";
 import {
-  createCalendarFeedToken,
   getWorkerCalendar,
   type CalendarShift,
   type TimeOffBlock,
@@ -358,14 +356,13 @@ function WorkerDayPanel({
 
 export default function WorkerScheduleCalendar() {
   const { translate, translateParams } = useAccessibility();
-  const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [selectedDay, setSelectedDay] = useState(() => new Date());
   const [confirmShift, setConfirmShift] = useState<CalendarShift | null>(null);
-  const [feedUrl, setFeedUrl] = useState<string | null>(null);
+  const [syncOpen, setSyncOpen] = useState(false);
 
   const rangeStart = viewMode === "week"
     ? weekStart
@@ -391,17 +388,6 @@ export default function WorkerScheduleCalendar() {
       end: endOfWeek(weekStart, { weekStartsOn: 1 }),
     });
   }, [weekStart]);
-
-  const feedMut = useMutation({
-    mutationFn: createCalendarFeedToken,
-    onSuccess: (res) => {
-      const full = `${window.location.origin}${res.feed_path}.ics`;
-      setFeedUrl(full);
-      void navigator.clipboard?.writeText(full);
-      toast({ title: translate("calendar.linkCopied"), description: translate("calendar.linkCopiedDesc") });
-    },
-    onError: (e: Error) => toast({ title: translate("common.error"), description: e.message, variant: "destructive" }),
-  });
 
   const handlePrint = useCallback(async () => {
     const { jsPDF } = await import("jspdf");
@@ -560,11 +546,11 @@ export default function WorkerScheduleCalendar() {
         <div className="ml-auto flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => feedMut.mutate()}
+            onClick={() => setSyncOpen(true)}
             className="flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-black text-white"
             style={{ background: "var(--cc-cta)" }}
           >
-            <Link2 size={14} /> {feedMut.isPending ? translate("calendar.generating") : translate("calendar.share")}
+            <CalendarPlus size={14} /> {translate("calendar.share")}
           </button>
           <button
             type="button"
@@ -577,12 +563,7 @@ export default function WorkerScheduleCalendar() {
         </div>
       </div>
 
-      {feedUrl && (
-        <div className="rounded-xl border bg-cc-bg p-3 text-xs" style={{ borderColor: BORDER }}>
-          <p className="font-black" style={{ color: TEXT }}>{translate("calendar.icalUrl")}</p>
-          <p className="mt-1 break-all font-mono" style={{ color: MUTED }}>{feedUrl}</p>
-        </div>
-      )}
+      <CalendarSyncSheet open={syncOpen} onOpenChange={setSyncOpen} />
 
       {isError && (
         <div

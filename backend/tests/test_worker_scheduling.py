@@ -54,7 +54,7 @@ def test_slot_statuses_defined():
 
 
 def test_build_ical_contains_calendar_header():
-    with patch.object(worker_calendar_service, "list_shifts_for_calendar", return_value=[]):
+    with patch.object(worker_calendar_service, "_feed_shifts", return_value=[]):
         ical = worker_calendar_service.build_ical_feed("nonexistent", "org")
     assert "BEGIN:VCALENDAR" in ical
     assert "END:VCALENDAR" in ical

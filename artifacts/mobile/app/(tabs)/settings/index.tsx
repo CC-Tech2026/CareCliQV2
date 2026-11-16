@@ -482,6 +482,22 @@ export default function SettingsTabScreen() {
               />
             ),
           },
+          {
+            key: "calendar-sync",
+            icon: "calendar",
+            label: t("calendarSync.title"),
+            keywords:
+              "calendar sync google calendar outlook apple ical ics subscribe shifts roster phone calendar",
+            render: (showDivider) => (
+              <SettingsRow
+                icon="calendar"
+                label={t("calendarSync.title")}
+                description={t("calendarSync.rowHint")}
+                onPress={() => router.push("/worker/calendar-sync" as never)}
+                showDivider={showDivider}
+              />
+            ),
+          },
         ],
       },
       {

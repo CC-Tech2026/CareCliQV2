@@ -22,5 +22,10 @@ async def calendar_feed(token: str):
     return Response(
         content=ical,
         media_type="text/calendar; charset=utf-8",
-        headers={"Content-Disposition": 'inline; filename="carecliq-shifts.ics"'},
+        headers={
+            "Content-Disposition": 'inline; filename="carecliq-shifts.ics"',
+            # Private to this worker: no shared cache may keep a copy.
+            "Cache-Control": "private, max-age=900",
+            "X-Robots-Tag": "noindex",
+        },
     )
