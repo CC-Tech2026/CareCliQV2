@@ -468,7 +468,11 @@ export function RosterCalendar({
     const earliest = placed.reduce((m, p) => Math.min(m, p.start), 6 * 60);
     el.scrollTop = Math.max(0, Math.floor(earliest / 60) * HOUR_PX - 8);
     const todayHead = el.querySelector<HTMLElement>(`[data-day-head="${todayKey}"]`);
-    el.scrollLeft = !oneDay && todayHead ? Math.max(0, todayHead.offsetLeft - GUTTER_PX) : 0;
+    // Measured against the calendar itself (offsetLeft counts from the page,
+    // so the sidebar's width pushed today too far left, under the hours).
+    el.scrollLeft = !oneDay && todayHead
+      ? Math.max(0, todayHead.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft - GUTTER_PX)
+      : 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayKeys[0], dayKeys.length]);
 
