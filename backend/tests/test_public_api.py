@@ -21,6 +21,9 @@ DIRECTOR = {"id": "md-1", "organization_id": ORG, "role": "managing_director"}
 COORDINATOR = {"id": "c-1", "organization_id": ORG, "role": "support_coordinator"}
 
 
+DB_ROW_CAP = 1000
+
+
 class _Query:
     def __init__(self, db, table):
         self.db, self.table, self.filters, self.op, self.payload = db, table, [], "select", None
@@ -44,6 +47,14 @@ class _Query:
     def limit(self, *_a):
         return self
 
+    def order(self, key, *_a, **_k):
+        self.order_by = key
+        return self
+
+    def range(self, start, end):
+        self.window = (start, end)
+        return self
+
     def insert(self, payload):
         self.op, self.payload = "insert", payload
         return self
@@ -63,6 +74,12 @@ class _Query:
             rows.append(row)
             return MagicMock(data=[row])
         hit = [r for r in rows if all(f(r) for f in self.filters)]
+        if self.op == "select":
+            # Like Supabase: at most DB_ROW_CAP rows a request, unless asked for a range.
+            if getattr(self, "order_by", None):
+                hit = sorted(hit, key=lambda r: str(r.get(self.order_by)))
+            start, end = getattr(self, "window", (0, DB_ROW_CAP - 1))
+            hit = hit[start:min(end + 1, start + DB_ROW_CAP)]
         if self.op == "update":
             for r in hit:
                 r.update(self.payload)
@@ -187,6 +204,28 @@ def test_credentials_stay_in_their_organisation_and_documents_stay_private():
     assert [c["id"] for c in recent["data"]] == ["c-2"]
 
 
+def test_long_lists_are_read_past_the_databases_1000_row_limit():
+    many = [
+        {"id": f"c-{i:05d}", "user_id": "w-1", "organization_id": ORG, "credential_type": "first_aid", "status": "valid",
+         "updated_at": f"2026-11-{1 + i % 28:02d}T00:00:00Z"}
+        for i in range(2345)
+    ]
+    completions = [
+        {"id": f"t-{i:05d}", "worker_id": "w-1", "organization_id": ORG, "module_id": "m-1", "status": "confirmed",
+         "completed_at": "2026-11-01T00:00:00Z"}
+        for i in range(1500)
+    ]
+    db = _DB(credentials=many, worker_training_completions=completions, training_modules=[
+        {"id": "m-1", "organization_id": ORG, "title": "Manual handling"},
+    ])
+    with patch.object(api, "get_supabase_admin", return_value=db):
+        creds = api.list_credentials(ORG, limit=500, offset=2000)
+        done = api.list_training_completions(ORG, limit=500, offset=1000)
+    assert creds["total"] == 2345 and len(creds["data"]) == 345 and creds["has_more"] is False
+    assert done["total"] == 1500 and len(done["data"]) == 500
+    assert done["data"][0]["module"]["title"] == "Manual handling"
+
+
 def test_the_http_api_needs_a_key_and_returns_pages():
     from backend.app.main import app
 
@@ -263,6 +302,26 @@ async def test_events_go_only_to_subscribed_endpoints_and_failures_are_retried()
         assert await wh.deliver(db.tables["webhook_deliveries"][0], endpoints[0]) is True
     assert db.tables["webhook_deliveries"][0]["status"] == "delivered"
     assert db.tables["webhook_endpoints"][0]["failure_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_delivery_being_sent_is_not_sent_again_by_the_retry_pass():
+    endpoint = {"id": "e-1", "organization_id": ORG, "url": "https://a.example.com", "secret": "whsec_a",
+                "events": ["credential.updated"], "is_active": True, "failure_count": 0}
+    db = _DB(webhook_endpoints=[endpoint], webhook_deliveries=[])
+    sends = []
+
+    async def slow_post(_endpoint, event, *, delivery_id):
+        sends.append(delivery_id)
+        if len(sends) == 1:
+            # The every-minute retry pass runs while the first send waits for an answer.
+            await wh.run_webhook_pass()
+        return {"ok": True, "status": 200, "body": "ok", "message": None}
+
+    with patch.object(wh, "get_supabase_admin", return_value=db), patch.object(wh, "_post", slow_post):
+        await wh._queue_and_send(ORG, "credential.updated", {"id": "c-2"})
+    assert len(sends) == 1
+    assert db.tables["webhook_deliveries"][0]["status"] == "delivered"
 
 
 def test_a_malformed_encryption_key_never_breaks_saving_a_secret(monkeypatch):

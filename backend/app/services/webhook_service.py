@@ -346,7 +346,12 @@ async def _queue_and_send(org_id: str, event_type: str, data: dict) -> None:
                 "payload": event,
                 "status": "pending",
                 "attempts": 0,
-                "next_attempt_at": _iso(_now()),
+                # Sent straight away below. The retry pass (every minute)
+                # leaves it alone until then, or it could send the same
+                # delivery a second time while this one is still waiting
+                # for an answer. If this attempt never finishes, the retry
+                # pass picks it up.
+                "next_attempt_at": _iso(_now() + RETRY_AFTER[0]),
             }
             saved = (db.table("webhook_deliveries").insert(row).execute()).data or []
             if saved:

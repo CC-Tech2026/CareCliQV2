@@ -63,7 +63,8 @@ it("renders children plus a temporary-access banner for a coordinator holding th
     </ProtectedRoute>,
   );
   expect(screen.getByText("Vault content")).toBeTruthy();
-  expect(screen.getByText(/Temporary access: Governance vault/)).toBeTruthy();
+  // The banner names the capability as the rest of the app does.
+  expect(screen.getByText(/Temporary access: Documents and audit/)).toBeTruthy();
 });
 
 it("still shows the restricted-access page when the coordinator's grant is for a different capability", () => {

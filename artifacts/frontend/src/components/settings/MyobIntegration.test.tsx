@@ -58,10 +58,12 @@ describe("MYOB tile", () => {
     expect((screen.getByRole("button", { name: /Connect to MYOB/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("says when MYOB isn't switched on for the server", async () => {
+  it("stays hidden while MYOB isn't switched on for the server", async () => {
     renderTile({ ...NOT_CONNECTED, available: false });
-    expect(await screen.findByText("Not switched on")).toBeTruthy();
-    expect((screen.getByRole("button", { name: /Connect to MYOB/ }) as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => expect(myob.getMyobStatus).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText("MYOB")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Connect to MYOB/ })).toBeNull();
   });
 
   it("asks for the account and tax code when they aren't chosen yet", async () => {
