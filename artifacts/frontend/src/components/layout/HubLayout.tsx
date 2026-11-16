@@ -343,6 +343,10 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       // the page's own buttons). The fixed hex, not --cc-brand-purple, which
       // turns light lilac in dark mode and white text can't be read on it.
       : "#7C3AED";
+  // The sidebar layouts sit on CareCliQ deep purple (the app sidebar's colour)
+  // unless a menu colour is chosen in Settings > Branding; every preset is
+  // dark, so the text and icons are light either way.
+  const sideBg = prefs?.nav_color || "var(--cc-sidebar-bg)";
 
   const [orgName, setOrgName] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -352,10 +356,10 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   // Remembers the last width the sidebar was dragged to, so collapsing (by
   // click or by dragging past the snap threshold) and re-expanding restores
   // it instead of always resetting to the default.
-  const [sidebarWidth, setSidebarWidth] = useState(288);
+  const [sidebarWidth, setSidebarWidth] = useState(264);
   const [sidebarDragging, setSidebarDragging] = useState(false);
   const sidebarDragStartX = useRef(0);
-  const sidebarDragStartWidth = useRef(288);
+  const sidebarDragStartWidth = useRef(264);
   const SIDEBAR_MIN_WIDTH = 200;
   const SIDEBAR_MAX_WIDTH = 420;
   const SIDEBAR_COLLAPSE_THRESHOLD = 150;
@@ -400,6 +404,49 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   const displayName =
     user?.full_name || user?.email || translate("hub.role.staffFallback");
   const initials = getInitials(displayName);
+
+  /** One link in the docked or floating sidebar. */
+  const renderSideLink = ({
+    href, label, icon: Icon, active, count,
+  }: { href: string; label: string; icon: LucideIcon; active: boolean; count: number }) => {
+    // Floating shows the current page as a solid purple pill; docked as a
+    // soft wash with a lilac bar, as the app sidebar does.
+    const pill = !dockedSidebar;
+    const activeBg = pill ? (navIsIndigoNight ? "#6C63FF" : "#7C3AED") : "rgba(167,139,250,0.20)";
+    return (
+      <Link
+        key={href}
+        href={href}
+        title={sidebarCollapsed ? label : undefined}
+        aria-label={sidebarCollapsed ? label : undefined}
+        aria-current={active ? "page" : undefined}
+        className={`relative flex h-10 items-center rounded-lg transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#A78BFA] ${
+          sidebarCollapsed ? "mx-auto w-10 justify-center" : "gap-3 px-3 text-[13.5px]"
+        } ${active ? "font-semibold" : "font-medium hover:bg-white/[0.06] hover:text-white"}`}
+        style={{
+          background: active ? activeBg : undefined,
+          color: active ? "#FFFFFF" : "rgba(255,255,255,0.80)",
+        }}
+      >
+        {active && !pill && !sidebarCollapsed && (
+          <span aria-hidden className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full" style={{ background: "#A78BFA" }} />
+        )}
+        <Icon
+          size={18}
+          strokeWidth={active ? 2.1 : 1.8}
+          style={{ color: active ? (pill ? "#FFFFFF" : "#D8CCFF") : "rgba(205,193,250,0.72)" }}
+        />
+        {sidebarCollapsed ? (
+          <NavCountDot count={count} />
+        ) : (
+          <>
+            <span className="min-w-0 flex-1 truncate">{label}</span>
+            <NavCountBadge count={count} />
+          </>
+        )}
+      </Link>
+    );
+  };
 
   const toggleGroup = (groupLabel: string) => {
     setCollapsedGroups((prev) => ({
@@ -1027,19 +1074,21 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             dockedSidebar ? "w-full" : `py-2 ${isMD || location === "/billing" ? "w-full px-3 sm:px-4" : "max-w-[1600px] px-4 sm:px-6"}`
           }`}
         >
+          {/* Docked: a deep purple rail on the left edge, like the app sidebar,
+              the current page marked with a soft purple wash and a lilac bar.
+              Floating: the same menu as a rounded panel on the page, the
+              current page a solid purple pill. */}
           <aside
-            className={`sticky top-[75px] hidden shrink-0 self-start xl:block ${
-              dockedSidebar ? "h-[calc(100dvh-75px)] border-r" : "rounded-2xl border"
+            className={`sticky hidden shrink-0 self-start xl:block ${
+              dockedSidebar ? "top-[75px] h-[calc(100dvh-75px)]" : "top-[87px] rounded-2xl"
             } ${sidebarDragging ? "" : "transition-[width] duration-200"}`}
             style={{
               width: sidebarCollapsed ? 72 : sidebarWidth,
-              background: navBackground,
-              borderColor: dockedSidebar ? "var(--cc-border)" : "rgba(124,58,237,0.15)",
-              boxShadow: dockedSidebar ? undefined : "var(--cc-shadow-sm)",
+              background: sideBg,
+              boxShadow: dockedSidebar ? undefined : "0 18px 40px -24px rgba(30,22,64,0.6)",
             }}
           >
-            {/* Drag handle — grab and pull to resize, or drag past the snap
-             * point to collapse/expand, in addition to the button below. */}
+            {/* Drag handle: pull to resize, or past the snap point to collapse. */}
             <div
               onPointerDown={startSidebarDrag}
               role="separator"
@@ -1049,120 +1098,79 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               style={{ touchAction: "none" }}
             >
               <div
-                className="h-10 w-1 rounded-full transition-colors group-hover:opacity-100"
-                style={{
-                  background: sidebarDragging
-                    ? "var(--cc-plum)"
-                    : "var(--cc-border)",
-                  opacity: sidebarDragging ? 1 : 0.6,
-                }}
+                className="h-10 w-1 rounded-full transition-opacity group-hover:opacity-100"
+                style={{ background: "#A78BFA", opacity: sidebarDragging ? 1 : 0 }}
               />
             </div>
 
-            <div
-              className={`${dockedSidebar ? "h-full" : "max-h-[calc(100dvh-6rem)]"} ${
-                sidebarCollapsed
-                  ? "flex flex-col items-center overflow-y-auto px-2 py-4"
-                  : "flex flex-col overflow-y-auto p-4"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => setSidebarCollapsed((prev) => !prev)}
-                style={{
-                  color: navText,
-                  ["--nav-hover-bg" as string]: navHoverBg,
-                  ["--nav-text-hover" as string]: navTextHover,
-                }}
-                className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)] ${
-                  sidebarCollapsed ? "" : "self-end"
-                }`}
-                aria-label={
-                  sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
-                }
+            <div className={`flex flex-col ${dockedSidebar ? "h-full" : "max-h-[calc(100dvh-6.5rem)]"}`}>
+              <nav
+                aria-label="Managing Director workspaces"
+                className={`min-h-0 flex-1 overflow-y-auto scrollbar-none ${sidebarCollapsed ? "space-y-3 px-2 py-4" : "space-y-5 px-3 py-4"}`}
               >
-                {sidebarCollapsed ? (
-                  <PanelLeftOpen size={18} />
-                ) : (
-                  <PanelLeftClose size={18} />
-                )}
-              </button>
-
-              <nav aria-label="Managing Director workspaces" className={sidebarCollapsed ? "space-y-3" : "space-y-5"}>
                 {MD_NAV_GROUPS.map((group) => {
                   const isGroupCollapsed = !!collapsedGroups[group.label];
-
                   return (
-                    <div key={group.label} className="space-y-1.5">
-                      {!sidebarCollapsed && (
+                    <div key={group.label}>
+                      {sidebarCollapsed ? (
+                        <div aria-hidden className="mx-auto mb-2 h-px w-6" style={{ background: "rgba(255,255,255,0.10)" }} />
+                      ) : (
                         <button
                           type="button"
                           onClick={() => toggleGroup(group.label)}
                           aria-expanded={!isGroupCollapsed}
-                          className="flex min-h-9 w-full items-center justify-between gap-2 px-2.5 text-[11px] font-semibold uppercase tracking-wider transition-colors hover:opacity-80"
-                          style={{ color: navText }}
+                          className="mb-1 flex h-7 w-full items-center justify-between gap-2 rounded-md px-3 text-[10.5px] font-semibold uppercase tracking-[0.08em] transition-colors hover:text-white"
+                          style={{ color: "rgba(205,193,250,0.6)" }}
                         >
-                          <span>{group.label}</span>
+                          <span className="truncate">{group.label}</span>
                           <ChevronRight
                             size={13}
-                            className={`transition-transform duration-200 ${isGroupCollapsed ? "" : "rotate-90"}`}
+                            className={`shrink-0 transition-transform duration-200 ${isGroupCollapsed ? "" : "rotate-90"}`}
                           />
                         </button>
                       )}
-
                       {(sidebarCollapsed || !isGroupCollapsed) && (
-                        <div
-                          className={
-                            sidebarCollapsed ? "space-y-2" : "space-y-1"
-                          }
-                        >
-                          {group.items.map((item) => {
-                            const active = isNavItemActive(location, item);
-                            const Icon = item.icon;
-
-                            return (
-                              <Link
-                                key={item.href}
-                                href={item.href}
-                                title={
-                                  sidebarCollapsed ? item.label : undefined
-                                }
-                                aria-label={sidebarCollapsed ? item.label : undefined}
-                                aria-current={active ? "page" : undefined}
-                                style={{
-                                  background: active ? navActiveBg : undefined,
-                                  color: active ? "#FFFFFF" : navText,
-                                  ["--nav-hover-bg" as string]: navHoverBg,
-                                  ["--nav-text-hover" as string]: navTextHover,
-                                }}
-                                className={
-                                  sidebarCollapsed
-                                    ? `relative mx-auto flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${active ? "shadow-sm" : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"}`
-                                    : `flex items-center gap-3.5 rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${active ? "shadow-sm" : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"}`
-                                }
-                              >
-                                <Icon size={20} />
-                                {!sidebarCollapsed ? (
-                                  <>
-                                    <span>{item.label}</span>
-                                    <NavCountBadge
-                                      count={NAV_BADGE_COUNTS[item.href] ?? 0}
-                                    />
-                                  </>
-                                ) : (
-                                  <NavCountDot
-                                    count={NAV_BADGE_COUNTS[item.href] ?? 0}
-                                  />
-                                )}
-                              </Link>
-                            );
-                          })}
+                        <div className={sidebarCollapsed ? "space-y-1.5" : "space-y-0.5"}>
+                          {group.items.map((item) => renderSideLink({
+                            href: item.href,
+                            label: item.label,
+                            icon: item.icon,
+                            active: isNavItemActive(location, item),
+                            count: NAV_BADGE_COUNTS[item.href] ?? 0,
+                          }))}
                         </div>
                       )}
                     </div>
                   );
                 })}
               </nav>
+
+              {/* Settings and the collapse control, at the foot of the menu. */}
+              <div
+                className={`shrink-0 space-y-0.5 ${sidebarCollapsed ? "px-2 py-3" : "px-3 py-3"}`}
+                style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
+              >
+                {renderSideLink({
+                  href: "/settings",
+                  label: translate("common.settings"),
+                  icon: Settings,
+                  active: isHrefActive(location, "/settings"),
+                  count: 0,
+                })}
+                <button
+                  type="button"
+                  onClick={() => setSidebarCollapsed((prev) => !prev)}
+                  aria-label={sidebarCollapsed ? "Expand menu" : "Collapse menu"}
+                  title={sidebarCollapsed ? "Expand menu" : undefined}
+                  className={`flex h-10 items-center rounded-lg text-[13px] font-medium transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#A78BFA] ${
+                    sidebarCollapsed ? "mx-auto w-10 justify-center" : "w-full gap-3 px-3"
+                  }`}
+                  style={{ color: "rgba(205,193,250,0.7)" }}
+                >
+                  {sidebarCollapsed ? <PanelLeftOpen size={18} strokeWidth={1.8} /> : <PanelLeftClose size={18} strokeWidth={1.8} />}
+                  {!sidebarCollapsed && <span>Collapse menu</span>}
+                </button>
+              </div>
             </div>
           </aside>
 

@@ -14,7 +14,8 @@ import { NAV_INDIGO_NIGHT_HEX } from "@/lib/nav-colors";
 type LayoutChoice = "topbar" | "floating" | "sidebar" | "docked" | "bottombar";
 
 function LayoutPreview({ variant }: { variant: LayoutChoice }) {
-  const PLUM = "var(--cc-plum)";
+  // The previews show where you are in CareCliQ Purple, as the menus do.
+  const PLUM = "var(--cc-brand-purple)";
   const LINE = "var(--cc-border)";
   const SURFACE = "var(--cc-surface)";
   const SOFT = "var(--cc-soft)";
@@ -204,18 +205,18 @@ function NavColorPicker() {
               disabled={busy}
               className="rounded-xl border p-2 text-left transition-all disabled:opacity-60"
               style={{
-                borderColor: selected ? "var(--cc-plum)" : "var(--cc-border)",
-                boxShadow: selected ? "0 0 0 2px var(--cc-plum-ring)" : "none",
+                borderColor: selected ? "var(--cc-brand-purple)" : "var(--cc-border)",
+                boxShadow: selected ? "0 0 0 2px var(--cc-brand-purple-ring)" : "none",
                 background: "var(--cc-soft)",
               }}
               aria-pressed={selected}
             >
               <NavDesignPreview hex={preset.hex} />
               <div className="mt-2 flex items-center justify-between gap-1.5">
-                <span className="text-[11px] font-bold" style={{ color: selected ? "var(--cc-plum)" : "var(--cc-text)" }}>
+                <span className="text-[11px] font-bold" style={{ color: selected ? "var(--cc-brand-purple)" : "var(--cc-text)" }}>
                   {translate(preset.labelKey)}
                 </span>
-                {selected && <Check className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--cc-plum)" }} />}
+                {selected && <Check className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--cc-brand-purple)" }} />}
               </div>
             </button>
           );
@@ -264,18 +265,18 @@ export function NavLayoutCard() {
                 disabled={busy}
                 className="rounded-xl border p-2 text-left transition-all disabled:opacity-60"
                 style={{
-                  borderColor: selected ? "var(--cc-plum)" : "var(--cc-border)",
-                  boxShadow: selected ? "0 0 0 2px var(--cc-plum-ring)" : "none",
+                  borderColor: selected ? "var(--cc-brand-purple)" : "var(--cc-border)",
+                  boxShadow: selected ? "0 0 0 2px var(--cc-brand-purple-ring)" : "none",
                   background: "var(--cc-soft)",
                 }}
               >
                 <LayoutPreview variant={opt.value} />
                 <div className="mt-2 flex items-center justify-between gap-1.5">
-                  <span className="text-[12px] font-bold" style={{ color: selected ? "var(--cc-plum)" : "var(--cc-text)" }}>
+                  <span className="text-[12px] font-bold" style={{ color: selected ? "var(--cc-brand-purple)" : "var(--cc-text)" }}>
                     {opt.label}
                   </span>
                   {selected && (
-                    <Check className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--cc-plum)" }} />
+                    <Check className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--cc-brand-purple)" }} />
                   )}
                 </div>
               </button>
