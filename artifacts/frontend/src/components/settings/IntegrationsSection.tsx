@@ -6,7 +6,8 @@
  *   /integrations/xero/callback); Manage opens a side panel with the
  *   organisation, how syncing is going, recent invoices, settings and
  *   Disconnect.
- * - API and webhooks: coming soon.
+ * - API and webhooks: keys and webhooks for systems such as CORA Workforce
+ *   (ApiAccessPanel).
  * - Suggest an integration: opens Improvements & Feedback.
  *
  * The Xero logo is Xero's official wordmark (public/integrations/XERO),
@@ -36,8 +37,10 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { formatAppDate, formatAppTime } from "@/lib/datetime";
+import { ApiAccessPanel } from "./ApiAccessPanel";
 import {
   disconnectXero,
+  getApiOverview,
   getXeroOptions,
   getXeroStatus,
   saveXeroSettings,
@@ -486,6 +489,36 @@ function XeroTile({ status }: { status: XeroStatus }) {
   );
 }
 
+function ApiTile() {
+  const [open, setOpen] = useState(false);
+  const query = useOrgQuery(["integrations", "api"], { queryFn: getApiOverview, staleTime: 30_000, retry: false });
+  const keys = (query.data?.keys ?? []).filter((k) => !k.revoked_at).length;
+  const hooks = query.data?.webhooks ?? [];
+  const failing = hooks.some((h) => h.active && h.failure_count > 0);
+  const status: TileStatus = failing ? "attention" : keys || hooks.length ? "connected" : "available";
+  const detail = keys || hooks.length
+    ? `${keys} ${keys === 1 ? "key" : "keys"} · ${hooks.length} ${hooks.length === 1 ? "webhook" : "webhooks"}`
+    : undefined;
+  return (
+    <>
+      <IntegrationTile
+        logo={<LogoSlot name="API" icon={<Webhook className="h-5 w-5" style={{ color: PURPLE }} />} />}
+        name="API and webhooks"
+        category="For developers"
+        description="Let systems such as CORA Workforce read your workers, credentials and training, and hear about changes."
+        status={query.isError ? "unavailable" : status}
+        detail={detail}
+        action={
+          <Button size="sm" variant="outline" disabled={!query.data} onClick={() => setOpen(true)}>
+            {keys || hooks.length ? "Manage" : "Set up"}
+          </Button>
+        }
+      />
+      {query.data && <ApiAccessPanel open={open} onOpenChange={setOpen} overview={query.data} />}
+    </>
+  );
+}
+
 export function IntegrationsSection({ onSuggest }: { onSuggest?: () => void } = {}) {
   const statusQuery = useOrgQuery(["integrations", "xero"], { queryFn: getXeroStatus, staleTime: 30_000 });
   return (
@@ -514,14 +547,7 @@ export function IntegrationsSection({ onSuggest }: { onSuggest?: () => void } = 
           <XeroTile status={statusQuery.data} />
         ) : null}
 
-        <IntegrationTile
-          logo={<LogoSlot name="API" icon={<Webhook className="h-5 w-5" style={{ color: PURPLE }} />} />}
-          name="API and webhooks"
-          category="For developers"
-          description="Let your other systems read CareCliQ data and hear about changes as they happen."
-          status="soon"
-          action={<p className="text-xs" style={{ color: MUTED }}>We're building this next.</p>}
-        />
+        <ApiTile />
 
         <article className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-cc-border p-5 text-center">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: PURPLE_SOFT, color: PURPLE }}>

@@ -94,3 +94,98 @@ export function sendInvoiceToXero(invoiceId: string) {
     method: "POST",
   });
 }
+
+// ---------------------------------------------------------------------------
+// CareCliQ API keys and webhooks (for systems such as CORA Workforce)
+// ---------------------------------------------------------------------------
+
+export type ApiKey = {
+  id: string;
+  name: string;
+  /** The start of the key, e.g. "cc_live_ab12cd34", to tell keys apart. */
+  prefix: string;
+  scopes: string[];
+  created_at: string;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+};
+
+export type WebhookEndpoint = {
+  id: string;
+  url: string;
+  description?: string | null;
+  events: string[];
+  active: boolean;
+  created_at: string;
+  last_delivery_at?: string | null;
+  last_status_code?: number | null;
+  failure_count: number;
+};
+
+export type WebhookDelivery = {
+  id: string;
+  event_type: string;
+  status: "pending" | "delivered" | "failed";
+  attempts: number;
+  response_status?: number | null;
+  error?: string | null;
+  created_at: string;
+  delivered_at?: string | null;
+  next_attempt_at?: string | null;
+};
+
+export type ApiOverview = {
+  keys: ApiKey[];
+  webhooks: WebhookEndpoint[];
+  scopes: Array<{ id: string; description: string }>;
+  events: Array<{ id: string; description: string }>;
+};
+
+export function getApiOverview() {
+  return jsonFetch<ApiOverview>("/api/integrations/api");
+}
+
+/** The response carries the full key this once. */
+export function createApiKey(name: string, scopes: string[]) {
+  return jsonFetch<ApiKey & { key: string }>("/api/integrations/api/keys", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, scopes }),
+  });
+}
+
+export function revokeApiKey(id: string) {
+  return jsonFetch<{ ok: boolean }>(`/api/integrations/api/keys/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+/** The response carries the signing secret this once. */
+export function createWebhook(url: string, events: string[], description?: string) {
+  return jsonFetch<WebhookEndpoint & { secret: string }>("/api/integrations/api/webhooks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, events, description }),
+  });
+}
+
+export function updateWebhook(id: string, changes: Partial<{ url: string; events: string[]; description: string; active: boolean }>) {
+  return jsonFetch<WebhookEndpoint>(`/api/integrations/api/webhooks/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(changes),
+  });
+}
+
+export function deleteWebhook(id: string) {
+  return jsonFetch<{ ok: boolean }>(`/api/integrations/api/webhooks/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function testWebhook(id: string) {
+  return jsonFetch<{ ok: boolean; status?: number; message?: string | null }>(
+    `/api/integrations/api/webhooks/${encodeURIComponent(id)}/test`,
+    { method: "POST" },
+  );
+}
+
+export function getWebhookDeliveries(id: string) {
+  return jsonFetch<WebhookDelivery[]>(`/api/integrations/api/webhooks/${encodeURIComponent(id)}/deliveries`);
+}

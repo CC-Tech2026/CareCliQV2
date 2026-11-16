@@ -34,6 +34,7 @@ from .credential_status import live_status
 from .notification_service import _org_coordinator_user_ids, notify_worker
 from .supabase_client import get_supabase_admin
 from . import worker_training_service as training
+from . import webhook_service
 
 logger = logging.getLogger(__name__)
 
@@ -319,6 +320,7 @@ async def _process_due_reminders() -> tuple[int, int]:
                 supabase.table("organization_members").update({"is_active": False}).eq(
                     "user_id", worker_id
                 ).eq("organization_id", org_id).execute()
+                webhook_service.emit_worker(org_id, worker_id, "worker.deactivated")
                 supabase.table("onboarding_stage_reminders").update(
                     {"escalated_at": now.isoformat()}
                 ).eq("id", row_id).execute()

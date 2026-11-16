@@ -66,6 +66,10 @@ _PUBLIC_PREFIXES: tuple[str, ...] = (
     # JWT at all — it authenticates with its own shared-secret header
     # instead (see jira_webhook.py), checked independently of org context.
     "/api/webhooks/jira",
+    # The CareCliQ API for other systems: an organisation's API key, not a
+    # login JWT, says whose data it is (see public_api_service.authenticate,
+    # which every /api/v1 route calls before reading anything).
+    "/api/v1/",
     "/docs",
     "/openapi.json",
     "/redoc",

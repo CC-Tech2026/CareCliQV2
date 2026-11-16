@@ -12,7 +12,10 @@ vi.mock("@/services/integrationsService");
 
 const SETTINGS = { sales_account_code: "200", tax_type: "EXEMPTOUTPUT", invoice_status: "AUTHORISED", auto_send: true } as const;
 
+const NO_API = { keys: [], webhooks: [], scopes: [], events: [] };
+
 function renderSection() {
+  vi.mocked(integrations.getApiOverview).mockResolvedValue(NO_API);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
@@ -27,7 +30,7 @@ afterEach(() => {
 });
 
 describe("Settings > Integrations", () => {
-  it("lists Xero, the API (coming soon) and a way to suggest one, and connects to Xero", async () => {
+  it("lists Xero, the API and a way to suggest one, and connects to Xero", async () => {
     vi.mocked(integrations.getXeroStatus).mockResolvedValue({
       available: true, connected: false, redirect_uri: "x", settings: { ...SETTINGS },
     });
@@ -35,9 +38,10 @@ describe("Settings > Integrations", () => {
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, assign });
     renderSection();
-    expect(await screen.findByText("Not connected")).toBeTruthy();
-    expect(screen.getByText(/payments made there mark them paid here/)).toBeTruthy();
+    expect(await screen.findByText(/payments made there mark them paid here/)).toBeTruthy();
+    expect(screen.getAllByText("Not connected")).toHaveLength(2); // Xero, and the API with no keys yet
     expect(screen.getByText("API and webhooks")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Set up" })).toBeTruthy();
     expect(screen.getByText("Need another integration?")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Connect to Xero/ }));
     await waitFor(() => expect(assign).toHaveBeenCalledWith("https://login.xero.com/identity/connect/authorize?x=1"));
