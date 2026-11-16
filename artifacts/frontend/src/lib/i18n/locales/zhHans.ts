@@ -3996,6 +3996,7 @@ export const zhHans: Dict = {
   "settings.nav.compliance": "遵守",
   "settings.nav.defaults": "会话默认值",
   "settings.nav.delegatedAccess": "委托访问",
+  "settings.nav.integrations": "集成",
   "settings.nav.improvementFeedback": "改进与反馈",
   "settings.nav.notifications": "通知",
   "settings.nav.privacy": "隐私与数据",

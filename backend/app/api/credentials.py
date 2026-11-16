@@ -15,6 +15,7 @@ from ..api.security import require_recent_reauth
 from ..services import audit_service
 from ..services.credential_status import live_status
 from ..services.supabase_client import get_supabase_admin, signed_storage_url
+from ..services import webhook_service
 
 CREDENTIAL_FILES_BUCKET = "credential-files"
 # Recomputed fresh on every read (never persisted — see _with_signed_file_url),
@@ -133,7 +134,9 @@ async def create_my_credential(body: CredentialBody, current_user: dict = Depend
         }
     )
     result = get_supabase_admin().table("credentials").insert(payload).execute()
-    return result.data[0] if result.data else payload
+    created = result.data[0] if result.data else payload
+    webhook_service.emit_credential(created, "credential.created")
+    return created
 
 
 @router.patch("/me/{credential_id}")
@@ -164,6 +167,7 @@ async def update_my_credential(
         .execute()
     )
     updated = result.data[0] if result.data else _get_credential_for_user(credential_id, current_user, owner_only=True)
+    webhook_service.emit_credential(updated)
     await audit_service.log_action(
         action_type="credential.updated",
         entity_type="credential",
@@ -182,6 +186,7 @@ async def delete_my_credential(credential_id: str, current_user: dict = Depends(
     if existing.get("verified_at"):
         raise HTTPException(status_code=403, detail="Reviewed credentials cannot be deleted.")
     get_supabase_admin().table("credentials").delete().eq("id", credential_id).eq("user_id", get_user_id(current_user)).execute()
+    webhook_service.emit_credential_deleted(existing)
     return None
 
 
@@ -267,6 +272,7 @@ async def review_credential(
         payload["last_checked_against_nwsd"] = body.last_checked_against_nwsd
     result = get_supabase_admin().table("credentials").update(payload).eq("id", credential_id).execute()
     updated = result.data[0] if result.data else {**existing, **payload}
+    webhook_service.emit_credential(updated)
     await audit_service.log_action(
         action_type="credential.reviewed",
         entity_type="credential",

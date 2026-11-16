@@ -3996,6 +3996,7 @@ export const ar: Dict = {
   "settings.nav.compliance": "امتثال",
   "settings.nav.defaults": "افتراضيات الجلسة",
   "settings.nav.delegatedAccess": "الوصول المفوَّض",
+  "settings.nav.integrations": "التكاملات",
   "settings.nav.improvementFeedback": "التحسينات والملاحظات",
   "settings.nav.notifications": "إشعارات",
   "settings.nav.privacy": "الخصوصية والبيانات",

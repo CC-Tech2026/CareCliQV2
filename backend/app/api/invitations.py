@@ -34,6 +34,7 @@ from ..services.branch_service import member_branch_id
 from ..services.email_service import queue_invitation_email, queue_invite_verification_email
 from ..services.employee_id_service import generate_employee_id
 from ..services.supabase_client import get_supabase_admin
+from ..services import webhook_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/invitations", tags=["invitations"])
@@ -1002,6 +1003,7 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
         if employee_id:
             member_row["employee_id"] = employee_id
         supabase.table("organization_members").insert(member_row).execute()
+        webhook_service.emit_worker(org_id, member_row.get("user_id"), "worker.created")
     except Exception as e:
         logger.error("accept_invite organization_members insert error: %s", e)
 

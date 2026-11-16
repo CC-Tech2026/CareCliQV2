@@ -212,6 +212,7 @@ const GRANT_NAV_ITEMS: Record<string, NavItem> = {
   governance_vault: { href: "/md/vault", label: "Documents & Audit Vault", icon: FolderLock },
   executive_dashboard: { href: "/md/executive", label: "Performance review", icon: BarChart3 },
   onboarding_program_design: { href: "/md/onboarding/training", label: "Competency & Training", icon: GraduationCap },
+  financial_overview: { href: "/md/financial", label: "Finances", icon: DollarSign },
 };
 
 // ── Mobile bottom nav ─────────────────────────────────────────────────────────
@@ -474,10 +475,15 @@ function SidebarContents({
   const { user } = useAuth();
   const role = (user?.role ?? "support_worker") as NavRole;
   const baseSections = SECTIONED_NAV[role] ?? SECTIONED_NAV.support_worker;
-  const { hasCapability } = useMyAccessGrants();
+  const { hasCapability, grants: myGrants } = useMyAccessGrants();
   const grantItems = Object.entries(GRANT_NAV_ITEMS)
     .filter(([capability]) => hasCapability(capability))
     .map(([, item]) => item);
+  // Some grants work inside other pages (Team, Staff onboarding), so always
+  // point to the full list of what this coordinator can do and until when.
+  if (role === "support_coordinator" && myGrants.length > 0) {
+    grantItems.push({ href: "/settings?section=delegatedAccess", label: "All your access", icon: Clock });
+  }
   const sections = grantItems.length > 0
     ? [...baseSections, { group: "Temporary Access", items: grantItems }]
     : baseSections;

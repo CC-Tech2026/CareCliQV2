@@ -3996,6 +3996,7 @@ export const vi: Dict = {
   "settings.nav.compliance": "Sự tuân thủ",
   "settings.nav.defaults": "Mặc định phiên",
   "settings.nav.delegatedAccess": "Quyền truy cập được ủy quyền",
+  "settings.nav.integrations": "Tích hợp",
   "settings.nav.improvementFeedback": "Cải tiến & Phản hồi",
   "settings.nav.notifications": "Thông báo",
   "settings.nav.privacy": "Quyền riêng tư & Dữ liệu",

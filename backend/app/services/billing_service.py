@@ -37,6 +37,8 @@ def _with_signed_pdf_url(invoice: dict) -> dict:
 from . import audit_service
 from . import billing_period_service
 from . import invoice_service
+from . import xero_service
+from . import myob_service
 from ..core.timezone import app_today, participant_timezone, shift_local_date
 
 
@@ -866,6 +868,10 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
             before_state={"status": existing.get("status")},
             after_state={"status": updated.get("status")},
         )
+        # Approved invoices go to Xero (when it's connected), in the background.
+        xero_service.invoice_status_changed({**existing, **updated}, existing.get("status"))
+        # Or to MYOB, when that's the organisation's accounting system.
+        myob_service.invoice_status_changed({**existing, **updated}, existing.get("status"))
     else:
         await audit_service.log_action(
             action_type="invoice.updated",
@@ -1082,6 +1088,10 @@ async def cancel_invoice(invoice_id: str, user: dict) -> dict:
         before_state={"status": existing.get("status")},
         after_state={"status": "cancelled", "released_completions": len(released.data or [])},
     )
+    # Its Xero copy, if it has one, is voided in the background.
+    xero_service.invoice_status_changed({**existing, **updated}, existing.get("status"))
+    # Its MYOB copy, if it has one, is deleted there in the background.
+    myob_service.invoice_status_changed({**existing, **updated}, existing.get("status"))
     return updated
 
 
@@ -1455,11 +1465,12 @@ async def get_revenue_report(user: dict) -> dict:
     completed shifts — it used to be participant plan spending
     (budget_usage), which is revenue, so the "margin" it produced was
     meaningless."""
-    if not is_managing_director(user):
+    from . import financial_summary_service as fin
+
+    if not fin.can_view_finances(user):
         raise HTTPException(status_code=403, detail="Revenue reports are available to the managing director only.")
     org_id = _require_org(user)
     supabase = get_supabase_admin()
-    from . import financial_summary_service as fin
 
     try:
         invoices = _fetch_all(

@@ -54,6 +54,7 @@ from ..services import (
 from ..schemas.safety_protocol import OrgAcknowledgementContentUpdate
 from ..services.credential_status import live_status
 from ..services.supabase_client import get_supabase_admin, signed_storage_url
+from ..services import webhook_service
 
 # Mirrors users.py's PROFILE_PHOTOS_BUCKET/PROFILE_PHOTO_SIGNED_URL_SECONDS —
 # kept as a local duplicate rather than imported from there: users.py pulls in
@@ -959,6 +960,7 @@ async def deactivate_worker(
         supabase.table("organization_members").update({"is_active": False}).eq("user_id", worker_id).eq("organization_id", org_id).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=internal_error_detail("Deactivation failed", e))
+    webhook_service.emit_worker(org_id, worker_id, "worker.deactivated")
 
     await audit_service.log_action(
         action_type="coordinator.worker.deactivated",
@@ -1009,6 +1011,7 @@ async def activate_worker(worker_id: str, current_user: dict = Depends(get_curre
         supabase.table("organization_members").update({"is_active": True}).eq("user_id", worker_id).eq("organization_id", org_id).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=internal_error_detail("Activation failed", e))
+    webhook_service.emit_worker(org_id, worker_id, "worker.updated")
 
     try:
         # Clear any onboarding_stage_reminders rows for this worker so the

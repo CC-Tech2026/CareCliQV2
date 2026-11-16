@@ -14,6 +14,7 @@ from .notification_service import _notify_office_staff, _user_display_name, noti
 from .supabase_client import get_supabase_admin
 from .training_cover_service import validate_cover, with_cover_url
 from .training_material_service import validate_material_path, with_material_url
+from . import webhook_service
 
 logger = logging.getLogger(__name__)
 
@@ -231,6 +232,7 @@ def mark_training_complete(
             record,
             on_conflict="worker_id,module_id",
         ).execute()
+        webhook_service.emit_training(organization_id, worker_id=worker_id, module_id=module_id)
     except Exception as exc:
         if "under maintenance" in str(exc).lower():
             raise HTTPException(status_code=423, detail="This module is being updated. Please try again when it is unlocked.") from exc
@@ -373,6 +375,7 @@ async def review_training_completion(
         "reviewed_at": now,
         "rejection_reason": rejection_reason if not approved else None,
     }).eq("id", completion_id).execute()
+    webhook_service.emit_training(organization_id, completion_id=completion_id)
 
     await notify_worker(
         user_id=str(row["worker_id"]),

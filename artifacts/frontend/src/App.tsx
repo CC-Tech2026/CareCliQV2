@@ -43,6 +43,8 @@ import Compliance from "@/pages/compliance";
 import Reports from "@/pages/reports";
 import Billing from "@/pages/billing";
 import Settings from "@/pages/settings";
+import XeroCallbackPage from "@/pages/xero-callback";
+import MyobCallbackPage from "@/pages/myob-callback";
 import MyClients from "@/pages/my-clients";
 import MyClientDetail from "@/pages/my-client-detail";
 import MyCompliance from "@/pages/my-compliance";
@@ -404,7 +406,7 @@ function Router() {
       </Route>
 
       <Route path="/md/financial">
-        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+        <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="financial_overview" capabilityLabel="Finances and wages">
           <MDFinancialPage />
         </ProtectedRoute>
       </Route>
@@ -850,6 +852,20 @@ function Router() {
       <Route path="/settings">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <RoleAwareShell><Settings /></RoleAwareShell>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Xero sends the director back here after they choose their organisation. */}
+      <Route path="/integrations/xero/callback">
+        <ProtectedRoute allowedRoles={["managing_director"]}>
+          <RoleAwareShell><XeroCallbackPage /></RoleAwareShell>
+        </ProtectedRoute>
+      </Route>
+
+      {/* MYOB sends the director back here after they choose the company file. */}
+      <Route path="/integrations/myob/callback">
+        <ProtectedRoute allowedRoles={["managing_director"]}>
+          <RoleAwareShell><MyobCallbackPage /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 

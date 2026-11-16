@@ -12,6 +12,7 @@ import Billing, {
   RevenueInvoiceLedger,
   overdueDays,
   invoiceReviewWarnings,
+  xeroLineText,
   type Invoice,
 } from "./billing";
 import { resolveNdisPrice } from "@/services/ndisService";
@@ -40,6 +41,12 @@ vi.mock("@/hooks/useReAuth", () => ({
 }));
 vi.mock("@workspace/api-client-react", () => ({
   useGetParticipants: () => ({ data: [] }),
+}));
+// The page's queries are stubbed above, so there's no QueryClientProvider; the
+// Xero line on an invoice only uses the client to refresh after a send.
+vi.mock("@tanstack/react-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-query")>()),
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 vi.mock("@/hooks/useOrgQuery", () => ({
   useOrgQuery: () => ({
@@ -490,4 +497,37 @@ it("opens an invoice linked from an attention item with its details expanded", a
   expect((screen.getByRole("textbox", { name: "Search invoices" }) as HTMLInputElement).value).toBe("a");
   expect(screen.getByText("Community participation")).toBeTruthy();
   expect(screen.getByRole("row", { name: /INV-101/ }).getAttribute("aria-expanded")).toBe("true");
+});
+
+
+describe("where an invoice stands in Xero", () => {
+  const base = {
+    id: "i-1", invoice_number: "INV-1", recipient_name: "Plan Partners", status: "sent", total_cents: 132444,
+    currency: "AUD", created_at: "2026-11-16T00:00:00Z", finalized_at: "2026-11-16T00:00:00Z", line_items: [],
+  } as Invoice;
+  const summary = { connected: true, tenant_name: "Demo Company (AU)", auto_send: true, connected_at: "2026-11-10T00:00:00Z" };
+  const later = Date.parse("2026-11-16T01:00:00Z");
+
+  it("shows part payments as amounts and full payments as paid in both places", () => {
+    expect(xeroLineText({ ...base, xero_invoice_id: "x", xero_status: "AUTHORISED", xero_amount_paid_cents: 50000, xero_amount_due_cents: 82444 }, summary, later).text)
+      .toBe("Part paid in Xero: $500.00 of $1,324.44. $824.44 still owing.");
+    expect(xeroLineText({ ...base, xero_invoice_id: "x", xero_status: "PAID" }, summary, later).text)
+      .toBe("Paid, and recorded in Xero (Demo Company (AU)).");
+  });
+
+  it("only offers a button when a person is needed", () => {
+    // Just approved: it goes on its own.
+    expect(xeroLineText(base, summary, Date.parse("2026-11-16T00:00:30Z"))).toEqual({ tone: "muted", text: "On its way to Xero." });
+    // Still not there minutes later: something stopped it.
+    expect(xeroLineText(base, summary, later).action).toBe("Send to Xero");
+    // A problem: says what, and Try again.
+    expect(xeroLineText({ ...base, xero_sync_error: "Choose which bank account payments go into." }, summary, later))
+      .toMatchObject({ tone: "danger", action: "Try again" });
+    // Approved before Xero was connected: only if someone chooses to.
+    expect(xeroLineText({ ...base, finalized_at: "2026-11-01T00:00:00Z" }, summary, later))
+      .toMatchObject({ text: "Approved before Xero was connected, so it wasn't sent.", action: "Send to Xero" });
+    expect(xeroLineText({ ...base, finalized_at: "2026-11-01T00:00:00Z" }, { ...summary, include_earlier: true }, later).action)
+      .toBe("Send to Xero"); // older one, sends allowed now, but it didn't go on its own
+    expect(xeroLineText({ ...base, status: "draft" }, summary, later).action).toBeUndefined();
+  });
 });
