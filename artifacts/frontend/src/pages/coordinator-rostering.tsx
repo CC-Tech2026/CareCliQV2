@@ -11,7 +11,7 @@ import {
 import {
   CalendarDays, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Clock3, Loader2,
   Plus, Users2, User2, AlertCircle, AlertTriangle, LayoutGrid, Settings2,
-  Activity, Search, RefreshCw, ClipboardCheck, CalendarPlus,
+  Activity, Search, RefreshCw, ClipboardCheck, CalendarPlus, Repeat,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
@@ -40,6 +40,7 @@ import {
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { BIG_TEAM, RosterBoard } from "@/components/coordinator/RosterBoard";
 import { BulkShiftModal }         from "@/components/coordinator/BulkShiftModal";
+import { RegularSchedulesPanel }  from "@/components/coordinator/RegularSchedulesPanel";
 import { OpenShiftsPanel }        from "@/components/coordinator/OpenShiftsPanel";
 import { UnassignedShiftPanel }   from "@/components/coordinator/UnassignedShiftPanel";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
@@ -357,6 +358,9 @@ export default function CoordinatorRosteringPage() {
   const [workerFilter, setWorkerFilter] = useState("all");
   const [assignOpen,   setAssignOpen]   = useState(false);
   const [bulkOpen,     setBulkOpen]     = useState(false);
+  const [seriesOpen,   setSeriesOpen]   = useState(false);
+  // Opened from a shift: straight to changing its schedule from its day.
+  const [seriesFocus,  setSeriesFocus]  = useState<{ seriesId: string; fromDate?: string } | null>(null);
   const [openListOpen, setOpenListOpen] = useState(false);
   const [findWorkerFor, setFindWorkerFor] = useState<CoordinatorShiftRecord | null>(null);
   const [availWorker,  setAvailWorker]  = useState<WorkerStats | null>(null);
@@ -551,6 +555,16 @@ export default function CoordinatorRosteringPage() {
     setSelectedDay(target);
   };
 
+  // A shift from a regular schedule: change the schedule from that shift's day.
+  const changeSeriesFrom = (shift: CoordinatorShiftRecord) => {
+    if (!shift.series_id) return;
+    setSeriesFocus({
+      seriesId: shift.series_id,
+      fromDate: shift.scheduled_start ? appLocalDateKey(shift.scheduled_start, shift.timezone) : undefined,
+    });
+    setSeriesOpen(true);
+  };
+
   const assignWorker   = workers.find((w) => w.id === workerFilter) ?? null;
   const periodLabel    = viewMode === "month"
     ? format(currentMonth, "MMMM yyyy")
@@ -593,12 +607,12 @@ export default function CoordinatorRosteringPage() {
             <Users2 size={14} /> {translate("coordinator.rostering.team")}
           </Button>
           <Button
-            onClick={() => setBulkOpen(true)}
+            onClick={() => setSeriesOpen(true)}
             variant="outline"
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold"
             style={{ borderColor: BORDER, color: TEXT }}
           >
-            <LayoutGrid size={14} /> {translate("coordinator.rostering.recurring")}
+            <Repeat size={14} /> Regular schedules
           </Button>
           <Button
             onClick={() => setAssignOpen(true)}
@@ -840,6 +854,7 @@ export default function CoordinatorRosteringPage() {
             setAssignOpen(true);
           }}
           onRefresh={() => shiftsQuery.refetch?.()}
+          onChangeSeries={changeSeriesFrom}
         />
       )}
 
@@ -938,9 +953,17 @@ export default function CoordinatorRosteringPage() {
         onOpenChange={(open) => { if (!open) setFindWorkerFor(null); }}
         workers={workers}
         onAssigned={() => { shiftsQuery.refetch?.(); openShiftsQuery.refetch?.(); }}
+        onChangeSeries={(shift) => { setFindWorkerFor(null); changeSeriesFrom(shift); }}
       />
 
-      {/* -- Bulk/Recurring shift modal ------------------------------------- */}
+      {/* -- Regular schedules, and the form for a new one ------------------ */}
+      <RegularSchedulesPanel
+        open={seriesOpen}
+        onOpenChange={(open) => { setSeriesOpen(open); if (!open) setSeriesFocus(null); }}
+        workers={workers}
+        focus={seriesFocus}
+        onNew={() => setBulkOpen(true)}
+      />
       <BulkShiftModal
         open={bulkOpen}
         onOpenChange={setBulkOpen}

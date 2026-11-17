@@ -700,6 +700,8 @@ export type CoordinatorShiftRecord = {
   is_shadow_shift?: boolean;
   shadow_of_worker_id?: string | null;
   shadow_of_worker_name?: string | null;
+  /** The regular schedule that made this shift, if one did. */
+  series_id?: string | null;
   duty_type?: string;
   is_sleepover?: boolean;
   created_at?: string;
@@ -1007,6 +1009,107 @@ export function bulkCreateShifts(payload: BulkShiftPayload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+// ── Regular schedules (shift series) ──────────────────────────────────────────
+
+/** A participant's standing arrangement. Shifts are kept made a few weeks
+ *  ahead and topped up as days pass. Days are 0 = Monday ... 6 = Sunday. */
+export type ShiftSeries = {
+  id: string;
+  participant_id: string;
+  participant_name: string;
+  worker_id: string | null;
+  worker_name: string | null;
+  days_of_week: number[];
+  start_time: string;
+  end_time: string;
+  interval_weeks: number;
+  start_date: string;
+  end_date: string | null;
+  shift_type: string;
+  expected_price_item_code?: string | null;
+  service_agreement_support_id?: string | null;
+  /** "Mon, Wed, Fri 09:00 to 12:00, every 2 weeks" */
+  summary: string;
+  next_start: string | null;
+  upcoming_count: number;
+  /** Coming shifts nobody has: days the worker couldn't do, or no worker. */
+  upcoming_open: number;
+};
+
+export type SeriesOpened = { date: string; shift_id: string; reason: string | null };
+export type SeriesSkipped = { date: string; reason: string };
+
+export type ShiftSeriesPayload = {
+  participant_id: string;
+  days_of_week: number[];
+  start_time: string;
+  end_time: string;
+  start_date: string;
+  end_date?: string | null;
+  interval_weeks: number;
+  worker_id?: string | null;
+  shift_type: string;
+  expected_price_item_code?: string;
+  service_agreement_support_id?: string;
+  selected_task_ids?: string[];
+};
+
+export type ShiftSeriesCreated = {
+  series: ShiftSeries;
+  created_count: number;
+  opened: SeriesOpened[];
+  skipped: SeriesSkipped[];
+};
+
+/** Only what's sent changes; worker_id: null makes the shifts open. */
+export type ShiftSeriesChange = {
+  from_date: string;
+  days_of_week?: number[];
+  start_time?: string;
+  end_time?: string;
+  interval_weeks?: number;
+  worker_id?: string | null;
+  end_date?: string | null;
+};
+
+export type ShiftSeriesChanged = {
+  updated_count: number;
+  removed_count: number;
+  created_count: number;
+  /** Shifts someone had changed by hand, which were left as they are. */
+  left_alone_count: number;
+  opened: SeriesOpened[];
+  skipped: SeriesSkipped[];
+};
+
+export function listShiftSeries(participantId?: string) {
+  const qs = participantId ? `?participant_id=${encodeURIComponent(participantId)}` : "";
+  return jsonFetch<ShiftSeries[]>(`/api/coordinator/shift-series${qs}`);
+}
+
+export function createShiftSeries(payload: ShiftSeriesPayload) {
+  return jsonFetch<ShiftSeriesCreated>("/api/coordinator/shift-series", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function changeShiftSeries(seriesId: string, change: ShiftSeriesChange) {
+  return jsonFetch<ShiftSeriesChanged>(`/api/coordinator/shift-series/${encodeURIComponent(seriesId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(change),
+  });
+}
+
+export function endShiftSeries(seriesId: string, fromDate: string) {
+  return jsonFetch<{ removed_count: number; left_alone_count: number; end_date: string }>(
+    `/api/coordinator/shift-series/${encodeURIComponent(seriesId)}/end`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from_date: fromDate }) },
+  );
 }
 
 /** Create a single unassigned shift (no worker yet) */

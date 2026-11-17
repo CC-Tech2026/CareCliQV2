@@ -3,7 +3,7 @@ import { detailIfShared, sharedNames } from "@/lib/person-identity";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { Phone, Mail, Target, CalendarClock, Ban, UserSearch } from "lucide-react";
+import { Phone, Mail, Target, CalendarClock, Ban, UserSearch, Repeat } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -36,6 +36,9 @@ export interface UnassignedShiftPanelProps {
   onOpenChange: (open: boolean) => void;
   workers: WorkerStats[];
   onAssigned?: () => void;
+  /** The shift came from a regular schedule: change it and the rest of the
+   *  schedule from its day (the panel's own buttons change just this one). */
+  onChangeSeries?: (shift: CoordinatorShiftRecord) => void;
 }
 
 const TEXT = "var(--cc-text)";
@@ -49,7 +52,7 @@ const DANGER = "var(--cc-danger-text)";
  * RosterBoard's drag-drop path already uses (ConflictModal, assignExistingShift),
  * so this is a second entry point into the same behaviour, not a second one
  * that quietly works differently. */
-export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAssigned }: UnassignedShiftPanelProps) {
+export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAssigned, onChangeSeries }: UnassignedShiftPanelProps) {
   const { translate } = useAccessibility();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -225,6 +228,19 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
             </div>
           </dl>
         ) : null}
+
+        {/* Made by a regular schedule: the buttons below change just this
+            shift; this changes it and the rest of the schedule from its day. */}
+        {shift?.series_id && onChangeSeries && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-cc-border px-4 py-3">
+            <p className="flex items-center gap-2 text-sm" style={{ color: TEXT }}>
+              <Repeat size={15} aria-hidden style={{ color: MUTED }} /> Part of a regular schedule
+            </p>
+            <button type="button" onClick={() => onChangeSeries(shift)} className={outlineClass}>
+              Change this and future shifts
+            </button>
+          </div>
+        )}
 
         {/* Reschedule / cancel - the only edit actions this shift has, since
             it's still unassigned (no worker to conflict-check against). */}

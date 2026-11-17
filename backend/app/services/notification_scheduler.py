@@ -39,6 +39,7 @@ _myob_sync_task: Optional[asyncio.Task] = None
 _employment_hero_task: Optional[asyncio.Task] = None
 _webhook_task: Optional[asyncio.Task] = None
 _overdue_shift_autoend_task: Optional[asyncio.Task] = None
+_shift_series_task: Optional[asyncio.Task] = None
 
 
 def _is_missing_schema_error(exc: Exception) -> bool:
@@ -243,6 +244,7 @@ async def _scheduler_loop() -> None:
 def start_notification_scheduler() -> None:
     global _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task
     global _overdue_shift_autoend_task, _xero_sync_task, _webhook_task, _myob_sync_task, _employment_hero_task
+    global _shift_series_task
     if not settings.notification_scheduler_enabled:
         return
     if _scheduler_task and not _scheduler_task.done():
@@ -256,6 +258,24 @@ def start_notification_scheduler() -> None:
     _myob_sync_task = asyncio.create_task(_myob_sync_loop())
     _employment_hero_task = asyncio.create_task(_employment_hero_loop())
     _webhook_task = asyncio.create_task(_webhook_retry_loop())
+    _shift_series_task = asyncio.create_task(_shift_series_loop())
+
+
+async def _shift_series_loop() -> None:
+    """Every hour: regular schedules make their shifts for the weeks ahead as
+    days pass, so ongoing support never runs out. Safe to run on two servers:
+    the database allows one shift per series per day."""
+    from .shift_series_service import run_series_pass
+
+    logger.info("Regular schedule top-up loop started (every 60 min)")
+    while True:
+        try:
+            made = await run_series_pass()
+            if made:
+                logger.info("Regular schedules: %s shift(s) made", made)
+        except Exception as exc:
+            logger.warning("Regular schedule top-up failed: %s", exc)
+        await asyncio.sleep(3600)
 
 
 async def _webhook_retry_loop() -> None:
@@ -394,9 +414,11 @@ async def _stripe_reconciliation_loop() -> None:
 async def stop_notification_scheduler() -> None:
     global _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task
     global _overdue_shift_autoend_task, _xero_sync_task, _webhook_task, _myob_sync_task, _employment_hero_task
+    global _shift_series_task
     for task in (
         _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task,
         _overdue_shift_autoend_task, _xero_sync_task, _webhook_task, _myob_sync_task, _employment_hero_task,
+        _shift_series_task,
     ):
         if not task:
             continue
@@ -414,3 +436,4 @@ async def stop_notification_scheduler() -> None:
     _myob_sync_task = None
     _employment_hero_task = None
     _webhook_task = None
+    _shift_series_task = None
