@@ -23,6 +23,7 @@ import { CalendarPlus, Moon, Plus } from "lucide-react";
 import { appLocalDateKey, appMinutesOfDay } from "@/lib/datetime";
 import type { CoordinatorShiftRecord, WorkerStats } from "@/services/coordinatorService";
 import { PersonPhoto } from "@/components/ui/person-photo";
+import { shortWorkerName } from "@/lib/person-identity";
 import { ShiftHoverCard, shiftLiveStatus } from "./ShiftHoverCard";
 import {
   FIT_COLORS,
@@ -135,11 +136,7 @@ function humanise(value?: string | null) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** "Aisha Rahman" to "Aisha R", for the narrow week columns. */
-function shortName(name: string) {
-  const parts = name.trim().split(/\s+/);
-  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}` : parts[0];
-}
+type ColumnLabel = { short: string; full: string; detail: string | null };
 
 function minutesOf(shift: CoordinatorShiftRecord) {
   const start = appMinutesOfDay(shift.scheduled_start!, shift.timezone);
@@ -381,9 +378,12 @@ function CalendarColumn({
 }
 
 export function RosterCalendar({
-  dayKeys, workers, shifts, availMap, allowCreate, newShiftId, activeShift, fits, onCreateAt, onSelect, onOpenDay,
+  dayKeys, workers, labels, shifts, availMap, allowCreate, newShiftId, activeShift, fits, onCreateAt, onSelect, onOpenDay,
   canEditTimes, onResize,
 }: {
+  /** Each worker's column heading, from rosterLabels over the whole team:
+   *  a short name that's unique, and a staff ID or suburb for shared names. */
+  labels?: Map<string, ColumnLabel>;
   /** Whether a shift's times can still change (it hasn't started, isn't done or cancelled). */
   canEditTimes: (shift: CoordinatorShiftRecord) => boolean;
   /** Its bottom edge was dragged: the shift's day and the new end in minutes (1440 = midnight after). */
@@ -540,10 +540,13 @@ export function RosterCalendar({
           const fit = c.kind === "worker" && draggingDay === c.dayKey ? fits.get(c.id) : undefined;
           const minutes = c.blocks.reduce((n, b) => n + (b.end - b.start), 0);
           const usual = c.worker ? dayAvailability(availMap[c.worker.id], c.dayKey) : null;
-          const name = c.kind === "open" ? (oneDay ? "Open shifts" : "Open") : oneDay ? c.worker!.full_name : shortName(c.worker!.full_name);
+          const label = c.worker ? labels?.get(c.worker.id) ?? { short: shortWorkerName(c.worker.full_name), full: c.worker.full_name, detail: null } : null;
+          const name = c.kind === "open" ? (oneDay ? "Open shifts" : "Open") : oneDay ? label!.full : label!.short;
           const subline = c.kind === "open"
             ? c.blocks.length ? `${c.blocks.length} to fill` : oneDay ? "None to fill" : ""
             : [
+                // Tells two people with the same name apart before anything else.
+                label?.detail ?? null,
                 usual?.state === "free" && usual.start != null ? usual.text : usual?.state === "leave" ? "On leave" : usual?.state === "off" ? "Off" : null,
                 oneDay && minutes ? `${hoursText(minutes)} rostered` : null,
               ].filter(Boolean).join(" · ");
@@ -565,7 +568,7 @@ export function RosterCalendar({
                 <PersonPhoto name={c.worker!.full_name} photoUrl={c.worker!.profile_photo_url} size={32} />
               ))}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[12.5px] font-semibold leading-tight" style={{ color: TEXT }} title={c.worker?.full_name}>{name}</p>
+                <p className="truncate text-[12.5px] font-semibold leading-tight" style={{ color: TEXT }} title={label ? [label.full, label.detail].filter(Boolean).join(" · ") : undefined}>{name}</p>
                 {fit ? (
                   <span
                     className="mt-0.5 inline-block max-w-full truncate rounded px-1.5 text-[10.5px] font-semibold leading-[18px]"

@@ -29,3 +29,28 @@ it("matches on any field, every word, birth date forms and spaced numbers", () =
 it("finds names held by more than one person, ignoring case", () => {
   expect([...sharedNames(["Jo Smith", "jo smith ", "Ben Ito"])]).toEqual(["jo smith"]);
 });
+
+import { rosterLabels, shortWorkerName, workerDetail, workerSearchText } from "./person-identity";
+
+it("describes a worker by staff ID and suburb, else email", () => {
+  expect(workerDetail({ full_name: "Sam Nguyen", employee_id: "1042", suburb: "Glenelg" })).toBe("ID 1042 · Glenelg");
+  expect(workerDetail({ full_name: "Sam Nguyen", suburb: "Glenelg" })).toBe("Glenelg");
+  expect(workerDetail({ full_name: "Sam Nguyen", email: "sam@x.example" })).toBe("sam@x.example");
+  expect(workerDetail({ full_name: "Sam Nguyen" })).toBeNull();
+  expect(workerSearchText({ full_name: "Sam Nguyen", employee_id: "1042", phone: "0400 111 222" })).toBe("Sam Nguyen 1042 0400 111 222");
+});
+
+it("keeps roster column names unique and tells same-named staff apart", () => {
+  const labels = rosterLabels([
+    { id: "a", full_name: "Sam Nguyen", employee_id: "1042", suburb: "Glenelg" },
+    { id: "b", full_name: "Sam Nguyen", employee_id: "2210", suburb: "Elizabeth" },
+    { id: "c", full_name: "Sam Nash", employee_id: "3001" },
+    { id: "d", full_name: "Aisha Rahman" },
+  ]);
+  // "Sam N" would be three people, so they get full names.
+  expect(labels.get("a")).toEqual({ short: "Sam Nguyen", full: "Sam Nguyen", detail: "ID 1042 · Glenelg" });
+  expect(labels.get("b")?.detail).toBe("ID 2210 · Elizabeth");
+  expect(labels.get("c")).toEqual({ short: "Sam Nash", full: "Sam Nash", detail: null });
+  expect(labels.get("d")).toEqual({ short: "Aisha R", full: "Aisha Rahman", detail: null });
+  expect(shortWorkerName("Cher")).toBe("Cher");
+});

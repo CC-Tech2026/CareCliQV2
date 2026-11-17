@@ -4004,6 +4004,98 @@ class WorkerAvailabilityBody(BaseModel):
     blackout_dates: Optional[list[dict]] = None  # [{start_date, end_date, reason}]
 
 
+_DEFAULT_AVAILABILITY = {
+    "available_days": [1, 2, 3, 4, 5],
+    "day_start_time": "08:00",
+    "day_end_time": "18:00",
+    "max_hours_per_week": 40,
+}
+# Ids per PostgREST in_() filter, to keep the request URL a sensible length.
+_IN_CHUNK = 150
+
+
+def _org_staff_ids(org_id: str) -> set[str]:
+    """Everyone on the organisation's staff: its organisation_members rows
+    (not participant-portal logins) and users whose organisation it is."""
+    supabase = get_supabase_admin()
+    ids: set[str] = set()
+    try:
+        for row in (
+            supabase.table("organization_members").select("user_id, role").eq("organization_id", org_id).execute().data
+            or []
+        ):
+            if isinstance(row, dict) and row.get("user_id") and str(row.get("role") or "") not in PARTICIPANT_ROLES:
+                ids.add(str(row["user_id"]))
+    except Exception:
+        logger.warning("organization_members lookup failed for org %s", org_id, exc_info=True)
+    try:
+        for row in (
+            supabase.table("users").select("id, role").eq("organization_id", org_id).execute().data or []
+        ):
+            if isinstance(row, dict) and row.get("id") and str(row.get("role") or "") not in PARTICIPANT_ROLES:
+                ids.add(str(row["id"]))
+    except Exception:
+        logger.warning("users lookup failed for org %s", org_id, exc_info=True)
+    return ids
+
+
+def _require_worker_in_org(worker_id: str, org_id: str) -> None:
+    """A coordinator can only read or change availability for their own
+    organisation's staff. 404 rather than 403, so other organisations'
+    worker ids can't be probed."""
+    supabase = get_supabase_admin()
+    try:
+        member = (
+            supabase.table("organization_members").select("user_id")
+            .eq("organization_id", org_id).eq("user_id", worker_id).limit(1).execute().data
+        )
+        if member:
+            return
+    except Exception:
+        pass
+    try:
+        user = supabase.table("users").select("id").eq("id", worker_id).eq("organization_id", org_id).limit(1).execute().data
+    except Exception:
+        user = None
+    if not user:
+        raise HTTPException(status_code=404, detail="Worker not found.")
+
+
+@router.get("/workers/availability")
+async def get_team_availability(current_user: dict = Depends(get_current_user)):
+    """Availability and blackout dates for the whole staff in one go, for the
+    roster, instead of one request per worker (slow with 50 to 100+ staff).
+    Workers with nothing saved get the same defaults as the single lookup."""
+    org_id = _require_org_read(current_user)
+    supabase = get_supabase_admin()
+    ids = sorted(_org_staff_ids(org_id))
+    availability: dict[str, dict] = {}
+    blackouts: dict[str, list[dict]] = {}
+    try:
+        for start in range(0, len(ids), _IN_CHUNK):
+            chunk = ids[start:start + _IN_CHUNK]
+            for row in supabase.table("worker_availability").select("*").in_("user_id", chunk).execute().data or []:
+                availability[str(row.get("user_id"))] = row
+            for row in (
+                supabase.table("worker_blackout_dates").select("id, user_id, start_date, end_date, reason")
+                .in_("user_id", chunk).order("start_date").execute().data
+                or []
+            ):
+                uid = str(row.pop("user_id", "") or "")
+                blackouts.setdefault(uid, []).append(row)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=internal_error_detail("Availability fetch failed", exc))
+    return {
+        "workers": {
+            uid: {
+                "availability": availability.get(uid) or {"user_id": uid, **_DEFAULT_AVAILABILITY},
+                "blackout_dates": blackouts.get(uid, []),
+            }
+            for uid in ids
+        }
+    }
+
+
 @router.get("/workers/{worker_id}/availability")
 async def get_worker_availability(
     worker_id: str,
@@ -4011,6 +4103,7 @@ async def get_worker_availability(
 ):
     """Get availability settings and blackout dates for a worker."""
     org_id = _require_org_read(current_user)
+    _require_worker_in_org(worker_id, org_id)
     supabase = get_supabase_admin()
     try:
         avail = (
@@ -4027,13 +4120,7 @@ async def get_worker_availability(
             .order("start_date")
             .execute()
         )
-        default_avail = {
-            "user_id": worker_id,
-            "available_days": [1, 2, 3, 4, 5],
-            "day_start_time": "08:00",
-            "day_end_time": "18:00",
-            "max_hours_per_week": 40,
-        }
+        default_avail = {"user_id": worker_id, **_DEFAULT_AVAILABILITY}
         return {
             "availability": (avail.data or [default_avail])[0],
             "blackout_dates": blackouts.data or [],
@@ -4050,6 +4137,7 @@ async def update_worker_availability(
 ):
     """Upsert availability settings for a worker."""
     org_id = _require_org_read(current_user)
+    _require_worker_in_org(worker_id, org_id)
     supabase = get_supabase_admin()
     try:
         now = datetime.now(timezone.utc).isoformat()
@@ -6586,6 +6674,7 @@ async def request_worker_availability_update(
     current_user: dict = Depends(get_current_user),
 ):
     org_id = _require_org_read(current_user)
+    _require_worker_in_org(worker_id, org_id)
     now = datetime.now(timezone.utc).isoformat()
     await notify_worker(
         user_id=worker_id,

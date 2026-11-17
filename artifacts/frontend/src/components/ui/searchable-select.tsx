@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { matchesPerson } from "@/lib/person-identity";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
@@ -18,7 +19,16 @@ export type SearchableOption = {
 
 /** Single-select combobox: a Select-like trigger that opens a filterable
  * cmdk list. `keywords` (falling back to `label`) is what each option is
- * matched against as the user types. */
+ * matched against as the user types: every word typed has to appear in it,
+ * so "sam 1042" finds the Sam with staff ID 1042. */
+
+// Each item is identified by its own value (two people can share a name, and
+// cmdk treats items with the same value as one), and matched on its keywords
+// only, word by word rather than fuzzily, so "1042" doesn't match any text
+// that happens to contain a 1, 0, 4 and 2.
+function matchOption(_value: string, search: string, keywords?: string[]) {
+  return matchesPerson(search, keywords ?? []) ? 1 : 0;
+}
 export function SearchableSelect({
   value,
   onValueChange,
@@ -72,7 +82,7 @@ export function SearchableSelect({
         className="z-[100] w-[var(--radix-popover-trigger-width)] p-0 border-cc-border"
         align="start"
       >
-        <Command>
+        <Command filter={matchOption}>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
@@ -83,7 +93,8 @@ export function SearchableSelect({
                   return (
                     <CommandItem
                       key={option.value}
-                      value={option.keywords ?? option.label}
+                      value={option.value}
+                      keywords={[option.keywords ?? option.label]}
                       onSelect={() => {
                         onValueChange(option.value);
                         setOpen(false);

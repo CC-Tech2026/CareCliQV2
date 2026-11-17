@@ -1070,6 +1070,11 @@ export function getWorkerAvailability(workerId: string) {
   );
 }
 
+/** Availability for the whole staff in one request (the roster). */
+export function getTeamAvailability() {
+  return jsonFetch<{ workers: Record<string, WorkerAvailabilityResponse> }>("/api/coordinator/workers/availability");
+}
+
 /** Update worker availability settings */
 export function updateWorkerAvailability(
   workerId: string,

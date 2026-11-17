@@ -56,6 +56,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { detailIfShared, sharedNames, workerDetail, workerSearchText } from "@/lib/person-identity";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -607,6 +608,27 @@ export function ShiftAssignmentModal({
   const ranked = (availableWorkersQuery.data ?? [])
     .filter((w) => !w.excluded && w.availability_status !== "unavailable" && assignableWorkers.some((a) => a.id === w.id))
     .sort((a, b) => (b.match_score ?? -1) - (a.match_score ?? -1));
+  // Staff who share a name are told apart by staff ID and suburb wherever
+  // they're listed here.
+  const sameWorkerNames = sharedNames(workers.map((w) => w.full_name));
+  const workerById = new Map(workers.map((w) => [w.id, w]));
+  const workerOption = (w: WorkerStats) => ({ value: w.id, label: w.full_name, keywords: workerSearchText(w) });
+  const workerOptionLabel = (id: string, label: string) => {
+    const w = workerById.get(id);
+    const detail = w ? workerDetail(w) : null;
+    return (
+      <span className="min-w-0">
+        <span className="block truncate">{label}</span>
+        {detail && <span className="block truncate text-[11px]" style={{ color: MUTED }}>{detail}</span>}
+      </span>
+    );
+  };
+  const workerTrigger = (selected: { value: string; label: string } | undefined, placeholder: string) => {
+    if (!selected) return <span style={{ color: MUTED }}>{placeholder}</span>;
+    const w = workerById.get(selected.value);
+    const detail = w ? detailIfShared(w, sameWorkerNames) : null;
+    return detail ? `${selected.label} · ${detail}` : selected.label;
+  };
   const suggestions = ranked.slice(0, 3);
   // The worker whose row was clicked stays on the list even if they aren't a top match.
   if (selectedWorkerId && !suggestions.some((w) => w.id === selectedWorkerId)) {
@@ -811,6 +833,9 @@ export function ShiftAssignmentModal({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-semibold" style={{ color: TEXT }}>{w.full_name}</span>
+                        {detailIfShared(w, sameWorkerNames) && (
+                          <span className="block truncate text-[11px]" style={{ color: MUTED }}>{detailIfShared(w, sameWorkerNames)}</span>
+                        )}
                         {note && <span className="block truncate text-[11px] font-medium" style={{ color: note.tone }}>{note.text}</span>}
                       </span>
                       {w.match_score != null && (
@@ -845,14 +870,19 @@ export function ShiftAssignmentModal({
                     emptyText={translate("common.noResults")}
                     options={[
                       { value: "__unassigned__", label: translate("coordinator.shiftAssign.unassigned"), keywords: "unassigned" },
-                      ...sortedAssignableWorkers.map((w) => ({ value: w.id, label: w.full_name, keywords: w.full_name })),
+                      ...sortedAssignableWorkers.map(workerOption),
                     ]}
+                    renderTrigger={(selected) =>
+                      selected?.value === "__unassigned__"
+                        ? selected.label
+                        : workerTrigger(selected, translate("coordinator.shiftAssign.unassigned"))
+                    }
                     renderOption={(option) =>
                       option.value === "__unassigned__" ? (
                         <span className="flex items-center gap-2" style={{ color: MUTED }}><User2 size={12} />{option.label}</span>
                       ) : (
                         <span className="flex w-full items-center justify-between gap-2">
-                          <span className="flex items-center gap-2"><User2 size={12} />{option.label}</span>
+                          <span className="flex min-w-0 items-center gap-2"><User2 size={12} className="shrink-0" />{workerOptionLabel(option.value, option.label)}</span>
                           <WorkerMatchBadge worker={workerMatchById.get(option.value)} />
                         </span>
                       )
@@ -1036,14 +1066,16 @@ export function ShiftAssignmentModal({
                       Shadow shift — pair with a senior worker
                     </label>
                     {isShadowShift && (
-                      <Select value={shadowOfWorkerId} onValueChange={setShadowOfWorkerId}>
-                        <SelectTrigger className="h-10 rounded-lg" style={{ borderColor: BORDER }}><SelectValue placeholder="Who are they shadowing?" /></SelectTrigger>
-                        <SelectContent>
-                          {assignableWorkers.filter((w) => w.id !== selectedWorkerId).map((w) => (
-                            <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={shadowOfWorkerId}
+                        onValueChange={setShadowOfWorkerId}
+                        placeholder="Who are they shadowing?"
+                        searchPlaceholder={translate("coordinator.shiftAssign.searchWorker")}
+                        emptyText={translate("common.noResults")}
+                        options={assignableWorkers.filter((w) => w.id !== selectedWorkerId).map(workerOption)}
+                        renderTrigger={(selected) => workerTrigger(selected, "Who are they shadowing?")}
+                        renderOption={(option) => workerOptionLabel(option.value, option.label)}
+                      />
                     )}
                   </div>
                 )}

@@ -1,4 +1,5 @@
 import { PersonPreview } from "./PersonPreview";
+import { detailIfShared, sharedNames } from "@/lib/person-identity";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -58,6 +59,7 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
   const [rescheduling, setRescheduling] = useState(false);
   const [draftStart, setDraftStart] = useState("");
   const [draftEnd, setDraftEnd] = useState("");
+  const sameWorkerNames = sharedNames((workers ?? []).map((w) => w.full_name));
 
   const participantId = shift?.participant_id;
 
@@ -306,6 +308,9 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
               <div key={w.id} className="flex items-center justify-between gap-3 rounded-xl border border-cc-border p-3">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold" style={{ color: TEXT }}>{w.full_name}</p>
+                  {detailIfShared(w, sameWorkerNames) && (
+                    <p className="text-xs" style={{ color: MUTED }}>{detailIfShared(w, sameWorkerNames)}</p>
+                  )}
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs" style={{ color: MUTED }}>
                     {w.phone && <ContactLink icon={Phone} value={w.phone} href={`tel:${w.phone.replace(/\s/g, "")}`} />}
                     {w.email && <ContactLink icon={Mail} value={w.email} href={`mailto:${w.email}`} />}
