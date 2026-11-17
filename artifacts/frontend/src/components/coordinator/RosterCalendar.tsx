@@ -19,7 +19,7 @@ import {
 } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { format, parseISO } from "date-fns";
-import { CalendarPlus, Moon, Plus } from "lucide-react";
+import { CalendarPlus, Moon, Plus, Repeat } from "lucide-react";
 import { appLocalDateKey, appMinutesOfDay } from "@/lib/datetime";
 import type { CoordinatorShiftRecord, WorkerStats } from "@/services/coordinatorService";
 import { PersonPhoto } from "@/components/ui/person-photo";
@@ -221,8 +221,9 @@ function ShiftBlock({
           boxShadow: isDragging || resizeEnd != null ? "0 10px 24px rgba(26,26,46,0.28)" : undefined,
         }}
       >
-        <span className="block truncate text-[12px] font-bold leading-tight" style={{ textDecoration: live === "cancelled" ? "line-through" : undefined }}>
-          {shift.participant_name || "Participant"}
+        <span className="flex items-center gap-1 truncate text-[12px] font-bold leading-tight" style={{ textDecoration: live === "cancelled" ? "line-through" : undefined }}>
+          {shift.series_id && <Repeat size={11} aria-label="Regular schedule" className="shrink-0" />}
+          <span className="truncate">{shift.participant_name || "Participant"}</span>
         </span>
         {height >= 38 && <span className="block truncate text-[11px] leading-snug opacity-95 tabular-nums">{times}</span>}
         {height >= 60 && detail && (

@@ -1700,6 +1700,25 @@ async def coordinator_shifts(
             care_coordinator_by_shift = {}
         for row in rows:
             row["care_coordinator_id"] = care_coordinator_by_shift.get(str(row.get("id")))
+        # Which regular schedule made the shift (migration 262), on its own for
+        # the same reason: a database without it still lists every shift.
+        try:
+            series_resp = (
+                supabase.table("shifts")
+                .select("id, series_id")
+                .in_("id", shift_ids)
+                .not_.is_("series_id", "null")
+                .execute()
+            )
+            series_by_shift = {
+                str(r.get("id")): r.get("series_id")
+                for r in (series_resp.data or [])
+                if isinstance(r, dict) and r.get("id")
+            }
+        except Exception:
+            series_by_shift = {}
+        for row in rows:
+            row["series_id"] = series_by_shift.get(str(row.get("id")))
 
     worker_ids = sorted({
         str(r.get(key))

@@ -22,7 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { format, addDays, isToday, parseISO, differenceInMinutes, eachDayOfInterval, getDay } from "date-fns";
 import {
   AlertTriangle, ChevronRight, Clock3, GripVertical,
-  Loader2, Minus, Plus, User2, Users, XCircle, MinusCircle, CalendarPlus,
+  Loader2, Minus, Plus, User2, Users, XCircle, MinusCircle, CalendarPlus, Repeat,
 } from "lucide-react";
 import {
   assignExistingShift,
@@ -162,6 +162,7 @@ function ShiftCard({
             {start && <ZoneLabel tz={shift.timezone} at={shift.scheduled_start!} />}
           </p>
           <p className="mt-0.5 flex items-center gap-1 truncate text-[11px]" style={{ color: tint.fg }}>
+            {shift.series_id && <Repeat size={10} aria-label="Regular schedule" className="shrink-0" />}
             {shift.is_shadow_shift && <Users size={10} aria-label="Shadow shift" className="shrink-0" />}
             <span className="truncate">{shift.participant_name || translate("common.participant")}</span>
           </p>
@@ -190,6 +191,7 @@ function ShiftCard({
       <GripVertical size={10} className="mt-0.5 shrink-0 opacity-40 group-hover:opacity-80" style={{ color: clrs.color }} />
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1 truncate text-[10.5px] font-black leading-tight" style={{ color: clrs.color }}>
+          {shift.series_id && <Repeat size={10} aria-label="Regular schedule" className="shrink-0" />}
           {shift.is_shadow_shift && (
             <span
               className="inline-flex shrink-0"
@@ -346,11 +348,14 @@ interface RosterBoardProps {
   onOpenDay?: (dateKey: string) => void;
   /** Week and fortnight as an hour calendar (day by day, a column per worker), or as cards per day. The day view is always a calendar. */
   layout?: "calendar" | "grid";
+  /** A shift from a regular schedule: change the schedule from its day. */
+  onChangeSeries?: (shift: CoordinatorShiftRecord) => void;
 }
 
 export function RosterBoard({
   newShiftId, weekStart, shifts, workers, availMap, loadingAvail, onCellClick, onOpenShiftCreate, onRefresh,
   colorBy = "status", allowCreate = true, view = "week", dayKey, onCreateAt, onOpenDay, layout = "grid",
+  onChangeSeries,
 }: RosterBoardProps) {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
@@ -1053,6 +1058,7 @@ export function RosterBoard({
         onOpenChange={(open) => { if (!open) setDetailShift(null); }}
         workers={workers}
         onAssigned={onRefresh}
+        onChangeSeries={onChangeSeries ? (shift) => { setDetailShift(null); onChangeSeries(shift); } : undefined}
       />
     </div>
   );
