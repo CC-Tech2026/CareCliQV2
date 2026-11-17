@@ -14,6 +14,7 @@ import {
   timeOffReasonLabel,
   type ScheduleRequest,
 } from "@/services/scheduleRequestService";
+import { leaveClashToast } from "./LeaveCoverPanel";
 
 const PLUM = "var(--cc-plum)";
 const TEXT = "var(--cc-text)";
@@ -36,11 +37,13 @@ export function ScheduleRequestQueue() {
   const resolveMut = useMutation({
     mutationFn: ({ id, status, note }: { id: string; status: "approved" | "declined"; note?: string }) =>
       resolveCoordinatorScheduleRequest(id, { status, coordinator_notes: note }),
-    onSuccess: () => {
-      toast({ title: translate("coordinator.scheduleRequest.updated") });
+    onSuccess: (res) => {
+      // Approved time off is now on their leave; say if it lands on shifts.
+      toast(leaveClashToast(res?.leave_clashes) ?? { title: translate("coordinator.scheduleRequest.updated") });
       setDeclineId(null);
       setDeclineNote("");
       void queryClient.invalidateQueries({ queryKey: ["coordinator", "schedule-requests"] });
+      void queryClient.invalidateQueries({ predicate: (q) => q.queryKey.includes("leave-cover") || q.queryKey.includes("worker-availability") });
     },
     onError: (e: Error) =>
       toast({ title: translate("coordinator.scheduleRequest.failed"), description: e.message, variant: "destructive" }),

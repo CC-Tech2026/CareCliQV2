@@ -4183,9 +4183,13 @@ async def update_worker_availability(
                         "end_date": bd["end_date"],
                         "reason": bd.get("reason"),
                     }).execute()
-        return {"ok": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=internal_error_detail("Availability update failed", exc))
+    # Shifts still rostered to them on a day of their leave, so the coordinator
+    # can cover them straight away rather than find out on the day.
+    from ..services import leave_cover_service
+
+    return {"ok": True, "leave_clashes": leave_cover_service.count_for_worker(supabase, org_id, worker_id)}
 
 
 # ── Worker skills ─────────────────────────────────────────────────────────────

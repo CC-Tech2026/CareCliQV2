@@ -8,6 +8,7 @@ from .api import integrations as integrations_api
 from .api import myob as myob_api
 from .api import employment_hero as employment_hero_api
 from .api import shift_series as shift_series_api
+from .api import leave_cover as leave_cover_api
 from .api import public_v1 as public_v1_api
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
@@ -244,6 +245,7 @@ app.include_router(notifications.router, prefix="/api")
 app.include_router(notifications.devices_router, prefix="/api")
 app.include_router(coordinator.router, prefix="/api")
 app.include_router(shift_series_api.router, prefix="/api")
+app.include_router(leave_cover_api.router, prefix="/api")
 app.include_router(shift_verification.router, prefix="/api")
 app.include_router(security.router, prefix="/api")
 app.include_router(auth_mfa.router, prefix="/api")  # NEW Supabase-native MFA, alongside security.router's old MFA

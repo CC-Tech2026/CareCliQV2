@@ -289,7 +289,44 @@ def resolve_request(
         "updated_at": now,
     }).eq("id", request_id).execute()
 
-    return get_request(request_id, organization_id=organization_id)
+    resolved = get_request(request_id, organization_id=organization_id)
+    if status == "approved" and existing.get("request_type") == "time_off":
+        resolved["leave_clashes"] = _add_approved_leave(supabase, existing, organization_id)
+    return resolved
+
+
+def _add_approved_leave(supabase, request: dict[str, Any], organization_id: str) -> int:
+    """Approved time off goes on the worker's leave, so the roster greys those
+    days, clash checks and regular schedules see it. Before this, approving
+    only changed the request's status and the worker still looked free.
+    Returns how many shifts still rostered to them fall in it."""
+    from . import leave_cover_service
+
+    detail = request.get("time_off") or {}
+    start, end, worker_id = detail.get("start_date"), detail.get("end_date"), request.get("user_id")
+    if not (start and end and worker_id):
+        return 0
+    try:
+        same = (
+            supabase.table("worker_blackout_dates").select("id")
+            .eq("user_id", worker_id).eq("start_date", str(start)[:10]).eq("end_date", str(end)[:10])
+            .limit(1).execute().data
+        )
+        if not same:
+            supabase.table("worker_blackout_dates").insert({
+                "user_id": worker_id,
+                "organization_id": organization_id,
+                "start_date": str(start)[:10],
+                "end_date": str(end)[:10],
+                "reason": leave_cover_service.reason_label(detail.get("reason_code")),
+            }).execute()
+    except Exception as exc:
+        logger.warning("Approved leave for request %s not added: %s", request.get("id"), exc)
+        return 0
+    # Only the days just approved, not any other leave they already had.
+    return leave_cover_service.count_for_worker(
+        supabase, organization_id, str(worker_id), within=(str(start)[:10], str(end)[:10]),
+    )
 
 
 def insert_worker_notification(
