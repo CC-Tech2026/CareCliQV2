@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Calendar,
   Clock,
@@ -26,6 +26,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { TimePicker } from "@/components/ui/time-picker";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { leaveClashToast } from "./LeaveCoverPanel";
 
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
@@ -68,6 +69,7 @@ export function WorkerAvailabilityPanel({
 }: WorkerAvailabilityPanelProps) {
   const { toast } = useToast();
   const { translate } = useAccessibility();
+  const qc = useQueryClient();
   const [tab, setTab] = useState<"availability" | "skills">("availability");
 
   // Availability
@@ -113,8 +115,10 @@ export function WorkerAvailabilityPanel({
         max_hours_per_week: maxHours,
         blackout_dates: blackouts,
       }),
-    onSuccess: () => {
-      toast({ title: translate("coordinator.availability.saved") });
+    onSuccess: (res) => {
+      // Leave that lands on rostered shifts: say so now, not on the day.
+      toast(leaveClashToast(res?.leave_clashes) ?? { title: translate("coordinator.availability.saved") });
+      qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("leave-cover") });
       refetchAvail();
     },
     onError: (e: Error) =>

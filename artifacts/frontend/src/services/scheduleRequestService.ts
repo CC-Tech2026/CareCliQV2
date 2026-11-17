@@ -7,6 +7,8 @@ export type ScheduleRequest = {
   id: string;
   request_type: ScheduleRequestType;
   status: ScheduleRequestStatus;
+  /** On approving time off: shifts still rostered to them in it. */
+  leave_clashes?: number;
   worker_notes?: string | null;
   coordinator_notes?: string | null;
   resolved_at?: string | null;

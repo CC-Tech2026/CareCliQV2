@@ -11,7 +11,7 @@ import {
 import {
   CalendarDays, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Clock3, Loader2,
   Plus, Users2, User2, AlertCircle, AlertTriangle, LayoutGrid, Settings2,
-  Activity, Search, RefreshCw, ClipboardCheck, CalendarPlus, Repeat,
+  Activity, Search, RefreshCw, ClipboardCheck, CalendarPlus, Repeat, CalendarOff,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
@@ -41,6 +41,7 @@ import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentMo
 import { BIG_TEAM, RosterBoard } from "@/components/coordinator/RosterBoard";
 import { BulkShiftModal }         from "@/components/coordinator/BulkShiftModal";
 import { RegularSchedulesPanel }  from "@/components/coordinator/RegularSchedulesPanel";
+import { LeaveCoverPanel, useLeaveClashes } from "@/components/coordinator/LeaveCoverPanel";
 import { OpenShiftsPanel }        from "@/components/coordinator/OpenShiftsPanel";
 import { UnassignedShiftPanel }   from "@/components/coordinator/UnassignedShiftPanel";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
@@ -359,6 +360,7 @@ export default function CoordinatorRosteringPage() {
   const [assignOpen,   setAssignOpen]   = useState(false);
   const [bulkOpen,     setBulkOpen]     = useState(false);
   const [seriesOpen,   setSeriesOpen]   = useState(false);
+  const [leaveOpen,    setLeaveOpen]    = useState(false);
   // Opened from a shift: straight to changing its schedule from its day.
   const [seriesFocus,  setSeriesFocus]  = useState<{ seriesId: string; fromDate?: string } | null>(null);
   const [openListOpen, setOpenListOpen] = useState(false);
@@ -430,6 +432,10 @@ export default function CoordinatorRosteringPage() {
   );
 
   const workers = workersQuery.data ?? [];
+  // Shifts rostered to someone on a day of their leave (coordinators and
+  // directors alike: both roster).
+  const leaveQuery = useLeaveClashes();
+  const leaveClashCount = leaveQuery.data?.shifts?.length ?? 0;
   const sharedWorkerNames = sharedNames(workers.map((w) => w.full_name));
   const workersByName = [...workers].sort((a, b) => a.full_name.localeCompare(b.full_name));
   // Picking one worker narrows the board to their row too, not only their shifts.
@@ -598,6 +604,24 @@ export default function CoordinatorRosteringPage() {
               </span>
             )}
           </Button>
+          {/* Only when someone's on leave with shifts still rostered to them. */}
+          {leaveClashCount > 0 && (
+            <Button
+              onClick={() => setLeaveOpen(true)}
+              variant="outline"
+              aria-label={`Leave clashes, ${leaveClashCount} shift${leaveClashCount === 1 ? "" : "s"} to cover`}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold"
+              style={{ borderColor: BORDER, color: TEXT }}
+            >
+              <CalendarOff size={14} /> Leave clashes
+              <span
+                className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold"
+                style={{ background: "var(--cc-status-danger-bg)", color: "var(--cc-danger-text)" }}
+              >
+                {leaveClashCount}
+              </span>
+            </Button>
+          )}
           <Button
             onClick={() => setTeamPanelOpen(true)}
             variant="outline"
@@ -954,6 +978,14 @@ export default function CoordinatorRosteringPage() {
         workers={workers}
         onAssigned={() => { shiftsQuery.refetch?.(); openShiftsQuery.refetch?.(); }}
         onChangeSeries={(shift) => { setFindWorkerFor(null); changeSeriesFrom(shift); }}
+      />
+
+      {/* -- Shifts rostered to someone on leave ---------------------------- */}
+      <LeaveCoverPanel
+        open={leaveOpen}
+        onOpenChange={setLeaveOpen}
+        workers={workers}
+        onFindCover={(shift) => { setLeaveOpen(false); setFindWorkerFor(shift); }}
       />
 
       {/* -- Regular schedules, and the form for a new one ------------------ */}

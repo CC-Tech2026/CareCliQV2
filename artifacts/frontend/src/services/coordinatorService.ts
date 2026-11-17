@@ -1112,6 +1112,37 @@ export function endShiftSeries(seriesId: string, fromDate: string) {
   );
 }
 
+// ── Leave cover ───────────────────────────────────────────────────────────────
+
+/** A coming shift still rostered to someone on a day of their leave. */
+export type LeaveClash = {
+  /** The shift's own day (yyyy-MM-dd) in its participant's branch. */
+  day?: string;
+  shift_id: string;
+  worker_id: string;
+  worker_name: string;
+  participant_id: string | null;
+  participant_name: string;
+  scheduled_start: string;
+  scheduled_end: string | null;
+  timezone: string;
+  series_id: string | null;
+  leave: { start_date: string; end_date: string; reason: string | null };
+};
+
+export function getLeaveClashes(workerId?: string) {
+  const qs = workerId ? `?worker_id=${encodeURIComponent(workerId)}` : "";
+  return jsonFetch<{ shifts: LeaveClash[] }>(`/api/coordinator/leave-cover${qs}`);
+}
+
+/** Makes them open shifts; only ones that still clash are changed. */
+export function releaseLeaveShifts(shiftIds: string[]) {
+  return jsonFetch<{ released_count: number; skipped: Array<{ shift_id: string; reason: string }> }>(
+    "/api/coordinator/leave-cover/release",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shift_ids: shiftIds }) },
+  );
+}
+
 /** Create a single unassigned shift (no worker yet) */
 export function createUnassignedShift(payload: {
   participant_id: string;
@@ -1183,7 +1214,8 @@ export function updateWorkerAvailability(
   workerId: string,
   data: Partial<WorkerAvailability> & { blackout_dates?: BlackoutDate[] }
 ) {
-  return jsonFetch<{ ok: boolean }>(
+  // leave_clashes: shifts still rostered to them on a day of their leave.
+  return jsonFetch<{ ok: boolean; leave_clashes?: number }>(
     `/api/coordinator/workers/${encodeURIComponent(workerId)}/availability`,
     {
       method: "PUT",
