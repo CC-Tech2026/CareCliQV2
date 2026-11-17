@@ -38,7 +38,7 @@ import {
   type OverdueUnassignedShift,
 } from "@/services/coordinatorService";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
-import { RosterBoard }           from "@/components/coordinator/RosterBoard";
+import { BIG_TEAM, RosterBoard } from "@/components/coordinator/RosterBoard";
 import { BulkShiftModal }         from "@/components/coordinator/BulkShiftModal";
 import { OpenShiftsPanel }        from "@/components/coordinator/OpenShiftsPanel";
 import { UnassignedShiftPanel }   from "@/components/coordinator/UnassignedShiftPanel";
@@ -67,6 +67,15 @@ type ViewMode = "day" | "roster" | "fortnight" | "month";
 const VIEW_LABELS: Record<ViewMode, string> = { day: "Day", roster: "Week", fortnight: "Fortnight", month: "Month" };
 // The view each person last used, on this device only.
 const VIEW_STORAGE_KEY = "carecliq.roster.view";
+// A week or fortnight by hour (a column per worker each day) or by person (a
+// row per worker). By hour stops working past a dozen or so people: fifty
+// staff is 350 columns to scroll across, so a big team starts by person.
+type BoardLayout = "calendar" | "grid";
+const LAYOUT_STORAGE_KEY = "carecliq.roster.layout";
+const LAYOUTS: { value: BoardLayout; label: string; title: string }[] = [
+  { value: "calendar", label: "By hour", title: "The hours down the side, and a column for each worker every day" },
+  { value: "grid", label: "By person", title: "A row for each worker and a column for each day, for a big team" },
+];
 
 const STATUS_CFG: Record<string, { labelKey: string; bg: string; color: string }> = {
   scheduled:   { labelKey: "coordinator.rostering.status.scheduled", bg: "#FCE3EB", color: "#E8457A" },
@@ -219,6 +228,8 @@ function DayPanel({
         .sort((a, b) => (a.scheduled_start ?? "").localeCompare(b.scheduled_start ?? "")),
     [shifts, day]
   );
+  // Two workers with the same name: their staff ID or suburb after it.
+  const shared = useMemo(() => sharedNames(workers.map((w) => w.full_name)), [workers]);
 
   return (
     <div className="flex flex-col rounded-2xl border bg-white" style={{ borderColor: BORDER }}>
@@ -273,6 +284,11 @@ function DayPanel({
                   <span className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
                     <PersonPreview id={shift.worker_id} name={shift.worker_name || workers.find((w) => w.id === shift.worker_id)?.full_name || translate("common.worker")} kind="worker" worker={workers.find(w => w.id === shift.worker_id)} />
                   </span>
+                  {(() => {
+                    const w = workers.find((x) => x.id === shift.worker_id);
+                    const detail = w ? detailIfShared(w, shared) : null;
+                    return detail ? <span className="text-[11px]" style={{ color: MUTED }}>{detail}</span> : null;
+                  })()}
                   {shift.shift_type && (
                     <span className="rounded px-1.5 py-0.5 text-[9px] font-black uppercase" style={{ background: SOFT, color: MUTED }}>
                       {shift.shift_type.replace(/_/g, " ")}
@@ -320,6 +336,19 @@ export default function CoordinatorRosteringPage() {
   const setViewMode = (mode: ViewMode) => {
     setViewModeState(mode);
     try { localStorage.setItem(VIEW_STORAGE_KEY, mode); } catch { /* private window */ }
+  };
+  // Null until someone picks one: then it follows the team's size.
+  const [savedLayout, setSavedLayout] = useState<BoardLayout | null>(() => {
+    try {
+      const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+      return saved === "calendar" || saved === "grid" ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+  const chooseLayout = (layout: BoardLayout) => {
+    setSavedLayout(layout);
+    try { localStorage.setItem(LAYOUT_STORAGE_KEY, layout); } catch { /* private window */ }
   };
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [weekStart,    setWeekStart]    = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -401,6 +430,7 @@ export default function CoordinatorRosteringPage() {
   const workersByName = [...workers].sort((a, b) => a.full_name.localeCompare(b.full_name));
   // Picking one worker narrows the board to their row too, not only their shifts.
   const boardWorkers = workerFilter === "all" ? workers : workers.filter((w) => w.id === workerFilter);
+  const boardLayout: BoardLayout = savedLayout ?? (workers.length > BIG_TEAM ? "grid" : "calendar");
   const shifts  = (shiftsQuery.data ?? []).filter((s) => {
     if (!s.scheduled_start) return true;
     const key = appLocalDateKey(s.scheduled_start, s.timezone);
@@ -673,6 +703,24 @@ export default function CoordinatorRosteringPage() {
           ))}
         </div>
 
+        {(viewMode === "roster" || viewMode === "fortnight") && (
+          <div role="group" aria-label="Lay out the roster" className="flex items-center gap-0.5 rounded-full border bg-cc-surface p-1" style={{ borderColor: BORDER }}>
+            {LAYOUTS.map((l) => (
+              <button
+                key={l.value}
+                type="button"
+                title={l.title}
+                onClick={() => chooseLayout(l.value)}
+                aria-pressed={boardLayout === l.value}
+                className="h-8 rounded-full px-3.5 text-sm font-medium transition-colors"
+                style={{ background: boardLayout === l.value ? "var(--cc-text)" : "transparent", color: boardLayout === l.value ? "var(--cc-bg)" : MUTED }}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-2">
           <button
             title={translate("coordinator.rostering.previousPeriod")}
@@ -770,7 +818,7 @@ export default function CoordinatorRosteringPage() {
       {!rosterLoading && !rosterError && viewMode !== "month" && (
         <RosterBoard
           view={viewMode === "fortnight" ? "fortnight" : viewMode === "day" ? "day" : "week"}
-          layout="calendar"
+          layout={boardLayout}
           dayKey={selectedDayKey}
           onOpenDay={openDay}
           onCreateAt={(worker, date, time) => {

@@ -23,7 +23,6 @@ import { CalendarPlus, Moon, Plus } from "lucide-react";
 import { appLocalDateKey, appMinutesOfDay } from "@/lib/datetime";
 import type { CoordinatorShiftRecord, WorkerStats } from "@/services/coordinatorService";
 import { PersonPhoto } from "@/components/ui/person-photo";
-import { shortWorkerName } from "@/lib/person-identity";
 import { ShiftHoverCard, shiftLiveStatus } from "./ShiftHoverCard";
 import {
   FIT_COLORS,
@@ -45,7 +44,8 @@ const MIN_PX = HOUR_PX / 60;
 const GUTTER_PX = 60;
 /** The day heading, then the worker headings under it. */
 const DAY_HEAD_PX = 64;
-const COL_HEAD_PX = 52;
+/** Room for a full name on two lines, and a line under it. */
+const COL_HEAD_PX = 64;
 /** Clicking an empty time picks the half hour under the pointer. */
 const PICK = 30;
 /** Moving or stretching a shift goes in quarter hours. */
@@ -136,7 +136,7 @@ function humanise(value?: string | null) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-type ColumnLabel = { short: string; full: string; detail: string | null };
+type ColumnLabel = { full: string; detail: string | null };
 
 function minutesOf(shift: CoordinatorShiftRecord) {
   const start = appMinutesOfDay(shift.scheduled_start!, shift.timezone);
@@ -382,7 +382,7 @@ export function RosterCalendar({
   canEditTimes, onResize,
 }: {
   /** Each worker's column heading, from rosterLabels over the whole team:
-   *  a short name that's unique, and a staff ID or suburb for shared names. */
+   *  their full name, and a staff ID or suburb for shared names. */
   labels?: Map<string, ColumnLabel>;
   /** Whether a shift's times can still change (it hasn't started, isn't done or cancelled). */
   canEditTimes: (shift: CoordinatorShiftRecord) => boolean;
@@ -502,7 +502,7 @@ export function RosterCalendar({
             <div
               key={dayKey}
               data-day-head={dayKey}
-              className="sticky top-0 z-40 flex items-center justify-center border-b px-2 text-center"
+              className={`sticky top-0 z-40 flex items-center border-b px-2 ${oneDay ? "justify-center" : ""}`}
               style={{
                 gridColumn: `span ${dayColumns.length}`,
                 height: DAY_HEAD_PX,
@@ -511,6 +511,9 @@ export function RosterCalendar({
                 background: isToday ? "var(--cc-today-header)" : "var(--cc-grid-header)",
               }}
             >
+              {/* A day with many people is thousands of pixels wide, so its
+                  name keeps to the left edge while you scroll across it. */}
+              <div className="sticky text-center" style={{ left: GUTTER_PX + 8 }}>
               {onOpenDay && !oneDay ? (
                 <button
                   type="button"
@@ -524,6 +527,7 @@ export function RosterCalendar({
               ) : (
                 <div>{heading}</div>
               )}
+              </div>
               {open > 0 && (
                 <span className="absolute right-2 top-2 rounded-full px-1.5 text-[10.5px] font-semibold" style={{ background: "var(--cc-status-danger-bg)", color: "var(--cc-danger-text)" }}>
                   {open} open
@@ -540,8 +544,8 @@ export function RosterCalendar({
           const fit = c.kind === "worker" && draggingDay === c.dayKey ? fits.get(c.id) : undefined;
           const minutes = c.blocks.reduce((n, b) => n + (b.end - b.start), 0);
           const usual = c.worker ? dayAvailability(availMap[c.worker.id], c.dayKey) : null;
-          const label = c.worker ? labels?.get(c.worker.id) ?? { short: shortWorkerName(c.worker.full_name), full: c.worker.full_name, detail: null } : null;
-          const name = c.kind === "open" ? (oneDay ? "Open shifts" : "Open") : oneDay ? label!.full : label!.short;
+          const label = c.worker ? labels?.get(c.worker.id) ?? { full: c.worker.full_name, detail: null } : null;
+          const name = c.kind === "open" ? (oneDay ? "Open shifts" : "Open") : label!.full;
           const subline = c.kind === "open"
             ? c.blocks.length ? `${c.blocks.length} to fill` : oneDay ? "None to fill" : ""
             : [
@@ -568,7 +572,15 @@ export function RosterCalendar({
                 <PersonPhoto name={c.worker!.full_name} photoUrl={c.worker!.profile_photo_url} size={32} />
               ))}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[12.5px] font-semibold leading-tight" style={{ color: TEXT }} title={label ? [label.full, label.detail].filter(Boolean).join(" · ") : undefined}>{name}</p>
+                {/* The whole name, wrapping to a second line in a narrow column
+                    rather than cut to "Sam N" (three people in a big team). */}
+                <p
+                  className={`${oneDay ? "truncate" : "line-clamp-2 break-words"} text-[12.5px] font-semibold leading-tight`}
+                  style={{ color: TEXT }}
+                  title={label ? [label.full, label.detail].filter(Boolean).join(" · ") : undefined}
+                >
+                  {name}
+                </p>
                 {fit ? (
                   <span
                     className="mt-0.5 inline-block max-w-full truncate rounded px-1.5 text-[10.5px] font-semibold leading-[18px]"

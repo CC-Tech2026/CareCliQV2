@@ -30,27 +30,29 @@ it("finds names held by more than one person, ignoring case", () => {
   expect([...sharedNames(["Jo Smith", "jo smith ", "Ben Ito"])]).toEqual(["jo smith"]);
 });
 
-import { rosterLabels, shortWorkerName, workerDetail, workerSearchText } from "./person-identity";
+import { rosterLabels, workerDetail, workerSearchText } from "./person-identity";
 
-it("describes a worker by staff ID and suburb, else email", () => {
+it("describes a worker by staff ID and suburb, else email, else phone", () => {
   expect(workerDetail({ full_name: "Sam Nguyen", employee_id: "1042", suburb: "Glenelg" })).toBe("ID 1042 · Glenelg");
   expect(workerDetail({ full_name: "Sam Nguyen", suburb: "Glenelg" })).toBe("Glenelg");
-  expect(workerDetail({ full_name: "Sam Nguyen", email: "sam@x.example" })).toBe("sam@x.example");
+  expect(workerDetail({ full_name: "Sam Nguyen", email: "sam@x.example", phone: "0400 111 222" })).toBe("sam@x.example");
+  expect(workerDetail({ full_name: "Sam Nguyen", phone: "0400 111 222" })).toBe("0400 111 222");
   expect(workerDetail({ full_name: "Sam Nguyen" })).toBeNull();
   expect(workerSearchText({ full_name: "Sam Nguyen", employee_id: "1042", phone: "0400 111 222" })).toBe("Sam Nguyen 1042 0400 111 222");
 });
 
-it("keeps roster column names unique and tells same-named staff apart", () => {
+it("names roster staff in full and tells same-named staff apart", () => {
   const labels = rosterLabels([
     { id: "a", full_name: "Sam Nguyen", employee_id: "1042", suburb: "Glenelg" },
     { id: "b", full_name: "Sam Nguyen", employee_id: "2210", suburb: "Elizabeth" },
     { id: "c", full_name: "Sam Nash", employee_id: "3001" },
-    { id: "d", full_name: "Aisha Rahman" },
+    { id: "d", full_name: "Alex Nguyen " },
+    { id: "e", full_name: "Cher" },
   ]);
-  // "Sam N" would be three people, so they get full names.
-  expect(labels.get("a")).toEqual({ short: "Sam Nguyen", full: "Sam Nguyen", detail: "ID 1042 · Glenelg" });
-  expect(labels.get("b")?.detail).toBe("ID 2210 · Elizabeth");
-  expect(labels.get("c")).toEqual({ short: "Sam Nash", full: "Sam Nash", detail: null });
-  expect(labels.get("d")).toEqual({ short: "Aisha R", full: "Aisha Rahman", detail: null });
-  expect(shortWorkerName("Cher")).toBe("Cher");
+  expect(labels.get("a")).toEqual({ full: "Sam Nguyen", detail: "ID 1042 · Glenelg" });
+  expect(labels.get("b")).toEqual({ full: "Sam Nguyen", detail: "ID 2210 · Elizabeth" });
+  // Same first name or same surname: the full names already differ.
+  expect(labels.get("c")).toEqual({ full: "Sam Nash", detail: null });
+  expect(labels.get("d")).toEqual({ full: "Alex Nguyen", detail: null });
+  expect(labels.get("e")).toEqual({ full: "Cher", detail: null });
 });

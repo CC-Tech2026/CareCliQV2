@@ -64,8 +64,9 @@ const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
-/** Above this many staff the board starts on who's rostered, not everyone. */
-const BIG_TEAM = 15;
+/** Above this many staff the board starts on who's rostered, not everyone,
+ *  and the rostering page lays a week out by person rather than by hour. */
+export const BIG_TEAM = 15;
 const SHOW_EVERYONE_KEY = "carecliq.roster.showEveryone";
 
 const STATUS_COLORS: Record<string, { bg: string; color: string; border: string }> = {
@@ -80,7 +81,8 @@ function statusColors(status?: string | null) {
   return STATUS_COLORS[status ?? ""] ?? STATUS_COLORS.scheduled;
 }
 
-/** Deterministic, cheerful avatar color per worker — purely decorative variety. */
+/** Deterministic avatar colour per worker. Keyed on their id, not their name,
+ *  so two people called Sam Nguyen don't look the same. */
 const AVATAR_PALETTE = [
   { bg: "#F3E8FF", fg: "#7C3AED" },
   { bg: "#FCE3EB", fg: "#DB2777" },
@@ -89,9 +91,9 @@ const AVATAR_PALETTE = [
   { bg: "#FEF3C7", fg: "#B45309" },
   { bg: "#E0F2FE", fg: "#0369A1" },
 ];
-function avatarColor(name: string) {
+function avatarColor(key: string) {
   let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 }
 function initials(name: string) {
@@ -131,7 +133,7 @@ function ShiftCard({
   if (colorBy === "worker") {
     // One colour per worker so a row reads as that person's week; status is
     // a dot (on shift / not clocked in) and the hover card has the detail.
-    const tint = avatarColor(shift.worker_name || "Worker");
+    const tint = avatarColor(shift.worker_id || shift.worker_name || "Worker");
     const live = shiftLiveStatus(shift);
     const dot = live === "on_shift" ? "var(--cc-status-success)" : live === "late" ? "var(--cc-status-danger)" : null;
     return (
@@ -415,8 +417,8 @@ export function RosterBoard({
   const openThisWeek = weekKeys.reduce((n, key) => n + (openByDay.get(key)?.length ?? 0), 0);
   const openOtherWeeks = unassigned.length - openThisWeek;
 
-  // Labels worked out over the whole team: "Sam N" only when it's unique,
-  // and a staff ID or suburb for two people with the same name.
+  // Labels worked out over the whole team: full names, and a staff ID or
+  // suburb for two people with the same name.
   const labels = useMemo(() => rosterLabels(workers), [workers]);
 
   // With a big team the board would be a column (or row) for everyone every
@@ -756,13 +758,14 @@ export function RosterBoard({
             onResize={resizeShift}
           />
         ) : (
-        /* Worker × day grid */
-        <div className="rounded-2xl border bg-white overflow-auto" style={{ borderColor: BORDER }}>
+        /* Worker × day grid: a row per person, so a team of 100 scrolls down
+           with each name on the left and the days staying along the top. */
+        <div role="region" aria-label="Roster by person" className="isolate max-h-[72vh] overflow-auto rounded-2xl border bg-cc-surface" style={{ borderColor: BORDER }}>
           <table className="w-full border-separate border-spacing-0">
             <thead>
               <tr>
                 <th
-                  className="sticky left-0 z-10 bg-white px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest min-w-[190px]"
+                  className="sticky left-0 top-0 z-30 bg-cc-surface px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest min-w-[190px]"
                   style={{ color: MUTED, borderBottom: `1px solid ${BORDER}` }}
                 >
                   {translate("coordinator.rostering.worker")}
@@ -770,7 +773,7 @@ export function RosterBoard({
                 {days.map((d) => (
                   <th
                     key={d.toISOString()}
-                    className="px-1.5 py-2.5 text-center"
+                    className="sticky top-0 z-20 px-1.5 py-2.5 text-center"
                     style={{ minWidth: colWidth, borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "var(--cc-today-header)" : "var(--cc-grid-header)" }}
                   >
                     <button
@@ -798,7 +801,7 @@ export function RosterBoard({
             <tbody>
               {(allowCreate || unassigned.length > 0) && (
                 <tr>
-                  <td className="sticky left-0 z-10 bg-white px-3 py-2.5" style={{ borderBottom: `2px solid ${BORDER}` }}>
+                  <td className="sticky left-0 z-10 bg-cc-surface px-3 py-2.5" style={{ borderBottom: `2px solid ${BORDER}` }}>
                     <div className="flex items-center gap-2.5">
                       <span
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
@@ -864,7 +867,7 @@ export function RosterBoard({
               )}
               {rosterRows.map((worker) => {
                 const avail = availMap[worker.id];
-                const avatar = avatarColor(worker.full_name);
+                const avatar = avatarColor(worker.id);
                 const weekHrs = weekHoursByWorker.get(worker.id) ?? 0;
                 const maxHrs = avail?.max_hours_per_week;
                 // A fortnight is measured against two weeks of the weekly cap.
@@ -872,7 +875,7 @@ export function RosterBoard({
                 const overCap = capHrs != null && weekHrs > capHrs;
                 return (
                   <tr key={worker.id}>
-                    <td className="sticky left-0 z-10 bg-white px-3 py-2.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
+                    <td className="sticky left-0 z-10 bg-cc-surface px-3 py-2.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
                       <div className="flex items-center gap-2.5">
                         {worker.profile_photo_url ? (
                           <PersonPhoto name={worker.full_name} photoUrl={worker.profile_photo_url} size={36} />
@@ -886,7 +889,14 @@ export function RosterBoard({
                         )}
                         <div className="min-w-0">
                           <PersonPreview id={worker.id} name={worker.full_name} kind="worker" worker={worker} scheduledHours={weekHrs} maxHours={maxHrs} className="truncate text-[12px] font-bold leading-tight text-cc-text" />
-                          <div className="flex items-center gap-2 mt-0.5">
+                          {/* Someone else has this exact name: their staff ID or
+                              suburb, on its own line straight under the name. */}
+                          {labels.get(worker.id)?.detail && (
+                            <p className="mt-0.5 truncate text-[10.5px] font-medium" style={{ color: TEXT }}>
+                              {labels.get(worker.id)?.detail}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-0.5 whitespace-nowrap">
                             {worker.avg_compliance != null && (
                               <span className="text-[10px] font-semibold" style={{ color: worker.avg_compliance >= 85 ? "#16A34A" : worker.avg_compliance >= 60 ? "#D97706" : "#DC2626" }}>
                                 {worker.avg_compliance.toFixed(0)}%
@@ -895,11 +905,6 @@ export function RosterBoard({
                             <span className="text-[10px] font-medium" style={{ color: overCap ? CORAL : MUTED }}>
                               {weekHrs.toFixed(1)}h{capHrs != null ? ` / ${capHrs}h` : ""}
                             </span>
-                            {labels.get(worker.id)?.detail && (
-                              <span className="truncate text-[10px] font-medium" style={{ color: MUTED }}>
-                                {labels.get(worker.id)?.detail}
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>

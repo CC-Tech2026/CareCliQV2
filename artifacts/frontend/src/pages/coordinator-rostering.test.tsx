@@ -84,7 +84,10 @@ it("a worker with no availability days doesn't break the board", async () => {
   renderPage();
   expect(await screen.findAllByTitle(/Alice Worker/)).not.toHaveLength(0);
   const board = screen.getByRole("region", { name: "Roster calendar" });
-  expect(within(board).getAllByText("Alice W").length).toBe(7);
+  // Her full name over each day's column, not "Alice W".
+  expect(within(board).getAllByText("Alice Worker").length).toBe(7);
+  // A small team's week stays by the hour.
+  expect(screen.getByRole("button", { name: "By hour" }).getAttribute("aria-pressed")).toBe("true");
 });
 
 it("keeps verification beside the roster navigation and hides empty assignment trays", async () => {
