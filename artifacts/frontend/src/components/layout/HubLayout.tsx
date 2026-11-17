@@ -37,6 +37,7 @@ import {
   NotebookPen,
   BadgeCheck,
   Car,
+  Wallet,
   Receipt,
   CalendarPlus,
   HeartPulse,
@@ -194,6 +195,7 @@ const MD_NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
       { href: "/md/financial", label: "Financial Governance", icon: DollarSign },
       { href: "/billing", label: "Billing & claims", icon: Receipt },
       { href: "/coordinator/travel", label: "Travel claims", icon: Car },
+      { href: "/payroll", label: "Payroll", icon: Wallet },
     ],
   },
 ];

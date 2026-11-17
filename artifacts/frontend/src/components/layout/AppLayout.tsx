@@ -7,7 +7,7 @@ import {
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, BadgeCheck, Wrench, Target, ClipboardList,
   BarChart2, BarChart3, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, Activity,
-  Sun, Moon, Search, Car, HelpCircle, Plus, MessageSquareWarning, FileText, FolderLock,
+  Sun, Moon, Search, Car, HelpCircle, Plus, MessageSquareWarning, FileText, FolderLock, Wallet,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -145,6 +145,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/compliance",            label: "Quality & Compliance", icon: ShieldCheck  },
         { href: "/incidents",             label: "Incident Management",  icon: AlertTriangle },
         { href: "/billing",               label: "Invoices",           icon: CreditCard   },
+        { href: "/payroll",               label: "Payroll", icon: Wallet       },
         { href: "/reports",               label: "Reports",            icon: FileBarChart2 },
       ],
     },
@@ -181,6 +182,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/md/compliance", label: "Compliance", icon: ShieldCheck  },
         { href: "/md/financial",  label: "Financial",  icon: DollarSign   },
         { href: "/billing", label: "NDIS invoices", icon: CreditCard },
+        { href: "/payroll", label: "Payroll", icon: Wallet },
         { href: "/md/onboarding", label: "Onboarding", icon: GraduationCap},
       ],
     },
