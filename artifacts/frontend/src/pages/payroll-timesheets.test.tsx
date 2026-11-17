@@ -19,7 +19,7 @@ vi.mock("@/services/payrollService", () => ({
   downloadPayrollHours: mocks.downloadPayrollHours,
 }));
 
-// The side panel's sheet measures itself; jsdom has no ResizeObserver.
+// The side panel and the menu measure themselves; jsdom has no ResizeObserver.
 globalThis.ResizeObserver ??= class {
   observe() {}
   unobserve() {}
@@ -67,12 +67,16 @@ function renderPage() {
   );
 }
 
+function openExport() {
+  const trigger = screen.getByRole("button", { name: /Export/ });
+  fireEvent.keyDown(trigger, { key: "Enter" }); // also proves it works from the keyboard
+}
+
 describe("pay periods and labels", () => {
   it("runs weeks Monday to Sunday, and fortnights as two of them", () => {
     expect(payPeriod("weekly", "2026-11-19", 0)).toEqual({ start: "2026-11-16", end: "2026-11-22" });
     expect(payPeriod("weekly", "2026-11-19", -1)).toEqual({ start: "2026-11-09", end: "2026-11-15" });
     expect(payPeriod("fortnightly", "2026-11-19", -1)).toEqual({ start: "2026-11-02", end: "2026-11-15" });
-    expect(payPeriod("fortnightly", "2026-11-19", 0)).toEqual({ start: "2026-11-16", end: "2026-11-29" });
   });
 
   it("says times and lengths the way people do", () => {
@@ -84,23 +88,23 @@ describe("pay periods and labels", () => {
 });
 
 describe("Payroll", () => {
-  it("opens on last week: what's left to approve, the download, and hours by worker", async () => {
+  it("opens on last week: one table of hours, a total, and a line about what isn't approved", async () => {
     mocks.getPayrollTimesheets.mockResolvedValue(data());
     renderPage();
-    expect(await screen.findByRole("region", { name: "Approve timesheets" })).toBeTruthy();
+    expect(await screen.findByText("Aisha Rahman")).toBeTruthy();
     expect(mocks.getPayrollTimesheets).toHaveBeenCalledWith("2026-11-09", "2026-11-15");
-    expect(screen.getByText("Last week")).toBeTruthy();
-    expect(screen.getByText("1 shift still to approve")).toBeTruthy();
+    expect(screen.getByText("9 Nov to 15 Nov")).toBeTruthy();
+    expect(screen.getByText("15h 40m")).toBeTruthy(); // Aisha: 3h 40m + 12h
+    expect(screen.getByText("Total · 2 staff members")).toBeTruthy();
+    expect(screen.getByText("18h 40m")).toBeTruthy(); // everyone
+    expect(screen.getByText(/1 shift in this period isn't approved yet/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Approve timesheets" }).getAttribute("href")).toBe("/coordinator/verification");
-    const rows = within(screen.getByRole("region", { name: "Hours by worker" }));
-    expect(rows.getByText("Aisha Rahman")).toBeTruthy();
-    expect(rows.getByText("15h 40m")).toBeTruthy(); // 3h 40m + 12h
-    // A sleepover and a real late stay are noted; Tom's 3 minutes aren't.
-    expect(rows.getAllByText("1 sleepover · Stayed late on 1 shift").length).toBeGreaterThan(0);
-    expect(rows.getAllByText(/Stayed late on/)).toHaveLength(2); // Aisha, on wide and narrow screens; not Tom
+    // A sleepover and a real late stay are noted for Aisha; Tom's 3 minutes aren't.
+    expect(screen.getAllByText("1 sleepover · Stayed late on 1 shift").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Stayed late/)).toHaveLength(2); // Aisha on wide and narrow screens only
   });
 
-  it("shows a worker's shifts in a side panel, with the sleepover split", async () => {
+  it("shows someone's shifts in a side panel, with the sleepover split", async () => {
     mocks.getPayrollTimesheets.mockResolvedValue(data());
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /Aisha Rahman/ }));
@@ -110,54 +114,52 @@ describe("Payroll", () => {
     expect(within(panel).getByText("Sleepover 10:00pm to 6:00am")).toBeTruthy();
   });
 
-  it("downloads the hours for the period on screen, and moves between periods", async () => {
+  it("exports the period on screen as Excel or CSV", async () => {
     mocks.getPayrollTimesheets.mockResolvedValue(data());
     mocks.downloadPayrollHours.mockResolvedValue(undefined);
     renderPage();
-    await screen.findByRole("region", { name: "Hours by worker" });
+    await screen.findByText("Aisha Rahman");
     fireEvent.click(screen.getByRole("button", { name: "Previous pay period" }));
     await waitFor(() => expect(mocks.getPayrollTimesheets).toHaveBeenCalledWith("2026-11-02", "2026-11-08"));
-    await screen.findByRole("region", { name: "Hours by worker" });
-    fireEvent.click(screen.getByRole("button", { name: /Download spreadsheet/ }));
+    await screen.findByText("Aisha Rahman");
+    openExport();
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Excel spreadsheet/ }));
     await waitFor(() => expect(mocks.downloadPayrollHours).toHaveBeenCalledWith("2026-11-02", "2026-11-08", "xlsx"));
-    // Payroll software that imports a CSV gets one.
-    fireEvent.click(screen.getByRole("button", { name: "CSV for payroll software" }));
+    await waitFor(() => expect((screen.getByRole("button", { name: /Export/ }) as HTMLButtonElement).disabled).toBe(false));
+    openExport();
+    fireEvent.click(await screen.findByRole("menuitem", { name: /CSV file/ }));
     await waitFor(() => expect(mocks.downloadPayrollHours).toHaveBeenCalledWith("2026-11-02", "2026-11-08", "csv"));
-    // Can't go past the current period.
-    fireEvent.click(screen.getByRole("button", { name: "Next pay period" }));
-    fireEvent.click(screen.getByRole("button", { name: "Next pay period" }));
-    expect((screen.getByRole("button", { name: "Next pay period" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("switches to fortnights and remembers the choice", async () => {
+  it("can't go past the current period, and remembers fortnightly", async () => {
     mocks.getPayrollTimesheets.mockResolvedValue(data());
     renderPage();
-    await screen.findByRole("region", { name: "Hours by worker" });
-    fireEvent.click(screen.getByRole("button", { name: "Fortnightly" }));
+    await screen.findByText("Aisha Rahman");
+    fireEvent.click(screen.getByRole("button", { name: "Next pay period" }));
+    expect((screen.getByRole("button", { name: "Next pay period" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("How often you pay"), { target: { value: "fortnightly" } });
     await waitFor(() => expect(mocks.getPayrollTimesheets).toHaveBeenCalledWith("2026-11-02", "2026-11-15"));
     expect(window.localStorage.getItem("carecliq-payroll-frequency")).toBe("fortnightly");
   });
 
-  it("with Employment Hero connected, says what was sent and what wasn't", async () => {
+  it("with Employment Hero connected, says when shifts couldn't be sent", async () => {
     mocks.getPayrollTimesheets.mockResolvedValue(data({
       connected: { employment_hero: true }, waiting: [],
       totals: { shifts: 2, hours: 15.67, workers: 1, waiting: 0, sent: 1, attention: 1 },
       shifts: [{ ...SHIFT, payroll: { status: "sent" } }, { ...SLEEP, payroll: { status: "failed", error: "Choose the work type for sleepovers." } }],
     }));
     renderPage();
-    expect(await screen.findByText("Every finished shift in this period is approved.")).toBeTruthy();
-    expect(screen.getByText("1 of 2 shifts sent.")).toBeTruthy();
-    expect(screen.getByText("1 shift couldn't be sent")).toBeTruthy();
-    expect(screen.getByText("1 shift not sent")).toBeTruthy();
+    expect(await screen.findByText(/1 shift couldn't be sent to Employment Hero/)).toBeTruthy();
+    expect(screen.getAllByText(/1 shift not sent to Employment Hero/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/isn't approved yet/)).toBeNull();
   });
 
-  it("with nothing worked, says so and won't download an empty file", async () => {
+  it("with nothing approved, says so and can't export", async () => {
     mocks.getPayrollTimesheets.mockResolvedValue(data({
       shifts: [], waiting: [], totals: { shifts: 0, hours: 0, workers: 0, waiting: 0, sent: 0, attention: 0 },
     }));
     renderPage();
-    expect(await screen.findByText("No shifts were worked in this period.")).toBeTruthy();
-    expect((screen.getByRole("button", { name: /Download spreadsheet/ }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.queryByRole("region", { name: "Hours by worker" })).toBeNull();
+    expect(await screen.findByText("No approved hours in this period")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /Export/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

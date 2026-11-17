@@ -1,21 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Clock, Download, Loader2, Moon } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock, Download, FileSpreadsheet, FileText, Loader2, Moon } from "lucide-react";
 import { SidePanel } from "@/components/layout/SidePanel";
+import { LoadError, PageHeader, SearchField, SkeletonBlocks, Surface, ctaClass, rowClass } from "@/components/layout/PageKit";
 import {
-  LoadError, PageHeader, PillTabs, SearchField, SkeletonBlocks, Surface, ctaClass, outlineClass, rowClass,
-} from "@/components/layout/PageKit";
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { appTodayKey } from "@/lib/datetime";
 import {
-  downloadPayrollHours, getPayrollTimesheets, type PayrollPeriodData, type PayrollShift,
+  downloadPayrollHours, getPayrollTimesheets, type PayrollShift,
 } from "@/services/payrollService";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const GOOD = "var(--cc-green)";
 const WARN = "var(--cc-amber)";
 const DANGER = "var(--cc-danger-text)";
 
@@ -98,139 +98,29 @@ type WorkerHours = {
   sleepovers: number;
   late: number;
   failed: number;
-  sent: number;
 };
 
 function byWorker(shifts: PayrollShift[]): WorkerHours[] {
   const map = new Map<string, WorkerHours>();
   for (const s of shifts) {
     const key = s.worker_id ?? s.worker_name;
-    const row = map.get(key) ?? { key, name: s.worker_name, email: s.worker_email, shifts: [], minutes: 0, sleepovers: 0, late: 0, failed: 0, sent: 0 };
+    const row = map.get(key) ?? { key, name: s.worker_name, email: s.worker_email, shifts: [], minutes: 0, sleepovers: 0, late: 0, failed: 0 };
     row.shifts.push(s);
     row.minutes += s.worked_minutes || 0;
     if (s.sleepover) row.sleepovers += 1;
     if (s.over_roster_minutes >= LATE_MINUTES) row.late += 1;
     if (s.payroll?.status === "failed") row.failed += 1;
-    if (s.payroll?.status === "sent" || s.payroll?.status === "paid") row.sent += 1;
     map.set(key, row);
   }
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function notesFor(w: WorkerHours): string {
+  if (w.failed) return `${plural(w.failed, "shift")} not sent to Employment Hero`;
   return [
     w.sleepovers ? plural(w.sleepovers, "sleepover") : "",
     w.late ? `Stayed late on ${plural(w.late, "shift")}` : "",
   ].filter(Boolean).join(" · ");
-}
-
-// ── The two steps ───────────────────────────────────────────────────────────
-
-function Step({ number, title, done, children }: { number: number; title: string; done: boolean; children: React.ReactNode }) {
-  return (
-    <section className="flex min-w-0 gap-3 rounded-2xl bg-cc-surface p-5" aria-label={title}>
-      <span
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
-        style={done ? { background: "var(--cc-status-success-bg, var(--cc-soft))", color: GOOD } : { background: "var(--cc-soft)", color: TEXT }}
-        aria-hidden
-      >
-        {done ? <CheckCircle2 size={18} /> : number}
-      </span>
-      <div className="min-w-0 flex-1 space-y-2">
-        <h2 className="text-base font-semibold" style={{ color: TEXT }}>{title}</h2>
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function ApproveStep({ data }: { data: PayrollPeriodData }) {
-  const waiting = data.waiting.length;
-  if (!waiting) {
-    return (
-      <Step number={1} title="Approve timesheets" done={data.shifts.length > 0}>
-        <p className="text-sm" style={{ color: MUTED }}>
-          {data.shifts.length ? "Every finished shift in this period is approved." : "No shifts were worked in this period."}
-        </p>
-      </Step>
-    );
-  }
-  const names = [...new Set(data.waiting.map((w) => w.worker_name ?? "Unknown"))];
-  return (
-    <Step number={1} title="Approve timesheets" done={false}>
-      <p className="text-sm font-medium" style={{ color: WARN }}>{plural(waiting, "shift")} still to approve</p>
-      <p className="text-sm" style={{ color: MUTED }}>
-        {names.slice(0, 3).join(", ")}{names.length > 3 ? ` and ${names.length - 3} more` : ""}. They're left out until approved.
-      </p>
-      <Link href="/coordinator/verification" className={`${ctaClass} w-full sm:w-auto`}>Approve timesheets</Link>
-    </Step>
-  );
-}
-
-function PayrollStep({ data, downloading, onDownload }: {
-  data: PayrollPeriodData;
-  downloading: "xlsx" | "csv" | null;
-  onDownload: (format: "xlsx" | "csv") => void;
-}) {
-  const { shifts, sent, attention } = data.totals;
-  const download = (primary: boolean) => (
-    <button
-      type="button"
-      className={`${primary ? ctaClass : outlineClass} w-full sm:w-auto`}
-      onClick={() => onDownload("xlsx")}
-      disabled={!!downloading || !shifts}
-    >
-      {downloading === "xlsx" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Download spreadsheet
-    </button>
-  );
-  // Payroll software that imports a CSV (KeyPay, MYOB...) wants that instead.
-  const csv = (
-    <button
-      type="button"
-      onClick={() => onDownload("csv")}
-      disabled={!!downloading || !shifts}
-      className="text-xs font-medium underline disabled:no-underline disabled:opacity-50"
-      style={{ color: TEXT }}
-    >
-      {downloading === "csv" ? "Making the CSV..." : "CSV for payroll software"}
-    </button>
-  );
-
-  if (data.connected.employment_hero) {
-    const done = shifts > 0 && sent === shifts;
-    return (
-      <Step number={2} title="Send to payroll" done={done}>
-        <p className="text-sm" style={{ color: MUTED }}>
-          Approved shifts go to Employment Hero by themselves.{" "}
-          <span style={{ color: TEXT }}>{sent} of {plural(shifts, "shift")} sent.</span>
-        </p>
-        {attention > 0 && (
-          <p className="flex items-center gap-1.5 text-sm font-medium" style={{ color: DANGER }}>
-            <CircleAlert size={15} /> {plural(attention, "shift")} couldn't be sent
-          </p>
-        )}
-        <div className="flex flex-wrap items-center gap-2">
-          {attention > 0 && <Link href={EH_PAGE} className={ctaClass}>Fix in Employment Hero settings</Link>}
-          {download(false)}
-        </div>
-        <p className="text-xs" style={{ color: MUTED }}>Need a different format? {csv}</p>
-      </Step>
-    );
-  }
-  return (
-    <Step number={2} title="Give the hours to payroll" done={false}>
-      <p className="text-sm" style={{ color: MUTED }}>
-        Download a spreadsheet of everyone's hours for your payroll software or bookkeeper. Your payroll works out the pay.
-      </p>
-      {download(true)}
-      <p className="text-xs" style={{ color: MUTED }}>
-        Importing into payroll software? Use the {csv}.
-      </p>
-      <p className="text-xs" style={{ color: MUTED }}>
-        Use Employment Hero? <Link href={EH_PAGE} className="font-medium underline" style={{ color: TEXT }}>Connect it</Link> and approved hours are sent for you.
-      </p>
-    </Step>
-  );
 }
 
 // ── A worker's shifts, in the side panel ───────────────────────────────────
@@ -274,9 +164,13 @@ function ShiftDetail({ shift }: { shift: PayrollShift }) {
 
 // ── The page ────────────────────────────────────────────────────────────────
 
-/** Payroll: a pay period's approved hours, in two steps (approve, then get
- *  them to payroll) and a table of hours by worker. CareCliQ doesn't work
- *  out pay; the provider's payroll applies the award. */
+// The Notes column only when someone has a note, so the table stays tight.
+const GRID_NOTES = "sm:grid-cols-[minmax(0,1fr)_5rem_6rem_minmax(0,1fr)_1.25rem]";
+const GRID_PLAIN = "sm:grid-cols-[minmax(0,1fr)_5rem_6rem_1.25rem]";
+
+/** Payroll: one table of the hours each worker worked in a pay period, and
+ *  an Export button. Only approved shifts count. CareCliQ doesn't work out
+ *  pay; the provider's payroll applies the award. */
 export default function PayrollTimesheetsPage() {
   const { toast } = useToast();
   const today = appTodayKey();
@@ -284,7 +178,7 @@ export default function PayrollTimesheetsPage() {
   const [offset, setOffset] = useState(-1);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<WorkerHours | null>(null);
-  const [downloading, setDownloading] = useState<"xlsx" | "csv" | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     try {
@@ -304,60 +198,86 @@ export default function PayrollTimesheetsPage() {
     const needle = search.trim().toLowerCase();
     return needle ? workers.filter((w) => [w.name, w.email].some((v) => (v ?? "").toLowerCase().includes(needle))) : workers;
   }, [workers, search]);
+  const totalMinutes = workers.reduce((sum, w) => sum + w.minutes, 0);
+  const hasNotes = workers.some((w) => notesFor(w));
+  const GRID = hasNotes ? GRID_NOTES : GRID_PLAIN;
+  const waiting = data?.waiting.length ?? 0;
+  const failed = data?.totals.attention ?? 0;
 
-  // The Notes column only when someone has a note, so the table stays tight.
-  const hasNotes = workers.some((w) => w.failed || notesFor(w));
-  const columns = hasNotes
-    ? "sm:grid-cols-[minmax(0,1fr)_5rem_6rem_minmax(0,1fr)_1.25rem]"
-    : "sm:grid-cols-[minmax(0,1fr)_5rem_6rem_1.25rem]";
-
-  const when = offset === 0
-    ? `This ${frequency === "weekly" ? "week" : "fortnight"} (so far)`
-    : offset === -1 ? `Last ${frequency === "weekly" ? "week" : "fortnight"}` : null;
-
-  async function download(format: "xlsx" | "csv") {
-    setDownloading(format);
+  async function exportAs(format: "xlsx" | "csv") {
+    setDownloading(true);
     try {
       await downloadPayrollHours(range.start, range.end, format);
     } catch (err) {
-      toast({ title: "Couldn't download the hours", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
+      toast({ title: "Couldn't export the hours", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
     } finally {
-      setDownloading(null);
+      setDownloading(false);
     }
   }
 
+  const period = (
+    <div className="flex items-center gap-2">
+      <div className="flex items-center rounded-full border bg-cc-surface" style={{ borderColor: BORDER }} role="group" aria-label="Pay period">
+        <button type="button" aria-label="Previous pay period" onClick={() => setOffset((o) => o - 1)}
+          className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-cc-soft" style={{ color: TEXT }}>
+          <ChevronLeft size={17} />
+        </button>
+        <span className="min-w-[9.5rem] text-center text-sm font-medium tabular-nums" style={{ color: TEXT }} aria-live="polite">
+          {shortDate(range.start)} to {shortDate(range.end)}
+        </span>
+        <button type="button" aria-label="Next pay period" onClick={() => setOffset((o) => Math.min(0, o + 1))} disabled={offset >= 0}
+          className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-cc-soft disabled:opacity-30" style={{ color: TEXT }}>
+          <ChevronRight size={17} />
+        </button>
+      </div>
+      <select
+        aria-label="How often you pay"
+        value={frequency}
+        onChange={(e) => { setFrequency(e.target.value as Frequency); setOffset(-1); }}
+        className="h-10 rounded-full border bg-cc-surface px-3 text-sm"
+        style={{ borderColor: BORDER, color: TEXT }}
+      >
+        <option value="weekly">Weekly</option>
+        <option value="fortnightly">Fortnightly</option>
+      </select>
+    </div>
+  );
+
+  const exportButton = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={ctaClass} disabled={downloading || !workers.length}>
+          {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Export
+          <ChevronDown size={15} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuItem onSelect={() => void exportAs("xlsx")} className="items-start gap-2.5 py-2">
+          <FileSpreadsheet size={16} className="mt-0.5 shrink-0" />
+          <span>
+            <span className="block text-sm font-medium">Excel spreadsheet</span>
+            <span className="block text-xs" style={{ color: MUTED }}>To check or send to your bookkeeper</span>
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void exportAs("csv")} className="items-start gap-2.5 py-2">
+          <FileText size={16} className="mt-0.5 shrink-0" />
+          <span>
+            <span className="block text-sm font-medium">CSV file</span>
+            <span className="block text-xs" style={{ color: MUTED }}>To import into payroll software</span>
+          </span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
-    <div className="space-y-5 pb-10">
+    <div className="space-y-4 pb-10">
       <PageHeader
         eyebrow="Finance"
         title="Payroll"
-        description="The hours your staff worked in a pay period, ready for payroll. Workers are paid for the time they worked, clock-in to clock-out, even when the NDIS is billed for less. CareCliQ doesn't work out pay: your payroll software applies the award."
+        description="Hours worked by each staff member in a pay period, from approved timesheets. Staff are paid for the time they worked, clock-in to clock-out. Export the hours for your payroll software or bookkeeper; your payroll works out the pay."
+        actions={<>{period}{exportButton}</>}
       />
-
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 rounded-full bg-cc-surface p-1" role="group" aria-label="Pay period">
-          <button type="button" aria-label="Previous pay period" onClick={() => setOffset((o) => o - 1)}
-            className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-cc-soft" style={{ color: TEXT }}>
-            <ChevronLeft size={18} />
-          </button>
-          <p className="min-w-[10.5rem] px-1 text-center leading-tight" aria-live="polite">
-            <span className="block text-sm font-semibold tabular-nums" style={{ color: TEXT }}>
-              {shortDate(range.start)} to {shortDate(range.end, true)}
-            </span>
-            {when && <span className="block text-xs" style={{ color: MUTED }}>{when}</span>}
-          </p>
-          <button type="button" aria-label="Next pay period" onClick={() => setOffset((o) => Math.min(0, o + 1))} disabled={offset >= 0}
-            className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-cc-soft disabled:opacity-30" style={{ color: TEXT }}>
-            <ChevronRight size={18} />
-          </button>
-        </div>
-        <PillTabs
-          label="How often you pay"
-          options={[{ key: "weekly", label: "Weekly" }, { key: "fortnightly", label: "Fortnightly" }]}
-          value={frequency}
-          onChange={(f) => { setFrequency(f); setOffset(-1); }}
-        />
-      </div>
 
       {query.isLoading ? (
         <SkeletonBlocks count={2} />
@@ -367,46 +287,53 @@ export default function PayrollTimesheetsPage() {
         </LoadError>
       ) : data ? (
         <>
-          <div className="grid gap-3 lg:grid-cols-2">
-            <ApproveStep data={data} />
-            <PayrollStep data={data} downloading={downloading} onDownload={(format) => void download(format)} />
-          </div>
+          {waiting > 0 && (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl px-4 py-2.5 text-sm"
+              style={{ background: "var(--cc-status-warning-bg)", color: TEXT }}>
+              <CircleAlert size={16} style={{ color: WARN }} />
+              {plural(waiting, "shift")} in this period {waiting === 1 ? "isn't" : "aren't"} approved yet, so {waiting === 1 ? "it's" : "they're"} not included.
+              <Link href="/coordinator/verification" className="font-semibold underline">Approve timesheets</Link>
+            </p>
+          )}
+          {failed > 0 && (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl px-4 py-2.5 text-sm"
+              style={{ background: "var(--cc-status-danger-bg)", color: TEXT }}>
+              <CircleAlert size={16} style={{ color: DANGER }} />
+              {plural(failed, "shift")} couldn't be sent to Employment Hero.
+              <Link href={EH_PAGE} className="font-semibold underline">See why</Link>
+            </p>
+          )}
 
-          {workers.length > 0 && (
-            <section className="space-y-3" aria-label="Hours by worker">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold" style={{ color: TEXT }}>Hours by worker</h2>
-                  <p className="text-sm" style={{ color: MUTED }}>
-                    {plural(data.totals.workers, "worker")} · {plural(data.totals.shifts, "approved shift")} ·{" "}
-                    {duration(data.totals.hours * 60)} in total. Select someone to see their shifts.
-                  </p>
-                </div>
-                {workers.length > 8 && (
-                  <SearchField value={search} onChange={setSearch} label="Find a worker" placeholder="Find a worker" />
-                )}
-              </div>
+          {workers.length === 0 ? (
+            <div className="rounded-2xl bg-cc-surface px-6 py-12 text-center">
+              <Clock size={24} className="mx-auto mb-2" style={{ color: MUTED }} />
+              <p className="text-base font-semibold" style={{ color: TEXT }}>No approved hours in this period</p>
+              <p className="mt-1 text-sm" style={{ color: MUTED }}>Hours show here once timesheets are approved.</p>
+            </div>
+          ) : (
+            <>
+              {workers.length > 8 && (
+                <SearchField value={search} onChange={setSearch} label="Find a staff member" placeholder="Find a staff member" />
+              )}
               <Surface>
-                <div className={`hidden gap-3 border-b px-5 py-2 text-xs font-semibold uppercase tracking-wide sm:grid ${columns}`}
+                <div className={`hidden gap-3 border-b px-5 py-2.5 text-xs font-semibold uppercase tracking-wide sm:grid ${GRID}`}
                   style={{ borderColor: BORDER, color: MUTED }}>
-                  <span>Worker</span><span className="text-right">Shifts</span><span className="text-right">Hours</span>{hasNotes && <span>Notes</span>}<span />
+                  <span>Staff member</span><span className="text-right">Shifts</span><span className="text-right">Hours</span>{hasNotes && <span>Notes</span>}<span />
                 </div>
                 <ul className="divide-y" style={{ borderColor: BORDER }}>
                   {shown.map((w) => (
                     <li key={w.key}>
-                      <button type="button" onClick={() => setOpen(w)} className={`${rowClass} sm:grid ${columns}`}>
+                      <button type="button" onClick={() => setOpen(w)} className={`${rowClass} sm:grid ${GRID}`}>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium" style={{ color: TEXT }}>{w.name}</span>
-                          <span className="block text-xs sm:hidden" style={{ color: MUTED }}>
-                            {plural(w.shifts.length, "shift")}{notesFor(w) ? ` · ${notesFor(w)}` : ""}
+                          <span className="block truncate text-xs sm:hidden" style={{ color: w.failed ? DANGER : MUTED }}>
+                            {[plural(w.shifts.length, "shift"), notesFor(w)].filter(Boolean).join(" · ")}
                           </span>
                         </span>
-                        <span className="hidden text-right text-sm tabular-nums sm:block" style={{ color: MUTED }}>{w.shifts.length}</span>
+                        <span className="hidden text-right text-sm tabular-nums sm:block" style={{ color: TEXT }}>{w.shifts.length}</span>
                         <span className="text-right text-sm font-semibold tabular-nums" style={{ color: TEXT }}>{duration(w.minutes)}</span>
                         {hasNotes && (
-                          <span className="hidden min-w-0 truncate text-sm sm:block" style={{ color: w.failed ? DANGER : MUTED }}>
-                            {w.failed ? `${plural(w.failed, "shift")} not sent` : notesFor(w) || " "}
-                          </span>
+                          <span className="hidden min-w-0 truncate text-sm sm:block" style={{ color: w.failed ? DANGER : MUTED }}>{notesFor(w)}</span>
                         )}
                         <ChevronRight size={16} className="shrink-0" style={{ color: MUTED }} />
                       </button>
@@ -414,8 +341,20 @@ export default function PayrollTimesheetsPage() {
                   ))}
                   {shown.length === 0 && <li className="px-5 py-4 text-sm" style={{ color: MUTED }}>No one matches "{search}".</li>}
                 </ul>
+                <div className={`flex items-center gap-3 border-t px-4 py-3 text-sm font-semibold sm:grid sm:px-5 ${GRID}`}
+                  style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-soft)" }}>
+                  <span className="flex-1">Total · {plural(workers.length, "staff member")}</span>
+                  <span className="hidden text-right tabular-nums sm:block">{data.totals.shifts}</span>
+                  <span className="text-right tabular-nums">{duration(totalMinutes)}</span>
+                  {hasNotes && <span className="hidden sm:block" />}<span className="hidden w-4 sm:block" />
+                </div>
               </Surface>
-            </section>
+              {!data.connected.employment_hero && (
+                <p className="text-xs" style={{ color: MUTED }}>
+                  Use Employment Hero? <Link href={EH_PAGE} className="font-medium underline" style={{ color: TEXT }}>Connect it</Link> and approved hours are sent automatically.
+                </p>
+              )}
+            </>
           )}
         </>
       ) : null}
