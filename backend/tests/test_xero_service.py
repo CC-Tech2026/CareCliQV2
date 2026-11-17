@@ -509,3 +509,25 @@ def test_xero_wont_connect_while_myob_is():
         with pytest.raises(HTTPException) as exc:
             xs.create_connect_url(DIRECTOR)
     assert exc.value.status_code == 409 and "MYOB" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_a_sign_in_saved_under_another_key_asks_to_reconnect_instead_of_crashing(monkeypatch):
+    import base64
+    import os
+
+    from backend.app.services import pii_service
+
+    monkeypatch.setenv("PII_ENCRYPTION_KEY", base64.b64encode(os.urandom(32)).decode())
+    sealed_elsewhere = pii_service.encrypt_field("access-1")
+    monkeypatch.setenv("PII_ENCRYPTION_KEY", base64.b64encode(os.urandom(32)).decode())  # the key changed
+    row = {**CONNECTION, "access_token": sealed_elsewhere}
+    in_xero = {**INVOICE, "status": "sent", "xero_invoice_id": "xinv-1", "xero_status": "AUTHORISED"}
+    db = _DB(xero_connections=[dict(row)], invoices=[in_xero])
+    with patch.object(xs, "get_supabase_admin", return_value=db):
+        with pytest.raises(xs.XeroAuthError) as exc:
+            await xs._access_token(row)
+        assert "Reconnect Xero" in str(exc.value)
+        result = await xs.refresh_payments({**COORDINATOR})
+    assert result["checked"] is False and "Reconnect Xero" in result["error"]
+    assert "Reconnect Xero" in db.tables["xero_connections"][0]["last_error"]
