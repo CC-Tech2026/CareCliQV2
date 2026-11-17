@@ -17,6 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { detailIfShared, sharedNames, workerDetail, workerSearchText } from "@/lib/person-identity";
 import {
   bulkCreateShifts,
   getParticipantPriceItemOptions,
@@ -80,6 +81,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers, init
 
   const [participantId, setParticipantId] = useState(initialParticipantId ?? "");
   const [workerId,       setWorkerId]       = useState("");
+  const sameWorkerNames = sharedNames(workers.map((w) => w.full_name));
   const [shiftType,      setShiftType]      = useState("standard_support");
   const [startDate,      setStartDate]      = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [startTime,      setStartTime]      = useState("09:00");
@@ -285,18 +287,34 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers, init
                 <label className="text-[12px] font-black" style={{ color: TEXT }}>
                   Auto-assign Worker <span className="font-normal">({translate("common.optional")})</span>
                 </label>
-                {/* Radix Select can't have an empty-string item; "__none__" means open shifts. */}
-                <Select value={workerId || "__none__"} onValueChange={(v) => setWorkerId(v === "__none__" ? "" : v)}>
-                  <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
-                    <SelectValue placeholder={translate("coordinator.bulkShift.selectWorker")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">{translate("coordinator.bulkShift.noAutoAssign")}</SelectItem>
-                    {workers.map((w) => (
-                      <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* "__none__" means open shifts. Searchable, with staff ID and
+                    suburb, so the right person is found among a large team. */}
+                <SearchableSelect
+                  value={workerId || "__none__"}
+                  onValueChange={(v) => setWorkerId(v === "__none__" ? "" : v)}
+                  placeholder={translate("coordinator.bulkShift.selectWorker")}
+                  searchPlaceholder={translate("coordinator.shiftAssign.searchWorker")}
+                  emptyText={translate("common.noResults")}
+                  options={[
+                    { value: "__none__", label: translate("coordinator.bulkShift.noAutoAssign"), keywords: "none open" },
+                    ...workers.map((w) => ({ value: w.id, label: w.full_name, keywords: workerSearchText(w) })),
+                  ]}
+                  renderTrigger={(selected) => {
+                    const w = workers.find((x) => x.id === selected?.value);
+                    const detail = w ? detailIfShared(w, sameWorkerNames) : null;
+                    return selected ? (detail ? `${selected.label} · ${detail}` : selected.label) : translate("coordinator.bulkShift.selectWorker");
+                  }}
+                  renderOption={(option) => {
+                    const w = workers.find((x) => x.id === option.value);
+                    const detail = w ? workerDetail(w) : null;
+                    return (
+                      <span className="min-w-0">
+                        <span className="block truncate">{option.label}</span>
+                        {detail && <span className="block truncate text-[11px]" style={{ color: MUTED }}>{detail}</span>}
+                      </span>
+                    );
+                  }}
+                />
               </div>
 
               {/* Agreed support: hours for every occurrence count against it,

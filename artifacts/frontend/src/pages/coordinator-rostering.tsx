@@ -18,7 +18,8 @@ import { useGetParticipants } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { SectionInfo } from "@/components/ui/section-info";
 import { StatCard, StatCardGroup } from "@/components/ui/stat-card";
-import { sharedNames } from "@/lib/person-identity";
+import { detailIfShared, matchesPerson, sharedNames, workerDetail, workerSearchText } from "@/lib/person-identity";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -26,6 +27,7 @@ import { SidePanel } from "@/components/layout/SidePanel";
 import {
   getCoordinatorWorkerStats,
   listCoordinatorShifts,
+  getTeamAvailability,
   getWorkerAvailability,
   getOverdueUnassignedShifts,
   getShiftDetail,
@@ -329,6 +331,7 @@ export default function CoordinatorRosteringPage() {
   const [openListOpen, setOpenListOpen] = useState(false);
   const [findWorkerFor, setFindWorkerFor] = useState<CoordinatorShiftRecord | null>(null);
   const [availWorker,  setAvailWorker]  = useState<WorkerStats | null>(null);
+  const [availSearch,  setAvailSearch]  = useState("");
   const [teamPanelOpen, setTeamPanelOpen] = useState(false);
   const [assignTarget, setAssignTarget] = useState<{ worker: WorkerStats | null; date: string; time?: string } | null>(null);
   const [availMap,     setAvailMap]     = useState<AvailabilityMap>({});
@@ -395,6 +398,9 @@ export default function CoordinatorRosteringPage() {
 
   const workers = workersQuery.data ?? [];
   const sharedWorkerNames = sharedNames(workers.map((w) => w.full_name));
+  const workersByName = [...workers].sort((a, b) => a.full_name.localeCompare(b.full_name));
+  // Picking one worker narrows the board to their row too, not only their shifts.
+  const boardWorkers = workerFilter === "all" ? workers : workers.filter((w) => w.id === workerFilter);
   const shifts  = (shiftsQuery.data ?? []).filter((s) => {
     if (!s.scheduled_start) return true;
     const key = appLocalDateKey(s.scheduled_start, s.timezone);
@@ -402,18 +408,32 @@ export default function CoordinatorRosteringPage() {
   });
   const overdueUnassignedShifts = overdueUnassignedQuery.data ?? [];
 
-  // Load availability for all workers when the list changes
+  // Availability for everyone on the roster in one request. An API from
+  // before that endpoint gets one request per worker, six at a time, rather
+  // than one after another (minutes, with 100 staff).
   useEffect(() => {
     if (workers.length === 0) return;
     let cancelled = false;
     setLoadingAvail(true);
     (async () => {
       const map: AvailabilityMap = {};
-      for (const w of workers) {
-        try {
-          const data = await getWorkerAvailability(w.id);
-          map[w.id] = { ...data.availability, blackout_dates: data.blackout_dates };
-        } catch { /* skip unavailable */ }
+      try {
+        const team = await getTeamAvailability();
+        for (const [id, data] of Object.entries(team.workers)) {
+          map[id] = { ...data.availability, blackout_dates: data.blackout_dates };
+        }
+      } catch {
+        const queue = [...workers];
+        await Promise.all(
+          Array.from({ length: Math.min(6, queue.length) }, async () => {
+            for (let w = queue.shift(); w && !cancelled; w = queue.shift()) {
+              try {
+                const data = await getWorkerAvailability(w.id);
+                map[w.id] = { ...data.availability, blackout_dates: data.blackout_dates };
+              } catch { /* skip unavailable */ }
+            }
+          }),
+        );
       }
       if (!cancelled) { setAvailMap(map); setLoadingAvail(false); }
     })();
@@ -681,22 +701,37 @@ export default function CoordinatorRosteringPage() {
         </div>
 
         <div className="flex w-full gap-2 sm:ml-auto sm:w-auto">
-          <Select value={workerFilter} onValueChange={setWorkerFilter}>
-            <SelectTrigger className="h-10 flex-1 rounded-full bg-cc-surface px-4 text-sm sm:w-[190px]" style={{ borderColor: BORDER }}>
-              <SelectValue placeholder={translate("coordinator.rostering.allWorkers")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{translate("coordinator.rostering.allWorkers")}</SelectItem>
-              {workers.map((w) => (
-                <SelectItem key={w.id} value={w.id}>
-                  {w.full_name}
-                  {sharedWorkerNames.has(w.full_name.trim().toLowerCase()) && (w.suburb || w.email) && (
-                    <span className="ml-1.5 text-muted-foreground">{w.suburb || w.email}</span>
-                  )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Searchable by name, staff ID, suburb, phone or email: a long
+              team doesn't fit a plain dropdown, and same-named staff show
+              their staff ID and suburb. */}
+          <div className="flex-1 sm:w-[240px] [&_button[role=combobox]]:h-10 [&_button[role=combobox]]:rounded-full [&_button[role=combobox]]:px-4">
+            <SearchableSelect
+              value={workerFilter}
+              onValueChange={setWorkerFilter}
+              placeholder={translate("coordinator.rostering.allWorkers")}
+              searchPlaceholder="Name, staff ID or suburb"
+              emptyText={translate("common.noResults")}
+              options={[
+                { value: "all", label: translate("coordinator.rostering.allWorkers"), keywords: "all everyone" },
+                ...workersByName.map((w) => ({ value: w.id, label: w.full_name, keywords: workerSearchText(w) })),
+              ]}
+              renderTrigger={(selected) => {
+                const w = workers.find((x) => x.id === selected?.value);
+                const detail = w ? detailIfShared(w, sharedWorkerNames) : null;
+                return selected ? (detail ? `${selected.label} · ${detail}` : selected.label) : translate("coordinator.rostering.allWorkers");
+              }}
+              renderOption={(option) => {
+                const w = workers.find((x) => x.id === option.value);
+                const detail = w ? workerDetail(w) : null;
+                return (
+                  <span className="min-w-0">
+                    <span className="block truncate">{option.label}</span>
+                    {detail && <span className="block truncate text-[11px] text-cc-muted">{detail}</span>}
+                  </span>
+                );
+              }}
+            />
+          </div>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="h-10 flex-1 rounded-full bg-cc-surface px-4 text-sm sm:w-[160px]" style={{ borderColor: BORDER }}>
@@ -745,7 +780,7 @@ export default function CoordinatorRosteringPage() {
           newShiftId={newShiftId}
           weekStart={weekStart}
           shifts={shifts}
-          workers={workers}
+          workers={boardWorkers}
           availMap={availMap}
           loadingAvail={loadingAvail}
           onCellClick={(worker, date) => {
@@ -763,7 +798,7 @@ export default function CoordinatorRosteringPage() {
       {/* -- Team availability & skills side panel --------------------------- */}
       <SidePanel
         open={teamPanelOpen}
-        onOpenChange={(open) => { setTeamPanelOpen(open); if (!open) setAvailWorker(null); }}
+        onOpenChange={(open) => { setTeamPanelOpen(open); if (!open) { setAvailWorker(null); setAvailSearch(""); } }}
         icon={CalendarDays}
         title={translate("coordinator.rostering.workerAvailability")}
         description={translate("coordinator.rostering.teamPanelDesc")}
@@ -781,8 +816,18 @@ export default function CoordinatorRosteringPage() {
                 <WorkerAvailabilityPanel worker={availWorker} onClose={() => setAvailWorker(null)} />
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {workers.map((w) => (
+              <div className="space-y-3">
+                <input
+                  type="search"
+                  value={availSearch}
+                  onChange={(e) => setAvailSearch(e.target.value)}
+                  placeholder="Find by name, staff ID or suburb"
+                  aria-label="Find a worker"
+                  className="h-10 w-full rounded-xl border bg-cc-surface px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
+                  style={{ borderColor: BORDER }}
+                />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {workersByName.filter((w) => matchesPerson(availSearch, [workerSearchText(w)])).map((w) => (
                   <button
                     key={w.id}
                     onClick={() => setAvailWorker(w)}
@@ -796,13 +841,19 @@ export default function CoordinatorRosteringPage() {
                       {w.full_name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-[11px] font-bold" style={{ color: PLUM }}>{w.full_name.split(" ")[0]}</p>
-                      <p className="text-[10px] flex items-center gap-1" style={{ color: MUTED }}>
-                        <Settings2 size={9} /> {translate("common.settings")}
+                      <p className="truncate text-[12px] font-bold" style={{ color: TEXT }}>{w.full_name}</p>
+                      <p className="truncate text-[11px]" style={{ color: MUTED }}>
+                        {workerDetail(w) ?? (
+                          <span className="inline-flex items-center gap-1"><Settings2 size={10} /> {translate("common.settings")}</span>
+                        )}
                       </p>
                     </div>
                   </button>
                 ))}
+              </div>
+                {availSearch.trim() && !workersByName.some((w) => matchesPerson(availSearch, [workerSearchText(w)])) && (
+                  <p className="py-6 text-center text-sm" style={{ color: MUTED }}>{translate("common.noResults")}</p>
+                )}
               </div>
             )}
           </div>

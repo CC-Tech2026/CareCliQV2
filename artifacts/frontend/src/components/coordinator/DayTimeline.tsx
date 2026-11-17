@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { rosterLabels } from "@/lib/person-identity";
 import { appLocalDateKey, appMinutesOfDay, formatAppTime } from "@/lib/datetime";
 import type { CoordinatorShiftRecord, WorkerStats } from "@/services/coordinatorService";
 import { ShiftHoverCard, shiftLiveStatus } from "./ShiftHoverCard";
@@ -65,7 +66,12 @@ export function DayTimeline({
       const row = !s.worker_id || s.worker_id === UNASSIGNED_PLACEHOLDER_ID ? UNASSIGNED_ROW : s.worker_id;
       byRow.set(row, [...(byRow.get(row) ?? []), { shift: s, startMin, endMin }]);
     }
-    const names = new Map(workers.map((w) => [w.id, w.full_name]));
+    // Two people with the same name get their staff ID or suburb after it.
+    const labels = rosterLabels(workers);
+    const names = new Map(workers.map((w) => {
+      const detail = labels.get(w.id)?.detail;
+      return [w.id, detail ? `${w.full_name} · ${detail}` : w.full_name];
+    }));
     for (const blocks of byRow.values()) {
       for (const b of blocks) {
         if (b.shift.worker_id && !names.has(b.shift.worker_id)) names.set(b.shift.worker_id, b.shift.worker_name || "Worker");

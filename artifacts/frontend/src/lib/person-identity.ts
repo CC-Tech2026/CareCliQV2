@@ -74,3 +74,62 @@ export function sharedNames(names: string[]): Set<string> {
   }
   return new Set([...counts].filter(([, n]) => n > 1).map(([key]) => key));
 }
+
+/** What a worker record needs for telling same-named staff apart. */
+export type WorkerIdentity = {
+  full_name: string;
+  employee_id?: string | null;
+  suburb?: string | null;
+  email?: string | null;
+  phone?: string | null;
+};
+
+/** The short line that tells one worker from another: staff ID and suburb
+ * ("ID 1042 · Glenelg"), else their email. Null when there's nothing. */
+export function workerDetail(worker: WorkerIdentity): string | null {
+  const parts = [worker.employee_id ? `ID ${worker.employee_id}` : null, worker.suburb?.trim() || null].filter(
+    (p): p is string => !!p,
+  );
+  if (parts.length) return parts.join(" · ");
+  return worker.email?.trim() || null;
+}
+
+/** Everything a search box should look at for a worker, so typing a staff
+ * ID, suburb, phone or email finds them as well as their name. */
+export function workerSearchText(worker: WorkerIdentity): string {
+  return [worker.full_name, worker.employee_id, worker.suburb, worker.email, worker.phone].filter(Boolean).join(" ");
+}
+
+/** The worker's detail when their name is held by someone else in the list. */
+export function detailIfShared(worker: WorkerIdentity, shared: Set<string>): string | null {
+  return shared.has(worker.full_name.trim().toLowerCase()) ? workerDetail(worker) : null;
+}
+
+/** "Aisha Rahman" to "Aisha R", for narrow roster columns. */
+export function shortWorkerName(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}` : parts[0] ?? "";
+}
+
+/** What each worker's roster column is headed with: the short name when no
+ * one else shortens to it (two "Sam N"s get their full names), and their
+ * staff ID or suburb when someone else has exactly the same name. Worked
+ * out over the whole team, so a column never looks like someone it isn't
+ * even while the other person is filtered out. */
+export function rosterLabels(workers: (WorkerIdentity & { id: string })[]): Map<string, { short: string; full: string; detail: string | null }> {
+  const shortCounts = new Map<string, Set<string>>();
+  for (const w of workers) {
+    const key = shortWorkerName(w.full_name).toLowerCase();
+    const fulls = shortCounts.get(key) ?? new Set<string>();
+    fulls.add(w.full_name.trim().toLowerCase());
+    shortCounts.set(key, fulls);
+  }
+  const same = sharedNames(workers.map((w) => w.full_name));
+  const labels = new Map<string, { short: string; full: string; detail: string | null }>();
+  for (const w of workers) {
+    const short = shortWorkerName(w.full_name);
+    const clash = (shortCounts.get(short.toLowerCase())?.size ?? 0) > 1;
+    labels.set(w.id, { short: clash ? w.full_name : short, full: w.full_name, detail: detailIfShared(w, same) });
+  }
+  return labels;
+}

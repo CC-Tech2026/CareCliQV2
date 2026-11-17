@@ -42,7 +42,7 @@ import { ConflictModal, type PendingDrop } from "@/components/coordinator/Confli
 import { ZoneLabel } from "@/components/branches/ZoneLabel";
 import { PersonPreview } from "./PersonPreview";
 import { PersonPhoto } from "@/components/ui/person-photo";
-import { sharedNames } from "@/lib/person-identity";
+import { matchesPerson, rosterLabels, workerSearchText } from "@/lib/person-identity";
 import { ShiftHoverCard, shiftLiveStatus } from "./ShiftHoverCard";
 import {
   FIT_COLORS,
@@ -64,6 +64,9 @@ const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
+/** Above this many staff the board starts on who's rostered, not everyone. */
+const BIG_TEAM = 15;
+const SHOW_EVERYONE_KEY = "carecliq.roster.showEveryone";
 
 const STATUS_COLORS: Record<string, { bg: string; color: string; border: string }> = {
   unassigned:  { bg: "#FEF2F2", color: "#DC2626", border: "#FCA5A5" },
@@ -412,13 +415,40 @@ export function RosterBoard({
   const openThisWeek = weekKeys.reduce((n, key) => n + (openByDay.get(key)?.length ?? 0), 0);
   const openOtherWeeks = unassigned.length - openThisWeek;
 
-  const sameNames = useMemo(() => sharedNames(workers.map((w) => w.full_name)), [workers]);
+  // Labels worked out over the whole team: "Sam N" only when it's unique,
+  // and a staff ID or suburb for two people with the same name.
+  const labels = useMemo(() => rosterLabels(workers), [workers]);
+
+  // With a big team the board would be a column (or row) for everyone every
+  // day, so by default it shows who's rostered in this period, with a switch
+  // to everyone; finding someone by name, staff ID or suburb always works.
+  const bigTeam = workers.length > BIG_TEAM;
+  const [peopleQuery, setPeopleQuery] = useState("");
+  const [showEveryone, setShowEveryoneState] = useState(() => {
+    try { return localStorage.getItem(SHOW_EVERYONE_KEY) === "1"; } catch { return false; }
+  });
+  const setShowEveryone = (next: boolean) => {
+    setShowEveryoneState(next);
+    try { localStorage.setItem(SHOW_EVERYONE_KEY, next ? "1" : "0"); } catch { /* private mode */ }
+  };
+  const rosteredIds = useMemo(() => {
+    const keys = new Set(view === "day" && dayKey ? [dayKey] : days.map((d) => format(d, "yyyy-MM-dd")));
+    const ids = new Set<string>();
+    for (const s of shifts) {
+      if (s.worker_id && s.scheduled_start && keys.has(appLocalDateKey(s.scheduled_start, s.timezone))) ids.add(s.worker_id);
+    }
+    return ids;
+  }, [shifts, days, view, dayKey]);
   // Support workers first: they're who gets rostered. Office staff (who can
   // still pick up a shift) follow, so the rows a rosterer needs lead the board.
+  // Alphabetical within each, so two people with the same name sit together.
   const rosterRows = useMemo(() => {
     const rank = (w: WorkerStats) => ((w.role ?? "support_worker") === "support_worker" ? 0 : 1);
-    return [...workers].sort((a, b) => rank(a) - rank(b));
-  }, [workers]);
+    const sorted = [...workers].sort((a, b) => rank(a) - rank(b) || a.full_name.localeCompare(b.full_name));
+    if (peopleQuery.trim()) return sorted.filter((w) => matchesPerson(peopleQuery, [workerSearchText(w)]));
+    if (bigTeam && !showEveryone) return sorted.filter((w) => rosteredIds.has(w.id));
+    return sorted;
+  }, [workers, peopleQuery, bigTeam, showEveryone, rosteredIds]);
   const weekHoursByWorker = useMemo(() => {
     const totals = new Map<string, number>();
     for (const s of shifts) {
@@ -660,7 +690,52 @@ export function RosterBoard({
           </div>
         ))}
         {loadingAvail && <Loader2 size={11} className="animate-spin" style={{ color: MUTED }} />}
+        {workers.length > 1 && (
+          <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            {bigTeam && (
+              <div className="flex overflow-hidden rounded-full border text-[12px] font-medium" role="group" aria-label="Who's on the board" style={{ borderColor: BORDER }}>
+                {([false, true] as const).map((everyone) => (
+                  <button
+                    key={String(everyone)}
+                    type="button"
+                    aria-pressed={showEveryone === everyone}
+                    onClick={() => setShowEveryone(everyone)}
+                    className="h-8 px-3 transition-colors"
+                    style={showEveryone === everyone ? { background: "var(--cc-cta)", color: "white" } : { color: MUTED }}
+                  >
+                    {everyone ? `Everyone (${workers.length})` : `Rostered (${rosteredIds.size})`}
+                  </button>
+                ))}
+              </div>
+            )}
+            <input
+              type="search"
+              value={peopleQuery}
+              onChange={(e) => setPeopleQuery(e.target.value)}
+              placeholder="Find a worker"
+              aria-label="Find a worker by name, staff ID or suburb"
+              title="Name, staff ID, suburb, phone or email"
+              className="h-8 min-w-0 flex-1 rounded-full border bg-cc-surface px-3 text-[12px] outline-none focus-visible:ring-2 focus-visible:ring-cc-plum sm:w-48 sm:flex-none"
+              style={{ borderColor: BORDER }}
+            />
+          </div>
+        )}
       </div>
+      {workers.length > 1 && rosterRows.length === 0 && (
+        <p className="rounded-xl border border-dashed px-4 py-3 text-[13px]" style={{ borderColor: BORDER, color: MUTED }}>
+          {peopleQuery.trim()
+            ? `No one matches "${peopleQuery.trim()}".`
+            : "No one is rostered in this period yet."}{" "}
+          <button
+            type="button"
+            className="font-semibold underline-offset-2 hover:underline"
+            style={{ color: TEXT }}
+            onClick={() => { setPeopleQuery(""); setShowEveryone(true); }}
+          >
+            Show everyone ({workers.length})
+          </button>
+        </p>
+      )}
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {calendar ? (
@@ -668,6 +743,7 @@ export function RosterBoard({
             dayKeys={view === "day" && dayKey ? [dayKey] : weekKeys}
             onOpenDay={onOpenDay}
             workers={rosterRows}
+            labels={labels}
             shifts={shifts}
             availMap={availMap}
             allowCreate={allowCreate && !!onCreateAt}
@@ -819,9 +895,9 @@ export function RosterBoard({
                             <span className="text-[10px] font-medium" style={{ color: overCap ? CORAL : MUTED }}>
                               {weekHrs.toFixed(1)}h{capHrs != null ? ` / ${capHrs}h` : ""}
                             </span>
-                            {sameNames.has(worker.full_name.trim().toLowerCase()) && (worker.suburb || worker.employee_id) && (
+                            {labels.get(worker.id)?.detail && (
                               <span className="truncate text-[10px] font-medium" style={{ color: MUTED }}>
-                                {worker.suburb || `ID ${worker.employee_id}`}
+                                {labels.get(worker.id)?.detail}
                               </span>
                             )}
                           </div>
