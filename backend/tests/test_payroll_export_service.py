@@ -183,11 +183,14 @@ def test_the_csv_has_a_row_per_period_and_shift_figures_once():
     assert late[0]["Breaks (minutes)"] == "30" and late[0]["Kilometres"] == "12.5"
     assert late[0]["Travel reimbursement ($)"] == "11.00" and late[0]["Times from"] == "Clock times"
     sleep = [r for r in rows if r["CareCliQ shift ID"] == "s-sleep"]
-    assert [(r["Date"], r["Start"], r["End"], r["Type"]) for r in sleep] == [
-        ("2026-11-13", "20:00", "22:00", "Active work"),
-        ("2026-11-13", "22:00", "06:00", "Sleepover"),
-        ("2026-11-14", "06:00", "08:00", "Active work"),
+    # Australian dates, and an overnight period shows the day it ends.
+    assert [(r["Start date"], r["Start time"], r["End date"], r["End time"], r["Type"]) for r in sleep] == [
+        ("13/11/2026", "20:00", "13/11/2026", "22:00", "Active work"),
+        ("13/11/2026", "22:00", "14/11/2026", "06:00", "Sleepover"),
+        ("14/11/2026", "06:00", "14/11/2026", "08:00", "Active work"),
     ]
+    # Approved at 01:00 UTC is 11:30 in Adelaide (daylight saving), day first.
+    assert late[0]["Approved at"] == "13/11/2026 11:30"
     # Roster hours on the first row only, so a column total isn't doubled.
     assert sleep[0]["Rostered hours"] == "12.00" and sleep[1]["Rostered hours"] == ""
 

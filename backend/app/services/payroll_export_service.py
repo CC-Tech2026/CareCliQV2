@@ -157,6 +157,15 @@ def _local_iso(d: datetime, tz) -> str:
     return d.astimezone(tz).replace(tzinfo=None).isoformat(timespec="minutes")
 
 
+def _local_or_none(raw: Any, tz) -> Optional[str]:
+    if not raw:
+        return None
+    try:
+        return _local_iso(parse_shift_datetime(raw), tz)
+    except Exception:
+        return None
+
+
 def period(org_id: str, start: date, end: date) -> dict[str, Any]:
     """Every approved shift worked in the period, and the finished shifts
     still waiting for approval."""
@@ -257,6 +266,8 @@ def period(org_id: str, start: date, end: date) -> dict[str, Any]:
             "travel_km": round(travel["km"], 1) if travel else 0,
             "travel_cents": travel["cents"] if travel else 0,
             "approved_at": approval.get("verified_at"),
+            # The approval time in the same local time as the shift, for the CSV.
+            "approved_at_local": _local_or_none(approval.get("verified_at"), tz),
             "approved_by": approver.get("full_name"),
             "payroll": payroll,
         })
@@ -284,7 +295,7 @@ def period(org_id: str, start: date, end: date) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 CSV_COLUMNS = [
-    "Worker", "Worker email", "Payroll employee ID", "Date", "Start", "End", "Hours", "Type",
+    "Worker", "Worker email", "Payroll employee ID", "Start date", "Start time", "End date", "End time", "Hours", "Type",
     "Breaks (minutes)", "Rostered hours", "Hours over roster", "Participant", "Kilometres",
     "Travel reimbursement ($)", "Times from", "Approved by", "Approved at", "CareCliQ shift ID",
 ]
@@ -295,6 +306,18 @@ def _safe(value: Any) -> Any:
     if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
         return "'" + value
     return value
+
+
+def au_date(local_iso: str) -> str:
+    """"2026-10-19..." -> "19/10/2026": the day-first dates Australian
+    payroll software and Excel expect."""
+    y, m, d = local_iso[:10].split("-")
+    return f"{d}/{m}/{y}"
+
+
+def au_datetime(local_iso: Optional[str]) -> str:
+    """"2026-10-30T22:04" -> "30/10/2026 22:04"."""
+    return f"{au_date(local_iso)} {local_iso[11:16]}" if local_iso else ""
 
 
 def _hours(minutes: Any) -> str:
@@ -318,8 +341,9 @@ def to_csv(data: dict[str, Any]) -> str:
                 s["worker_name"],
                 s.get("worker_email") or "",
                 s.get("payroll_employee_id") or "",
-                p["start"][:10],
+                au_date(p["start"]),
                 p["start"][11:16],
+                au_date(p["end"]),
                 p["end"][11:16],
                 _hours(p["minutes"]),
                 "Sleepover" if p["kind"] == "sleepover" else "Active work",
@@ -331,7 +355,7 @@ def to_csv(data: dict[str, Any]) -> str:
                 f"{s['travel_cents'] / 100:.2f}" if first and s.get("travel_cents") else "",
                 ("Clock times" if s.get("source") == "clock" else "Rostered times") if first else "",
                 s.get("approved_by") or "",
-                str(s.get("approved_at") or "")[:16].replace("T", " "),
+                au_datetime(s.get("approved_at_local")),
                 s["shift_id"],
             ]])
     return out.getvalue()
