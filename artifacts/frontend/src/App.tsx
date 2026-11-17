@@ -121,6 +121,7 @@ import WorkerPolicies from "@/pages/worker-policies";
 import WorkerFeedback from "@/pages/worker-feedback";
 import WorkerTravelExpenses from "@/pages/worker-travel-expenses";
 import CoordinatorTravelExpenses from "@/pages/coordinator-travel-expenses";
+import PayrollTimesheetsPage from "@/pages/payroll-timesheets";
 import WorkerAccessibility from "@/pages/worker-accessibility";
 import AccountSecure from "@/pages/account-secure";
 import { OfflineSyncProvider } from "@/contexts/OfflineSyncContext";
@@ -697,6 +698,12 @@ function Router() {
       <Route path="/coordinator/travel">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
           <RoleAwareShell><CoordinatorTravelExpenses /></RoleAwareShell>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/payroll">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
+          <RoleAwareShell><PayrollTimesheetsPage /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 
