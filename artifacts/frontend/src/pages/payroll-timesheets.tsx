@@ -1,52 +1,61 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, CalendarRange, Download, Loader2 } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Clock, Download, Loader2, Moon } from "lucide-react";
+import { SidePanel } from "@/components/layout/SidePanel";
 import {
-  EmptyState, LoadError, Notice, PageHeader, PillTabs, RowList, SearchField, SkeletonBlocks, StatusText,
-  SummaryStrip, Surface, ctaClass, outlineClass, type SummaryItem, type Tone,
+  LoadError, PageHeader, PillTabs, SearchField, SkeletonBlocks, Surface, ctaClass, outlineClass, rowClass,
 } from "@/components/layout/PageKit";
 import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { appTodayKey } from "@/lib/datetime";
-import { downloadPayrollCsv, getPayrollTimesheets, type PayrollShift } from "@/services/payrollService";
+import {
+  downloadPayrollCsv, getPayrollTimesheets, type PayrollPeriodData, type PayrollShift,
+} from "@/services/payrollService";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
+const GOOD = "var(--cc-green)";
+const WARN = "var(--cc-amber)";
+const DANGER = "var(--cc-danger-text)";
 
-type PeriodKey = "this_week" | "last_week" | "last_fortnight" | "custom";
+const EH_PAGE = "/settings?section=integrations&integration=employment-hero";
+const FREQUENCY_KEY = "carecliq-payroll-frequency";
+/** Staying on a few minutes is normal; from this many it's worth a look. */
+const LATE_MINUTES = 15;
 
-const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
-  { key: "this_week", label: "This week" },
-  { key: "last_week", label: "Last week" },
-  { key: "last_fortnight", label: "Last fortnight" },
-  { key: "custom", label: "Choose dates" },
-];
+export type Frequency = "weekly" | "fortnightly";
 
-// ── Dates ("YYYY-MM-DD", the organisation's local calendar) ────────────────
+// ── Dates ("YYYY-MM-DD" in the organisation's calendar) ────────────────────
 
 function parseKey(key: string): Date {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d));
 }
-function toKey(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 function addDays(key: string, days: number): string {
   const d = parseKey(key);
   d.setUTCDate(d.getUTCDate() + days);
-  return toKey(d);
+  return d.toISOString().slice(0, 10);
 }
 
-/** Pay weeks run Monday to Sunday: the SCHADS default in payroll systems. */
-export function periodFor(choice: Exclude<PeriodKey, "custom">, today: string): { start: string; end: string } {
-  const weekday = (parseKey(today).getUTCDay() + 6) % 7; // Monday = 0
-  const monday = addDays(today, -weekday);
-  if (choice === "this_week") return { start: monday, end: addDays(monday, 6) };
-  if (choice === "last_week") return { start: addDays(monday, -7), end: addDays(monday, -1) };
-  return { start: addDays(monday, -14), end: addDays(monday, -1) };
+/** The pay period `offset` periods from the one containing today (0 = the
+ *  current one, -1 = the last finished one). Weeks run Monday to Sunday,
+ *  the default in payroll systems; a fortnight is two of them. */
+export function payPeriod(frequency: Frequency, today: string, offset: number): { start: string; end: string } {
+  const monday = addDays(today, -((parseKey(today).getUTCDay() + 6) % 7));
+  if (frequency === "weekly") {
+    const start = addDays(monday, 7 * offset);
+    return { start, end: addDays(start, 6) };
+  }
+  const end = addDays(monday, 14 * offset + 13);
+  return { start: addDays(end, -13), end };
 }
 
+function shortDate(key: string, withYear = false): string {
+  return parseKey(key).toLocaleDateString("en-AU", {
+    day: "numeric", month: "short", ...(withYear ? { year: "numeric" } : {}), timeZone: "UTC",
+  });
+}
 function dayLabel(key: string): string {
   return parseKey(key).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 }
@@ -66,210 +75,345 @@ export function duration(minutes: number): string {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
-const PAYROLL_STATUS: Record<string, { label: string; tone: Tone }> = {
-  sent: { label: "In Employment Hero", tone: "good" },
-  paid: { label: "Paid in Employment Hero", tone: "good" },
-  failed: { label: "Needs attention", tone: "danger" },
-  removed: { label: "Removed from Employment Hero", tone: "neutral" },
-  waiting: { label: "Waiting to send", tone: "warning" },
+function plural(n: number, one: string, many = `${one}s`) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+function readFrequency(): Frequency {
+  try {
+    return window.localStorage.getItem(FREQUENCY_KEY) === "fortnightly" ? "fortnightly" : "weekly";
+  } catch {
+    return "weekly";
+  }
+}
+
+// ── Per worker ──────────────────────────────────────────────────────────────
+
+type WorkerHours = {
+  key: string;
+  name: string;
+  email?: string | null;
+  shifts: PayrollShift[];
+  minutes: number;
+  sleepovers: number;
+  late: number;
+  failed: number;
+  sent: number;
 };
 
-function Tag({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "warning" | "info" }) {
-  const bg = tone === "warning" ? "var(--cc-status-warning-bg)" : tone === "info" ? "var(--cc-status-info-bg)" : "var(--cc-soft)";
+function byWorker(shifts: PayrollShift[]): WorkerHours[] {
+  const map = new Map<string, WorkerHours>();
+  for (const s of shifts) {
+    const key = s.worker_id ?? s.worker_name;
+    const row = map.get(key) ?? { key, name: s.worker_name, email: s.worker_email, shifts: [], minutes: 0, sleepovers: 0, late: 0, failed: 0, sent: 0 };
+    row.shifts.push(s);
+    row.minutes += s.worked_minutes || 0;
+    if (s.sleepover) row.sleepovers += 1;
+    if (s.over_roster_minutes >= LATE_MINUTES) row.late += 1;
+    if (s.payroll?.status === "failed") row.failed += 1;
+    if (s.payroll?.status === "sent" || s.payroll?.status === "paid") row.sent += 1;
+    map.set(key, row);
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function notesFor(w: WorkerHours): string {
+  return [
+    w.sleepovers ? plural(w.sleepovers, "sleepover") : "",
+    w.late ? `Stayed late on ${plural(w.late, "shift")}` : "",
+  ].filter(Boolean).join(" · ");
+}
+
+// ── The two steps ───────────────────────────────────────────────────────────
+
+function Step({ number, title, done, children }: { number: number; title: string; done: boolean; children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: bg, color: TEXT }}>
-      {children}
-    </span>
+    <section className="flex min-w-0 gap-3 rounded-2xl bg-cc-surface p-5" aria-label={title}>
+      <span
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+        style={done ? { background: "var(--cc-status-success-bg, var(--cc-soft))", color: GOOD } : { background: "var(--cc-soft)", color: TEXT }}
+        aria-hidden
+      >
+        {done ? <CheckCircle2 size={18} /> : number}
+      </span>
+      <div className="min-w-0 flex-1 space-y-2">
+        <h2 className="text-base font-semibold" style={{ color: TEXT }}>{title}</h2>
+        {children}
+      </div>
+    </section>
   );
 }
 
-function ShiftRow({ shift }: { shift: PayrollShift }) {
-  const status = shift.payroll ? PAYROLL_STATUS[shift.payroll.status] : null;
-  return (
-    <li className="flex flex-wrap items-start gap-x-4 gap-y-1.5 px-4 py-3 sm:px-5" style={{ borderColor: BORDER }}>
-      <div className="w-28 shrink-0">
-        <p className="text-sm font-medium" style={{ color: TEXT }}>{dayLabel(shift.date)}</p>
-        <p className="text-xs" style={{ color: MUTED }}>{shift.participant || "No participant"}</p>
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm tabular-nums" style={{ color: TEXT }}>
-          {clock(shift.start.slice(11, 16))} to {clock(shift.end.slice(11, 16))}
-          <span className="ml-2 font-semibold">{duration(shift.worked_minutes)}</span>
+function ApproveStep({ data }: { data: PayrollPeriodData }) {
+  const waiting = data.waiting.length;
+  if (!waiting) {
+    return (
+      <Step number={1} title="Approve timesheets" done={data.shifts.length > 0}>
+        <p className="text-sm" style={{ color: MUTED }}>
+          {data.shifts.length ? "Every finished shift in this period is approved." : "No shifts were worked in this period."}
         </p>
-        <div className="mt-1 flex flex-wrap gap-1.5">
-          {shift.sleepover && <Tag tone="info">Sleepover</Tag>}
-          {/* A few minutes either side is normal; a real overrun stands out. */}
-          {shift.over_roster_minutes >= 1 && (
-            <Tag tone={shift.over_roster_minutes >= 15 ? "warning" : "neutral"}>{duration(shift.over_roster_minutes)} over roster</Tag>
-          )}
-          {shift.source === "roster" && <Tag tone="warning">Rostered times, no clock-in</Tag>}
-          {shift.break_minutes > 0 && <Tag>Break {duration(shift.break_minutes)}</Tag>}
-          {shift.travel_km > 0 && <Tag>{shift.travel_km} km</Tag>}
-        </div>
-        {shift.payroll?.status === "failed" && shift.payroll.error && (
-          <p className="mt-1 text-xs" style={{ color: "var(--cc-danger-text)" }}>{shift.payroll.error}</p>
+      </Step>
+    );
+  }
+  const names = [...new Set(data.waiting.map((w) => w.worker_name ?? "Unknown"))];
+  return (
+    <Step number={1} title="Approve timesheets" done={false}>
+      <p className="text-sm font-medium" style={{ color: WARN }}>{plural(waiting, "shift")} still to approve</p>
+      <p className="text-sm" style={{ color: MUTED }}>
+        {names.slice(0, 3).join(", ")}{names.length > 3 ? ` and ${names.length - 3} more` : ""}. They're left out until approved.
+      </p>
+      <Link href="/coordinator/verification" className={`${ctaClass} w-full sm:w-auto`}>Approve timesheets</Link>
+    </Step>
+  );
+}
+
+function PayrollStep({ data, downloading, onDownload }: { data: PayrollPeriodData; downloading: boolean; onDownload: () => void }) {
+  const { shifts, sent, attention } = data.totals;
+  const download = (primary: boolean) => (
+    <button
+      type="button"
+      className={`${primary ? ctaClass : outlineClass} w-full sm:w-auto`}
+      onClick={onDownload}
+      disabled={downloading || !shifts}
+    >
+      {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Download hours (CSV)
+    </button>
+  );
+
+  if (data.connected.employment_hero) {
+    const done = shifts > 0 && sent === shifts;
+    return (
+      <Step number={2} title="Send to payroll" done={done}>
+        <p className="text-sm" style={{ color: MUTED }}>
+          Approved shifts go to Employment Hero by themselves.{" "}
+          <span style={{ color: TEXT }}>{sent} of {plural(shifts, "shift")} sent.</span>
+        </p>
+        {attention > 0 && (
+          <p className="flex items-center gap-1.5 text-sm font-medium" style={{ color: DANGER }}>
+            <CircleAlert size={15} /> {plural(attention, "shift")} couldn't be sent
+          </p>
         )}
+        <div className="flex flex-wrap gap-2">
+          {attention > 0 && <Link href={EH_PAGE} className={ctaClass}>Fix in Employment Hero settings</Link>}
+          {download(false)}
+        </div>
+      </Step>
+    );
+  }
+  return (
+    <Step number={2} title="Give the hours to payroll" done={false}>
+      <p className="text-sm" style={{ color: MUTED }}>
+        Download a spreadsheet of everyone's hours for your payroll software or bookkeeper. Your payroll works out the pay.
+      </p>
+      {download(true)}
+      <p className="text-xs" style={{ color: MUTED }}>
+        Use Employment Hero? <Link href={EH_PAGE} className="font-medium underline" style={{ color: TEXT }}>Connect it</Link> and approved hours are sent for you.
+      </p>
+    </Step>
+  );
+}
+
+// ── A worker's shifts, in the side panel ───────────────────────────────────
+
+function ShiftDetail({ shift }: { shift: PayrollShift }) {
+  const pieces = shift.periods.length > 1 ? shift.periods : [];
+  return (
+    <li className="space-y-1 py-3" style={{ borderColor: BORDER }}>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-sm font-medium" style={{ color: TEXT }}>{dayLabel(shift.date)}</p>
+        <p className="text-sm font-semibold tabular-nums" style={{ color: TEXT }}>{duration(shift.worked_minutes)}</p>
       </div>
-      {status && <StatusText tone={status.tone}>{status.label}</StatusText>}
+      <p className="text-sm tabular-nums" style={{ color: MUTED }}>
+        {clock(shift.start.slice(11, 16))} to {clock(shift.end.slice(11, 16))}
+        {shift.participant ? ` · with ${shift.participant}` : ""}
+      </p>
+      {pieces.length > 0 && (
+        <ul className="space-y-0.5 text-xs" style={{ color: MUTED }}>
+          {pieces.map((p) => (
+            <li key={p.start} className="flex items-center gap-1.5">
+              {p.kind === "sleepover" && <Moon size={12} />}
+              {p.kind === "sleepover" ? "Sleepover" : "Active"} {clock(p.start.slice(11, 16))} to {clock(p.end.slice(11, 16))}
+            </li>
+          ))}
+        </ul>
+      )}
+      {[
+        shift.over_roster_minutes >= 1 ? `${duration(shift.over_roster_minutes)} longer than rostered` : "",
+        shift.break_minutes > 0 ? `${duration(shift.break_minutes)} break` : "",
+        shift.travel_km > 0 ? `${shift.travel_km} km travel` : "",
+        shift.source === "roster" ? "No clock-in, so the rostered times are used" : "",
+      ].filter(Boolean).map((note) => (
+        <p key={note} className="text-xs" style={{ color: note.startsWith("No clock") ? WARN : MUTED }}>{note}</p>
+      ))}
+      {shift.payroll?.status === "failed" && (
+        <p className="text-xs font-medium" style={{ color: DANGER }}>Not sent: {shift.payroll.error || "Employment Hero said no."}</p>
+      )}
     </li>
   );
 }
 
-/** Timesheets for payroll: a pay period's approved shifts with the time each
- *  worker worked (not the billed time), and a CSV for any payroll system. */
+// ── The page ────────────────────────────────────────────────────────────────
+
+/** Payroll: a pay period's approved hours, in two steps (approve, then get
+ *  them to payroll) and a table of hours by worker. CareCliQ doesn't work
+ *  out pay; the provider's payroll applies the award. */
 export default function PayrollTimesheetsPage() {
   const { toast } = useToast();
   const today = appTodayKey();
-  const [choice, setChoice] = useState<PeriodKey>("last_week");
-  const [custom, setCustom] = useState(() => periodFor("last_week", today));
+  const [frequency, setFrequency] = useState<Frequency>(readFrequency);
+  const [offset, setOffset] = useState(-1);
   const [search, setSearch] = useState("");
+  const [open, setOpen] = useState<WorkerHours | null>(null);
   const [downloading, setDownloading] = useState(false);
 
-  const range = choice === "custom" ? custom : periodFor(choice, today);
-  const rangeOk = !!range.start && !!range.end && range.start <= range.end;
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(FREQUENCY_KEY, frequency);
+    } catch {
+      /* a remembered choice is a convenience only */
+    }
+  }, [frequency]);
+
+  const range = payPeriod(frequency, today, offset);
   const query = useOrgQuery(["payroll-timesheets", range.start, range.end], {
     queryFn: () => getPayrollTimesheets(range.start, range.end),
-    enabled: rangeOk,
   });
   const data = query.data;
-
-  const groups = useMemo(() => {
+  const workers = useMemo(() => byWorker(data?.shifts ?? []), [data]);
+  const shown = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    const shown = (data?.shifts ?? []).filter((s) =>
-      !needle || [s.worker_name, s.worker_email, s.participant].some((v) => (v ?? "").toLowerCase().includes(needle)),
-    );
-    const byWorker = new Map<string, PayrollShift[]>();
-    for (const s of shown) {
-      const key = s.worker_id ?? s.worker_name;
-      byWorker.set(key, [...(byWorker.get(key) ?? []), s]);
-    }
-    return [...byWorker.values()].sort((a, b) => a[0].worker_name.localeCompare(b[0].worker_name));
-  }, [data, search]);
+    return needle ? workers.filter((w) => [w.name, w.email].some((v) => (v ?? "").toLowerCase().includes(needle))) : workers;
+  }, [workers, search]);
+
+  // The Notes column only when someone has a note, so the table stays tight.
+  const hasNotes = workers.some((w) => w.failed || notesFor(w));
+  const columns = hasNotes
+    ? "sm:grid-cols-[minmax(0,1fr)_5rem_6rem_minmax(0,1fr)_1.25rem]"
+    : "sm:grid-cols-[minmax(0,1fr)_5rem_6rem_1.25rem]";
+
+  const when = offset === 0
+    ? `This ${frequency === "weekly" ? "week" : "fortnight"} (so far)`
+    : offset === -1 ? `Last ${frequency === "weekly" ? "week" : "fortnight"}` : null;
 
   async function download() {
     setDownloading(true);
     try {
       await downloadPayrollCsv(range.start, range.end);
     } catch (err) {
-      toast({ title: "Couldn't download the CSV", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
+      toast({ title: "Couldn't download the hours", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
     } finally {
       setDownloading(false);
     }
   }
 
-  const totals = data?.totals;
-  const chips: SummaryItem[] = totals
-    ? [
-        { value: totals.shifts, label: totals.shifts === 1 ? "approved shift" : "approved shifts" },
-        { value: totals.hours.toLocaleString("en-AU", { maximumFractionDigits: 2 }), label: "hours worked" },
-        { value: totals.workers, label: totals.workers === 1 ? "worker" : "workers" },
-        ...(data?.connected.employment_hero
-          ? [
-              { value: totals.sent, label: "in Employment Hero", tone: "good" as Tone },
-              ...(totals.attention ? [{ value: totals.attention, label: "need attention", tone: "danger" as Tone }] : []),
-            ]
-          : []),
-      ]
-    : [];
-
   return (
     <div className="space-y-5 pb-10">
       <PageHeader
         eyebrow="Finance"
-        title="Payroll timesheets"
-        description="Approved shifts for a pay period, with the time each worker worked: clock-in to clock-out, including any time over the roster. CareCliQ doesn't calculate pay. Your payroll system applies the award. Download the CSV for your payroll, or connect Employment Hero to send them automatically."
-        actions={
-          <button type="button" className={ctaClass} onClick={() => void download()} disabled={!rangeOk || downloading || !totals?.shifts}>
-            {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Download CSV
-          </button>
-        }
+        title="Payroll"
+        description="The hours your staff worked in a pay period, ready for payroll. Workers are paid for the time they worked, clock-in to clock-out, even when the NDIS is billed for less. CareCliQ doesn't work out pay: your payroll software applies the award."
       />
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <PillTabs label="Pay period" options={PERIOD_OPTIONS} value={choice} onChange={(key) => {
-          if (key === "custom" && choice !== "custom") setCustom(range);
-          setChoice(key);
-        }} />
-        {choice === "custom" ? (
-          <div className="flex flex-wrap items-center gap-2 text-sm" style={{ color: MUTED }}>
-            <input type="date" aria-label="Period start" value={custom.start} max={custom.end || undefined}
-              onChange={(e) => setCustom({ ...custom, start: e.target.value })}
-              className="h-10 rounded-full border bg-cc-surface px-3 text-sm" style={{ borderColor: BORDER, color: TEXT }} />
-            to
-            <input type="date" aria-label="Period end" value={custom.end} min={custom.start || undefined}
-              onChange={(e) => setCustom({ ...custom, end: e.target.value })}
-              className="h-10 rounded-full border bg-cc-surface px-3 text-sm" style={{ borderColor: BORDER, color: TEXT }} />
-          </div>
-        ) : (
-          <p className="flex items-center gap-1.5 text-sm" style={{ color: MUTED }}>
-            <CalendarRange size={15} /> {dayLabel(range.start)} to {dayLabel(range.end)}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 rounded-full bg-cc-surface p-1" role="group" aria-label="Pay period">
+          <button type="button" aria-label="Previous pay period" onClick={() => setOffset((o) => o - 1)}
+            className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-cc-soft" style={{ color: TEXT }}>
+            <ChevronLeft size={18} />
+          </button>
+          <p className="min-w-[10.5rem] px-1 text-center leading-tight" aria-live="polite">
+            <span className="block text-sm font-semibold tabular-nums" style={{ color: TEXT }}>
+              {shortDate(range.start)} to {shortDate(range.end, true)}
+            </span>
+            {when && <span className="block text-xs" style={{ color: MUTED }}>{when}</span>}
           </p>
-        )}
+          <button type="button" aria-label="Next pay period" onClick={() => setOffset((o) => Math.min(0, o + 1))} disabled={offset >= 0}
+            className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-cc-soft disabled:opacity-30" style={{ color: TEXT }}>
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        <PillTabs
+          label="How often you pay"
+          options={[{ key: "weekly", label: "Weekly" }, { key: "fortnightly", label: "Fortnightly" }]}
+          value={frequency}
+          onChange={(f) => { setFrequency(f); setOffset(-1); }}
+        />
       </div>
 
-      {!rangeOk ? (
-        <LoadError>Choose a start date on or before the end date.</LoadError>
-      ) : query.isLoading ? (
-        <SkeletonBlocks count={3} />
+      {query.isLoading ? (
+        <SkeletonBlocks count={2} />
       ) : query.isError ? (
         <LoadError onRetry={() => void query.refetch()}>
-          {query.error instanceof Error ? query.error.message : "The timesheets couldn't be loaded."}
+          {query.error instanceof Error ? query.error.message : "The hours couldn't be loaded."}
         </LoadError>
       ) : data ? (
         <>
-          <SummaryStrip items={chips} />
+          <div className="grid gap-3 lg:grid-cols-2">
+            <ApproveStep data={data} />
+            <PayrollStep data={data} downloading={downloading} onDownload={() => void download()} />
+          </div>
 
-          {data.waiting.length > 0 && (
-            <Notice
-              tone="warning"
-              icon={AlertTriangle}
-              title={`${data.waiting.length} finished ${data.waiting.length === 1 ? "shift isn't" : "shifts aren't"} approved yet`}
-              action={<Link href="/coordinator/verification" className={outlineClass}>Review timesheets</Link>}
-            >
-              {data.waiting.length === 1 ? "It isn't" : "They aren't"} in the CSV or sent to payroll until approved
-              {": "}
-              {data.waiting.slice(0, 4).map((w) => `${w.worker_name ?? "Unknown"} on ${dayLabel(w.date)}`).join(", ")}
-              {data.waiting.length > 4 ? `, and ${data.waiting.length - 4} more.` : "."}
-            </Notice>
-          )}
-
-          {data.shifts.length === 0 ? (
-            <EmptyState
-              icon={CalendarRange}
-              title="No approved shifts in this period"
-              body="Shifts appear here once a coordinator approves their timesheet."
-            />
-          ) : (
-            <>
-              <SearchField value={search} onChange={setSearch} label="Search timesheets" placeholder="Search by worker or participant" />
-              {groups.length === 0 ? (
-                <p className="text-sm" style={{ color: MUTED }}>No one matches "{search}".</p>
-              ) : (
-                groups.map((shifts) => {
-                  const minutes = shifts.reduce((sum, s) => sum + (s.worked_minutes || 0), 0);
-                  const first = shifts[0];
-                  return (
-                    <Surface key={first.worker_id ?? first.worker_name}>
-                      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-4 py-3 sm:px-5" style={{ borderColor: BORDER }}>
-                        <div className="min-w-0">
-                          <h2 className="text-base font-semibold" style={{ color: TEXT }}>{first.worker_name}</h2>
-                          {first.worker_email && <p className="truncate text-xs" style={{ color: MUTED }}>{first.worker_email}</p>}
-                        </div>
-                        <p className="text-sm tabular-nums" style={{ color: MUTED }}>
-                          {shifts.length} {shifts.length === 1 ? "shift" : "shifts"} · <span className="font-semibold" style={{ color: TEXT }}>{duration(minutes)}</span>
-                        </p>
-                      </div>
-                      <RowList>
-                        {shifts.map((s) => <ShiftRow key={s.shift_id} shift={s} />)}
-                      </RowList>
-                    </Surface>
-                  );
-                })
-              )}
-            </>
+          {workers.length > 0 && (
+            <section className="space-y-3" aria-label="Hours by worker">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold" style={{ color: TEXT }}>Hours by worker</h2>
+                  <p className="text-sm" style={{ color: MUTED }}>
+                    {plural(data.totals.workers, "worker")} · {plural(data.totals.shifts, "approved shift")} ·{" "}
+                    {duration(data.totals.hours * 60)} in total. Select someone to see their shifts.
+                  </p>
+                </div>
+                {workers.length > 8 && (
+                  <SearchField value={search} onChange={setSearch} label="Find a worker" placeholder="Find a worker" />
+                )}
+              </div>
+              <Surface>
+                <div className={`hidden gap-3 border-b px-5 py-2 text-xs font-semibold uppercase tracking-wide sm:grid ${columns}`}
+                  style={{ borderColor: BORDER, color: MUTED }}>
+                  <span>Worker</span><span className="text-right">Shifts</span><span className="text-right">Hours</span>{hasNotes && <span>Notes</span>}<span />
+                </div>
+                <ul className="divide-y" style={{ borderColor: BORDER }}>
+                  {shown.map((w) => (
+                    <li key={w.key}>
+                      <button type="button" onClick={() => setOpen(w)} className={`${rowClass} sm:grid ${columns}`}>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium" style={{ color: TEXT }}>{w.name}</span>
+                          <span className="block text-xs sm:hidden" style={{ color: MUTED }}>
+                            {plural(w.shifts.length, "shift")}{notesFor(w) ? ` · ${notesFor(w)}` : ""}
+                          </span>
+                        </span>
+                        <span className="hidden text-right text-sm tabular-nums sm:block" style={{ color: MUTED }}>{w.shifts.length}</span>
+                        <span className="text-right text-sm font-semibold tabular-nums" style={{ color: TEXT }}>{duration(w.minutes)}</span>
+                        {hasNotes && (
+                          <span className="hidden min-w-0 truncate text-sm sm:block" style={{ color: w.failed ? DANGER : MUTED }}>
+                            {w.failed ? `${plural(w.failed, "shift")} not sent` : notesFor(w) || " "}
+                          </span>
+                        )}
+                        <ChevronRight size={16} className="shrink-0" style={{ color: MUTED }} />
+                      </button>
+                    </li>
+                  ))}
+                  {shown.length === 0 && <li className="px-5 py-4 text-sm" style={{ color: MUTED }}>No one matches "{search}".</li>}
+                </ul>
+              </Surface>
+            </section>
           )}
         </>
       ) : null}
+
+      <SidePanel
+        open={!!open}
+        onOpenChange={(o) => { if (!o) setOpen(null); }}
+        icon={Clock}
+        eyebrow={`${shortDate(range.start)} to ${shortDate(range.end, true)}`}
+        title={open?.name ?? ""}
+        description={open ? `${plural(open.shifts.length, "approved shift")} · ${duration(open.minutes)} worked` : undefined}
+      >
+        {open && (
+          <ul className="divide-y" style={{ borderColor: BORDER }}>
+            {open.shifts.map((s) => <ShiftDetail key={s.shift_id} shift={s} />)}
+          </ul>
+        )}
+      </SidePanel>
     </div>
   );
 }
