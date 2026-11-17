@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { choiceOf, googleCalendarUrl, guestEmails, icsFile, isOnlineMode, outlookCalendarUrl } from "./meeting-booking";
+import { choiceOf, googleCalendarUrl, guestEmails, icsFile, inviteSummary, isOnlineMode, meetingWhen, outlookCalendarUrl, parseDurationMinutes } from "./meeting-booking";
 import type { OrgEvent } from "@/services/hubService";
 
 const event: OrgEvent = {
@@ -27,6 +27,24 @@ describe("meeting formats", () => {
     expect(isOnlineMode("in_person")).toBe(false);
     expect(isOnlineMode("phone")).toBe(false);
     expect(isOnlineMode(null)).toBe(false);
+  });
+});
+
+describe("meeting labels", () => {
+  it("says when, with a 12-hour time", () => {
+    expect(meetingWhen({ event_date: "2026-11-18", start_time: "14:30" })).toMatch(/18 Nov, 2:30pm$/);
+    expect(meetingWhen({ event_date: "2026-11-18", start_time: null })).toMatch(/18 Nov$/);
+  });
+
+  it("reads durations back into minutes", () => {
+    expect(parseDurationMinutes("1h 30m")).toBe(90);
+    expect(parseDurationMinutes("45 mins")).toBe(45);
+    expect(parseDurationMinutes("")).toBe(60);
+  });
+
+  it("sums up the invites", () => {
+    expect(inviteSummary({ sent: ["a@x.com", "b@x.com"], failed: [], email_off: false }, false)).toBe("Calendar invite sent to 2 people.");
+    expect(inviteSummary({ sent: [], failed: [], email_off: true }, false)).toBe("Email is turned off, so no invites were sent.");
   });
 });
 

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { IntegrationsSection } from "./IntegrationsSection";
 import * as integrations from "@/services/integrationsService";
 import * as myob from "@/services/myobService";
+import * as eh from "@/services/employmentHeroService";
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ user: { id: "md-1", organizationId: "org-1", role: "managing_director" } }),
@@ -11,6 +12,7 @@ vi.mock("@/contexts/AuthContext", () => ({
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/services/integrationsService");
 vi.mock("@/services/myobService");
+vi.mock("@/services/employmentHeroService");
 
 const SETTINGS = { sales_account_code: "200", tax_type: "EXEMPTOUTPUT", invoice_status: "AUTHORISED", auto_send: true } as const;
 
@@ -20,10 +22,16 @@ const MYOB_OFF = {
   settings: { income_account_uid: null, tax_code_uid: null, auto_send: true },
 };
 
+const EH_OFF = {
+  available: false, connected: false, redirect_uri: "e",
+  settings: { auto_send: true, send_approved: true, send_from: null, sleepover_work_type_id: null },
+};
+
 function renderSection() {
   vi.mocked(integrations.getApiOverview).mockResolvedValue(NO_API);
   // MYOB has its own tests (MyobIntegration.test.tsx); here it is simply not switched on.
   vi.mocked(myob.getMyobStatus).mockResolvedValue(MYOB_OFF);
+  vi.mocked(eh.getEmploymentHeroStatus).mockResolvedValue(EH_OFF);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>

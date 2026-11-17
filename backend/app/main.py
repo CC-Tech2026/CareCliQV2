@@ -6,6 +6,7 @@ from .api import auth, participants, sessions, alerts, plans, reports, ai, compl
 from .api import auth_mfa
 from .api import integrations as integrations_api
 from .api import myob as myob_api
+from .api import employment_hero as employment_hero_api
 from .api import public_v1 as public_v1_api
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
@@ -225,6 +226,7 @@ app.include_router(assignments.router, prefix="/api")
 app.include_router(billing.router, prefix="/api")
 app.include_router(integrations_api.router, prefix="/api")
 app.include_router(myob_api.router, prefix="/api")
+app.include_router(employment_hero_api.router, prefix="/api")
 app.include_router(public_v1_api.router, prefix="/api")
 app.include_router(dashboards.router, prefix="/api")
 app.include_router(chatbox.router, prefix="/api")

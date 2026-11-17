@@ -227,7 +227,7 @@ def authenticate(request: Request, scope: Optional[str]) -> dict:
 # The data, in the shapes the API and webhooks share
 # ---------------------------------------------------------------------------
 
-def _all_rows(make_query) -> list[dict]:
+def _all_rows(make_query, order: str = "id") -> list[dict]:
     """Every matching row. Supabase stops at 1,000 rows a request without
     saying so, which cut long credential and training lists short (and made
     ``total`` wrong). ``make_query`` builds a fresh query for each page,
@@ -235,7 +235,7 @@ def _all_rows(make_query) -> list[dict]:
     rows: list[dict] = []
     start = 0
     while True:
-        page = make_query().order("id").range(start, start + DB_PAGE - 1).execute().data or []
+        page = make_query().order(order).range(start, start + DB_PAGE - 1).execute().data or []
         rows.extend(page)
         if len(page) < DB_PAGE:
             return rows

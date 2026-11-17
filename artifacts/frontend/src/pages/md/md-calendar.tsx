@@ -13,10 +13,10 @@ import { PageHeader, ctaClass, outlineClass } from "@/components/layout/PageKit"
 import { SidePanel } from "@/components/layout/SidePanel";
 import { MeetingBookingSheet, type BookingDraft } from "@/components/calendar/MeetingBookingSheet";
 import { MeetingDetailSheet } from "@/components/calendar/MeetingDetailSheet";
-import { MEETING_CHOICES, MEETING_MODES, choiceOf, isOnlineMode } from "@/lib/meeting-booking";
+import { MEETING_CHOICES, MEETING_MODES, choiceOf, inviteSummary, isOnlineMode, parseDurationMinutes } from "@/lib/meeting-booking";
 import {
   getOrgEvents, createOrgEvent, updateOrgEvent, deleteOrgEvent,
-  type InviteResult, type OrgEvent, type OrgEventPayload,
+  type OrgEvent, type OrgEventPayload,
 } from "@/services/hubService";
 import { listCoordinatorShifts, type CoordinatorShiftRecord } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
@@ -133,34 +133,10 @@ function timeTopPx(hhmm: string): number {
   const mins = hhmmToMinutes(hhmm) - HOUR_START * 60;
   return Math.max(0, Math.min(GRID_HEIGHT, (mins / 60) * HOUR_PX));
 }
-/** Best-effort parse of free-text durations ("1 hour", "45 mins", "1.5 hours",
- *  or our own "1h 30m") back into minutes, for sizing legacy event blocks. */
-function parseDurationMinutes(duration: string): number {
-  const text = (duration || "").toLowerCase();
-  const hourMatch = text.match(/([\d.]+)\s*h/);
-  const minMatch = text.match(/([\d.]+)\s*m/);
-  let minutes = 0;
-  if (hourMatch) minutes += parseFloat(hourMatch[1]) * 60;
-  if (minMatch) minutes += parseFloat(minMatch[1]);
-  return minutes > 0 ? Math.round(minutes) : 60;
-}
-
 function shiftTimes(s: CoordinatorShiftRecord): string {
   if (!s.scheduled_start) return "No time set";
   const start = clock(new Date(s.scheduled_start));
   return s.scheduled_end ? `${start} to ${clock(new Date(s.scheduled_end))}` : start;
-}
-
-/** One line on what happened to the calendar invites. */
-function inviteSummary(invites: InviteResult | undefined, update: boolean): string {
-  if (!invites) return "";
-  if (invites.email_off) return "Email is turned off, so no invites were sent.";
-  const sent = invites.sent.length;
-  const failed = invites.failed.length;
-  const parts = [];
-  if (sent) parts.push(`${update ? "Updated invite" : "Calendar invite"} sent to ${sent} ${sent === 1 ? "person" : "people"}.`);
-  if (failed) parts.push(`Couldn't reach ${invites.failed.join(", ")}.`);
-  return parts.join(" ");
 }
 
 /** A row in the day list: a coloured edge for the kind, then what and when. */

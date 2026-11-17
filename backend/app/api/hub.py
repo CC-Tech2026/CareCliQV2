@@ -565,6 +565,9 @@ class OrgEventBody(BaseModel):
     participants_desc: Optional[str] = None
     start_time: Optional[str] = None  # "HH:MM", 24h — positions the event in the Week/Day hour grid
     participant_id: Optional[str] = None
+    # Someone still in participant onboarding (no participant record yet),
+    # e.g. the Meet & Greet booked from their onboarding page.
+    intake_id: Optional[str] = None
     meeting_kind: Optional[str] = None
     meeting_mode: Optional[str] = None
     easy_capture: bool = False
@@ -584,27 +587,58 @@ async def _validated_event_payload(body: OrgEventBody, current_user: dict) -> di
             raise HTTPException(status_code=422, detail="Unknown meeting type.")
         if body.event_type != "meeting":
             raise HTTPException(status_code=422, detail="A participant meeting must be a meeting.")
-        if not body.participant_id:
+        if not body.participant_id and not body.intake_id:
             raise HTTPException(status_code=422, detail="Choose the participant this meeting is with.")
+    elif body.intake_id:
+        raise HTTPException(status_code=422, detail="Choose what kind of meeting this is.")
     if body.meeting_mode is not None and body.meeting_mode not in MEETING_MODES:
         raise HTTPException(status_code=422, detail="Unknown meeting format.")
-    if body.easy_capture and (body.meeting_mode != "in_person" or not body.participant_id):
+    if body.easy_capture and (body.meeting_mode != "in_person" or not (body.participant_id or body.intake_id)):
         raise HTTPException(status_code=422, detail="Easy Capture is for in-person meetings with a participant.")
     try:
         attendees = meeting_invite_service.normalise_attendees([a.model_dump() for a in body.attendees])
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    if body.participant_id:
-        participant = await participant_service.get_participant_by_id(body.participant_id, current_user)
+    participant_id = body.participant_id
+    if body.intake_id:
+        intake = _find_intake(body.intake_id, _get_org_id(current_user))
+        if not intake:
+            raise HTTPException(status_code=404, detail="Participant onboarding not found.")
+        made = intake.get("participant_id")
+        if participant_id and made and str(made) != str(participant_id):
+            raise HTTPException(status_code=422, detail="That onboarding is for a different participant.")
+        # Once they're activated, the meeting is theirs as a participant too.
+        participant_id = participant_id or (str(made) if made else None)
+
+    if participant_id:
+        participant = await participant_service.get_participant_by_id(participant_id, current_user)
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found.")
 
     row = body.model_dump(exclude={"send_invites"})
-    return {**row, "title": body.title.strip(), "attendees": attendees}
+    return {**row, "participant_id": participant_id, "title": body.title.strip(), "attendees": attendees}
+
+
+def _find_intake(intake_id: str, org_id: str | None) -> dict | None:
+    """The onboarding record in this organisation, or None."""
+    if not org_id:
+        return None
+    try:
+        rows = (
+            get_supabase_admin().table("participant_intakes")
+            .select("id, full_name, email, participant_id, web_intake")
+            .eq("id", intake_id).eq("organization_id", org_id).limit(1).execute().data
+        ) or []
+    except Exception as exc:
+        logger.warning("Onboarding lookup failed for %s: %s", intake_id, exc)
+        return None
+    return rows[0] if rows else None
 
 
 def _with_participant_names(supabase, rows: list[dict]) -> list[dict]:
+    """Adds participant_name: the participant's, or for someone still in
+    onboarding, the name on their intake."""
     ids = sorted({str(r["participant_id"]) for r in rows if r.get("participant_id")})
     names: dict[str, str] = {}
     if ids:
@@ -613,24 +647,44 @@ def _with_participant_names(supabase, rows: list[dict]) -> list[dict]:
             names = {str(p["id"]): p.get("full_name") or "" for p in result.data or []}
         except Exception:
             names = {}
-    return [{**r, "participant_name": names.get(str(r.get("participant_id") or "")) or None} for r in rows]
+    intake_ids = sorted({str(r["intake_id"]) for r in rows if r.get("intake_id") and not r.get("participant_id")})
+    intake_names: dict[str, str] = {}
+    if intake_ids:
+        try:
+            result = supabase.table("participant_intakes").select("id, full_name").in_("id", intake_ids).execute()
+            intake_names = {str(p["id"]): p.get("full_name") or "" for p in result.data or []}
+        except Exception:
+            intake_names = {}
+    return [
+        {
+            **r,
+            "participant_name": names.get(str(r.get("participant_id") or ""))
+            or intake_names.get(str(r.get("intake_id") or ""))
+            or None,
+        }
+        for r in rows
+    ]
 
 
 @router.get("/org-events")
 async def list_org_events(
     start: Optional[date] = None,
     end: Optional[date] = None,
+    intake_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
     """Org calendar events. With start and end (the Calendar's visible range),
-    everything in that range; without them, the next 20 upcoming."""
+    everything in that range; with intake_id, every meeting booked for that
+    person in onboarding; with neither, the next 20 upcoming."""
     org_id = _get_org_id(current_user)
     if not org_id:
         return []
     supabase = get_supabase_admin()
     try:
         query = supabase.table("org_events").select("*").eq("organization_id", org_id)
-        if start and end:
+        if intake_id:
+            query = query.eq("intake_id", intake_id).limit(50)
+        elif start and end:
             query = query.gte("event_date", start.isoformat()).lte("event_date", end.isoformat()).limit(500)
         else:
             query = query.gte("event_date", app_today().isoformat()).limit(20)
@@ -701,15 +755,28 @@ def _merge_results(*results: dict) -> dict:
 
 
 @router.get("/org-events/invitees")
-async def meeting_invitees(participant_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+async def meeting_invitees(
+    participant_id: Optional[str] = None,
+    intake_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
     """Who to suggest inviting: you, and for a participant meeting the
-    participant, their nominee/family contacts and their support workers."""
+    participant, their nominee/family contacts and their support workers.
+    For someone still in onboarding, the people on their intake form."""
     org_id = _require_org_wide(current_user)
+    supabase = get_supabase_admin()
+    if intake_id:
+        intake = _find_intake(intake_id, org_id)
+        if not intake:
+            raise HTTPException(status_code=404, detail="Participant onboarding not found.")
+        if not intake.get("participant_id"):
+            return meeting_invite_service.intake_invitees(intake, _organiser(supabase, current_user))
+        # Already activated: their participant record has the fuller list.
+        participant_id = str(intake["participant_id"])
     if participant_id:
         participant = await participant_service.get_participant_by_id(participant_id, current_user)
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found.")
-    supabase = get_supabase_admin()
     return meeting_invite_service.suggested_invitees(supabase, org_id, participant_id, _organiser(supabase, current_user))
 
 

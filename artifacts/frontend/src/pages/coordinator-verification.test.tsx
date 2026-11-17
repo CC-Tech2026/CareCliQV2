@@ -243,7 +243,7 @@ it("bills extra time only when approved with a reason", async () => {
   expect(screen.getAllByText("Worked 30m longer than scheduled").length).toBeGreaterThan(0);
   const approve = () => screen.getByRole("button", { name: /Approve shift/ }) as HTMLButtonElement;
   expect(approve().disabled).toBe(false); // billed at the scheduled 2h
-  fireEvent.click(screen.getByLabelText("Approve the extra 30 min"));
+  fireEvent.click(screen.getByLabelText("Bill the extra 30 min"));
   expect(approve().disabled).toBe(true); // needs a reason
   fireEvent.change(screen.getByLabelText("Reason for the extra time"), { target: { value: "Appointment ran late" } });
   fireEvent.click(approve());

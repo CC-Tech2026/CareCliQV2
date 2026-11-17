@@ -988,6 +988,14 @@ async def verify_shift(
     checks = compute_verification_checks(shift, session, note_text=note)
     # What was billed and why — part of the audit snapshot.
     checks["billing"] = {**billing, "extra_time_reason": reason or None, "rate_source": rate_source}
+    # What the worker is paid for: clock-in to clock-out, never capped at the
+    # roster the way billing is. Payroll exports send this, not the billing.
+    try:
+        from . import pay_time_service
+
+        checks["pay"] = pay_time_service.to_record(pay_time_service.for_shift(shift))
+    except Exception as exc:  # never block approving a timesheet
+        logger.warning("Paid time not recorded for shift %s: %s", shift.get("id"), exc)
     if assessment:
         checks["agreement"] = {**assessment, "reason": agreement_reason or None, "check_level": check_level}
     elif agreement_check_error:
@@ -1137,6 +1145,11 @@ async def verify_shift(
         set_conversation_read_only_for_shift(shift_id)
     except Exception:
         logger.debug("Could not close the conversation for verified shift %s", shift_id)
+    # Approved: the time goes to the organisation's payroll (Employment Hero),
+    # in the background. Never blocks or fails the approval.
+    from . import employment_hero_service
+
+    employment_hero_service.timesheet_approved(org_id, shift_id)
     return result
 
 
@@ -1266,6 +1279,10 @@ async def reverse_verification(
         "reversal_reason": reason,
     }).eq("id", str(verification["id"])).execute()
 
+    # No longer approved: take it back out of payroll unless it's been paid.
+    from . import employment_hero_service
+
+    employment_hero_service.timesheet_unapproved(org_id, shift_id)
     return {"shift_id": shift_id, "verification_id": verification["id"], "refunded_amount": charged, "reversed_at": now}
 
 

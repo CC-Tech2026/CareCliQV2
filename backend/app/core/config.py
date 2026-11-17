@@ -149,6 +149,17 @@ class Settings(BaseSettings):
         "sme-company-file sme-sales sme-contacts-customer sme-general-ledger",
     )
     myob_api_base: str = os.environ.get("MYOB_API_BASE", "https://api.myob.com/accountright")
+    # Employment Hero Payroll (formerly KeyPay): approved timesheets out (see
+    # backend/app/services/employment_hero_service.py). CareCliQ's OAuth
+    # client ID and secret come from Employment Hero (requested once by
+    # CareCliQ, with the redirect URI below). Providers only click Connect and
+    # sign in. Unset = the Integrations page doesn't offer it.
+    employment_hero_client_id: str = os.environ.get("EMPLOYMENT_HERO_CLIENT_ID", "")
+    employment_hero_client_secret: str = os.environ.get("EMPLOYMENT_HERO_CLIENT_SECRET", "")
+    # Defaults to the website's /integrations/employment-hero/callback page.
+    employment_hero_redirect_uri: str = os.environ.get("EMPLOYMENT_HERO_REDIRECT_URI", "")
+    # Australian payroll. Also where sign-in and tokens live.
+    employment_hero_base_url: str = os.environ.get("EMPLOYMENT_HERO_BASE_URL", "https://api.yourpayroll.com.au")
     # Jira auto-ticketing for bug reports / improvement feedback (see
     # backend/app/services/jira_service.py). Optional — everything using
     # this degrades to "no Jira link" rather than failing when unset.

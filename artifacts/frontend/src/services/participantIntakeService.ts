@@ -124,6 +124,20 @@ export type ParticipantIntake = {
   web_intake?: WebIntakeForm;
   screening_checks?: ScreeningManualChecks;
   meet_greet_summary?: MeetGreetSummary | null;
+  /** The next meeting booked for them (usually the Meet & Greet), or the
+   *  last one held if none is coming up. Only on the board listing. */
+  next_meeting?: IntakeMeeting | null;
+};
+
+export type IntakeMeeting = {
+  id: string;
+  title: string;
+  event_date: string;
+  start_time?: string | null;
+  duration?: string | null;
+  meeting_kind?: string | null;
+  meeting_mode?: "in_person" | "phone" | "video" | null;
+  location?: string | null;
 };
 
 export function listParticipantIntakes() {

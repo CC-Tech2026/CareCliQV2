@@ -375,6 +375,100 @@ def test_suggested_invitees_cover_participant_contacts_and_workers():
     ]
 
 
+# ── Booking from participant onboarding ─────────────────────────────────────
+
+INTAKE = {
+    "id": "intake-1",
+    "full_name": "Ava Thompson",
+    "email": "ava@example.com",
+    "participant_id": None,
+    "web_intake": {
+        "next_of_kin": [
+            {"name": "Mark Thompson", "relationship": "father", "email": "mark@example.com"},
+            {"name": "No Email", "relationship": "aunt"},
+            {"name": "Ava again", "email": "AVA@example.com"},
+        ],
+        "plan_manager_org": "Plan Partners",
+        "plan_manager_email": "invoices@planpartners.example.com",
+    },
+}
+
+
+@pytest.mark.asyncio
+async def test_a_meet_and_greet_can_be_booked_for_someone_in_onboarding(monkeypatch):
+    lookup = AsyncMock()
+    monkeypatch.setattr(hub.participant_service, "get_participant_by_id", lookup)
+    monkeypatch.setattr(hub, "_find_intake", lambda intake_id, org_id: dict(INTAKE) if intake_id == "intake-1" else None)
+    payload = await hub._validated_event_payload(
+        _body(meeting_kind="intake", participant_id=None, intake_id="intake-1", easy_capture=True), {}
+    )
+    assert payload["intake_id"] == "intake-1"
+    assert payload["participant_id"] is None
+    assert payload["easy_capture"] is True
+    lookup.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_onboarding_from_another_org_is_rejected(monkeypatch):
+    monkeypatch.setattr(hub, "_find_intake", lambda *_: None)
+    with pytest.raises(HTTPException) as err:
+        await hub._validated_event_payload(_body(meeting_kind="intake", participant_id=None, intake_id="intake-9"), {})
+    assert err.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_once_activated_the_meeting_is_filed_on_the_participant_too(monkeypatch, participant_found):
+    monkeypatch.setattr(hub, "_find_intake", lambda *_: {**INTAKE, "participant_id": "participant-1"})
+    payload = await hub._validated_event_payload(_body(meeting_kind="intake", participant_id=None, intake_id="intake-1"), {})
+    assert payload["participant_id"] == "participant-1"
+    participant_found.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_an_onboarding_meeting_needs_a_meeting_type(monkeypatch):
+    monkeypatch.setattr(hub, "_find_intake", lambda *_: dict(INTAKE))
+    with pytest.raises(HTTPException) as err:
+        await hub._validated_event_payload(_body(meeting_kind=None, participant_id=None, intake_id="intake-1"), {})
+    assert err.value.status_code == 422
+
+
+def test_onboarding_invitees_come_from_the_intake_form():
+    people = invites.intake_invitees(INTAKE, {"name": "Olivia", "email": "olivia@example.com"})
+    assert [(p["email"], p["role"]) for p in people] == [
+        ("olivia@example.com", "You"),
+        ("ava@example.com", "Participant"),
+        ("mark@example.com", "Father"),
+        ("invoices@planpartners.example.com", "Plan manager"),
+    ]
+    assert people[3]["name"] == "Plan Partners"
+
+
+def test_the_board_shows_the_next_meeting_or_else_the_last_one():
+    from backend.app.services.participant_intake_service import pick_next_meeting
+
+    past = {"id": "a", "event_date": "2026-11-10", "start_time": "10:00"}
+    soon = {"id": "b", "event_date": "2026-11-20", "start_time": "09:00"}
+    later = {"id": "c", "event_date": "2026-11-20", "start_time": "14:00"}
+    today = date(2026, 11, 17)
+    assert pick_next_meeting([later, past, soon], today)["id"] == "b"
+    assert pick_next_meeting([past], today)["id"] == "a"
+    assert pick_next_meeting([], today) is None
+
+
+def test_names_fall_back_to_the_intake_for_someone_in_onboarding():
+    def table(name):
+        q = MagicMock()
+        q.select.return_value.in_.return_value.execute.return_value = SimpleNamespace(
+            data=[{"id": "intake-1", "full_name": "Ava Thompson"}] if name == "participant_intakes" else []
+        )
+        return q
+
+    client = MagicMock()
+    client.table.side_effect = table
+    rows = hub._with_participant_names(client, [{"id": "e1", "intake_id": "intake-1", "participant_id": None}])
+    assert rows[0]["participant_name"] == "Ava Thompson"
+
+
 @pytest.mark.asyncio
 async def test_range_listing_attaches_participant_names(monkeypatch):
     events = MagicMock()

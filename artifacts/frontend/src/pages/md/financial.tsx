@@ -365,14 +365,14 @@ function ProfitAndLoss({ data, month, onClearMonth, onEdit }: { data: FinancialS
       <div className="mt-3">
         <Line2 label="Revenue" value={money(revenue)} hint={month ? `${money(month.collected_cents)} collected` : `${money(data.collected_cents)} collected`} />
         <Line2
-          label="Wages"
+          label="Wages (estimate)"
           value={wages == null ? "—" : `−${money(wages)}`}
           hint={
             wages == null
-              ? "No pay calculated yet"
+              ? "No pay estimated yet"
               : !month && pl && !pl.wages_complete
-                ? `${data.costed_session_count.toLocaleString("en-AU")} of ${data.session_count.toLocaleString("en-AU")} shifts costed`
-                : undefined
+                ? `Estimated from ${data.costed_session_count.toLocaleString("en-AU")} of ${data.session_count.toLocaleString("en-AU")} shifts. Your payroll has the actual figure.`
+                : "Estimated from shifts worked. Your payroll has the actual figure."
           }
         />
         <Line2
@@ -563,7 +563,7 @@ function FinanceSettingsDialog({ open, onOpenChange, data, onSaved }: { open: bo
           <Field
             label="Monthly overheads ($)"
             htmlFor="finance-overheads"
-            hint="Costs outside payroll: rent, insurance, software, vehicles, accounting. Wages come from the pay engine."
+            hint="Costs outside payroll: rent, insurance, software, vehicles, accounting. Wages are estimated from shifts worked."
           >
             <input id="finance-overheads" inputMode="decimal" value={overheads} onChange={(e) => setOverheads(e.target.value)} placeholder="e.g. 18000" className={inputClass} style={{ borderColor: BORDER, color: TEXT }} />
           </Field>

@@ -203,7 +203,7 @@ export function OrgSetupChecklist({
                   <button
                     type="button"
                     onClick={() => onNavigate(step.href)}
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-[#7C3AED] px-3 text-[12px] font-bold text-white transition-colors hover:bg-[#6D28D9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7C3AED]"
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-[var(--cc-cta)] px-3 text-[12px] font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cc-cta)]"
                   >
                     {step.action}
                     <ArrowRight size={14} aria-hidden="true" />

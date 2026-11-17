@@ -14,8 +14,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { getApiOverview, getXeroStatus } from "@/services/integrationsService";
 import { getMyobStatus } from "@/services/myobService";
+import { getEmploymentHeroStatus } from "@/services/employmentHeroService";
 import { INTEGRATIONS_HREF, StatusPill, integrationHref, type IntegrationId } from "@/components/settings/IntegrationPage";
-import { apiTileStatus, myobTileStatus, xeroTileStatus, XERO_WORDMARK, type TileStatus } from "@/components/settings/integrationStatus";
+import { apiTileStatus, employmentHeroTileStatus, myobTileStatus, xeroTileStatus, XERO_WORDMARK, type TileStatus } from "@/components/settings/integrationStatus";
 
 type Row = {
   id: IntegrationId;
@@ -40,6 +41,7 @@ export function IntegrationsMenu() {
   // The same queries (and cache) as Settings > Integrations.
   const xero = useOrgQuery(["integrations", "xero"], { queryFn: getXeroStatus, staleTime: 5 * 60_000, retry: false });
   const myob = useOrgQuery(["integrations", "myob"], { queryFn: getMyobStatus, staleTime: 5 * 60_000, retry: false });
+  const eh = useOrgQuery(["integrations", "employment-hero"], { queryFn: getEmploymentHeroStatus, staleTime: 5 * 60_000, retry: false });
   const api = useOrgQuery(["integrations", "api"], { queryFn: getApiOverview, staleTime: 5 * 60_000, retry: false });
 
   const rows: Row[] = [];
@@ -66,6 +68,20 @@ export function IntegrationsMenu() {
       logo: <NameLogo>MYOB</NameLogo>,
       detail: myob.data.business_name || "Accounting",
       status: myobTileStatus(myob.data),
+    });
+  }
+  if (eh.data?.connected) {
+    const waiting = eh.data.counts?.failed ?? 0;
+    rows.push({
+      id: "employment-hero",
+      name: "Employment Hero",
+      logo: <NameLogo>EH</NameLogo>,
+      detail: eh.data.needs_business
+        ? "Choose your payroll business"
+        : waiting
+          ? `${waiting} ${waiting === 1 ? "timesheet needs" : "timesheets need"} your answer`
+          : eh.data.business_name || "Payroll",
+      status: employmentHeroTileStatus(eh.data),
     });
   }
   if (api.data && apiTileStatus(api.data) !== "available") {

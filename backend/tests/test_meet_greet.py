@@ -92,6 +92,18 @@ def test_activation_files_the_meet_and_greet_on_the_participant():
     chain.eq.return_value.eq.return_value.is_.assert_called_once_with("participant_id", "null")
 
 
+def test_activation_files_meetings_booked_in_onboarding_on_the_participant():
+    client = MagicMock()
+    with patch.object(svc, "get_supabase_admin", return_value=client):
+        svc._attach_booked_meetings(INTAKE, ORG, "participant-9")
+    client.table.assert_called_with("org_events")
+    update = client.table.return_value.update
+    update.assert_called_once_with({"participant_id": "participant-9"})
+    chain = update.return_value
+    chain.eq.assert_called_once_with("intake_id", INTAKE)
+    chain.eq.return_value.eq.return_value.is_.assert_called_once_with("participant_id", "null")
+
+
 def test_session_for_unknown_intake_is_refused():
     app.dependency_overrides[get_current_user] = lambda: {
         "id": "md-1", "role": "managing_director", "organization_id": ORG,

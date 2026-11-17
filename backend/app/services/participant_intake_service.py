@@ -137,7 +137,46 @@ def list_intakes(organization_id: str) -> list[dict[str, Any]]:
         if _is_missing_schema(exc):
             return []
         raise
-    return [_with_fresh_document_url(r) for r in rows]
+    meetings = _next_meetings(organization_id)
+    return [{**_with_fresh_document_url(r), "next_meeting": meetings.get(str(r["id"]))} for r in rows]
+
+
+MEETING_FIELDS = "id, title, event_date, start_time, duration, meeting_kind, meeting_mode, location, intake_id"
+
+
+def pick_next_meeting(events: list[dict[str, Any]], today: date) -> dict[str, Any] | None:
+    """The soonest meeting from today on; if none is coming up, the latest
+    one held, so the board can say when the Meet & Greet was."""
+    def key(e: dict[str, Any]) -> tuple[str, str]:
+        return (str(e.get("event_date") or "")[:10], str(e.get("start_time") or ""))
+
+    upcoming = sorted((e for e in events if key(e)[0] >= today.isoformat()), key=key)
+    if upcoming:
+        return upcoming[0]
+    past = sorted(events, key=key)
+    return past[-1] if past else None
+
+
+def _next_meetings(organization_id: str) -> dict[str, dict[str, Any]]:
+    """Each onboarding's next booked meeting (the Meet & Greet, usually), by
+    intake id. Empty if meetings can't be read, so the board still loads."""
+    from ..core.timezone import app_today
+
+    try:
+        rows = (
+            get_supabase_admin().table("org_events").select(MEETING_FIELDS)
+            .eq("organization_id", organization_id).not_.is_("intake_id", "null")
+            .limit(1000).execute().data
+        ) or []
+    except Exception as exc:
+        logger.warning("Onboarding meetings not loaded for %s: %s", organization_id, exc)
+        return {}
+    by_intake: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_intake.setdefault(str(row["intake_id"]), []).append(row)
+    today = app_today()
+    picked = {intake_id: pick_next_meeting(events, today) for intake_id, events in by_intake.items()}
+    return {k: v for k, v in picked.items() if v}
 
 
 def get_intake(intake_id: str, organization_id: str) -> dict[str, Any]:
@@ -262,6 +301,7 @@ async def _activate_side_effects(existing: dict[str, Any], merged: dict[str, Any
         except Exception as exc:
             logger.warning("Imported plan management type not applied to %s: %s", participant["id"], exc)
     _attach_meeting_sessions(existing["id"], existing["organization_id"], participant["id"])
+    _attach_booked_meetings(existing["id"], existing["organization_id"], participant["id"])
     # The agreement built and signed during onboarding becomes the
     # participant's service agreement of record, supports and all.
     from .service_agreement_document_service import attach_intake_agreements
@@ -300,6 +340,22 @@ def _attach_meeting_sessions(intake_id: str, organization_id: str, participant_i
         )
     except Exception as exc:  # never block activation on this
         logger.warning("Could not attach Meet & Greet sessions for intake %s: %s", intake_id, exc)
+
+
+def _attach_booked_meetings(intake_id: str, organization_id: str, participant_id: str) -> None:
+    """Meetings booked while they were in onboarding show on their
+    participant record (and the Calendar links to it) once they're activated."""
+    try:
+        (
+            get_supabase_admin().table("org_events")
+            .update({"participant_id": participant_id})
+            .eq("intake_id", intake_id)
+            .eq("organization_id", organization_id)
+            .is_("participant_id", "null")
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("Could not attach onboarding meetings for intake %s: %s", intake_id, exc)
 
 
 async def update_intake(

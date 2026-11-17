@@ -40,6 +40,12 @@ type Person = { email: string; name: string; role: string };
 
 export type BookingDraft = { date: Date; start: string; end: string; participantId?: string };
 
+/** Someone in participant onboarding, who has no participant record yet. */
+export type BookingIntake = { id: string; name: string; address?: string | null; participantId?: string | null };
+
+/** Invite suggestions left unticked: the MD adds them if they want them. */
+const UNTICKED_ROLES = new Set(["Support worker", "Plan manager"]);
+
 function hhmmToMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
   return (h || 0) * 60 + (m || 0);
@@ -103,7 +109,9 @@ function OptionCard({ icon: Icon, title, text, control }: { icon: typeof Video; 
 /** Book a meeting, or edit one (`editing`). Participant meetings carry the
  *  participant; everyone ticked under "Who to invite" gets a calendar invite
  *  (emailed for in person and phone, sent from the organiser's own calendar
- *  for a video call); in-person ones can be set up for Easy Capture. */
+ *  for a video call); in-person ones can be set up for Easy Capture.
+ *  With `intake`, it's booked from participant onboarding for that person:
+ *  a Meet & Greet unless another type is picked. */
 export function MeetingBookingSheet({
   open,
   onOpenChange,
@@ -112,6 +120,7 @@ export function MeetingBookingSheet({
   editingMinutes,
   saving,
   onSave,
+  intake: intakeProp,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -120,7 +129,17 @@ export function MeetingBookingSheet({
   editingMinutes?: number;
   saving: boolean;
   onSave: (payload: OrgEventPayload) => void;
+  intake?: BookingIntake | null;
 }) {
+  // A meeting booked in onboarding, opened from the Calendar, is still theirs.
+  const intake = useMemo<BookingIntake | null>(
+    () =>
+      intakeProp ??
+      (editing?.intake_id && !editing.participant_id
+        ? { id: editing.intake_id, name: editing.participant_name || "New participant" }
+        : null),
+    [intakeProp, editing],
+  );
   const participantsQuery = useGetParticipants();
   const participants = (participantsQuery.data as ParticipantOption[] | undefined) ?? [];
   const sameNames = useMemo(() => sharedNames(participants.map((p) => p.full_name)), [participants]);
@@ -174,7 +193,7 @@ export function MeetingBookingSheet({
       invitesTouched.current = true;
       return;
     }
-    const initial: MeetingChoice = draft?.participantId ? "check_in" : "plan_review";
+    const initial: MeetingChoice = intake ? "intake" : draft?.participantId ? "check_in" : "plan_review";
     setChoice(initial);
     setParticipantId(draft?.participantId ?? "");
     titleEdited.current = false;
@@ -183,31 +202,37 @@ export function MeetingBookingSheet({
     setStart(draft?.start ?? "09:00");
     setEnd(draft?.end ?? minutesToHHMM(hhmmToMinutes(draft?.start ?? "09:00") + MEETING_CHOICES[initial].minutes));
     setMode("in_person");
-    setLocation("");
+    setLocation(intake?.address ?? "");
     setCapture(!!MEETING_CHOICES[initial].capture);
     setNotes("");
     setExtra([]);
     setInvited(new Set());
     invitesTouched.current = false;
-  }, [open, editing, editingMinutes, draft]);
+  }, [open, editing, editingMinutes, draft, intake]);
 
   const config = MEETING_CHOICES[choice];
   const withParticipant = isParticipantChoice(choice);
   const participant = participants.find((p) => p.id === participantId);
+  const withName = intake ? intake.name : participant?.full_name;
   const video = isOnlineMode(mode);
 
-  const inviteesQuery = useOrgQuery(["meeting-invitees", withParticipant ? participantId || "none" : "internal"], {
-    queryFn: () => getMeetingInvitees(withParticipant ? participantId : null),
-    enabled: open && (!withParticipant || !!participantId),
+  const inviteesKey = intake && withParticipant
+    ? ["meeting-invitees", "intake", intake.id]
+    : ["meeting-invitees", withParticipant ? participantId || "none" : "internal"];
+  const inviteesQuery = useOrgQuery(inviteesKey, {
+    queryFn: () =>
+      intake && withParticipant ? getMeetingInvitees(null, intake.id) : getMeetingInvitees(withParticipant ? participantId : null),
+    enabled: open && (!withParticipant || !!participantId || !!intake),
     staleTime: 60_000,
   });
   const suggestions = useMemo(() => (inviteesQuery.data ?? []).map(toPerson), [inviteesQuery.data]);
 
   // A new booking starts with you, the participant and their family or
-  // nominee ticked; support workers are listed but left for the MD to add.
+  // nominee ticked; support workers and the plan manager are listed but
+  // left for the MD to add.
   useEffect(() => {
     if (!open || invitesTouched.current || !inviteesQuery.data) return;
-    setInvited(new Set(suggestions.filter((p) => p.role !== "Support worker").map((p) => p.email.toLowerCase())));
+    setInvited(new Set(suggestions.filter((p) => !UNTICKED_ROLES.has(p.role)).map((p) => p.email.toLowerCase())));
   }, [open, suggestions, inviteesQuery.data]);
 
   const people = useMemo(() => {
@@ -224,8 +249,8 @@ export function MeetingBookingSheet({
   // The title follows the type and participant until the MD types their own.
   useEffect(() => {
     if (!open || titleEdited.current) return;
-    setTitle(withParticipant && participant ? `${config.label} · ${participant.full_name}` : config.label);
-  }, [open, config.label, withParticipant, participant]);
+    setTitle(withParticipant && withName ? `${config.label} · ${withName}` : config.label);
+  }, [open, config.label, withParticipant, withName]);
 
   function pickChoice(next: MeetingChoice) {
     setChoice(next);
@@ -260,7 +285,7 @@ export function MeetingBookingSheet({
     setNewEmail("");
   }
 
-  const missingParticipant = withParticipant && !participantId;
+  const missingParticipant = withParticipant && !participantId && !intake;
   const endBeforeStart = hhmmToMinutes(end) <= hhmmToMinutes(start);
   const canSave = !!title.trim() && !!date && !missingParticipant && !endBeforeStart;
 
@@ -276,7 +301,8 @@ export function MeetingBookingSheet({
       duration: durationLabel(hhmmToMinutes(end) - hhmmToMinutes(start)),
       event_type: internal ? (choice as OrgEvent["event_type"]) : "meeting",
       meeting_kind: internal ? null : (choice as OrgEvent["meeting_kind"]),
-      participant_id: withParticipant ? participantId : null,
+      participant_id: !withParticipant ? null : intake ? intake.participantId ?? null : participantId,
+      intake_id: withParticipant && intake ? intake.id : null,
       meeting_mode: mode,
       location: mode === "video" ? null : location.trim() || null,
       easy_capture: mode === "in_person" && withParticipant && capture,
@@ -286,7 +312,8 @@ export function MeetingBookingSheet({
     });
   }
 
-  const choiceGroups = (["participant", "internal"] as const).map((group) => ({
+  // From onboarding it's always a meeting with that person.
+  const choiceGroups = (intake ? (["participant"] as const) : (["participant", "internal"] as const)).map((group) => ({
     group,
     choices: (Object.keys(MEETING_CHOICES) as MeetingChoice[]).filter((c) => MEETING_CHOICES[c].group === group),
   }));
@@ -332,7 +359,15 @@ export function MeetingBookingSheet({
             </Select>
           </Field>
 
-          {withParticipant && (
+          {withParticipant && intake && (
+            <Field label="Participant" hint={intake.participantId ? undefined : "In onboarding. The meeting moves to their participant record when they're activated."}>
+              <p className="flex h-10 items-center rounded-md border border-cc-border bg-cc-soft px-3 text-sm font-medium" style={{ color: TEXT }}>
+                {intake.name}
+              </p>
+            </Field>
+          )}
+
+          {withParticipant && !intake && (
             <Field label="Participant" error={triedSave && missingParticipant ? "Choose who the meeting is with." : null}>
               <SearchableSelect
                 value={participantId}
@@ -434,7 +469,7 @@ export function MeetingBookingSheet({
           )}
 
           <Field label="Who to invite" error={newEmailError}>
-            {withParticipant && !participantId ? (
+            {withParticipant && !participantId && !intake ? (
               <p className="rounded-xl border border-dashed px-3 py-3 text-sm" style={{ borderColor: BORDER, color: MUTED }}>
                 Choose the participant to see their family, nominee and support workers here.
               </p>

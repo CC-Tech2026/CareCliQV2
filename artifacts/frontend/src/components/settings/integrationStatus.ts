@@ -5,6 +5,7 @@
  */
 import type { ApiOverview, XeroStatus } from "@/services/integrationsService";
 import type { MyobStatus } from "@/services/myobService";
+import type { EmploymentHeroStatus } from "@/services/employmentHeroService";
 
 export type TileStatus = "connected" | "available" | "attention" | "soon" | "unavailable";
 
@@ -22,6 +23,12 @@ export function myobTileStatus(status: MyobStatus): TileStatus {
   return status.last_error || (status.counts?.failed ?? 0) > 0 || !status.settings.income_account_uid || !status.settings.tax_code_uid
     ? "attention"
     : "connected";
+}
+
+/** Employment Hero (payroll) also needs attention until its payroll business is chosen. */
+export function employmentHeroTileStatus(status: EmploymentHeroStatus): TileStatus {
+  if (!status.connected) return status.available ? "available" : "unavailable";
+  return status.needs_business || status.last_error || (status.counts?.failed ?? 0) > 0 ? "attention" : "connected";
 }
 
 /** Connected, needs attention (a webhook is failing) or not set up yet. */
