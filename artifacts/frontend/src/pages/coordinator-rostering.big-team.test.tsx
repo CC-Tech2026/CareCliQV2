@@ -55,41 +55,58 @@ function renderPage() {
   return render(<QueryClientProvider client={client}><Page /></QueryClientProvider>);
 }
 
-it("starts a big team's board on who's rostered, with a switch to everyone", async () => {
+const BY_PERSON = { name: "Roster by person" };
+const BY_HOUR = { name: "Roster calendar" };
+
+it("lays a big team's week out by person, on who's rostered, with a switch to everyone", async () => {
   renderPage();
-  const roster = await screen.findByRole("region", { name: "Roster calendar" });
+  const roster = await screen.findByRole("region", BY_PERSON);
+  expect(screen.getByRole("button", { name: "By person" }).getAttribute("aria-pressed")).toBe("true");
   await waitFor(() => expect(roster.textContent).toContain("Sam Nash"));
-  expect(roster.textContent).not.toContain("Zoe U");
+  expect(roster.textContent).not.toContain("Zoe Unrostered");
   fireEvent.click(screen.getByRole("button", { name: "Everyone (20)" }));
-  await waitFor(() => expect(screen.getByRole("region", { name: "Roster calendar" }).textContent).toContain("Zoe U"));
+  await waitFor(() => expect(screen.getByRole("region", BY_PERSON).textContent).toContain("Zoe Unrostered"));
   // Remembered on this device.
   expect(localStorage.getItem("carecliq.roster.showEveryone")).toBe("1");
 });
 
-it("never shows two people under one name", async () => {
+it("never shows two people under one name, by person or by hour", async () => {
   renderPage();
   fireEvent.click(await screen.findByRole("button", { name: "Everyone (20)" }));
-  const roster = screen.getByRole("region", { name: "Roster calendar" });
-  await waitFor(() => expect(roster.textContent).toContain("ID 2210 · Elizabeth"));
-  // "Sam N" would be three people, so the columns use full names...
-  expect(roster.textContent).not.toMatch(/Sam N(?![a-z])/);
-  // ...and the two Sam Nguyens carry their staff ID and suburb.
-  expect(roster.textContent).toContain("ID 1042 · Glenelg");
+  const rows = screen.getByRole("region", BY_PERSON);
+  // The two Sam Nguyens carry their staff ID and suburb; Sam Nash needs neither.
+  await waitFor(() => expect(rows.textContent).toContain("ID 2210 · Elizabeth"));
+  expect(rows.textContent).toContain("ID 1042 · Glenelg");
+  expect(rows.textContent).not.toContain("ID 3001");
+
+  fireEvent.click(screen.getByRole("button", { name: "By hour" }));
+  const columns = await screen.findByRole("region", BY_HOUR);
+  await waitFor(() => expect(columns.textContent).toContain("ID 2210 · Elizabeth"));
+  // Full names over the columns: "Sam N" would be three people.
+  expect(columns.textContent).not.toMatch(/Sam N(?![a-z])/);
+  expect(localStorage.getItem("carecliq.roster.layout")).toBe("calendar");
 });
 
 it("finds a worker on the board by staff ID", async () => {
   renderPage();
-  await screen.findByRole("region", { name: "Roster calendar" });
+  await screen.findByRole("region", BY_PERSON);
   fireEvent.change(screen.getByRole("searchbox", { name: /Find a worker/ }), { target: { value: "2210" } });
-  const roster = screen.getByRole("region", { name: "Roster calendar" });
+  const roster = screen.getByRole("region", BY_PERSON);
   await waitFor(() => expect(roster.textContent).toContain("ID 2210 · Elizabeth"));
   expect(roster.textContent).not.toContain("ID 1042");
   expect(roster.textContent).not.toContain("Sam Nash");
 });
 
+it("keeps the layout someone chose, whatever the team's size", async () => {
+  localStorage.setItem("carecliq.roster.layout", "calendar");
+  renderPage();
+  expect(await screen.findByRole("region", BY_HOUR)).toBeTruthy();
+  expect(screen.queryByRole("region", BY_PERSON)).toBeNull();
+});
+
 it("loads the whole team's availability in one request", async () => {
   renderPage();
-  await screen.findByRole("region", { name: "Roster calendar" });
+  await screen.findByRole("region", BY_PERSON);
   await waitFor(() => expect(calls.urls.some((u) => u.includes("/coordinator/workers/availability"))).toBe(true));
   expect(calls.urls.filter((u) => /\/coordinator\/workers\/[^/]+\/availability/.test(u))).toHaveLength(0);
 });
