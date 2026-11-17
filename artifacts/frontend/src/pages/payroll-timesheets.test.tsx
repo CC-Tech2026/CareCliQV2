@@ -7,7 +7,7 @@ import type { PayrollPeriodData, PayrollShift } from "@/services/payrollService"
 const mocks = vi.hoisted(() => ({
   toast: vi.fn(),
   getPayrollTimesheets: vi.fn(),
-  downloadPayrollCsv: vi.fn(),
+  downloadPayrollHours: vi.fn(),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
 vi.mock("@/contexts/AuthContext", () => ({
@@ -16,7 +16,7 @@ vi.mock("@/contexts/AuthContext", () => ({
 vi.mock("@/lib/datetime", () => ({ appTodayKey: () => "2026-11-19" })); // a Thursday
 vi.mock("@/services/payrollService", () => ({
   getPayrollTimesheets: mocks.getPayrollTimesheets,
-  downloadPayrollCsv: mocks.downloadPayrollCsv,
+  downloadPayrollHours: mocks.downloadPayrollHours,
 }));
 
 // The side panel's sheet measures itself; jsdom has no ResizeObserver.
@@ -112,14 +112,17 @@ describe("Payroll", () => {
 
   it("downloads the hours for the period on screen, and moves between periods", async () => {
     mocks.getPayrollTimesheets.mockResolvedValue(data());
-    mocks.downloadPayrollCsv.mockResolvedValue(undefined);
+    mocks.downloadPayrollHours.mockResolvedValue(undefined);
     renderPage();
     await screen.findByRole("region", { name: "Hours by worker" });
     fireEvent.click(screen.getByRole("button", { name: "Previous pay period" }));
     await waitFor(() => expect(mocks.getPayrollTimesheets).toHaveBeenCalledWith("2026-11-02", "2026-11-08"));
     await screen.findByRole("region", { name: "Hours by worker" });
-    fireEvent.click(screen.getByRole("button", { name: /Download hours/ }));
-    await waitFor(() => expect(mocks.downloadPayrollCsv).toHaveBeenCalledWith("2026-11-02", "2026-11-08"));
+    fireEvent.click(screen.getByRole("button", { name: /Download spreadsheet/ }));
+    await waitFor(() => expect(mocks.downloadPayrollHours).toHaveBeenCalledWith("2026-11-02", "2026-11-08", "xlsx"));
+    // Payroll software that imports a CSV gets one.
+    fireEvent.click(screen.getByRole("button", { name: "CSV for payroll software" }));
+    await waitFor(() => expect(mocks.downloadPayrollHours).toHaveBeenCalledWith("2026-11-02", "2026-11-08", "csv"));
     // Can't go past the current period.
     fireEvent.click(screen.getByRole("button", { name: "Next pay period" }));
     fireEvent.click(screen.getByRole("button", { name: "Next pay period" }));
@@ -154,7 +157,7 @@ describe("Payroll", () => {
     }));
     renderPage();
     expect(await screen.findByText("No shifts were worked in this period.")).toBeTruthy();
-    expect((screen.getByRole("button", { name: /Download hours/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /Download spreadsheet/ }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole("region", { name: "Hours by worker" })).toBeNull();
   });
 });

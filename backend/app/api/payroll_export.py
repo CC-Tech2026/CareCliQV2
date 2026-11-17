@@ -1,6 +1,7 @@
 """Timesheets for payroll: a pay period's approved shifts, on screen and as a
-CSV for any payroll system. See services/payroll_export_service.py.
-Coordinators and managing directors, who approve the timesheets."""
+download (Excel, or CSV for payroll software). See
+services/payroll_export_service.py. Coordinators and managing directors, who
+approve the timesheets."""
 
 from __future__ import annotations
 
@@ -15,6 +16,8 @@ from ..services import audit_service
 from ..services import payroll_export_service as svc
 
 router = APIRouter(prefix="/payroll", tags=["payroll"])
+
+XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def _org(user: dict) -> str:
@@ -33,6 +36,28 @@ def _period(org_id: str, start: date, end: date) -> dict:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+async def _download(user: dict, start: date, end: date, kind: str) -> Response:
+    org_id = _org(user)
+    data = _period(org_id, start, end)
+    try:
+        await audit_service.log_action(
+            action_type="payroll.timesheets_exported",
+            entity_type="organization",
+            entity_id=org_id,
+            user_id=str(get_user_id(user)),
+            organization_id=org_id,
+            details={"start": start.isoformat(), "end": end.isoformat(), "shifts": data["totals"]["shifts"], "format": kind},
+        )
+    except Exception:  # an audit hiccup never blocks the download
+        pass
+    name = f"carecliq-hours-{start.isoformat()}-to-{end.isoformat()}.{kind}"
+    headers = {"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"}
+    if kind == "xlsx":
+        return Response(content=svc.to_xlsx(data), media_type=XLSX_TYPE, headers=headers)
+    # The BOM makes Excel read names with accents correctly.
+    return Response(content="﻿" + svc.to_csv(data), media_type="text/csv; charset=utf-8", headers=headers)
+
+
 @router.get("/timesheets")
 async def payroll_timesheets(
     start: date = Query(...),
@@ -42,28 +67,19 @@ async def payroll_timesheets(
     return _period(_org(current_user), start, end)
 
 
+@router.get("/timesheets.xlsx")
+async def payroll_timesheets_xlsx(
+    start: date = Query(...),
+    end: date = Query(...),
+    current_user: dict = Depends(get_current_user),
+):
+    return await _download(current_user, start, end, "xlsx")
+
+
 @router.get("/timesheets.csv")
 async def payroll_timesheets_csv(
     start: date = Query(...),
     end: date = Query(...),
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = _org(current_user)
-    data = _period(org_id, start, end)
-    try:
-        await audit_service.log_action(
-            action_type="payroll.timesheets_exported",
-            entity_type="organization",
-            entity_id=org_id,
-            user_id=str(get_user_id(current_user)),
-            organization_id=org_id,
-            details={"start": start.isoformat(), "end": end.isoformat(), "shifts": data["totals"]["shifts"]},
-        )
-    except Exception:  # an audit hiccup never blocks the download
-        pass
-    filename = f"carecliq-timesheets-{start.isoformat()}-to-{end.isoformat()}.csv"
-    return Response(
-        content="﻿" + svc.to_csv(data),  # the BOM makes Excel read names with accents correctly
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"},
-    )
+    return await _download(current_user, start, end, "csv")

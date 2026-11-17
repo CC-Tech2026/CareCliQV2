@@ -203,6 +203,55 @@ def test_a_name_that_looks_like_a_formula_is_defused():
     assert "'=HYPERLINK" in text
 
 
+def _sheet(xlsx: bytes):
+    import zipfile
+    import xml.etree.ElementTree as ET
+
+    ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    with zipfile.ZipFile(io.BytesIO(xlsx)) as z:
+        names = set(z.namelist())
+        sheet = ET.fromstring(z.read("xl/worksheets/sheet1.xml"))
+        styles = ET.fromstring(z.read("xl/styles.xml"))
+        for name in names:  # every part is well-formed XML
+            if name.endswith(".xml") or name.endswith(".rels"):
+                ET.fromstring(z.read(name))
+    cells = {}
+    for c in sheet.iter(f"{{{ns['x']}}}c"):
+        text = c.find("x:is/x:t", ns)
+        value = c.find("x:v", ns)
+        cells[c.get("r")] = (text.text if text is not None else value.text, c.get("s"))
+    return names, sheet, styles, cells, ns
+
+
+def test_the_excel_file_has_wide_columns_real_dates_and_a_fixed_heading():
+    with _run(_db(missing={"employment_hero_connections"})):
+        data = svc.period(ORG, *WEEK)
+    names, sheet, styles, cells, ns = _sheet(svc.to_xlsx(data))
+    assert {"[Content_Types].xml", "xl/workbook.xml", "xl/styles.xml", "xl/worksheets/sheet1.xml"} <= names
+    # Headings in row 1, bold, and the row stays put when scrolling.
+    assert cells["A1"] == ("Worker", "1") and cells["D1"][0] == "Start date"
+    assert sheet.find("x:sheetViews/x:sheetView/x:pane", ns).get("state") == "frozen"
+    # Date columns are wide enough to show 19/10/2026 rather than ######.
+    widths = {int(c.get("min")): float(c.get("width")) for c in sheet.find("x:cols", ns)}
+    assert widths[4] >= 11 and widths[6] >= 11 and widths[18] >= 16
+    # Shown day first, and stored as real dates and times.
+    formats = {f.get("numFmtId"): f.get("formatCode") for f in styles.find("x:numFmts", ns)}
+    assert formats["164"] == "dd/mm/yyyy" and formats["166"] == "dd/mm/yyyy hh:mm"
+    late_row = next(r for r in range(2, 10) if cells.get(f"S{r}", ("",))[0] == "s-late")
+    assert cells[f"D{late_row}"] == ("46338", "2")  # 12/11/2026 as an Excel date
+    assert cells[f"E{late_row}"][1] == "3" and abs(float(cells[f"E{late_row}"][0]) - 9 / 24) < 1e-9  # 09:00
+    assert abs(float(cells[f"H{late_row}"][0]) - 220 / 60) < 1e-9  # hours as a number
+    assert cells[f"R{late_row}"][1] == "4"  # approved at: a date and time
+
+
+def test_the_excel_file_takes_names_as_plain_text():
+    db = _db(missing={"employment_hero_connections"})
+    db.tables["users"][0]["full_name"] = "=SUM(1,2) & <Aisha> \x01"
+    with _run(db):
+        _names, _sheet_xml, _styles, cells, _ns = _sheet(svc.to_xlsx(svc.period(ORG, *WEEK)))
+    assert ("=SUM(1,2) & <Aisha> ", None) in cells.values()
+
+
 def test_a_period_must_be_the_right_way_round_and_not_too_long():
     with pytest.raises(svc.PeriodError):
         svc.check_period(date(2026, 11, 15), date(2026, 11, 9))
@@ -230,8 +279,15 @@ def test_the_routes_are_for_coordinators_and_directors_and_the_csv_downloads():
             res = client.get("/api/payroll/timesheets.csv", params={"start": "2026-11-09", "end": "2026-11-15"})
         assert res.status_code == 200
         assert res.headers["content-type"].startswith("text/csv")
-        assert 'filename="carecliq-timesheets-2026-11-09-to-2026-11-15.csv"' in res.headers["content-disposition"]
+        assert 'filename="carecliq-hours-2026-11-09-to-2026-11-15.csv"' in res.headers["content-disposition"]
         assert res.text.lstrip("\ufeff").startswith("Worker,Worker email,")
+        with patch.object(svc, "period", return_value=sample), \
+                patch("backend.app.api.payroll_export.audit_service.log_action", MagicMock()):
+            xlsx = client.get("/api/payroll/timesheets.xlsx", params={"start": "2026-11-09", "end": "2026-11-15"})
+        assert xlsx.status_code == 200
+        assert xlsx.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        assert 'filename="carecliq-hours-2026-11-09-to-2026-11-15.xlsx"' in xlsx.headers["content-disposition"]
+        assert xlsx.content[:2] == b"PK"  # a zip, as every .xlsx is
         bad = client.get("/api/payroll/timesheets", params={"start": "2026-11-15", "end": "2026-11-09"})
         assert bad.status_code == 422
     finally:

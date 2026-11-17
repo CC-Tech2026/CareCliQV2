@@ -67,11 +67,14 @@ export function getPayrollTimesheets(start: string, end: string) {
   return jsonFetch<PayrollPeriodData>(`/api/payroll/timesheets?${query(start, end)}`);
 }
 
-export async function downloadPayrollCsv(start: string, end: string) {
-  const res = await apiFetch(`/api/payroll/timesheets.csv?${query(start, end)}`);
+/** The hours as an Excel file (opens straight in Excel or Google Sheets,
+ *  with day-first dates and wide enough columns) or as a CSV for payroll
+ *  software that imports one. */
+export async function downloadPayrollHours(start: string, end: string, format: "xlsx" | "csv") {
+  const res = await apiFetch(`/api/payroll/timesheets.${format}?${query(start, end)}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as { detail?: string }).detail || "The CSV couldn't be made. Try again.");
+    throw new Error((body as { detail?: string }).detail || "The file couldn't be made. Try again.");
   }
-  downloadBlob(await res.blob(), `carecliq-timesheets-${start}-to-${end}.csv`);
+  downloadBlob(await res.blob(), `carecliq-hours-${start}-to-${end}.${format}`);
 }

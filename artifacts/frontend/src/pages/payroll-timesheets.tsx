@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { appTodayKey } from "@/lib/datetime";
 import {
-  downloadPayrollCsv, getPayrollTimesheets, type PayrollPeriodData, type PayrollShift,
+  downloadPayrollHours, getPayrollTimesheets, type PayrollPeriodData, type PayrollShift,
 } from "@/services/payrollService";
 
 const TEXT = "var(--cc-text)";
@@ -167,16 +167,32 @@ function ApproveStep({ data }: { data: PayrollPeriodData }) {
   );
 }
 
-function PayrollStep({ data, downloading, onDownload }: { data: PayrollPeriodData; downloading: boolean; onDownload: () => void }) {
+function PayrollStep({ data, downloading, onDownload }: {
+  data: PayrollPeriodData;
+  downloading: "xlsx" | "csv" | null;
+  onDownload: (format: "xlsx" | "csv") => void;
+}) {
   const { shifts, sent, attention } = data.totals;
   const download = (primary: boolean) => (
     <button
       type="button"
       className={`${primary ? ctaClass : outlineClass} w-full sm:w-auto`}
-      onClick={onDownload}
-      disabled={downloading || !shifts}
+      onClick={() => onDownload("xlsx")}
+      disabled={!!downloading || !shifts}
     >
-      {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Download hours (CSV)
+      {downloading === "xlsx" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Download spreadsheet
+    </button>
+  );
+  // Payroll software that imports a CSV (KeyPay, MYOB...) wants that instead.
+  const csv = (
+    <button
+      type="button"
+      onClick={() => onDownload("csv")}
+      disabled={!!downloading || !shifts}
+      className="text-xs font-medium underline disabled:no-underline disabled:opacity-50"
+      style={{ color: TEXT }}
+    >
+      {downloading === "csv" ? "Making the CSV..." : "CSV for payroll software"}
     </button>
   );
 
@@ -193,10 +209,11 @@ function PayrollStep({ data, downloading, onDownload }: { data: PayrollPeriodDat
             <CircleAlert size={15} /> {plural(attention, "shift")} couldn't be sent
           </p>
         )}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {attention > 0 && <Link href={EH_PAGE} className={ctaClass}>Fix in Employment Hero settings</Link>}
           {download(false)}
         </div>
+        <p className="text-xs" style={{ color: MUTED }}>Need a different format? {csv}</p>
       </Step>
     );
   }
@@ -206,6 +223,9 @@ function PayrollStep({ data, downloading, onDownload }: { data: PayrollPeriodDat
         Download a spreadsheet of everyone's hours for your payroll software or bookkeeper. Your payroll works out the pay.
       </p>
       {download(true)}
+      <p className="text-xs" style={{ color: MUTED }}>
+        Importing into payroll software? Use the {csv}.
+      </p>
       <p className="text-xs" style={{ color: MUTED }}>
         Use Employment Hero? <Link href={EH_PAGE} className="font-medium underline" style={{ color: TEXT }}>Connect it</Link> and approved hours are sent for you.
       </p>
@@ -264,7 +284,7 @@ export default function PayrollTimesheetsPage() {
   const [offset, setOffset] = useState(-1);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<WorkerHours | null>(null);
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<"xlsx" | "csv" | null>(null);
 
   useEffect(() => {
     try {
@@ -295,14 +315,14 @@ export default function PayrollTimesheetsPage() {
     ? `This ${frequency === "weekly" ? "week" : "fortnight"} (so far)`
     : offset === -1 ? `Last ${frequency === "weekly" ? "week" : "fortnight"}` : null;
 
-  async function download() {
-    setDownloading(true);
+  async function download(format: "xlsx" | "csv") {
+    setDownloading(format);
     try {
-      await downloadPayrollCsv(range.start, range.end);
+      await downloadPayrollHours(range.start, range.end, format);
     } catch (err) {
       toast({ title: "Couldn't download the hours", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
   }
 
@@ -349,7 +369,7 @@ export default function PayrollTimesheetsPage() {
         <>
           <div className="grid gap-3 lg:grid-cols-2">
             <ApproveStep data={data} />
-            <PayrollStep data={data} downloading={downloading} onDownload={() => void download()} />
+            <PayrollStep data={data} downloading={downloading} onDownload={(format) => void download(format)} />
           </div>
 
           {workers.length > 0 && (
