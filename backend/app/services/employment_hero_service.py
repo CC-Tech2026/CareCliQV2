@@ -860,12 +860,25 @@ async def run_employment_hero_pass() -> int:
         raise
     sent = 0
     for row in rows:
+        org_id = str(row["organization_id"])
+        # Employment Hero's refresh token lasts 28 days. Refreshing whenever
+        # the 24-hour access token is due keeps a quiet organisation (a
+        # Christmas break, auto-send off) connected without anyone signing in
+        # again.
+        try:
+            await _access_token(row)
+        except EmploymentHeroAuthError as exc:
+            _note_error(org_id, str(exc))
+            continue
+        except Exception as exc:
+            logger.info("Employment Hero sign-in refresh failed for %s: %s", org_id, exc)
+            continue
         if not _settings_of(row).get("auto_send", True):
             continue
         try:
             sent += (await sync_organization(str(row["organization_id"]), row=row))["sent"]
         except Exception as exc:
-            logger.warning("Employment Hero sync failed for %s: %s", row.get("organization_id"), exc)
+            logger.warning("Employment Hero sync failed for %s: %s", org_id, exc)
     return sent
 
 

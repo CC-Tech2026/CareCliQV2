@@ -333,6 +333,32 @@ async def test_the_background_pass_sends_what_is_waiting():
     assert sorted(c[3]["employeeId"] for c in api.posted()) == [501, 502]
 
 
+@pytest.mark.asyncio
+async def test_a_quiet_organisation_stays_signed_in():
+    """The refresh token lasts 28 days: the background pass refreshes even
+    when nothing is waiting (or auto-send is off), so nobody has to reconnect."""
+    conn = {**_connection(auto_send=False),
+            "access_token_expires_at": (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()}
+    db = _DB(employment_hero_connections=[conn])
+    token = AsyncMock(return_value={"access_token": "at-2", "refresh_token": "rt-2", "expires_in": 86400})
+    with patch.multiple(eh, get_supabase_admin=MagicMock(return_value=db), _token_request=token,
+                        _seal=lambda v: v, _open=lambda v: v):
+        await eh.run_employment_hero_pass()
+        await eh.run_employment_hero_pass()
+    # Refreshed once (the new token is good for a day), and kept the new pair.
+    token.assert_awaited_once_with({"grant_type": "refresh_token", "refresh_token": "rt"})
+    saved = db.tables["employment_hero_connections"][0]
+    assert saved["access_token"] == "at-2" and saved["refresh_token"] == "rt-2"
+
+    # Revoked in Employment Hero: the director is told to reconnect.
+    db.tables["employment_hero_connections"][0]["access_token_expires_at"] = conn["access_token_expires_at"]
+    gone = AsyncMock(side_effect=eh.EmploymentHeroAuthError("Reconnect Employment Hero."))
+    with patch.multiple(eh, get_supabase_admin=MagicMock(return_value=db), _token_request=gone,
+                        _seal=lambda v: v, _open=lambda v: v):
+        assert await eh.run_employment_hero_pass() == 0
+    assert db.tables["employment_hero_connections"][0]["last_error"] == "Reconnect Employment Hero."
+
+
 # ---------------------------------------------------------------------------
 # Connecting
 # ---------------------------------------------------------------------------
