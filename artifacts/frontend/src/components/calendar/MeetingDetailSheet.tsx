@@ -78,9 +78,15 @@ export function MeetingDetailSheet({
   const attendees = event?.attendees ?? [];
   // The organiser's own calendar adds them, so they're not a guest of it.
   const guests = event ? guestEmails(event, user?.email) : [];
-  const captureHref = event?.participant_id
-    ? `/patients?id=${encodeURIComponent(event.participant_id)}&tab=plan_meetings`
-    : null;
+  // Someone still in onboarding is recorded on their onboarding page's
+  // Meet & Greet step, which is also where they're looked up.
+  const inOnboarding = !!event?.intake_id && !event.participant_id;
+  const onboardingHref = event?.intake_id ? `/onboard-participant?intake=${encodeURIComponent(event.intake_id)}` : null;
+  const captureHref = inOnboarding
+    ? onboardingHref
+    : event?.participant_id
+      ? `/patients?id=${encodeURIComponent(event.participant_id)}&tab=plan_meetings`
+      : null;
 
   return (
     <SidePanel
@@ -128,6 +134,14 @@ export function MeetingDetailSheet({
                 <Link href={`/patients?id=${encodeURIComponent(event.participant_id)}`} className="font-medium text-[var(--cc-plum)] hover:underline">
                   {event.participant_name || "Participant"}
                 </Link>
+              </Row>
+            )}
+            {inOnboarding && onboardingHref && (
+              <Row icon={UserRound} label="Participant">
+                <Link href={onboardingHref} className="font-medium text-[var(--cc-plum)] hover:underline">
+                  {event.participant_name || "New participant"}
+                </Link>
+                <span style={{ color: MUTED }}> · in onboarding</span>
               </Row>
             )}
             {mode && (

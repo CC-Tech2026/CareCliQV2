@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft, HeartHandshake, ClipboardCheck, FileUp, Mic, FileSignature, Send, CheckCircle2, Clock3,
   Loader2, ChevronRight, Search, PenLine, PhoneCall, Mail, XCircle, ShieldCheck, Users,
   MapPin, User, FileText, Trash2, Plus, LayoutGrid, Rows3, ChevronUp, ChevronDown, ArrowRight,
   SlidersHorizontal, X, AlertTriangle, ArrowUp, ArrowDown, Accessibility, HeartPulse, Link2, Check, MessageSquareWarning,
+  CalendarCheck,
 } from "lucide-react";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -54,6 +55,8 @@ import {
   type ParticipantComplaint,
 } from "@/services/participantComplaintsService";
 import { MeetGreetCapture } from "@/components/onboarding/MeetGreetCapture";
+import { MeetGreetBooking } from "@/components/onboarding/MeetGreetBooking";
+import { meetingWhen } from "@/lib/meeting-booking";
 import { MeetGreetSummaryPanel } from "@/components/onboarding/MeetGreetSummaryPanel";
 import {
   listParticipantIntakes, createParticipantIntake, updateParticipantIntake,
@@ -297,7 +300,14 @@ function badgeForIntake(intake: Intake): { icon?: typeof Clock3; label: string; 
     return null;
   }
   if (column === "meet_greet") {
-    return intake.meet_greet_recording_url ? { icon: Mic, label: "Easy Capture ready", color: CRITICAL, bg: CRITICAL_BG } : null;
+    if (intake.meet_greet_recording_url) return { icon: Mic, label: "Easy Capture ready", color: CRITICAL, bg: CRITICAL_BG };
+    // Booked and still to come: the day, so the board shows who's booked.
+    const meeting = intake.next_meeting;
+    if (meeting && meeting.event_date.slice(0, 10) >= new Date().toLocaleDateString("en-CA")) {
+      const day = new Date(`${meeting.event_date.slice(0, 10)}T00:00:00`);
+      return { icon: CalendarCheck, label: day.toLocaleDateString("en-AU", { day: "numeric", month: "short" }), color: INFO, bg: INFO_BG };
+    }
+    return null;
   }
   if (column === "service_agreement") {
     return intake.status === "awaiting_signatures" ? { label: "Awaiting sign", color: SUCCESS, bg: SUCCESS_BG } : null;
@@ -319,7 +329,12 @@ function subtitleForIntake(intake: Intake): string {
       return `${intakeSourceMeta(intake).label} · ${relative}`;
     }
     case "screening": return "Awaiting plan copy";
-    case "meet_greet": return "Awaiting scheduling";
+    case "meet_greet": {
+      const meeting = intake.next_meeting;
+      if (!meeting) return "Awaiting scheduling";
+      const today = new Date().toLocaleDateString("en-CA");
+      return `${meeting.event_date.slice(0, 10) < today ? "Met" : "Booked"} ${meetingWhen(meeting)}`;
+    }
     case "service_agreement":
       return intake.status === "awaiting_signatures" ? "Sent for signature"
         : intake.status === "signed" ? "Signed — ready to activate"
@@ -1507,7 +1522,8 @@ export default function ParticipantOnboardingBoard() {
   function updateIntake(id: string, patch: Partial<Intake>): Promise<Intake> {
     return updateParticipantIntake(id, patch)
       .then((updated) => {
-        setIntakes((prev) => prev.map((i) => (i.id === id ? updated : i)));
+        // The next meeting comes with the board listing, not with a save.
+        setIntakes((prev) => prev.map((i) => (i.id === id ? { next_meeting: i.next_meeting, ...updated } : i)));
         return updated;
       })
       .catch((err: Error) => {
@@ -2410,9 +2426,18 @@ function IntakeDetail({
     toast({ title: "Draft saved" });
   }
 
+  // Moving them to Meet & Greet opens the booking straight away.
+  const [bookOnArrival, setBookOnArrival] = useState(false);
+  const bookingOpened = useCallback(() => setBookOnArrival(false), []);
+
   function accept() {
-    onUpdate({ status: "meet_greet" });
-    toast({ title: "Moved to Meet & Greet" });
+    void onUpdate({ status: "meet_greet" }).then(
+      () => {
+        setBookOnArrival(true);
+        toast({ title: "Moved to Meet & Greet", description: "Book the meeting now, or later from this step." });
+      },
+      () => undefined,
+    );
   }
 
   function decline() {
@@ -2638,6 +2663,13 @@ function IntakeDetail({
                     <p className="text-base font-semibold" style={{ color: TEXT }}>Meet &amp; Greet</p>
                   </div>
                   <div className="p-5 space-y-3">
+                    <MeetGreetBooking
+                      intake={intake}
+                      editable={intake.status === "meet_greet"}
+                      autoOpen={bookOnArrival}
+                      onAutoOpened={bookingOpened}
+                      onNextMeetingChange={(next_meeting) => onLocalUpdate({ next_meeting })}
+                    />
                     <MeetGreetCapture
                       intake={intake}
                       notes={notes}

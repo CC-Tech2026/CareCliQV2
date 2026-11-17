@@ -326,6 +326,32 @@ def suggested_invitees(supabase, org_id: str, participant_id: str | None, me: di
         except Exception as exc:
             logger.debug("invitee lookup (workers) failed: %s", exc)
 
+    return _unique(people)
+
+
+def intake_invitees(intake: dict[str, Any], me: dict[str, str]) -> list[dict[str, str]]:
+    """For someone still in onboarding: the organiser, the person, the family
+    or next of kin on their intake form, and their plan manager. Only people
+    with an email address; each once."""
+    people: list[dict[str, str]] = []
+
+    def add(name: Any, email: Any, role: str) -> None:
+        email = str(email or "").strip()
+        if email and EMAIL_RE.match(email):
+            people.append({"name": str(name or "").strip(), "email": email, "role": role})
+
+    form = intake.get("web_intake") or {}
+    add(me.get("name"), me.get("email"), "You")
+    add(intake.get("full_name"), intake.get("email"), "Participant")
+    for kin in form.get("next_of_kin") or []:
+        if isinstance(kin, dict):
+            relationship = str(kin.get("relationship") or "").strip()
+            add(kin.get("name"), kin.get("email"), relationship[:1].upper() + relationship[1:] if relationship else "Family")
+    add(form.get("plan_manager_name") or form.get("plan_manager_org"), form.get("plan_manager_email"), "Plan manager")
+    return _unique(people)
+
+
+def _unique(people: list[dict[str, str]]) -> list[dict[str, str]]:
     seen: set[str] = set()
     unique = []
     for person in people:

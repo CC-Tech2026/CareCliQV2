@@ -1,4 +1,38 @@
-import type { MeetingMode, OrgEvent, ParticipantMeetingKind } from "@/services/hubService";
+import type { InviteResult, MeetingMode, OrgEvent, ParticipantMeetingKind } from "@/services/hubService";
+
+/** Best-effort parse of free-text durations ("1 hour", "45 mins", "1.5 hours",
+ *  or our own "1h 30m") back into minutes, for sizing legacy event blocks. */
+export function parseDurationMinutes(duration: string | null | undefined): number {
+  const text = (duration || "").toLowerCase();
+  const hourMatch = text.match(/([\d.]+)\s*h/);
+  const minMatch = text.match(/([\d.]+)\s*m/);
+  let minutes = 0;
+  if (hourMatch) minutes += parseFloat(hourMatch[1]) * 60;
+  if (minMatch) minutes += parseFloat(minMatch[1]);
+  return minutes > 0 ? Math.round(minutes) : 60;
+}
+
+/** "Tue 18 Nov, 10:00am": when a meeting is, for a card or a list. */
+export function meetingWhen(event: { event_date: string; start_time?: string | null }): string {
+  const day = new Date(`${event.event_date.slice(0, 10)}T00:00:00`);
+  const date = day.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
+  if (!event.start_time) return date;
+  const [h, m] = event.start_time.split(":").map(Number);
+  const time = `${(h || 0) % 12 || 12}:${String(m || 0).padStart(2, "0")}${(h || 0) < 12 ? "am" : "pm"}`;
+  return `${date}, ${time}`;
+}
+
+/** One line on what happened to the calendar invites. */
+export function inviteSummary(invites: InviteResult | undefined, update: boolean): string {
+  if (!invites) return "";
+  if (invites.email_off) return "Email is turned off, so no invites were sent.";
+  const sent = invites.sent.length;
+  const failed = invites.failed.length;
+  const parts = [];
+  if (sent) parts.push(`${update ? "Updated invite" : "Calendar invite"} sent to ${sent} ${sent === 1 ? "person" : "people"}.`);
+  if (failed) parts.push(`Couldn't reach ${invites.failed.join(", ")}.`);
+  return parts.join(" ");
+}
 
 /** What the MD picks in "Meeting type": a participant meeting, or one of the
  *  calendar's own internal event types. */

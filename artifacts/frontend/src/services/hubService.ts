@@ -33,6 +33,9 @@ export type OrgEvent = {
   start_time?: string | null;
   /** Set when the meeting is with a participant (plan review, intake...). */
   participant_id?: string | null;
+  /** Booked for someone still in participant onboarding (the Meet & Greet).
+   *  participant_name is then the name on their intake. */
+  intake_id?: string | null;
   participant_name?: string | null;
   meeting_kind?: ParticipantMeetingKind | null;
   meeting_mode?: MeetingMode | null;
@@ -133,10 +136,18 @@ export async function updateOrgEvent(id: string, payload: OrgEventPayload): Prom
   });
 }
 
+/** Every meeting booked for someone in participant onboarding. */
+export async function getIntakeMeetings(intakeId: string): Promise<OrgEvent[]> {
+  return jsonFetch<OrgEvent[]>(`/api/hub/org-events?intake_id=${encodeURIComponent(intakeId)}`);
+}
+
 /** People to suggest inviting: you, and for a participant meeting the
- *  participant, their nominee/family contacts and their support workers. */
-export async function getMeetingInvitees(participantId?: string | null): Promise<Required<MeetingAttendee>[]> {
-  const query = participantId ? `?participant_id=${encodeURIComponent(participantId)}` : "";
+ *  participant, their nominee/family contacts and their support workers.
+ *  For someone in onboarding, the people on their intake form. */
+export async function getMeetingInvitees(participantId?: string | null, intakeId?: string | null): Promise<Required<MeetingAttendee>[]> {
+  const query = intakeId
+    ? `?intake_id=${encodeURIComponent(intakeId)}`
+    : participantId ? `?participant_id=${encodeURIComponent(participantId)}` : "";
   return jsonFetch<Required<MeetingAttendee>[]>(`/api/hub/org-events/invitees${query}`);
 }
 
