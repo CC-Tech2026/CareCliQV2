@@ -138,7 +138,7 @@ def test_the_period_has_the_approved_shifts_with_the_time_worked():
     assert [(p["kind"], p["minutes"]) for p in by_id["s-sleep"]["periods"]] == [
         ("active", 120), ("sleepover", 480), ("active", 120)]
     # Not connected to payroll: no payroll status at all.
-    assert late["payroll"] is None and data["connected"] == {"employment_hero": False}
+    assert late["payroll"] is None and data["connected"] == {"employment_hero": False, "xero_payroll": False}
     # Finished but not approved: waiting. Not worked yet, next period, reversed: not listed.
     assert [w["shift_id"] for w in data["waiting"]] == ["s-todo"]
     assert data["totals"] == {"shifts": 2, "hours": round((220 + 720) / 60, 2), "workers": 1,
