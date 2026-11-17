@@ -34,6 +34,7 @@ function renderSection() {
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState(null, "", "/");
   vi.resetAllMocks();
 });
 
@@ -86,7 +87,10 @@ describe("Settings > Integrations", () => {
     expect(await screen.findByText("Sunrise Supports")).toBeTruthy();
     expect(screen.getByText("Needs attention")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Manage" }));
+    // Manage is Xero's own page, with its own address.
     expect(await screen.findByText("12")).toBeTruthy();
+    expect(window.location.search).toBe("?section=integrations&integration=xero");
+    expect(screen.queryByText("Need another integration?")).toBeNull();
     expect(screen.getByText("Need attention")).toBeTruthy();
     // Recent invoices: their state in Xero, and why one didn't go.
     expect(screen.getByText("Paid in Xero")).toBeTruthy();
@@ -101,8 +105,47 @@ describe("Settings > Integrations", () => {
     await waitFor(() =>
       expect(integrations.saveXeroSettings).toHaveBeenCalledWith({ ...SETTINGS, invoice_status: "DRAFT" }),
     );
-    // Opens the side panel and its selects, so more than the default 5s.
+    // Back returns to the list of integrations.
+    fireEvent.click(screen.getByRole("button", { name: "Back to Integrations" }));
+    expect(await screen.findByText("Need another integration?")).toBeTruthy();
+    expect(window.location.search).toBe("?section=integrations");
+    // Opens the page and its selects, so more than the default 5s.
   }, 15_000);
+
+  it("opens straight on Xero's page from its link", async () => {
+    window.history.replaceState(null, "", "/settings?section=integrations&integration=xero");
+    vi.mocked(integrations.getXeroStatus).mockResolvedValue({
+      available: true, connected: true, redirect_uri: "x", settings: { ...SETTINGS },
+      tenant_name: "Sunrise Supports", counts: { in_xero: 3, waiting: 0, failed: 0 },
+    });
+    vi.mocked(integrations.getXeroOptions).mockResolvedValue({ accounts: [], tax_rates: [] });
+    renderSection();
+    expect(await screen.findByRole("button", { name: "Back to Integrations" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Xero" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Disconnect" })).toBeTruthy();
+  });
+
+  it("shows the list when the link is for Xero but it isn't connected", async () => {
+    window.history.replaceState(null, "", "/settings?section=integrations&integration=xero");
+    vi.mocked(integrations.getXeroStatus).mockResolvedValue({
+      available: true, connected: false, redirect_uri: "x", settings: { ...SETTINGS },
+    });
+    renderSection();
+    expect(await screen.findByRole("button", { name: /Connect to Xero/ })).toBeTruthy();
+  });
+
+  it("opens the API and webhooks page from its tile", async () => {
+    vi.mocked(integrations.getXeroStatus).mockResolvedValue({
+      available: true, connected: false, redirect_uri: "x", settings: { ...SETTINGS },
+    });
+    renderSection();
+    const setUp = (await screen.findByRole("button", { name: "Set up" })) as HTMLButtonElement;
+    await waitFor(() => expect(setUp.disabled).toBe(false));
+    fireEvent.click(setUp);
+    expect(await screen.findByRole("button", { name: "Back to Integrations" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "API and webhooks" })).toBeTruthy();
+    expect(window.location.search).toBe("?section=integrations&integration=api");
+  });
 
   it("asks once about invoices from before connecting, and sends them when told to", async () => {
     vi.mocked(integrations.getXeroStatus).mockResolvedValue({

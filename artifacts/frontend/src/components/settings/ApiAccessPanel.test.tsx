@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ApiAccessPanel } from "./ApiAccessPanel";
+import { ApiAccessPage } from "./ApiAccessPanel";
 import * as integrations from "@/services/integrationsService";
 import type { ApiOverview } from "@/services/integrationsService";
 
@@ -31,7 +31,7 @@ function renderPanel(overview = OVERVIEW) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ApiAccessPanel open onOpenChange={() => {}} overview={overview} />
+      <ApiAccessPage onBack={() => {}} overview={overview} />
     </QueryClientProvider>,
   );
 }
@@ -41,7 +41,7 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-describe("API and webhooks panel", () => {
+describe("API and webhooks page", () => {
   it("lists keys without their secret, and shows a new key once", async () => {
     vi.mocked(integrations.createApiKey).mockResolvedValue({
       ...OVERVIEW.keys[0], id: "k-2", name: "Payroll", key: "cc_live_fullsecretvalue123",

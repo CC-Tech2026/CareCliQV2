@@ -18,6 +18,7 @@ vi.mock("@/services/organizationBrandingService", () => ({ getOrganizationBrandi
 vi.mock("@/hooks/useOrgQuery", () => ({ useOrgQuery: () => ({ data: [{ status: "open" }, { status: "closed" }] }) }));
 vi.mock("@/components/notifications/NotificationInbox", () => ({ NotificationBell: () => null, NotificationInbox: () => null }));
 vi.mock("@/components/worker/NotificationRealtimeBridge", () => ({ NotificationRealtimeBridge: () => null }));
+vi.mock("./IntegrationsMenu", () => ({ IntegrationsMenu: () => null }));
 
 beforeEach(() => {
   vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));

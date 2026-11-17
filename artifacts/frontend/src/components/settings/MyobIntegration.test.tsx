@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MyobTile } from "./MyobIntegration";
+import { useState } from "react";
+import { MyobManageRoute, MyobTile } from "./MyobIntegration";
 import * as myob from "@/services/myobService";
 import type { MyobStatus } from "@/services/myobService";
 
@@ -27,9 +28,16 @@ function renderTile(status: MyobStatus) {
     tax_codes: [{ uid: "fre", code: "FRE", label: "FRE GST Free" }, { uid: "gst", code: "GST", label: "GST Goods & Services Tax" }],
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // Settings > Integrations swaps the tile for MYOB's own page on Manage.
+  function Harness() {
+    const [managing, setManaging] = useState(false);
+    return managing
+      ? <MyobManageRoute status={status} onBack={() => setManaging(false)} />
+      : <MyobTile onManage={() => setManaging(true)} />;
+  }
   return render(
     <QueryClientProvider client={client}>
-      <MyobTile />
+      <Harness />
     </QueryClientProvider>,
   );
 }
@@ -89,6 +97,8 @@ describe("MYOB tile", () => {
     expect(await screen.findByText("Connected")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Manage" }));
     expect(await screen.findByText(/HBCC-INV-202611-004 · MYOB 00000123/)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "MYOB" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Back to Integrations" })).toBeTruthy();
     expect(screen.getByText("Awaiting payment")).toBeTruthy();
     const save = screen.getByRole("button", { name: "Save MYOB settings" }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);

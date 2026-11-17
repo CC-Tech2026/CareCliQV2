@@ -2,12 +2,15 @@
  * Settings > Integrations (managing directors): a directory of the systems
  * CareCliQ connects to, one equal tile each, with the detail a click away.
  *
+ * Each connected integration's Manage opens its own page here
+ * (?integration=xero|myob|api); the top bar's Integrations menu links to them.
+ *
  * - Xero: Connect goes straight to Xero (and back to
- *   /integrations/xero/callback); Manage opens a side panel with the
- *   organisation, how syncing is going, recent invoices, settings and
- *   Disconnect.
+ *   /integrations/xero/callback); Manage opens Xero's own page
+ *   (?section=integrations&integration=xero) with the organisation, how
+ *   syncing is going, recent invoices, settings and Disconnect.
  * - API and webhooks: keys and webhooks for systems such as CORA Workforce
- *   (ApiAccessPanel).
+ *   (ApiAccessPanel), on its own page too.
  * - Suggest an integration: opens Improvements & Feedback.
  *
  * The Xero logo is Xero's official wordmark (public/integrations/XERO),
@@ -23,7 +26,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SidePanel } from "@/components/layout/SidePanel";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,8 +39,18 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { formatAppDate, formatAppTime } from "@/lib/datetime";
-import { ApiAccessPanel } from "./ApiAccessPanel";
-import { MyobTile } from "./MyobIntegration";
+import { ApiAccessPage } from "./ApiAccessPanel";
+import { apiTileStatus, xeroTileStatus, XERO_WORDMARK } from "./integrationStatus";
+import { getMyobStatus } from "@/services/myobService";
+import { MyobManageRoute, MyobTile } from "./MyobIntegration";
+import {
+  DisconnectRow,
+  IntegrationPage,
+  PanelHeading,
+  StatusPill,
+  useIntegrationRoute,
+  type TileStatus,
+} from "./IntegrationPage";
 import {
   dismissEarlierXero,
   disconnectXero,
@@ -57,8 +69,6 @@ const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const PURPLE = "var(--cc-brand-purple)";
 const PURPLE_SOFT = "var(--cc-brand-purple-soft)";
-/** Xero's official wordmark, in Xero Blue. */
-const XERO_WORDMARK = "/integrations/XERO/Xero%20Wordmark%20Blue.svg";
 
 function when(iso?: string | null) {
   if (!iso) return null;
@@ -72,26 +82,6 @@ function money(cents: number, currency = "AUD") {
 // ---------------------------------------------------------------------------
 // Tiles
 // ---------------------------------------------------------------------------
-
-export type TileStatus = "connected" | "available" | "attention" | "soon" | "unavailable";
-
-const STATUS_LOOK: Record<TileStatus, { label: string; fg: string; bg: string; dot?: string }> = {
-  connected: { label: "Connected", fg: "var(--cc-status-success)", bg: "var(--cc-status-success-bg)", dot: "var(--cc-status-success)" },
-  attention: { label: "Needs attention", fg: "var(--cc-danger-text)", bg: "var(--cc-status-danger-bg)", dot: "var(--cc-danger-text)" },
-  available: { label: "Not connected", fg: MUTED, bg: "var(--cc-soft)" },
-  soon: { label: "Coming soon", fg: MUTED, bg: "var(--cc-soft)" },
-  unavailable: { label: "Not switched on", fg: MUTED, bg: "var(--cc-soft)" },
-};
-
-function StatusPill({ status }: { status: TileStatus }) {
-  const look = STATUS_LOOK[status];
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: look.fg, background: look.bg }}>
-      {look.dot && <span className="h-1.5 w-1.5 rounded-full" style={{ background: look.dot }} />}
-      {look.label}
-    </span>
-  );
-}
 
 /** Xero's wordmark, at the tile's logo height. */
 function XeroWordmark() {
@@ -150,7 +140,7 @@ export function IntegrationTile({
 }
 
 // ---------------------------------------------------------------------------
-// Xero: the Manage panel
+// Xero: the Manage page
 // ---------------------------------------------------------------------------
 
 /** The state of one invoice in Xero, in words, with its colour. */
@@ -167,17 +157,30 @@ function xeroState(row: NonNullable<XeroStatus["recent"]>[number]) {
   }
 }
 
-export function PanelHeading({ children }: { children: ReactNode }) {
-  return <h4 className="text-[13px] font-semibold" style={{ color: TEXT }}>{children}</h4>;
+/** Starts the Xero sign-in; Xero sends the director back to /integrations/xero/callback. */
+function useXeroConnect() {
+  const { toast } = useToast();
+  const [connecting, setConnecting] = useState(false);
+  const connect = async () => {
+    setConnecting(true);
+    try {
+      const { url } = await startXeroConnect();
+      window.location.assign(url);
+    } catch (err) {
+      setConnecting(false);
+      toast({ title: "Couldn't start connecting to Xero", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+    }
+  };
+  return { connect, connecting };
 }
 
-function XeroPanel({
-  open, onOpenChange, status, onReconnect,
+/** Xero's own page inside Settings > Integrations (?integration=xero). */
+function XeroManagePage({
+  status, onReconnect, onBack,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   status: XeroStatus;
   onReconnect: () => void;
+  onBack: () => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -191,7 +194,7 @@ function XeroPanel({
 
   const optionsQuery = useOrgQuery(["integrations", "xero", "options"], {
     queryFn: getXeroOptions,
-    enabled: open && status.connected,
+    enabled: status.connected,
     staleTime: 5 * 60_000,
     retry: false,
   });
@@ -250,7 +253,7 @@ function XeroPanel({
     try {
       await disconnectXero();
       toast({ title: "Xero disconnected", description: "Invoices already in Xero stay there." });
-      onOpenChange(false);
+      onBack();
       refresh();
     } catch (err) {
       toast({ title: "Couldn't disconnect Xero", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
@@ -277,30 +280,19 @@ function XeroPanel({
 
   return (
     <>
-      <SidePanel
-        open={open}
-        onOpenChange={onOpenChange}
-        eyebrow="Accounting"
-        title="Xero"
-        description={
+      <IntegrationPage
+        onBack={onBack}
+        status={xeroTileStatus(status)}
+        title={<img src={XERO_WORDMARK} alt="Xero" width={86} height={24} className="block h-6 w-auto" />}
+        subtitle={
           <>
-            Connected to <span className="font-semibold text-cc-text">{status.tenant_name || "your Xero organisation"}</span>
+            Accounting · Connected to <span className="font-semibold text-cc-text">{status.tenant_name || "your Xero organisation"}</span>
             {status.connected_by_name ? ` by ${status.connected_by_name}` : ""}
             {status.connected_at ? ` on ${formatAppDate(status.connected_at)}` : ""}.
           </>
         }
-        footer={
-          <>
-            <Button variant="ghost" className="mr-auto" style={{ color: "var(--cc-danger-text)" }} onClick={() => setConfirmDisconnect(true)}>
-              Disconnect
-            </Button>
-            <Button onClick={save} disabled={!dirty || saving} className="gap-1.5" style={{ background: "var(--cc-cta)", color: "#fff" }}>
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Save Xero settings
-            </Button>
-          </>
-        }
       >
+
         {status.last_error && (
           <div role="alert" className="flex gap-2.5 rounded-lg px-4 py-3 text-sm" style={{ background: "var(--cc-status-danger-bg)", color: "var(--cc-danger-text)" }}>
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -316,7 +308,7 @@ function XeroPanel({
         )}
 
         {earlier && earlier.count > 0 && (
-          <section className="space-y-3 rounded-xl border border-cc-border p-4" aria-label="Invoices from before you connected">
+          <section className="space-y-3 rounded-xl border border-cc-border bg-cc-surface p-4" aria-label="Invoices from before you connected">
             <PanelHeading>
               {earlier.count === 1
                 ? "1 invoice from before you connected isn't in Xero"
@@ -356,171 +348,186 @@ function XeroPanel({
           </section>
         )}
 
-        {/* How syncing is going */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <PanelHeading>Syncing</PanelHeading>
-            <Button variant="outline" size="sm" onClick={sync} disabled={syncing} className="gap-1.5">
-              {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              Sync now
-            </Button>
-          </div>
-          <dl className="grid grid-cols-3 divide-x divide-cc-border rounded-xl border border-cc-border">
-            {[
-              { label: "In Xero", value: status.counts?.in_xero ?? 0 },
-              { label: "Waiting to send", value: status.counts?.waiting ?? 0 },
-              { label: "Need attention", value: status.counts?.failed ?? 0, danger: true },
-            ].map((s) => (
-              <div key={s.label} className="px-4 py-3">
-                <dd className="text-xl font-semibold tabular-nums" style={{ color: s.danger && s.value > 0 ? "var(--cc-danger-text)" : TEXT }}>{s.value}</dd>
-                <dt className="text-xs" style={{ color: MUTED }}>{s.label}</dt>
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+          <div className="min-w-0 space-y-5">
+            {/* How syncing is going */}
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <PanelHeading>Syncing</PanelHeading>
+                <Button variant="outline" size="sm" onClick={sync} disabled={syncing} className="gap-1.5">
+                  {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  Sync now
+                </Button>
               </div>
-            ))}
-          </dl>
-          <p className="text-xs" style={{ color: MUTED }}>
-            {status.last_payment_check_at
-              ? `Payments last checked ${when(status.last_payment_check_at)}. Xero is checked every 30 minutes, and whenever someone opens Billing.`
-              : "Payments are checked every 30 minutes, and whenever someone opens Billing."}
-          </p>
-        </section>
-
-        {/* Recent invoices */}
-        <section className="space-y-3">
-          <PanelHeading>Recent invoices</PanelHeading>
-          {recent.length === 0 ? (
-            <p className="text-sm" style={{ color: MUTED }}>Nothing sent yet. Approved invoices will appear here.</p>
-          ) : (
-            <ul className="divide-y divide-cc-border rounded-xl border border-cc-border">
-              {recent.map((row) => {
-                const state = xeroState(row);
-                return (
-                  <li key={row.id} className="px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-medium tabular-nums" style={{ color: TEXT }}>{row.invoice_number}</p>
-                        <p className="truncate text-xs" style={{ color: MUTED }}>
-                          {row.payer || "No payer"}{row.at ? ` · ${when(row.at)}` : ""}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="text-[13px] font-semibold tabular-nums" style={{ color: TEXT }}>{money(row.total_cents, row.currency)}</span>
-                        <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: state.fg, background: state.bg }}>{state.label}</span>
-                      </div>
-                    </div>
-                    {row.error && <p className="mt-1.5 text-xs" style={{ color: "var(--cc-danger-text)" }}>{row.error}</p>}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        {/* Settings */}
-        <section className="space-y-4">
-          <PanelHeading>How invoices arrive in Xero</PanelHeading>
-          <div className="space-y-1.5">
-            <Label htmlFor="xero-account" className="text-[13px]">Sales account</Label>
-            <Select value={draft.sales_account_code} onValueChange={(v) => setDraft({ ...draft, sales_account_code: v })}>
-              <SelectTrigger id="xero-account"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {accountChoices.map((a) => (
-                  <SelectItem key={a.code} value={a.code}>{a.name ? `${a.code} · ${a.name}` : a.code}</SelectItem>
+              <dl className="grid grid-cols-3 divide-x divide-cc-border rounded-xl border border-cc-border bg-cc-surface">
+                {[
+                  { label: "In Xero", value: status.counts?.in_xero ?? 0 },
+                  { label: "Waiting to send", value: status.counts?.waiting ?? 0 },
+                  { label: "Need attention", value: status.counts?.failed ?? 0, danger: true },
+                ].map((s) => (
+                  <div key={s.label} className="px-4 py-3">
+                    <dd className="text-xl font-semibold tabular-nums" style={{ color: s.danger && s.value > 0 ? "var(--cc-danger-text)" : TEXT }}>{s.value}</dd>
+                    <dt className="text-xs" style={{ color: MUTED }}>{s.label}</dt>
+                  </div>
                 ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs" style={{ color: MUTED }}>
-              {optionsQuery.isLoading ? "Loading your Xero accounts..." : optionsQuery.isError ? "Couldn't load your Xero accounts." : "Where the invoice lines are recorded."}
-            </p>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="xero-tax" className="text-[13px]">Tax rate</Label>
-            <Select value={draft.tax_type} onValueChange={(v) => setDraft({ ...draft, tax_type: v })}>
-              <SelectTrigger id="xero-tax"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {taxChoices.map((t) => (
-                  <SelectItem key={t.type} value={t.type}>{t.name || t.type}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs" style={{ color: MUTED }}>NDIS supports are usually GST-free.</p>
-          </div>
-          <div className="space-y-1.5">
-            <p className="text-[13px] font-medium" style={{ color: TEXT }}>In Xero, invoices arrive</p>
-            <div role="radiogroup" aria-label="In Xero, invoices arrive" className="inline-flex rounded-lg border border-cc-border p-1">
-              {([
-                { value: "AUTHORISED", label: "Approved" },
-                { value: "DRAFT", label: "As drafts" },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={draft.invoice_status === opt.value}
-                  onClick={() => setDraft({ ...draft, invoice_status: opt.value })}
-                  className="h-8 rounded-md px-3 text-sm font-medium transition-colors"
-                  style={draft.invoice_status === opt.value ? { background: PURPLE_SOFT, color: PURPLE } : { color: MUTED }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs" style={{ color: MUTED }}>
-              {draft.invoice_status === "AUTHORISED"
-                ? "Ready to receive payments as soon as they arrive."
-                : "Someone approves each one in Xero before it can be paid."}
-            </p>
-          </div>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[13px] font-medium" style={{ color: TEXT }}>Send each invoice when it's approved</p>
-              <p className="mt-0.5 text-xs" style={{ color: MUTED }}>
-                Off: invoices go only when you press Send to Xero on the invoice, or Sync now.
+              </dl>
+              <p className="text-xs" style={{ color: MUTED }}>
+                {status.last_payment_check_at
+                  ? `Payments last checked ${when(status.last_payment_check_at)}. Xero is checked every 30 minutes, and whenever someone opens Billing.`
+                  : "Payments are checked every 30 minutes, and whenever someone opens Billing."}
               </p>
-            </div>
-            <Switch aria-label="Send each invoice when it's approved" checked={draft.auto_send} onCheckedChange={(v) => setDraft({ ...draft, auto_send: v })} />
-          </div>
-          <p className="text-xs" style={{ color: MUTED }}>Cancelling an invoice here voids it in Xero.</p>
-        </section>
+            </section>
 
-        <section className="space-y-4">
-          <PanelHeading>Payments</PanelHeading>
-          <p className="text-[13px]" style={{ color: MUTED }}>
-            Payments recorded in Xero mark the invoice paid here. Pressing Mark paid here records the payment in Xero too,
-            so it's only ever entered once.
-          </p>
-          <div className="space-y-1.5">
-            <Label htmlFor="xero-bank" className="text-[13px]">Bank account for payments marked here</Label>
-            <Select
-              value={draft.payment_account_id || "auto"}
-              onValueChange={(v) => {
-                const bank = bankChoices.find((b) => b.id === v);
-                setDraft({
-                  ...draft,
-                  payment_account_id: v === "auto" ? null : v,
-                  payment_account_name: v === "auto" ? null : bank?.name ?? null,
-                });
-              }}
-            >
-              <SelectTrigger id="xero-bank"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">
-                  {banks.length === 1 ? `${banks[0].name} (your only bank account)` : "Choose an account"}
-                </SelectItem>
-                {bankChoices.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>{b.code ? `${b.code} · ${b.name}` : b.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs" style={{ color: banks.length > 1 && !draft.payment_account_id ? "var(--cc-danger-text)" : MUTED }}>
-              {optionsQuery.isLoading
-                ? "Loading your Xero bank accounts..."
-                : banks.length > 1 && !draft.payment_account_id
-                  ? "You have more than one bank account in Xero. Choose one, or payments marked here won't reach Xero."
-                  : "The account the money is paid into, so it matches in bank reconciliation."}
-            </p>
+            {/* Recent invoices */}
+            <section className="space-y-3">
+              <PanelHeading>Recent invoices</PanelHeading>
+              {recent.length === 0 ? (
+                <p className="text-sm" style={{ color: MUTED }}>Nothing sent yet. Approved invoices will appear here.</p>
+              ) : (
+                <ul className="divide-y divide-cc-border rounded-xl border border-cc-border bg-cc-surface">
+                  {recent.map((row) => {
+                    const state = xeroState(row);
+                    return (
+                      <li key={row.id} className="px-4 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-medium tabular-nums" style={{ color: TEXT }}>{row.invoice_number}</p>
+                            <p className="truncate text-xs" style={{ color: MUTED }}>
+                              {row.payer || "No payer"}{row.at ? ` · ${when(row.at)}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <span className="text-[13px] font-semibold tabular-nums" style={{ color: TEXT }}>{money(row.total_cents, row.currency)}</span>
+                            <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: state.fg, background: state.bg }}>{state.label}</span>
+                          </div>
+                        </div>
+                        {row.error && <p className="mt-1.5 text-xs" style={{ color: "var(--cc-danger-text)" }}>{row.error}</p>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
           </div>
-        </section>
-      </SidePanel>
+
+          {/* Settings */}
+          <div className="space-y-5 rounded-xl border border-cc-border bg-cc-surface p-5">
+            <section className="space-y-4">
+              <PanelHeading>How invoices arrive in Xero</PanelHeading>
+              <div className="space-y-1.5">
+                <Label htmlFor="xero-account" className="text-[13px]">Sales account</Label>
+                <Select value={draft.sales_account_code} onValueChange={(v) => setDraft({ ...draft, sales_account_code: v })}>
+                  <SelectTrigger id="xero-account"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {accountChoices.map((a) => (
+                      <SelectItem key={a.code} value={a.code}>{a.name ? `${a.code} · ${a.name}` : a.code}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs" style={{ color: MUTED }}>
+                  {optionsQuery.isLoading ? "Loading your Xero accounts..." : optionsQuery.isError ? "Couldn't load your Xero accounts." : "Where the invoice lines are recorded."}
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="xero-tax" className="text-[13px]">Tax rate</Label>
+                <Select value={draft.tax_type} onValueChange={(v) => setDraft({ ...draft, tax_type: v })}>
+                  <SelectTrigger id="xero-tax"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {taxChoices.map((t) => (
+                      <SelectItem key={t.type} value={t.type}>{t.name || t.type}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs" style={{ color: MUTED }}>NDIS supports are usually GST-free.</p>
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-[13px] font-medium" style={{ color: TEXT }}>In Xero, invoices arrive</p>
+                <div role="radiogroup" aria-label="In Xero, invoices arrive" className="inline-flex rounded-lg border border-cc-border p-1">
+                  {([
+                    { value: "AUTHORISED", label: "Approved" },
+                    { value: "DRAFT", label: "As drafts" },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={draft.invoice_status === opt.value}
+                      onClick={() => setDraft({ ...draft, invoice_status: opt.value })}
+                      className="h-8 rounded-md px-3 text-sm font-medium transition-colors"
+                      style={draft.invoice_status === opt.value ? { background: PURPLE_SOFT, color: PURPLE } : { color: MUTED }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs" style={{ color: MUTED }}>
+                  {draft.invoice_status === "AUTHORISED"
+                    ? "Ready to receive payments as soon as they arrive."
+                    : "Someone approves each one in Xero before it can be paid."}
+                </p>
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[13px] font-medium" style={{ color: TEXT }}>Send each invoice when it's approved</p>
+                  <p className="mt-0.5 text-xs" style={{ color: MUTED }}>
+                    Off: invoices go only when you press Send to Xero on the invoice, or Sync now.
+                  </p>
+                </div>
+                <Switch aria-label="Send each invoice when it's approved" checked={draft.auto_send} onCheckedChange={(v) => setDraft({ ...draft, auto_send: v })} />
+              </div>
+              <p className="text-xs" style={{ color: MUTED }}>Cancelling an invoice here voids it in Xero.</p>
+            </section>
+
+            <section className="space-y-4">
+              <PanelHeading>Payments</PanelHeading>
+              <p className="text-[13px]" style={{ color: MUTED }}>
+                Payments recorded in Xero mark the invoice paid here. Pressing Mark paid here records the payment in Xero too,
+                so it's only ever entered once.
+              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="xero-bank" className="text-[13px]">Bank account for payments marked here</Label>
+                <Select
+                  value={draft.payment_account_id || "auto"}
+                  onValueChange={(v) => {
+                    const bank = bankChoices.find((b) => b.id === v);
+                    setDraft({
+                      ...draft,
+                      payment_account_id: v === "auto" ? null : v,
+                      payment_account_name: v === "auto" ? null : bank?.name ?? null,
+                    });
+                  }}
+                >
+                  <SelectTrigger id="xero-bank"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">
+                      {banks.length === 1 ? `${banks[0].name} (your only bank account)` : "Choose an account"}
+                    </SelectItem>
+                    {bankChoices.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>{b.code ? `${b.code} · ${b.name}` : b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs" style={{ color: banks.length > 1 && !draft.payment_account_id ? "var(--cc-danger-text)" : MUTED }}>
+                  {optionsQuery.isLoading
+                    ? "Loading your Xero bank accounts..."
+                    : banks.length > 1 && !draft.payment_account_id
+                      ? "You have more than one bank account in Xero. Choose one, or payments marked here won't reach Xero."
+                      : "The account the money is paid into, so it matches in bank reconciliation."}
+                </p>
+              </div>
+            </section>
+            <div className="flex items-center justify-end gap-3 border-t border-cc-border pt-4">
+              {dirty && <span className="mr-auto text-xs" style={{ color: MUTED }}>Unsaved changes</span>}
+              <Button onClick={save} disabled={!dirty || saving} className="gap-1.5" style={{ background: "var(--cc-cta)", color: "#fff" }}>
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                Save Xero settings
+              </Button>
+          </div>
+        </div>
+        </div>
+
+        <DisconnectRow name="Xero" onDisconnect={() => setConfirmDisconnect(true)} />
+      </IntegrationPage>
 
       <AlertDialog open={confirmDisconnect} onOpenChange={setConfirmDisconnect}>
         <AlertDialogContent>
@@ -547,99 +554,105 @@ function XeroPanel({
 // The page
 // ---------------------------------------------------------------------------
 
-function XeroTile({ status }: { status: XeroStatus }) {
-  const { toast } = useToast();
-  const [connecting, setConnecting] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const connect = async () => {
-    setConnecting(true);
-    try {
-      const { url } = await startXeroConnect();
-      window.location.assign(url);
-    } catch (err) {
-      setConnecting(false);
-      toast({ title: "Couldn't start connecting to Xero", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
-    }
-  };
-  const tileStatus: TileStatus = status.connected
-    ? status.last_error || (status.counts?.failed ?? 0) > 0 ? "attention" : "connected"
-    : status.available ? "available" : "unavailable";
-
+function XeroTile({ status, onManage }: { status: XeroStatus; onManage: () => void }) {
+  const { connect, connecting } = useXeroConnect();
   return (
-    <>
-      <IntegrationTile
-        logo={<XeroWordmark />}
-        logoIsName
-        name="Xero"
-        category="Accounting"
-        description="Approved invoices go to Xero on their own, and payments sync both ways."
-        status={tileStatus}
-        detail={
-          status.connected ? (
-            status.earlier?.count ? (
-              <>{status.earlier.count} older {status.earlier.count === 1 ? "invoice needs" : "invoices need"} your answer. Open Manage.</>
-            ) : (
-              <>Connected to <span className="font-semibold">{status.tenant_name || "your Xero organisation"}</span></>
-            )
-          ) : undefined
-        }
-        action={
-          status.connected ? (
-            <Button variant="outline" size="sm" onClick={() => setPanelOpen(true)}>Manage</Button>
+    <IntegrationTile
+      logo={<XeroWordmark />}
+      logoIsName
+      name="Xero"
+      category="Accounting"
+      description="Approved invoices go to Xero on their own, and payments sync both ways."
+      status={xeroTileStatus(status)}
+      detail={
+        status.connected ? (
+          status.earlier?.count ? (
+            <>{status.earlier.count} older {status.earlier.count === 1 ? "invoice needs" : "invoices need"} your answer. Open Manage.</>
           ) : (
-            <Button
-              size="sm"
-              className="gap-1.5"
-              disabled={!status.available || connecting}
-              onClick={connect}
-              style={{ background: "var(--cc-cta)", color: "#fff" }}
-              title={status.available ? undefined : "Xero isn't switched on for this CareCliQ account yet. Contact CareCliQ support."}
-            >
-              {connecting && <Loader2 className="h-4 w-4 animate-spin" />}
-              Connect to Xero
-            </Button>
+            <>Connected to <span className="font-semibold">{status.tenant_name || "your Xero organisation"}</span></>
           )
-        }
-      />
-      {status.connected && (
-        <XeroPanel open={panelOpen} onOpenChange={setPanelOpen} status={status} onReconnect={connect} />
-      )}
-    </>
+        ) : undefined
+      }
+      action={
+        status.connected ? (
+          <Button variant="outline" size="sm" onClick={onManage}>Manage</Button>
+        ) : (
+          <Button
+            size="sm"
+            className="gap-1.5"
+            disabled={!status.available || connecting}
+            onClick={connect}
+            style={{ background: "var(--cc-cta)", color: "#fff" }}
+            title={status.available ? undefined : "Xero isn't switched on for this CareCliQ account yet. Contact CareCliQ support."}
+          >
+            {connecting && <Loader2 className="h-4 w-4 animate-spin" />}
+            Connect to Xero
+          </Button>
+        )
+      }
+    />
   );
 }
 
-function ApiTile() {
-  const [open, setOpen] = useState(false);
+/** Connected Xero's page, with its own address so Back and links work. */
+function XeroManageRoute({ status, onBack }: { status: XeroStatus; onBack: () => void }) {
+  const { connect } = useXeroConnect();
+  return <XeroManagePage status={status} onReconnect={connect} onBack={onBack} />;
+}
+
+function ApiTile({ onManage }: { onManage: () => void }) {
   const query = useOrgQuery(["integrations", "api"], { queryFn: getApiOverview, staleTime: 30_000, retry: false });
   const keys = (query.data?.keys ?? []).filter((k) => !k.revoked_at).length;
   const hooks = query.data?.webhooks ?? [];
-  const failing = hooks.some((h) => h.active && h.failure_count > 0);
-  const status: TileStatus = failing ? "attention" : keys || hooks.length ? "connected" : "available";
   const detail = keys || hooks.length
     ? `${keys} ${keys === 1 ? "key" : "keys"} · ${hooks.length} ${hooks.length === 1 ? "webhook" : "webhooks"}`
     : undefined;
   return (
-    <>
-      <IntegrationTile
-        logo={<LogoSlot name="API" icon={<Webhook className="h-5 w-5" style={{ color: PURPLE }} />} />}
-        name="API and webhooks"
-        category="For developers"
-        description="Let systems such as CORA Workforce read your workers, credentials and training, and hear about changes."
-        status={query.isError ? "unavailable" : status}
-        detail={detail}
-        action={
-          <Button size="sm" variant="outline" disabled={!query.data} onClick={() => setOpen(true)}>
-            {keys || hooks.length ? "Manage" : "Set up"}
-          </Button>
-        }
-      />
-      {query.data && <ApiAccessPanel open={open} onOpenChange={setOpen} overview={query.data} />}
-    </>
+    <IntegrationTile
+      logo={<LogoSlot name="API" icon={<Webhook className="h-5 w-5" style={{ color: PURPLE }} />} />}
+      name="API and webhooks"
+      category="For developers"
+      description="Let systems such as CORA Workforce read your workers, credentials and training, and hear about changes."
+      status={query.isError ? "unavailable" : query.data ? apiTileStatus(query.data) : "available"}
+      detail={detail}
+      action={
+        <Button size="sm" variant="outline" disabled={!query.data} onClick={onManage}>
+          {keys || hooks.length ? "Manage" : "Set up"}
+        </Button>
+      }
+    />
+  );
+}
+
+function PageLoading({ name }: { name: string }) {
+  return (
+    <div className="flex min-h-[220px] items-center justify-center gap-2 text-sm" style={{ color: MUTED }}>
+      <Loader2 className="h-4 w-4 animate-spin" /> Loading {name}...
+    </div>
   );
 }
 
 export function IntegrationsSection({ onSuggest }: { onSuggest?: () => void } = {}) {
   const statusQuery = useOrgQuery(["integrations", "xero"], { queryFn: getXeroStatus, staleTime: 30_000 });
+  const myobQuery = useOrgQuery(["integrations", "myob"], { queryFn: getMyobStatus, staleTime: 30_000, retry: false });
+  const apiQuery = useOrgQuery(["integrations", "api"], { queryFn: getApiOverview, staleTime: 30_000, retry: false });
+  const { managing, open, back } = useIntegrationRoute();
+
+  // Each integration's own page. Until its status arrives, a loading line; if
+  // it isn't connected (or the link is old), the list below.
+  if (managing === "xero") {
+    if (statusQuery.data?.connected) return <XeroManageRoute status={statusQuery.data} onBack={back} />;
+    if (statusQuery.isLoading) return <PageLoading name="Xero" />;
+  }
+  if (managing === "myob") {
+    if (myobQuery.data?.connected) return <MyobManageRoute status={myobQuery.data} onBack={back} />;
+    if (myobQuery.isLoading) return <PageLoading name="MYOB" />;
+  }
+  if (managing === "api") {
+    if (apiQuery.data) return <ApiAccessPage overview={apiQuery.data} onBack={back} />;
+    if (apiQuery.isLoading) return <PageLoading name="API and webhooks" />;
+  }
+
   return (
     <div className="space-y-5">
       <div className="border-b border-cc-border pb-4">
@@ -663,12 +676,12 @@ export function IntegrationsSection({ onSuggest }: { onSuggest?: () => void } = 
             <Loader2 className="h-4 w-4 animate-spin" /> Loading Xero...
           </div>
         ) : statusQuery.data ? (
-          <XeroTile status={statusQuery.data} />
+          <XeroTile status={statusQuery.data} onManage={() => open("xero")} />
         ) : null}
 
-        <MyobTile />
+        <MyobTile onManage={() => open("myob")} />
 
-        <ApiTile />
+        <ApiTile onManage={() => open("api")} />
 
         <article className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-cc-border p-5 text-center">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: PURPLE_SOFT, color: PURPLE }}>
