@@ -157,7 +157,18 @@ def _seal(token: str) -> str:
 
 
 def _open(token: str) -> str:
-    return decrypt_field(token) if token else token
+    """The saved token in plain text. One saved under a different (or now
+    invalid) PII_ENCRYPTION_KEY can't be read: that means reconnecting, so it
+    surfaces as a connection problem the director can act on, not a crash."""
+    if not token:
+        return token
+    try:
+        return decrypt_field(token)
+    except Exception as exc:
+        logger.warning("Saved Xero sign-in can't be decrypted (%s): %s", type(exc).__name__, exc)
+        raise XeroAuthError(
+            "CareCliQ can't read the saved Xero sign-in (the encryption key changed). Reconnect Xero."
+        ) from exc
 
 
 def _schema_missing(exc: Exception) -> bool:

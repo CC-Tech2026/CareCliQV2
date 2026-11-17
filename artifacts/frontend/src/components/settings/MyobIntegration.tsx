@@ -1,5 +1,6 @@
 /**
- * Settings > Integrations: the MYOB tile and its Manage panel.
+ * Settings > Integrations: the MYOB tile and its own Manage page
+ * (?section=integrations&integration=myob).
  *
  * MYOB Business (AccountRight) works like Xero: approved invoices go to MYOB
  * as service sales invoices, and invoices paid in MYOB are marked paid here.
@@ -17,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SidePanel } from "@/components/layout/SidePanel";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,7 +41,9 @@ import {
   type MyobSettings,
   type MyobStatus,
 } from "@/services/myobService";
-import { IntegrationTile, LogoSlot, PanelHeading, type TileStatus } from "./IntegrationsSection";
+import { IntegrationTile, LogoSlot } from "./IntegrationsSection";
+import { DisconnectRow, IntegrationPage, PanelHeading } from "./IntegrationPage";
+import { myobTileStatus } from "./integrationStatus";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -67,13 +69,35 @@ function myobState(row: NonNullable<MyobStatus["recent"]>[number]) {
   }
 }
 
-function MyobPanel({
-  open, onOpenChange, status, onReconnect,
+/** Starts the MYOB sign-in; MYOB sends the director back to /integrations/myob/callback. */
+function useMyobConnect() {
+  const { toast } = useToast();
+  const [connecting, setConnecting] = useState(false);
+  const connect = async () => {
+    setConnecting(true);
+    try {
+      const { url } = await startMyobConnect();
+      window.location.assign(url);
+    } catch (err) {
+      setConnecting(false);
+      toast({ title: "Couldn't start connecting to MYOB", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+    }
+  };
+  return { connect, connecting };
+}
+
+/** Connected MYOB's own page inside Settings > Integrations. */
+export function MyobManageRoute({ status, onBack }: { status: MyobStatus; onBack: () => void }) {
+  const { connect } = useMyobConnect();
+  return <MyobManagePage status={status} onReconnect={connect} onBack={onBack} />;
+}
+
+function MyobManagePage({
+  status, onReconnect, onBack,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   status: MyobStatus;
   onReconnect: () => void;
+  onBack: () => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -86,7 +110,7 @@ function MyobPanel({
 
   const optionsQuery = useOrgQuery(["integrations", "myob", "options"], {
     queryFn: getMyobOptions,
-    enabled: open && status.connected,
+    enabled: status.connected,
     staleTime: 5 * 60_000,
     retry: false,
   });
@@ -124,7 +148,7 @@ function MyobPanel({
     try {
       await disconnectMyob();
       toast({ title: "MYOB disconnected", description: "Invoices already in MYOB stay there." });
-      onOpenChange(false);
+      onBack();
       refresh();
     } catch (err) {
       toast({ title: "Couldn't disconnect MYOB", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
@@ -146,27 +170,15 @@ function MyobPanel({
 
   return (
     <>
-      <SidePanel
-        open={open}
-        onOpenChange={onOpenChange}
-        eyebrow="Accounting"
+      <IntegrationPage
+        onBack={onBack}
+        status={myobTileStatus(status)}
         title="MYOB"
-        description={
+        subtitle={
           <>
-            Connected to <span className="font-semibold text-cc-text">{status.business_name || "your MYOB company file"}</span>
+            Accounting · Connected to <span className="font-semibold text-cc-text">{status.business_name || "your MYOB company file"}</span>
             {status.connected_by_name ? ` by ${status.connected_by_name}` : ""}
             {status.connected_at ? ` on ${formatAppDate(status.connected_at)}` : ""}.
-          </>
-        }
-        footer={
-          <>
-            <Button variant="ghost" className="mr-auto" style={{ color: "var(--cc-danger-text)" }} onClick={() => setConfirmDisconnect(true)}>
-              Disconnect
-            </Button>
-            <Button onClick={save} disabled={!dirty || saving} className="gap-1.5" style={{ background: "var(--cc-cta)", color: "#fff" }}>
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Save MYOB settings
-            </Button>
           </>
         }
       >
@@ -189,115 +201,130 @@ function MyobPanel({
           </p>
         )}
 
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <PanelHeading>Syncing</PanelHeading>
-            <Button variant="outline" size="sm" onClick={sync} disabled={syncing} className="gap-1.5">
-              {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              Sync now
-            </Button>
-          </div>
-          <dl className="grid grid-cols-3 divide-x divide-cc-border rounded-xl border border-cc-border">
-            {[
-              { label: "In MYOB", value: status.counts?.in_myob ?? 0 },
-              { label: "Waiting to send", value: status.counts?.waiting ?? 0 },
-              { label: "Couldn't be sent", value: status.counts?.failed ?? 0, danger: true },
-            ].map((s) => (
-              <div key={s.label} className="px-4 py-3">
-                <dd className="text-xl font-semibold tabular-nums" style={{ color: s.danger && s.value > 0 ? "var(--cc-danger-text)" : TEXT }}>{s.value}</dd>
-                <dt className="text-xs" style={{ color: MUTED }}>{s.label}</dt>
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+          <div className="min-w-0 space-y-5">
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <PanelHeading>Syncing</PanelHeading>
+                <Button variant="outline" size="sm" onClick={sync} disabled={syncing} className="gap-1.5">
+                  {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  Sync now
+                </Button>
               </div>
-            ))}
-          </dl>
-          <p className="text-xs" style={{ color: MUTED }}>
-            {status.last_payment_check_at
-              ? `Payments last checked ${when(status.last_payment_check_at)}. MYOB is checked every 30 minutes.`
-              : "Payments are checked every 30 minutes, or press Sync now."}
-          </p>
-        </section>
-
-        <section className="space-y-3">
-          <PanelHeading>Recent invoices</PanelHeading>
-          {recent.length === 0 ? (
-            <p className="text-sm" style={{ color: MUTED }}>Nothing sent yet. Approved invoices will appear here.</p>
-          ) : (
-            <ul className="divide-y divide-cc-border rounded-xl border border-cc-border">
-              {recent.map((row) => {
-                const state = myobState(row);
-                return (
-                  <li key={row.id} className="px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-medium tabular-nums" style={{ color: TEXT }}>
-                          {row.invoice_number}
-                          {row.myob_number && row.myob_number !== row.invoice_number ? ` · MYOB ${row.myob_number}` : ""}
-                        </p>
-                        <p className="truncate text-xs" style={{ color: MUTED }}>
-                          {row.payer || "No payer"}{row.at ? ` · ${when(row.at)}` : ""}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="text-[13px] font-semibold tabular-nums" style={{ color: TEXT }}>{money(row.total_cents, row.currency)}</span>
-                        <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: state.fg, background: state.bg }}>{state.label}</span>
-                      </div>
-                    </div>
-                    {row.error && <p className="mt-1.5 text-xs" style={{ color: "var(--cc-danger-text)" }}>{row.error}</p>}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        <section className="space-y-4">
-          <PanelHeading>How invoices arrive in MYOB</PanelHeading>
-          <div className="space-y-1.5">
-            <Label htmlFor="myob-account" className="text-[13px]">Income account</Label>
-            <Select
-              value={draft.income_account_uid ?? undefined}
-              onValueChange={(v) => setDraft({ ...draft, income_account_uid: v, income_account_name: accountChoices.find((a) => a.uid === v)?.label ?? null })}
-            >
-              <SelectTrigger id="myob-account"><SelectValue placeholder="Choose an account" /></SelectTrigger>
-              <SelectContent>
-                {accountChoices.map((a) => (
-                  <SelectItem key={a.uid} value={a.uid}>{a.label}</SelectItem>
+              <dl className="grid grid-cols-3 divide-x divide-cc-border rounded-xl border border-cc-border bg-cc-surface">
+                {[
+                  { label: "In MYOB", value: status.counts?.in_myob ?? 0 },
+                  { label: "Waiting to send", value: status.counts?.waiting ?? 0 },
+                  { label: "Couldn't be sent", value: status.counts?.failed ?? 0, danger: true },
+                ].map((s) => (
+                  <div key={s.label} className="px-4 py-3">
+                    <dd className="text-xl font-semibold tabular-nums" style={{ color: s.danger && s.value > 0 ? "var(--cc-danger-text)" : TEXT }}>{s.value}</dd>
+                    <dt className="text-xs" style={{ color: MUTED }}>{s.label}</dt>
+                  </div>
                 ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs" style={{ color: MUTED }}>
-              {optionsQuery.isLoading ? "Loading your MYOB accounts..." : optionsQuery.isError ? "Couldn't load your MYOB accounts." : "Where the invoice lines are recorded."}
-            </p>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="myob-tax" className="text-[13px]">Tax code</Label>
-            <Select
-              value={draft.tax_code_uid ?? undefined}
-              onValueChange={(v) => setDraft({ ...draft, tax_code_uid: v, tax_code_name: taxChoices.find((t) => t.uid === v)?.label ?? null })}
-            >
-              <SelectTrigger id="myob-tax"><SelectValue placeholder="Choose a tax code" /></SelectTrigger>
-              <SelectContent>
-                {taxChoices.map((t) => (
-                  <SelectItem key={t.uid} value={t.uid}>{t.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs" style={{ color: MUTED }}>NDIS supports are usually GST-free (FRE).</p>
-          </div>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[13px] font-medium" style={{ color: TEXT }}>Send each invoice when it's approved</p>
-              <p className="mt-0.5 text-xs" style={{ color: MUTED }}>
-                Off: invoices go only when you press Send to MYOB on the invoice, or Sync now.
+              </dl>
+              <p className="text-xs" style={{ color: MUTED }}>
+                {status.last_payment_check_at
+                  ? `Payments last checked ${when(status.last_payment_check_at)}. MYOB is checked every 30 minutes.`
+                  : "Payments are checked every 30 minutes, or press Sync now."}
               </p>
-            </div>
-            <Switch aria-label="Send each invoice when it's approved" checked={draft.auto_send} onCheckedChange={(v) => setDraft({ ...draft, auto_send: v })} />
+            </section>
+
+            <section className="space-y-3">
+              <PanelHeading>Recent invoices</PanelHeading>
+              {recent.length === 0 ? (
+                <p className="text-sm" style={{ color: MUTED }}>Nothing sent yet. Approved invoices will appear here.</p>
+              ) : (
+                <ul className="divide-y divide-cc-border rounded-xl border border-cc-border bg-cc-surface">
+                  {recent.map((row) => {
+                    const state = myobState(row);
+                    return (
+                      <li key={row.id} className="px-4 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-medium tabular-nums" style={{ color: TEXT }}>
+                              {row.invoice_number}
+                              {row.myob_number && row.myob_number !== row.invoice_number ? ` · MYOB ${row.myob_number}` : ""}
+                            </p>
+                            <p className="truncate text-xs" style={{ color: MUTED }}>
+                              {row.payer || "No payer"}{row.at ? ` · ${when(row.at)}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <span className="text-[13px] font-semibold tabular-nums" style={{ color: TEXT }}>{money(row.total_cents, row.currency)}</span>
+                            <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: state.fg, background: state.bg }}>{state.label}</span>
+                          </div>
+                        </div>
+                        {row.error && <p className="mt-1.5 text-xs" style={{ color: "var(--cc-danger-text)" }}>{row.error}</p>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
           </div>
-          <p className="text-xs" style={{ color: MUTED }}>
-            MYOB numbers invoices itself when a CareCliQ number is longer than 13 characters. The CareCliQ number is
-            always in the invoice's Customer PO field. Cancelling an invoice here deletes it in MYOB, unless it's been paid there.
-          </p>
-        </section>
-      </SidePanel>
+
+          <div className="space-y-5 rounded-xl border border-cc-border bg-cc-surface p-5">
+            <section className="space-y-4">
+              <PanelHeading>How invoices arrive in MYOB</PanelHeading>
+              <div className="space-y-1.5">
+                <Label htmlFor="myob-account" className="text-[13px]">Income account</Label>
+                <Select
+                  value={draft.income_account_uid ?? undefined}
+                  onValueChange={(v) => setDraft({ ...draft, income_account_uid: v, income_account_name: accountChoices.find((a) => a.uid === v)?.label ?? null })}
+                >
+                  <SelectTrigger id="myob-account"><SelectValue placeholder="Choose an account" /></SelectTrigger>
+                  <SelectContent>
+                    {accountChoices.map((a) => (
+                      <SelectItem key={a.uid} value={a.uid}>{a.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs" style={{ color: MUTED }}>
+                  {optionsQuery.isLoading ? "Loading your MYOB accounts..." : optionsQuery.isError ? "Couldn't load your MYOB accounts." : "Where the invoice lines are recorded."}
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="myob-tax" className="text-[13px]">Tax code</Label>
+                <Select
+                  value={draft.tax_code_uid ?? undefined}
+                  onValueChange={(v) => setDraft({ ...draft, tax_code_uid: v, tax_code_name: taxChoices.find((t) => t.uid === v)?.label ?? null })}
+                >
+                  <SelectTrigger id="myob-tax"><SelectValue placeholder="Choose a tax code" /></SelectTrigger>
+                  <SelectContent>
+                    {taxChoices.map((t) => (
+                      <SelectItem key={t.uid} value={t.uid}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs" style={{ color: MUTED }}>NDIS supports are usually GST-free (FRE).</p>
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[13px] font-medium" style={{ color: TEXT }}>Send each invoice when it's approved</p>
+                  <p className="mt-0.5 text-xs" style={{ color: MUTED }}>
+                    Off: invoices go only when you press Send to MYOB on the invoice, or Sync now.
+                  </p>
+                </div>
+                <Switch aria-label="Send each invoice when it's approved" checked={draft.auto_send} onCheckedChange={(v) => setDraft({ ...draft, auto_send: v })} />
+              </div>
+              <p className="text-xs" style={{ color: MUTED }}>
+                MYOB numbers invoices itself when a CareCliQ number is longer than 13 characters. The CareCliQ number is
+                always in the invoice's Customer PO field. Cancelling an invoice here deletes it in MYOB, unless it's been paid there.
+              </p>
+            </section>
+            <div className="flex items-center justify-end gap-3 border-t border-cc-border pt-4">
+              {dirty && <span className="mr-auto text-xs" style={{ color: MUTED }}>Unsaved changes</span>}
+              <Button onClick={save} disabled={!dirty || saving} className="gap-1.5" style={{ background: "var(--cc-cta)", color: "#fff" }}>
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                Save MYOB settings
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <DisconnectRow name="MYOB" onDisconnect={() => setConfirmDisconnect(true)} />
+      </IntegrationPage>
 
       <AlertDialog open={confirmDisconnect} onOpenChange={setConfirmDisconnect}>
         <AlertDialogContent>
@@ -320,35 +347,16 @@ function MyobPanel({
   );
 }
 
-export function MyobTile() {
-  const { toast } = useToast();
+export function MyobTile({ onManage }: { onManage: () => void }) {
   const query = useOrgQuery(["integrations", "myob"], { queryFn: getMyobStatus, staleTime: 30_000, retry: false });
-  const [connecting, setConnecting] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
+  const { connect, connecting } = useMyobConnect();
   const status = query.data;
-
-  const connect = async () => {
-    setConnecting(true);
-    try {
-      const { url } = await startMyobConnect();
-      window.location.assign(url);
-    } catch (err) {
-      setConnecting(false);
-      toast({ title: "Couldn't start connecting to MYOB", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
-    }
-  };
 
   // Hidden until MYOB is switched on for the server (MYOB_CLIENT_ID and
   // MYOB_CLIENT_SECRET set). An organisation already connected still sees it.
   if (!status || (!status.available && !status.connected)) return null;
 
-  const tileStatus: TileStatus = !status
-    ? "unavailable"
-    : status.connected
-      ? status.last_error || (status.counts?.failed ?? 0) > 0 || !status.settings.income_account_uid || !status.settings.tax_code_uid
-        ? "attention"
-        : "connected"
-      : status.available ? "available" : "unavailable";
+  const tileStatus = myobTileStatus(status);
   const blocked = Boolean(status?.blocked_by_xero);
   const detail = status?.connected
     ? <>Connected to <span className="font-semibold">{status.business_name || "your MYOB company file"}</span></>
@@ -357,8 +365,7 @@ export function MyobTile() {
       : undefined;
 
   return (
-    <>
-      <IntegrationTile
+    <IntegrationTile
         logo={<LogoSlot name="MYOB" />}
         name="MYOB"
         category="Accounting"
@@ -367,7 +374,7 @@ export function MyobTile() {
         detail={detail}
         action={
           status?.connected ? (
-            <Button variant="outline" size="sm" onClick={() => setPanelOpen(true)}>Manage</Button>
+            <Button variant="outline" size="sm" onClick={onManage}>Manage</Button>
           ) : (
             <Button
               size="sm"
@@ -386,10 +393,6 @@ export function MyobTile() {
             </Button>
           )
         }
-      />
-      {status?.connected && (
-        <MyobPanel open={panelOpen} onOpenChange={setPanelOpen} status={status} onReconnect={connect} />
-      )}
-    </>
+    />
   );
 }

@@ -4,6 +4,7 @@ import { NotificationRealtimeBridge } from "@/components/worker/NotificationReal
 import { PageErrorBoundary } from "@/components/ErrorBoundary";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ManagementPageSearch, type QuickAction } from "./ManagementPageSearch";
+import { IntegrationsMenu } from "./IntegrationsMenu";
 ﻿import { useEffect, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -758,6 +759,14 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               >
                 <CalendarDays size={18} />
               </Link>
+            )}
+
+            {/* Integrations are set up by the managing director only (Settings > Integrations).
+                Hidden on phones, where the header is already full; Settings has them there. */}
+            {isMD && (
+              <div className="hidden sm:block">
+                <IntegrationsMenu />
+              </div>
             )}
 
             {/* Day / Night pill — both options always visible, active one highlighted. */}

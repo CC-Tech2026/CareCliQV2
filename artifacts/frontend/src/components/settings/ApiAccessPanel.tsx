@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { SidePanel } from "@/components/layout/SidePanel";
+import { IntegrationPage } from "./IntegrationPage";
+import { apiTileStatus } from "./integrationStatus";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -538,27 +539,22 @@ function DeveloperGuide() {
   );
 }
 
-export function ApiAccessPanel({
-  open, onOpenChange, overview,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  overview: ApiOverview;
-}) {
+/** API and webhooks' own page inside Settings > Integrations (?integration=api). */
+export function ApiAccessPage({ overview, onBack }: { overview: ApiOverview; onBack: () => void }) {
   const qc = useQueryClient();
   const refresh = () => void qc.invalidateQueries({ predicate: (q) => q.queryKey.includes("integrations") });
   return (
-    <SidePanel
-      open={open}
-      onOpenChange={onOpenChange}
-      eyebrow="For developers"
+    <IntegrationPage
+      onBack={onBack}
       title="API and webhooks"
-      description="For systems such as CORA Workforce. Keys only ever read this organisation's data, and you can revoke them at any time."
-      wide
+      status={apiTileStatus(overview)}
+      subtitle="For developers · For systems such as CORA Workforce. Keys only ever read this organisation's data, and you can revoke them at any time."
     >
-      <KeysSection overview={overview} refresh={refresh} />
-      <WebhooksSection overview={overview} refresh={refresh} />
-      <DeveloperGuide />
-    </SidePanel>
+      <div className="max-w-3xl space-y-6">
+        <KeysSection overview={overview} refresh={refresh} />
+        <WebhooksSection overview={overview} refresh={refresh} />
+        <DeveloperGuide />
+      </div>
+    </IntegrationPage>
   );
 }
