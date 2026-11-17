@@ -1137,6 +1137,11 @@ async def verify_shift(
         set_conversation_read_only_for_shift(shift_id)
     except Exception:
         logger.debug("Could not close the conversation for verified shift %s", shift_id)
+    # Approved: the time goes to the organisation's payroll (Employment Hero),
+    # in the background. Never blocks or fails the approval.
+    from . import employment_hero_service
+
+    employment_hero_service.timesheet_approved(org_id, shift_id)
     return result
 
 
@@ -1266,6 +1271,10 @@ async def reverse_verification(
         "reversal_reason": reason,
     }).eq("id", str(verification["id"])).execute()
 
+    # No longer approved: take it back out of payroll unless it's been paid.
+    from . import employment_hero_service
+
+    employment_hero_service.timesheet_unapproved(org_id, shift_id)
     return {"shift_id": shift_id, "verification_id": verification["id"], "refunded_amount": charged, "reversed_at": now}
 
 

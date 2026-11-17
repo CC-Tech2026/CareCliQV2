@@ -3,7 +3,7 @@
  * CareCliQ connects to, one equal tile each, with the detail a click away.
  *
  * Each connected integration's Manage opens its own page here
- * (?integration=xero|myob|api); the top bar's Integrations menu links to them.
+ * (?integration=xero|myob|employment-hero|api); the top bar's Integrations menu links to them.
  *
  * - Xero: Connect goes straight to Xero (and back to
  *   /integrations/xero/callback); Manage opens Xero's own page
@@ -43,6 +43,8 @@ import { ApiAccessPage } from "./ApiAccessPanel";
 import { apiTileStatus, xeroTileStatus, XERO_WORDMARK } from "./integrationStatus";
 import { getMyobStatus } from "@/services/myobService";
 import { MyobManageRoute, MyobTile } from "./MyobIntegration";
+import { getEmploymentHeroStatus } from "@/services/employmentHeroService";
+import { EmploymentHeroManageRoute, EmploymentHeroTile } from "./EmploymentHeroIntegration";
 import {
   DisconnectRow,
   IntegrationPage,
@@ -635,6 +637,7 @@ function PageLoading({ name }: { name: string }) {
 export function IntegrationsSection({ onSuggest }: { onSuggest?: () => void } = {}) {
   const statusQuery = useOrgQuery(["integrations", "xero"], { queryFn: getXeroStatus, staleTime: 30_000 });
   const myobQuery = useOrgQuery(["integrations", "myob"], { queryFn: getMyobStatus, staleTime: 30_000, retry: false });
+  const ehQuery = useOrgQuery(["integrations", "employment-hero"], { queryFn: getEmploymentHeroStatus, staleTime: 30_000, retry: false });
   const apiQuery = useOrgQuery(["integrations", "api"], { queryFn: getApiOverview, staleTime: 30_000, retry: false });
   const { managing, open, back } = useIntegrationRoute();
 
@@ -647,6 +650,10 @@ export function IntegrationsSection({ onSuggest }: { onSuggest?: () => void } = 
   if (managing === "myob") {
     if (myobQuery.data?.connected) return <MyobManageRoute status={myobQuery.data} onBack={back} />;
     if (myobQuery.isLoading) return <PageLoading name="MYOB" />;
+  }
+  if (managing === "employment-hero") {
+    if (ehQuery.data?.connected) return <EmploymentHeroManageRoute status={ehQuery.data} onBack={back} />;
+    if (ehQuery.isLoading) return <PageLoading name="Employment Hero" />;
   }
   if (managing === "api") {
     if (apiQuery.data) return <ApiAccessPage overview={apiQuery.data} onBack={back} />;
@@ -680,6 +687,8 @@ export function IntegrationsSection({ onSuggest }: { onSuggest?: () => void } = 
         ) : null}
 
         <MyobTile onManage={() => open("myob")} />
+
+        <EmploymentHeroTile onManage={() => open("employment-hero")} />
 
         <ApiTile onManage={() => open("api")} />
 

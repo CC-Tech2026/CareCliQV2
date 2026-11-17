@@ -36,6 +36,7 @@ _random_checkin_task: Optional[asyncio.Task] = None
 _stripe_reconciliation_task: Optional[asyncio.Task] = None
 _xero_sync_task: Optional[asyncio.Task] = None
 _myob_sync_task: Optional[asyncio.Task] = None
+_employment_hero_task: Optional[asyncio.Task] = None
 _webhook_task: Optional[asyncio.Task] = None
 _overdue_shift_autoend_task: Optional[asyncio.Task] = None
 
@@ -241,7 +242,7 @@ async def _scheduler_loop() -> None:
 
 def start_notification_scheduler() -> None:
     global _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task
-    global _overdue_shift_autoend_task, _xero_sync_task, _webhook_task, _myob_sync_task
+    global _overdue_shift_autoend_task, _xero_sync_task, _webhook_task, _myob_sync_task, _employment_hero_task
     if not settings.notification_scheduler_enabled:
         return
     if _scheduler_task and not _scheduler_task.done():
@@ -253,6 +254,7 @@ def start_notification_scheduler() -> None:
     _overdue_shift_autoend_task = asyncio.create_task(_overdue_shift_autoend_loop())
     _xero_sync_task = asyncio.create_task(_xero_sync_loop())
     _myob_sync_task = asyncio.create_task(_myob_sync_loop())
+    _employment_hero_task = asyncio.create_task(_employment_hero_loop())
     _webhook_task = asyncio.create_task(_webhook_retry_loop())
 
 
@@ -284,6 +286,22 @@ async def _xero_sync_loop() -> None:
                 logger.info("Xero sync: %s invoice(s) marked paid", paid)
         except Exception as exc:
             logger.warning("Xero sync loop failed: %s", exc)
+        await asyncio.sleep(1800)
+
+
+async def _employment_hero_loop() -> None:
+    """Every 30 minutes: approved timesheets that didn't reach Employment Hero
+    (payroll) are sent again, for example once a worker has been matched."""
+    from .employment_hero_service import run_employment_hero_pass
+
+    logger.info("Employment Hero sync loop started (every 30 min)")
+    while True:
+        try:
+            sent = await run_employment_hero_pass()
+            if sent:
+                logger.info("Employment Hero sync: %s timesheet(s) sent", sent)
+        except Exception as exc:
+            logger.warning("Employment Hero sync loop failed: %s", exc)
         await asyncio.sleep(1800)
 
 
@@ -375,10 +393,10 @@ async def _stripe_reconciliation_loop() -> None:
 
 async def stop_notification_scheduler() -> None:
     global _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task
-    global _overdue_shift_autoend_task, _xero_sync_task, _webhook_task, _myob_sync_task
+    global _overdue_shift_autoend_task, _xero_sync_task, _webhook_task, _myob_sync_task, _employment_hero_task
     for task in (
         _scheduler_task, _long_shift_task, _random_checkin_task, _stripe_reconciliation_task,
-        _overdue_shift_autoend_task, _xero_sync_task, _webhook_task, _myob_sync_task,
+        _overdue_shift_autoend_task, _xero_sync_task, _webhook_task, _myob_sync_task, _employment_hero_task,
     ):
         if not task:
             continue
@@ -394,4 +412,5 @@ async def stop_notification_scheduler() -> None:
     _overdue_shift_autoend_task = None
     _xero_sync_task = None
     _myob_sync_task = None
+    _employment_hero_task = None
     _webhook_task = None

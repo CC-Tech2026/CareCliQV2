@@ -45,6 +45,7 @@ import Billing from "@/pages/billing";
 import Settings from "@/pages/settings";
 import XeroCallbackPage from "@/pages/xero-callback";
 import MyobCallbackPage from "@/pages/myob-callback";
+import EmploymentHeroCallbackPage from "@/pages/employment-hero-callback";
 import MyClients from "@/pages/my-clients";
 import MyClientDetail from "@/pages/my-client-detail";
 import MyCompliance from "@/pages/my-compliance";
@@ -866,6 +867,13 @@ function Router() {
       <Route path="/integrations/myob/callback">
         <ProtectedRoute allowedRoles={["managing_director"]}>
           <RoleAwareShell><MyobCallbackPage /></RoleAwareShell>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Employment Hero (payroll) sends the director back here after they sign in. */}
+      <Route path="/integrations/employment-hero/callback">
+        <ProtectedRoute allowedRoles={["managing_director"]}>
+          <RoleAwareShell><EmploymentHeroCallbackPage /></RoleAwareShell>
         </ProtectedRoute>
       </Route>
 

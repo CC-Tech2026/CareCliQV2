@@ -12,7 +12,7 @@ import type { TileStatus } from "./integrationStatus";
 
 export type { TileStatus };
 
-export type IntegrationId = "xero" | "myob" | "api";
+export type IntegrationId = "xero" | "myob" | "employment-hero" | "api";
 
 export const INTEGRATIONS_HREF = "/settings?section=integrations";
 export function integrationHref(id: IntegrationId) {
@@ -104,13 +104,20 @@ export function IntegrationPage({
 }
 
 /** The bottom row of a connected accounting page: what disconnecting does, and the button. */
-export function DisconnectRow({ name, onDisconnect }: { name: string; onDisconnect: () => void }) {
+export function DisconnectRow({
+  name, onDisconnect, detail,
+}: {
+  name: string;
+  onDisconnect: () => void;
+  /** What stops and what stays; defaults to the accounting wording (invoices). */
+  detail?: string;
+}) {
   return (
     <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cc-border bg-cc-surface p-4">
       <div className="min-w-0">
         <PanelHeading>Disconnect {name}</PanelHeading>
         <p className="mt-0.5 text-xs" style={{ color: "var(--cc-muted)" }}>
-          New invoices stop going to {name}. Invoices already in {name} stay there.
+          {detail ?? `New invoices stop going to ${name}. Invoices already in ${name} stay there.`}
         </p>
       </div>
       <Button variant="outline" size="sm" style={{ color: "var(--cc-danger-text)" }} onClick={onDisconnect}>
