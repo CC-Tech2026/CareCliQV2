@@ -11,6 +11,8 @@ export type EmploymentHeroSettings = {
   /** Employment Hero work type used for sleepovers. */
   sleepover_work_type_id: number | null;
   sleepover_work_type_name?: string | null;
+  /** Breaks taken in the worker app are unpaid meal breaks (default: marked paid). */
+  breaks_unpaid?: boolean;
 };
 
 export type EmploymentHeroAttention = {

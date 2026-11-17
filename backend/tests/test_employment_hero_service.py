@@ -44,6 +44,17 @@ class _Query:
         self.filters.append(lambda r: r.get(key) is None)
         return self
 
+    @property
+    def not_(self):
+        query = self
+
+        class _Not:
+            def is_(self, key, _null):
+                query.filters.append(lambda r: r.get(key) is not None)
+                return query
+
+        return _Not()
+
     def gte(self, key, value):
         self.filters.append(lambda r: r.get(key) is None or str(r.get(key)) >= str(value))
         return self
@@ -188,13 +199,32 @@ class _FakeApi:
         return [c for c in self.calls if c[:2] == ("POST", "/timesheet")]
 
 
+class _Both:
+    """Patches Employment Hero and paid time (which reads breaks and
+    sleepover segments) onto the same fake database."""
+
+    def __init__(self, db, api):
+        from backend.app.services import pay_time_service
+
+        self.patches = [
+            patch.multiple(eh, get_supabase_admin=MagicMock(return_value=db), _api=api,
+                           participant_timezone=MagicMock(return_value=ADELAIDE)),
+            patch.object(pay_time_service, "get_supabase_admin", MagicMock(return_value=db)),
+        ]
+
+    def __enter__(self):
+        for p in self.patches:
+            p.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        for p in reversed(self.patches):
+            p.__exit__(*exc)
+        return False
+
+
 def _run(db, api):
-    return patch.multiple(
-        eh,
-        get_supabase_admin=MagicMock(return_value=db),
-        _api=api,
-        participant_timezone=MagicMock(return_value=ADELAIDE),
-    )
+    return _Both(db, api)
 
 
 # ---------------------------------------------------------------------------
@@ -214,23 +244,75 @@ def test_workers_are_matched_by_email_then_name_and_never_guessed():
     assert eh.match_employee({"full_name": "Old Staff", "email": "old@example.com"}, employees) is None
 
 
-def test_the_timesheet_is_the_approved_time_in_local_time_once_per_shift():
-    shift = _shift(is_sleepover=True)
-    start, end = eh.paid_window(shift, _verification(minutes=180))
-    # Clocked out 20 minutes late without approval: paid the 3 scheduled hours.
-    assert (end - start) == timedelta(hours=3)
-    line = eh.build_timesheet(shift, 501, start, end, {**eh.DEFAULT_SETTINGS, "sleepover_work_type_id": 44}, ADELAIDE)
-    assert line == {
+def test_the_worker_is_paid_the_time_worked_even_when_billing_is_capped():
+    shift = _shift()
+    # Billing was capped at the 3 rostered hours (extra time not approved)...
+    pay = eh.paid_time_for(shift, _verification(minutes=180))
+    # ...but they clocked out 20 minutes late, and are paid for it.
+    assert pay["end"] - pay["start"] == timedelta(hours=3, minutes=20)
+    lines = eh.build_timesheets(shift, 501, pay, dict(eh.DEFAULT_SETTINGS), ADELAIDE)
+    assert lines == [{
         "employeeId": 501,
         "startTime": "2026-11-14T09:00:00",
-        "endTime": "2026-11-14T12:00:00",
+        "endTime": "2026-11-14T12:20:00",
         "comments": "CareCliQ shift with Liam C.",
         "externalId": "carecliq-shift-s-1",
         "status": "Approved",
-        "workTypeId": 44,
-    }
-    submitted = eh.build_timesheet(_shift(), 501, start, end, {**eh.DEFAULT_SETTINGS, "send_approved": False}, ADELAIDE)
-    assert submitted["status"] == "Submitted" and "workTypeId" not in submitted
+    }]
+    submitted = eh.build_timesheets(shift, 501, pay, {**eh.DEFAULT_SETTINGS, "send_approved": False}, ADELAIDE)
+    assert submitted[0]["status"] == "Submitted"
+
+
+def test_the_approved_snapshot_is_what_gets_paid():
+    from backend.app.services import pay_time_service
+
+    shift = _shift()
+    snapshot = pay_time_service.to_record(pay_time_service.paid_time(shift))
+    verification = {**_verification(), "checks_run": {"pay": snapshot}}
+    # The clock times changed after approving: what was approved is sent.
+    pay = eh.paid_time_for({**shift, "clocked_out_at": "2026-11-14T15:00:00+10:30"}, verification)
+    assert pay["end"] == datetime(2026, 11, 14, 1, 50, tzinfo=timezone.utc)
+
+
+def _sleepover_pay():
+    from backend.app.services import pay_time_service
+
+    shift = _shift(
+        start="2026-11-14T20:00:00+10:30", scheduled_end="2026-11-15T08:00:00+10:30",
+        clocked_out_at="2026-11-15T08:00:00+10:30", is_sleepover=True,
+    )
+    segments = [
+        {"segment_type": "sleepover_block", "segment_start": "2026-11-14T22:00:00+10:30", "segment_end": "2026-11-15T06:00:00+10:30"},
+        {"segment_type": "call_out", "segment_start": "2026-11-15T02:00:00+10:30", "segment_end": "2026-11-15T02:30:00+10:30"},
+    ]
+    breaks = [{"break_start_at": "2026-11-14T21:00:00+10:30", "break_end_at": "2026-11-14T21:30:00+10:30"}]
+    return shift, pay_time_service.paid_time(shift, breaks, segments)
+
+
+def test_a_sleepover_goes_as_active_sleepover_call_out_and_active_lines():
+    shift, pay = _sleepover_pay()
+    lines = eh.build_timesheets(shift, 501, pay, {**eh.DEFAULT_SETTINGS, "sleepover_work_type_id": 44}, ADELAIDE)
+    assert [(l["startTime"][11:16], l["endTime"][11:16], l.get("workTypeId")) for l in lines] == [
+        ("20:00", "22:00", None),
+        ("22:00", "02:00", 44),
+        ("02:00", "02:30", None),  # woken to work: active time
+        ("02:30", "06:00", 44),
+        ("06:00", "08:00", None),
+    ]
+    assert [l["externalId"] for l in lines] == [
+        "carecliq-shift-s-1", "carecliq-shift-s-1-2", "carecliq-shift-s-1-3", "carecliq-shift-s-1-4", "carecliq-shift-s-1-5",
+    ]
+    # The break taken in the evening goes on the first line, marked paid by default.
+    assert lines[0]["breaks"] == [{"startTime": "2026-11-14T21:00:00", "endTime": "2026-11-14T21:30:00", "isPaidBreak": True}]
+    unpaid = eh.build_timesheets(shift, 501, pay, {**eh.DEFAULT_SETTINGS, "sleepover_work_type_id": 44, "breaks_unpaid": True}, ADELAIDE)
+    assert unpaid[0]["breaks"][0]["isPaidBreak"] is False
+
+
+def test_a_sleepover_waits_until_the_sleepover_work_type_is_chosen():
+    shift, pay = _sleepover_pay()
+    with pytest.raises(eh.EmploymentHeroError) as err:
+        eh.build_timesheets(shift, 501, pay, dict(eh.DEFAULT_SETTINGS), ADELAIDE)
+    assert "work type for sleepovers" in str(err.value)
 
 
 # ---------------------------------------------------------------------------
@@ -298,8 +380,24 @@ async def test_a_lost_answer_is_picked_up_instead_of_sending_twice():
     db, api = _db(), _FakeApi(responses)
     with _run(db, api):
         result = await eh.push_shift(ORG, "s-1")
-    assert result == {"status": "sent", "timesheet_id": 8123}
+    assert result == {"status": "sent", "timesheet_id": 8123, "timesheet_ids": [8123]}
     assert db.tables["employment_hero_timesheets"][0]["timesheet_id"] == 8123
+
+
+@pytest.mark.asyncio
+async def test_a_sleepover_shift_is_sent_and_removed_as_all_its_lines():
+    shift = _shift(scheduled_end="2026-11-15T08:00:00+10:30", clocked_out_at="2026-11-15T08:00:00+10:30", is_sleepover=True)
+    segments = [{"shift_id": "s-1", "segment_type": "sleepover_block",
+                 "segment_start": "2026-11-14T22:00:00+10:30", "segment_end": "2026-11-15T06:00:00+10:30"}]
+    db, api = _db(shifts=[shift], shift_segments=segments), _FakeApi()
+    db.tables["employment_hero_connections"][0]["settings"]["sleepover_work_type_id"] = 44
+    with _run(db, api):
+        sent = await eh.push_shift(ORG, "s-1")
+        removed = await eh.remove_shift(ORG, "s-1")
+    assert sent["status"] == "sent" and sent["timesheet_ids"] == [7001, 7002, 7003]
+    assert [c[3].get("workTypeId") for c in api.posted()] == [None, 44, None]
+    assert removed["status"] == "removed"
+    assert [c[1] for c in api.calls if c[0] == "DELETE"] == ["/timesheet/7001", "/timesheet/7002", "/timesheet/7003"]
 
 
 @pytest.mark.asyncio

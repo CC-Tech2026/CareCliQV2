@@ -97,7 +97,7 @@ it("shows revenue, profit, runway and outstanding for the period", async () => {
   expect(screen.getAllByText("12.5 months")).toHaveLength(2); // tile and cash card
   expect(screen.getByText("$986.00 overdue")).toBeTruthy();
   // P&L: shifts not all costed yet.
-  expect(screen.getByText("1,200 of 1,284 shifts costed")).toBeTruthy();
+  expect(screen.getByText("Estimated from 1,200 of 1,284 shifts. Your payroll has the actual figure.")).toBeTruthy();
   expect(screen.getByText("−$73,680.00")).toBeTruthy();
   // Cash: reserves meter and basis.
   expect(screen.getByRole("meter", { name: "Months of costs covered" }).getAttribute("aria-valuenow")).toBe("5");

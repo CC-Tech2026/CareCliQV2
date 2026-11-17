@@ -988,6 +988,14 @@ async def verify_shift(
     checks = compute_verification_checks(shift, session, note_text=note)
     # What was billed and why — part of the audit snapshot.
     checks["billing"] = {**billing, "extra_time_reason": reason or None, "rate_source": rate_source}
+    # What the worker is paid for: clock-in to clock-out, never capped at the
+    # roster the way billing is. Payroll exports send this, not the billing.
+    try:
+        from . import pay_time_service
+
+        checks["pay"] = pay_time_service.to_record(pay_time_service.for_shift(shift))
+    except Exception as exc:  # never block approving a timesheet
+        logger.warning("Paid time not recorded for shift %s: %s", shift.get("id"), exc)
     if assessment:
         checks["agreement"] = {**assessment, "reason": agreement_reason or None, "check_level": check_level}
     elif agreement_check_error:

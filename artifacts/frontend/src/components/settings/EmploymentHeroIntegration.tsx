@@ -415,6 +415,15 @@ function EmploymentHeroManagePage({
                   </div>
                   <Switch aria-label="Arrive approved, ready for the pay run" checked={draft.send_approved} onCheckedChange={(v) => setDraft({ ...draft, send_approved: v })} />
                 </div>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[13px] font-medium" style={{ color: TEXT }}>Breaks are unpaid meal breaks</p>
+                    <p className="mt-0.5 text-xs" style={{ color: MUTED }}>
+                      Breaks workers take in the app go with the timesheet. Off: they're marked as paid rest breaks. On: as unpaid meal breaks, so {NAME} takes them off the paid time.
+                    </p>
+                  </div>
+                  <Switch aria-label="Breaks are unpaid meal breaks" checked={!!draft.breaks_unpaid} onCheckedChange={(v) => setDraft({ ...draft, breaks_unpaid: v })} />
+                </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="eh-send-from" className="text-[13px]">Send shifts worked from</Label>
                   <Input
@@ -438,14 +447,16 @@ function EmploymentHeroManagePage({
                   >
                     <SelectTrigger id="eh-sleepover"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={NO_WORK_TYPE}>The worker's usual pay</SelectItem>
+                      <SelectItem value={NO_WORK_TYPE}>Not chosen yet</SelectItem>
                       {workTypeChoices.map((w) => (
                         <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <p className="text-xs" style={{ color: MUTED }}>
-                    {optionsQuery.isError ? `Couldn't load your ${NAME} work types.` : "A sleepover work type is picked for you when there is one."}
+                    {optionsQuery.isError
+                      ? `Couldn't load your ${NAME} work types.`
+                      : "Picked for you when there is one. Shifts with a sleepover wait until it's chosen, so the sleep time isn't paid as ordinary hours."}
                   </p>
                 </div>
                 <p className="text-xs" style={{ color: MUTED }}>

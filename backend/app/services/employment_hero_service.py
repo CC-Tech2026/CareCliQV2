@@ -9,13 +9,14 @@ How it fits together
   website's /integrations/employment-hero/callback page with a code; we swap it
   for tokens. If their login sees one payroll business we use it; if it sees
   several, they pick theirs by name.
-- When a coordinator approves a timesheet (verifies a shift), the approved
-  time goes to Employment Hero in the background as a timesheet for that
-  worker: the start time and the minutes approved for pay (the time worked,
-  capped at the scheduled time unless extra time was approved). Employment
-  Hero's own award settings (SCHADS) work out the rates, so weekend, evening
-  and public holiday loadings are what the provider's payroll already does.
-  Sleepovers go in under the business's sleepover work type when it has one.
+- When a coordinator approves a timesheet (verifies a shift), the time worked
+  goes to Employment Hero in the background as timesheet lines for that
+  worker: clock-in to clock-out (pay_time_service), never capped at the
+  roster the way billing is, with any breaks taken. Employment Hero's own
+  award settings (SCHADS) work out the rates, so weekend, evening and public
+  holiday loadings are what the provider's payroll already does. A shift
+  with a sleepover goes as separate lines: active work, the sleepover under
+  the business's sleepover work type, call-outs, then active work again.
 - Workers are matched to Employment Hero employees by email, then by name.
   Only when that can't tell people apart does the director pick the person
   from a list. Each shift is sent once (Employment Hero enforces our external
@@ -73,6 +74,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # Employment Hero work type for sleepovers, found by name on connect.
     "sleepover_work_type_id": None,
     "sleepover_work_type_name": None,
+    # Breaks taken in the worker app go across as recorded. The app can't tell
+    # a paid rest break from an unpaid meal break, so they're marked paid
+    # unless the director says the organisation's breaks are unpaid.
+    "breaks_unpaid": False,
 }
 
 
@@ -632,23 +637,18 @@ def _shift(shift_id: str) -> Optional[dict]:
     return rows[0] if rows else None
 
 
-def paid_window(shift: dict, verification: Optional[dict]) -> tuple[datetime, datetime]:
-    """When the approved time starts and ends (UTC). It starts when the worker
-    clocked in and runs for the minutes approved for pay: the time worked,
-    capped at the scheduled time unless the coordinator approved extra."""
-    from .shift_verification_service import billable_minutes
+def paid_time_for(shift: dict, verification: Optional[dict]) -> dict:
+    """The time the worker is paid for (pay_time_service): clock-in to
+    clock-out, never capped at the roster the way billing is, split around a
+    sleepover. Taken from the approval's snapshot when it has one, so what's
+    sent is what the coordinator saw when they approved."""
+    from . import pay_time_service
 
-    start_raw = shift.get("clocked_in_at") or shift.get("scheduled_start")
-    if not start_raw:
-        raise EmploymentHeroError("The shift has no start time.")
-    start = parse_shift_datetime(start_raw).astimezone(timezone.utc)
-    billing = ((verification or {}).get("checks_run") or {}).get("billing") or {}
-    minutes = billing.get("billable_minutes")
-    if minutes is None:
-        minutes = billable_minutes(shift).get("billable_minutes")
-    if not minutes or float(minutes) <= 0:
-        raise EmploymentHeroError("The shift has no approved time to pay.")
-    return start, start + timedelta(minutes=round(float(minutes)))
+    record = ((verification or {}).get("checks_run") or {}).get("pay")
+    try:
+        return pay_time_service.from_record(record) if record else pay_time_service.for_shift(shift)
+    except (ValueError, KeyError) as exc:
+        raise EmploymentHeroError(str(exc) or "The shift has no time to pay.") from exc
 
 
 def _participant_label(name: Any) -> str:
@@ -658,21 +658,52 @@ def _participant_label(name: Any) -> str:
     return parts[0] if len(parts) == 1 else f"{parts[0]} {parts[-1][0]}."
 
 
-def build_timesheet(shift: dict, employee_id: int, start: datetime, end: datetime, conn_settings: dict, tz) -> dict:
-    """The Employment Hero timesheet line. Times are the shift's local times,
-    which is how Employment Hero reads them."""
+def _external_id(shift_id: Any, index: int) -> str:
+    """The first line keeps the shift's own id (what earlier versions sent);
+    a sleepover shift's later lines add -2, -3..."""
+    base = f"{EXTERNAL_PREFIX}{shift_id}"
+    return base if index == 0 else f"{base}-{index + 1}"
+
+
+def build_timesheets(shift: dict, employee_id: int, pay: dict, conn_settings: dict, tz) -> list[dict]:
+    """The Employment Hero timesheet lines for one shift: one per period of
+    active work or sleepover, in the shift's local times (how Employment Hero
+    reads them). Employment Hero's award settings work out the pay."""
+    def local(d: datetime) -> str:
+        return d.astimezone(tz).replace(tzinfo=None).isoformat(timespec="seconds")
+
+    periods = pay.get("periods") or [{"kind": "active", "start": pay["start"], "end": pay["end"]}]
+    sleepover_type = conn_settings.get("sleepover_work_type_id")
+    if any(p["kind"] == "sleepover" for p in periods) and not sleepover_type:
+        raise EmploymentHeroError(
+            "This shift has a sleepover. Choose Employment Hero's work type for sleepovers on the Employment Hero page, "
+            "and it will be sent."
+        )
     who = _participant_label(shift.get("participant_name"))
-    line: dict[str, Any] = {
-        "employeeId": employee_id,
-        "startTime": start.astimezone(tz).replace(tzinfo=None).isoformat(timespec="seconds"),
-        "endTime": end.astimezone(tz).replace(tzinfo=None).isoformat(timespec="seconds"),
-        "comments": f"CareCliQ shift{' with ' + who if who else ''}"[:250],
-        "externalId": f"{EXTERNAL_PREFIX}{shift['id']}",
-        "status": "Approved" if conn_settings.get("send_approved", True) else "Submitted",
-    }
-    if shift.get("is_sleepover") and conn_settings.get("sleepover_work_type_id"):
-        line["workTypeId"] = int(conn_settings["sleepover_work_type_id"])
-    return line
+    paid_breaks = not conn_settings.get("breaks_unpaid", False)
+    lines: list[dict] = []
+    for index, period in enumerate(periods):
+        sleeping = period["kind"] == "sleepover"
+        line: dict[str, Any] = {
+            "employeeId": employee_id,
+            "startTime": local(period["start"]),
+            "endTime": local(period["end"]),
+            "comments": f"CareCliQ {'sleepover' if sleeping else 'shift'}{' with ' + who if who else ''}"[:250],
+            "externalId": _external_id(shift["id"], index),
+            "status": "Approved" if conn_settings.get("send_approved", True) else "Submitted",
+        }
+        if sleeping:
+            line["workTypeId"] = int(sleepover_type)
+        breaks = [
+            {"startTime": local(max(b["start"], period["start"])), "endTime": local(min(b["end"], period["end"])),
+             "isPaidBreak": paid_breaks}
+            for b in pay.get("breaks") or []
+            if not sleeping and b["end"] > period["start"] and b["start"] < period["end"]
+        ]
+        if breaks:
+            line["breaks"] = breaks
+        lines.append(line)
+    return lines
 
 
 async def _find_existing(row: dict, external_id: str) -> Optional[int]:
@@ -723,24 +754,30 @@ async def push_shift(org_id: str, shift_id: str, *, row: Optional[dict] = None, 
     try:
         if not worker_id:
             raise EmploymentHeroError("The shift has no worker.")
-        start, end = paid_window(shift, verification)
+        pay = paid_time_for(shift, verification)
         employee_id = await _employee_for(row, org_id, worker_id, cache)
-        line = build_timesheet(shift, employee_id, start, end, conn_settings, tz)
-        try:
-            created = await _api(row, "POST", "/timesheet", params={"enforceUniqueExternalId": "true"}, json=line)
-            timesheet_id = _get(created, "id")
-        except EmploymentHeroError as exc:
-            if "external" not in str(exc).lower():
-                raise
-            timesheet_id = await _find_existing(row, line["externalId"])
-            if timesheet_id is None:
-                raise
+        lines = build_timesheets(shift, employee_id, pay, conn_settings, tz)
+        ids: list[int] = []
+        # Each line has its own external id, so sending again after a line
+        # failed picks up the ones already there instead of doubling them.
+        for line in lines:
+            try:
+                created = await _api(row, "POST", "/timesheet", params={"enforceUniqueExternalId": "true"}, json=line)
+                timesheet_id = _get(created, "id")
+            except EmploymentHeroError as exc:
+                if "external" not in str(exc).lower():
+                    raise
+                timesheet_id = await _find_existing(row, line["externalId"])
+                if timesheet_id is None:
+                    raise
+            if timesheet_id is not None:
+                ids.append(int(timesheet_id))
         _save_timesheet(org_id, shift_id, {
-            "worker_id": worker_id, "timesheet_id": int(timesheet_id) if timesheet_id is not None else None,
-            "status": "sent", "start_time": _iso(start), "end_time": _iso(end), "error": None,
+            "worker_id": worker_id, "timesheet_id": ids[0] if ids else None, "timesheet_ids": ids,
+            "status": "sent", "start_time": _iso(pay["start"]), "end_time": _iso(pay["end"]), "error": None,
             "attempts": attempts, "sent_at": _iso(_now()),
         })
-        return {"status": "sent", "timesheet_id": timesheet_id}
+        return {"status": "sent", "timesheet_id": ids[0] if ids else None, "timesheet_ids": ids}
     except EmploymentHeroAuthError as exc:
         _note_error(org_id, str(exc))
         _save_timesheet(org_id, shift_id, {"worker_id": worker_id or None, "status": "failed", "error": str(exc),
@@ -759,23 +796,32 @@ async def remove_shift(org_id: str, shift_id: str, *, row: Optional[dict] = None
     if not existing or existing.get("status") in ("removed",):
         return {"status": "nothing"}
     row = row or _load_connection(org_id)
-    timesheet_id = existing.get("timesheet_id")
-    if existing.get("status") != "sent" or not timesheet_id or not row:
+    ids = [int(i) for i in existing.get("timesheet_ids") or [] if i is not None]
+    if not ids and existing.get("timesheet_id"):
+        ids = [int(existing["timesheet_id"])]  # sent before shifts could have several lines
+    if existing.get("status") != "sent" or not ids or not row:
         _save_timesheet(org_id, shift_id, {"status": "removed", "error": None})
         return {"status": "removed"}
     try:
-        line = await _api(row, "GET", f"/timesheet/{int(timesheet_id)}")
-        if str(_get(line, "status") or "").lower() == "processed":
-            message = "Already paid in an Employment Hero pay run. Adjust it in Employment Hero."
-            _save_timesheet(org_id, shift_id, {"status": "paid", "error": message})
-            return {"status": "paid", "error": message}
-        await _api(row, "DELETE", f"/timesheet/{int(timesheet_id)}")
-    except EmploymentHeroNotFound:
-        pass
+        # Paid in a pay run? Then none of it is touched: half a shift is worse.
+        for timesheet_id in ids:
+            try:
+                line = await _api(row, "GET", f"/timesheet/{timesheet_id}")
+            except EmploymentHeroNotFound:
+                continue
+            if str(_get(line, "status") or "").lower() == "processed":
+                message = "Already paid in an Employment Hero pay run. Adjust it in Employment Hero."
+                _save_timesheet(org_id, shift_id, {"status": "paid", "error": message})
+                return {"status": "paid", "error": message}
+        for timesheet_id in ids:
+            try:
+                await _api(row, "DELETE", f"/timesheet/{timesheet_id}")
+            except EmploymentHeroNotFound:
+                pass
     except EmploymentHeroError as exc:
         _save_timesheet(org_id, shift_id, {"error": f"Couldn't remove it from Employment Hero: {exc}"})
         return {"status": "failed", "error": str(exc)}
-    _save_timesheet(org_id, shift_id, {"status": "removed", "timesheet_id": None, "error": None})
+    _save_timesheet(org_id, shift_id, {"status": "removed", "timesheet_id": None, "timesheet_ids": [], "error": None})
     return {"status": "removed"}
 
 
@@ -963,7 +1009,7 @@ def update_settings(user: dict, data: dict) -> dict:
     if not row:
         raise HTTPException(status_code=404, detail="Employment Hero isn't connected.")
     conn_settings = _settings_of(row)
-    for key in ("auto_send", "send_approved"):
+    for key in ("auto_send", "send_approved", "breaks_unpaid"):
         if key in data and data[key] is not None:
             conn_settings[key] = bool(data[key])
     if data.get("send_from"):

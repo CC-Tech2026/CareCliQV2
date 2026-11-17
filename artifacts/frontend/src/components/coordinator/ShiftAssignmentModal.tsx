@@ -1271,7 +1271,7 @@ function BillingEstimate({
             <span className="font-normal" style={{ color: MUTED }}>Worker pay estimate unavailable ({pay.reason.replace(/_/g, " ")})</span>
           ) : payDollars != null ? (
             <>
-              Projected worker pay: ${payDollars.toFixed(2)}
+              Estimated worker pay: ${payDollars.toFixed(2)}
               {payDayTypes.length > 0 && <span className="ml-1 font-normal" style={{ color: MUTED }}>(paid as {payDayTypes.join(" + ")})</span>}
               {margin != null && (
                 <span className="ml-1 font-normal" style={{ color: margin < 0 ? "#DC2626" : MUTED }}>
