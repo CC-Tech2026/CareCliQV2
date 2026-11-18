@@ -1959,12 +1959,14 @@ def seed_records(db, org_id: str, staff: dict[str, str], participants: dict[str,
 
 
 def seed_invoices(db, org_id: str, staff: dict[str, str], participants: dict[str, str]) -> None:
-    prices = {
-        row["item_code"]: float(row["price_national"])
-        for row in db.table("platform_ndis_price_items").select("item_code, price_national, valid_to")
+    catalogue = [
+        row
+        for row in db.table("platform_ndis_price_items").select("item_code, name, price_national, valid_to")
         .in_("item_code", sorted({c for p in PARTICIPANTS for c, *_ in p["supports"]})).execute().data
         if not row.get("valid_to") or row["valid_to"] >= iso_now()
-    }
+    ]
+    prices = {row["item_code"]: float(row["price_national"]) for row in catalogue}
+    names = {row["item_code"]: row.get("name") for row in catalogue}
     count = 0
     for n, p in enumerate(PARTICIPANTS, start=1):
         number = f"{ORG_ABBREV}-INV-{TODAY:%Y%m}-{n:03d}"
@@ -1980,7 +1982,14 @@ def seed_invoices(db, org_id: str, staff: dict[str, str], participants: dict[str
         invoice = db.table("invoices").insert({
             "organization_id": org_id, "issued_by": staff["olivia"], "participant_id": participants[p["key"]],
             "invoice_number": number, "recipient_name": recipient, "recipient_email": "accounts@planpartners.example.com" if "Plan" in recipient else p["email"],
-            "line_items": [{"price_item_code": code, "description": f"Support work, {hours} hours", "quantity": hours, "unit_price": unit, "total_price": total}],
+            # The app's line format (billing_service._calculate_totals): item_code and
+            # cents. Older seeds wrote price_item_code / unit_price / total_price,
+            # which the app doesn't read, so those invoices showed $0 and no code.
+            "line_items": [{
+                "description": names.get(code) or f"Support work, {hours} hours", "item_code": code, "unit": "H",
+                "quantity": hours, "unit_amount_cents": round(unit * 100), "line_total_cents": int(total * 100),
+                "location_type": "national", "service_date": None,
+            }],
             "subtotal_cents": int(total * 100), "tax_cents": 0, "total_cents": int(total * 100), "currency": "AUD",
             "status": "paid" if paid else "sent", "due_date": d(14 if not paid else -7), "issued_at": local(TODAY - timedelta(days=21), 9).isoformat(),
             "finalized_at": local(TODAY - timedelta(days=21), 9).isoformat(),
