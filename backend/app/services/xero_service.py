@@ -370,6 +370,20 @@ async def complete_connection(user: dict, code: str, state: str) -> dict:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     existing = _load_connection(org_id)
+    if existing and existing.get("tenant_id") and str(existing["tenant_id"]) != str(tenant["tenantId"]):
+        # Signing in again (to reconnect, or to allow payroll) lets the person
+        # pick any of their Xero organisations. Quietly switching would send
+        # this organisation's invoices, payments and timesheets into another
+        # set of books (on 2026-11-18 a demo's invoices reached a real
+        # company's Xero this way). Changing organisation takes a disconnect.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"You chose {tenant.get('tenantName') or 'a different organisation'} in Xero, but CareCliQ is connected to "
+                f"{existing.get('tenant_name') or 'another Xero organisation'}. Nothing was changed. Sign in again and choose "
+                f"{existing.get('tenant_name') or 'that organisation'}, or disconnect Xero first to switch organisation."
+            ),
+        )
     payload = {
         "organization_id": org_id,
         "tenant_id": tenant["tenantId"],

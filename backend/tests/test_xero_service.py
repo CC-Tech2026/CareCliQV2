@@ -168,6 +168,83 @@ async def test_a_sign_in_link_only_finishes_for_the_organisation_that_started_it
     assert db.tables["xero_oauth_states"] == []  # used up either way
 
 
+class _XeroConnections:
+    """httpx.AsyncClient for the /connections call: the organisations the
+    person just authorised, the one they picked last-updated first."""
+
+    def __init__(self, tenants):
+        self.tenants = tenants
+
+    def __call__(self, *a, **k):
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, *a, **k):
+        return MagicMock(status_code=200, json=lambda: self.tenants)
+
+
+def _signing_in(db, tenants):
+    tokens = {"access_token": "access-9", "refresh_token": "refresh-9", "expires_in": 1800,
+              "scope": "offline_access accounting.invoices payroll.timesheets"}
+    return [
+        patch.object(xs, "get_supabase_admin", return_value=db),
+        patch.object(xs, "_token_request", AsyncMock(return_value=tokens)),
+        patch.object(xs.httpx, "AsyncClient", _XeroConnections(tenants)),
+        patch.object(xs.audit_service, "log_action", AsyncMock()),
+        patch.object(xs, "get_status", lambda user: {"ok": True}),
+    ]
+
+
+def _state():
+    return {"state": "s-1", "organization_id": ORG, "user_id": "md-1", "created_at": datetime.now(timezone.utc).isoformat()}
+
+
+@pytest.mark.asyncio
+async def test_signing_in_again_never_switches_to_another_xero_organisation():
+    db = _DB(xero_oauth_states=[_state()], xero_connections=[dict(CONNECTION)])
+    picked = [{"tenantId": "tenant-real", "tenantName": "CC Tech Australia PTY LTD", "tenantType": "ORGANISATION",
+               "id": "conn-real", "updatedDateUtc": "2026-11-18T00:00:00"},
+              {"tenantId": "tenant-1", "tenantName": "Sunrise Supports", "tenantType": "ORGANISATION",
+               "id": "conn-1", "updatedDateUtc": "2026-11-16T00:00:00"}]
+    patches = _signing_in(db, picked)
+    for p in patches:
+        p.start()
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await xs.complete_connection(DIRECTOR, "code", "s-1")
+    finally:
+        for p in reversed(patches):
+            p.stop()
+    assert exc.value.status_code == 409
+    assert "CC Tech Australia PTY LTD" in exc.value.detail and "Sunrise Supports" in exc.value.detail
+    # The existing connection is untouched: same organisation, same tokens.
+    saved = db.tables["xero_connections"][0]
+    assert saved["tenant_id"] == "tenant-1" and saved["access_token"] == "access-1"
+
+
+@pytest.mark.asyncio
+async def test_signing_in_again_to_the_same_organisation_still_works():
+    db = _DB(xero_oauth_states=[_state()], xero_connections=[dict(CONNECTION)])
+    picked = [{"tenantId": "tenant-1", "tenantName": "Sunrise Supports", "tenantType": "ORGANISATION",
+               "id": "conn-1", "updatedDateUtc": "2026-11-18T00:00:00"}]
+    patches = _signing_in(db, picked)
+    for p in patches:
+        p.start()
+    try:
+        assert await xs.complete_connection(DIRECTOR, "code", "s-1") == {"ok": True}
+    finally:
+        for p in reversed(patches):
+            p.stop()
+    saved = db.tables["xero_connections"][-1]  # the upsert (this fake appends it)
+    assert saved["tenant_id"] == "tenant-1"
+    assert "payroll.timesheets" in saved["scopes"]
+
+
 @pytest.mark.asyncio
 async def test_an_expired_access_token_is_refreshed_and_the_new_pair_saved():
     row = {**CONNECTION, "access_token_expires_at": (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()}
