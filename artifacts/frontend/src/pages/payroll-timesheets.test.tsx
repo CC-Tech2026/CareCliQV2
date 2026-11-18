@@ -8,8 +8,10 @@ const mocks = vi.hoisted(() => ({
   toast: vi.fn(),
   getPayrollTimesheets: vi.fn(),
   downloadPayrollHours: vi.fn(),
+  sendHoursToXero: vi.fn(),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
+vi.mock("@/services/xeroPayrollService", () => ({ sendHoursToXero: mocks.sendHoursToXero }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ user: { id: "c-1", organizationId: "org-1", role: "support_coordinator" } }),
 }));
@@ -152,6 +154,30 @@ describe("Payroll", () => {
     expect(await screen.findByText(/1 shift couldn't be sent to Employment Hero/)).toBeTruthy();
     expect(screen.getAllByText(/1 shift not sent to Employment Hero/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/isn't approved yet/)).toBeNull();
+  });
+
+  it("with Xero Payroll on, sends the period to Xero and says who didn't go", async () => {
+    mocks.getPayrollTimesheets.mockResolvedValue(data({ connected: { employment_hero: false, xero_payroll: true } }));
+    mocks.sendHoursToXero.mockResolvedValue({
+      sent: 1, failed: 1, skipped: 0, waiting: 0,
+      results: [
+        { worker_id: "w-1", worker_name: "Aisha Rahman", status: "sent", period: "09/11 to 15/11", hours: 15.67 },
+        { worker_id: "w-2", worker_name: "Tom Walsh", status: "failed", message: "Tom Walsh isn't matched to a Xero employee. Choose who they are on the Xero page." },
+      ],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Send to Xero/ }));
+    await waitFor(() => expect(mocks.sendHoursToXero).toHaveBeenCalledWith("2026-11-09", "2026-11-15"));
+    expect(await screen.findByText(/1 timesheet in Xero as a draft/)).toBeTruthy();
+    expect(screen.getByText(/Tom Walsh isn't matched to a Xero employee/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open Xero settings" })).toBeTruthy();
+  });
+
+  it("without Xero Payroll, there's no Send to Xero button", async () => {
+    mocks.getPayrollTimesheets.mockResolvedValue(data());
+    renderPage();
+    await screen.findByText("Aisha Rahman");
+    expect(screen.queryByRole("button", { name: /Send to Xero/ })).toBeNull();
   });
 
   it("with nothing approved, says so and can't export", async () => {

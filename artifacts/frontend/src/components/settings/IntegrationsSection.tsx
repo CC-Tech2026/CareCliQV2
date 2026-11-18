@@ -45,6 +45,7 @@ import { getMyobStatus } from "@/services/myobService";
 import { MyobManageRoute, MyobTile } from "./MyobIntegration";
 import { getEmploymentHeroStatus } from "@/services/employmentHeroService";
 import { EmploymentHeroManageRoute, EmploymentHeroTile } from "./EmploymentHeroIntegration";
+import { XeroPayrollSection } from "./XeroPayrollSection";
 import {
   DisconnectRow,
   IntegrationPage,
@@ -527,6 +528,8 @@ function XeroManagePage({
           </div>
         </div>
         </div>
+
+        <XeroPayrollSection />
 
         <DisconnectRow name="Xero" onDisconnect={() => setConfirmDisconnect(true)} />
       </IntegrationPage>

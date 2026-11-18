@@ -53,7 +53,7 @@ export type PayrollWaiting = {
 export type PayrollPeriodData = {
   start: string;
   end: string;
-  connected: { employment_hero: boolean };
+  connected: { employment_hero: boolean; xero_payroll?: boolean };
   totals: { shifts: number; hours: number; workers: number; waiting: number; sent: number; attention: number };
   shifts: PayrollShift[];
   waiting: PayrollWaiting[];

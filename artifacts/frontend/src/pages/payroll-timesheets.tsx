@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock, Download, FileSpreadsheet, FileText, Loader2, Moon } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock, Download, FileSpreadsheet, FileText, Loader2, Moon, Send } from "lucide-react";
 import { SidePanel } from "@/components/layout/SidePanel";
-import { LoadError, PageHeader, SearchField, SkeletonBlocks, Surface, ctaClass, rowClass } from "@/components/layout/PageKit";
+import { LoadError, PageHeader, SearchField, SkeletonBlocks, Surface, ctaClass, outlineClass, rowClass } from "@/components/layout/PageKit";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -12,6 +12,7 @@ import { appTodayKey } from "@/lib/datetime";
 import {
   downloadPayrollHours, getPayrollTimesheets, type PayrollShift,
 } from "@/services/payrollService";
+import { sendHoursToXero, type XeroPayrollSend } from "@/services/xeroPayrollService";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -20,6 +21,8 @@ const WARN = "var(--cc-amber)";
 const DANGER = "var(--cc-danger-text)";
 
 const EH_PAGE = "/settings?section=integrations&integration=employment-hero";
+const XERO_PAGE = "/settings?section=integrations&integration=xero";
+const GOOD = "var(--cc-green)";
 const FREQUENCY_KEY = "carecliq-payroll-frequency";
 /** Staying on a few minutes is normal; from this many it's worth a look. */
 const LATE_MINUTES = 15;
@@ -162,6 +165,31 @@ function ShiftDetail({ shift }: { shift: PayrollShift }) {
   );
 }
 
+/** What Send to Xero did: how many drafts went, and anyone who didn't. */
+function XeroResult({ result }: { result: XeroPayrollSend }) {
+  const problems = result.results.filter((r) => r.status === "failed" || r.status === "skipped");
+  return (
+    <div className="space-y-1.5 rounded-xl px-4 py-2.5 text-sm" role="status"
+      style={{ background: problems.length ? "var(--cc-status-warning-bg)" : "var(--cc-soft)", color: TEXT }}>
+      <p className="flex flex-wrap items-center gap-x-2">
+        <CheckCircle2 size={16} style={{ color: GOOD }} />
+        {result.sent
+          ? `${plural(result.sent, "timesheet")} in Xero as ${result.sent === 1 ? "a draft" : "drafts"}. Check and approve them in Xero Payroll.`
+          : "Nothing new went to Xero."}
+      </p>
+      {problems.map((r) => (
+        <p key={`${r.worker_id}-${r.period ?? ""}`} className="flex items-start gap-2 text-sm">
+          <CircleAlert size={15} className="mt-0.5 shrink-0" style={{ color: r.status === "failed" ? DANGER : WARN }} />
+          <span>{r.message}</span>
+        </p>
+      ))}
+      {result.results.some((r) => r.status === "failed") && (
+        <Link href={XERO_PAGE} className="inline-block font-semibold underline">Open Xero settings</Link>
+      )}
+    </div>
+  );
+}
+
 // ── The page ────────────────────────────────────────────────────────────────
 
 // The Notes column only when someone has a note, so the table stays tight.
@@ -179,6 +207,9 @@ export default function PayrollTimesheetsPage() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<WorkerHours | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [sending, setSending] = useState(false);
+  // What the last Send to Xero did, for the period it was sent for.
+  const [sent, setSent] = useState<{ key: string; result: XeroPayrollSend } | null>(null);
 
   useEffect(() => {
     try {
@@ -203,6 +234,21 @@ export default function PayrollTimesheetsPage() {
   const GRID = hasNotes ? GRID_NOTES : GRID_PLAIN;
   const waiting = data?.waiting.length ?? 0;
   const failed = data?.totals.attention ?? 0;
+
+  const xero = !!data?.connected.xero_payroll;
+  const sentHere = sent && sent.key === `${range.start}:${range.end}` ? sent.result : null;
+
+  async function sendToXero() {
+    setSending(true);
+    try {
+      const result = await sendHoursToXero(range.start, range.end);
+      setSent({ key: `${range.start}:${range.end}`, result });
+    } catch (err) {
+      toast({ title: "Couldn't send to Xero", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function exportAs(format: "xlsx" | "csv") {
     setDownloading(true);
@@ -246,7 +292,7 @@ export default function PayrollTimesheetsPage() {
   const exportButton = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className={ctaClass} disabled={downloading || !workers.length}>
+        <button type="button" className={xero ? outlineClass : ctaClass} disabled={downloading || !workers.length}>
           {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Export
           <ChevronDown size={15} />
         </button>
@@ -276,7 +322,17 @@ export default function PayrollTimesheetsPage() {
         eyebrow="Finance"
         title="Payroll"
         description="Hours worked by each staff member in a pay period, from approved timesheets. Staff are paid for the time they worked, clock-in to clock-out. Export the hours for your payroll software or bookkeeper; your payroll works out the pay."
-        actions={<>{period}{exportButton}</>}
+        actions={
+          <>
+            {period}
+            {exportButton}
+            {xero && (
+              <button type="button" className={ctaClass} onClick={() => void sendToXero()} disabled={sending || !workers.length}>
+                {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Send to Xero
+              </button>
+            )}
+          </>
+        }
       />
 
       {query.isLoading ? (
@@ -295,6 +351,7 @@ export default function PayrollTimesheetsPage() {
               <Link href="/coordinator/verification" className="font-semibold underline">Approve timesheets</Link>
             </p>
           )}
+          {sentHere && <XeroResult result={sentHere} />}
           {failed > 0 && (
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl px-4 py-2.5 text-sm"
               style={{ background: "var(--cc-status-danger-bg)", color: TEXT }}>

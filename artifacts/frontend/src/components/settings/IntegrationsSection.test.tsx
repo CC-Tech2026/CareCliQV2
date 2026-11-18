@@ -5,6 +5,7 @@ import { IntegrationsSection } from "./IntegrationsSection";
 import * as integrations from "@/services/integrationsService";
 import * as myob from "@/services/myobService";
 import * as eh from "@/services/employmentHeroService";
+import * as xeroPayroll from "@/services/xeroPayrollService";
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ user: { id: "md-1", organizationId: "org-1", role: "managing_director" } }),
@@ -13,6 +14,7 @@ vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/services/integrationsService");
 vi.mock("@/services/myobService");
 vi.mock("@/services/employmentHeroService");
+vi.mock("@/services/xeroPayrollService");
 
 const SETTINGS = { sales_account_code: "200", tax_type: "EXEMPTOUTPUT", invoice_status: "AUTHORISED", auto_send: true } as const;
 
@@ -32,6 +34,12 @@ function renderSection() {
   // MYOB has its own tests (MyobIntegration.test.tsx); here it is simply not switched on.
   vi.mocked(myob.getMyobStatus).mockResolvedValue(MYOB_OFF);
   vi.mocked(eh.getEmploymentHeroStatus).mockResolvedValue(EH_OFF);
+  // Xero Payroll has its own tests (XeroPayrollSection.test.tsx).
+  vi.mocked(xeroPayroll.getXeroPayroll).mockResolvedValue({
+    connected: false, has_access: false, enabled: false, breaks_unpaid: false, linked: 0, employment_hero_connected: false,
+    rates: { weekday: null, saturday: null, sunday: null, public_holiday: null, sleepover: null },
+    rate_names: { weekday: null, saturday: null, sunday: null, public_holiday: null, sleepover: null },
+  });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>

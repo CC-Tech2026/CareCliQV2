@@ -160,6 +160,16 @@ def _local_iso(d: datetime, tz) -> str:
     return d.astimezone(tz).replace(tzinfo=None).isoformat(timespec="minutes")
 
 
+def _xero_payroll_on(org_id: str) -> bool:
+    """Whether approved hours go to Xero Payroll (local import: that module uses this one)."""
+    try:
+        from .xero_payroll_service import enabled_for
+
+        return enabled_for(org_id)
+    except Exception:
+        return False
+
+
 def _local_or_none(raw: Any, tz) -> Optional[str]:
     if not raw:
         return None
@@ -279,7 +289,7 @@ def period(org_id: str, start: date, end: date) -> dict[str, Any]:
     return {
         "start": start.isoformat(),
         "end": end.isoformat(),
-        "connected": {"employment_hero": connected},
+        "connected": {"employment_hero": connected, "xero_payroll": _xero_payroll_on(org_id)},
         "totals": {
             "shifts": len(shifts),
             "hours": round(worked / 60, 2),
