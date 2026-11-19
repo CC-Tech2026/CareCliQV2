@@ -108,6 +108,15 @@ def _require_coordinator(current_user: dict) -> None:
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
+@router.get("/plan-meetings/voice-access")
+async def meeting_voice_access(current_user: dict = Depends(get_current_user)):
+    """Whether this organisation may record meetings, so the app can say so
+    before anyone starts talking rather than after the recording."""
+    _require_coordinator(current_user)
+    enabled = voice_access.voice_notes_allowed(get_user_organization_id(current_user))
+    return {"enabled": enabled, "message": None if enabled else voice_access.VOICE_OFF_DETAIL}
+
+
 # ✅ NEW: Create meeting session (MINIMAL - fixes 422 error)
 @router.post("/plan-meetings/sessions", status_code=status.HTTP_201_CREATED)
 async def create_meeting_session(
@@ -127,6 +136,8 @@ async def create_meeting_session(
     _require_coordinator(current_user)
     organization_id = get_user_organization_id(current_user)
     coordinator_id = get_user_id(current_user)
+    # A session exists only to hold a recording; refuse before any audio is made.
+    voice_access.require_voice_notes(organization_id)
     
     # ✅ FIX: Validate required fields are present
     if not organization_id:
@@ -279,7 +290,7 @@ async def list_plan_meetings(
     try:
         session_query = (
             supabase.table("plan_meeting_sessions")
-            .select("id, meeting_type, created_at, recorded_at, coordinator_id, stage_2_status, review_status")
+            .select("id, meeting_type, created_at, recorded_at, coordinator_id, stage_1_status, stage_2_status, review_status")
             .eq("participant_id", participant_id)
             .eq("organization_id", organization_id)
         )
@@ -289,6 +300,10 @@ async def list_plan_meetings(
             session_query = session_query.lte("created_at", f"{date_to}T23:59:59.999999")
         session_resp = session_query.order("created_at", desc=True).execute()
         for row in session_resp.data or []:
+            # A recording that was discarded, or whose transcription failed,
+            # has nothing to show: there's no audio kept and no transcript.
+            if row.get("stage_1_status") not in (None, "complete"):
+                continue
             suggestions_status = "applied" if row.get("review_status") == "approved" else "pending_review"
             session_meetings.append({
                 "id": row["id"],
@@ -458,6 +473,8 @@ async def get_plan_meeting(
             "consent_given_by": session.get("consent_given_by"),
             "consent_method": session.get("consent_method"),
             "consent_confirmed_at": session.get("consent_confirmed_at"),
+            "stage_2_status": session.get("stage_2_status"),
+            "reviewed_at": session.get("reviewed_at"),
         },
     }
 

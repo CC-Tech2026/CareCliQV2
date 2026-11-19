@@ -4,6 +4,7 @@ import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
 import { Toaster } from "@/components/ui/toaster";
+import { MeetingRecorderRoot } from "@/components/coordinator/meeting-capture/MeetingRecorderRoot";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -908,7 +909,7 @@ function App() {
                 <WelcomeScreenGate />
                 <OnboardingCompleteGate />
                 <SubscriptionBanner />
-                <PersonDetailsProvider><Router /></PersonDetailsProvider>
+                <PersonDetailsProvider><MeetingRecorderRoot><Router /></MeetingRecorderRoot></PersonDetailsProvider>
               </WouterRouter>
             </OfflineSyncProvider>
             <Toaster />

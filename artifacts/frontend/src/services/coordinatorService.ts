@@ -2272,6 +2272,11 @@ export type PlanMeetingDetail = PlanMeeting & {
   consent_given_by?: ConsentGivenBy | null;
   consent_method?: ConsentMethod | null;
   consent_confirmed_at?: string | null;
+  attention_flags?: Array<{ flag_type?: string; severity?: string; description: string }>;
+  /** "complete" once goals and tasks have been looked for. */
+  stage_2_status?: string | null;
+  /** When the suggestions were added to the plan. */
+  reviewed_at?: string | null;
 };
 
 export type RecordMeetingPayload = {
@@ -2291,6 +2296,12 @@ export function recordPlanMeeting(payload: RecordMeetingPayload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+/** Whether this organisation may record meetings (voice is off for most
+ * providers until the speech processing agreements are in place). */
+export function getMeetingVoiceAccess() {
+  return jsonFetch<{ enabled: boolean; message: string | null }>("/api/coordinator/plan-meetings/voice-access");
 }
 
 export function listPlanMeetings(participantId: string, filters?: { dateFrom?: string; dateTo?: string }) {
@@ -2357,6 +2368,10 @@ export function getPendingPlanMeetings() {
 /** Whisper picks the decoder from the file extension, so Safari's mp4 audio
  * must not be sent as ".webm". */
 function audioFilename(audioBlob: Blob) {
+  // An uploaded file keeps its own name, so an .mp3 or .wav is read as one.
+  if (typeof File !== "undefined" && audioBlob instanceof File && /\.[a-z0-9]{2,5}$/i.test(audioBlob.name)) {
+    return audioBlob.name;
+  }
   return audioBlob.type.includes("mp4") ? "recording.m4a" : "recording.webm";
 }
 
