@@ -109,7 +109,9 @@ def test_session_for_unknown_intake_is_refused():
         "id": "md-1", "role": "managing_director", "organization_id": ORG,
     }
     try:
-        with patch("backend.app.services.participant_intake_service.get_intake_for_session", return_value=None):
+        # Recording sessions are refused while voice is off for the organisation;
+        # switch it on so this checks the intake.
+        with patch("backend.app.services.voice_access.settings.voice_notes_org_ids", "all"),              patch("backend.app.services.participant_intake_service.get_intake_for_session", return_value=None):
             res = TestClient(app).post("/api/coordinator/plan-meetings/sessions", json={
                 "meeting_type": "meet_greet", "intake_id": INTAKE,
                 "consent_given_by": "participant", "consent_method": "verbal",
