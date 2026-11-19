@@ -11,6 +11,9 @@ export const Brand = {
   purple: "#4B3F91",
   /** Light Grey — app background (never use white for screen bg) */
   ivory: "#F2F3F5",
+  /** Warm off-white behind the logo animation (the video's own canvas), used
+   *  by the splash so the animation sits on its background seamlessly. */
+  canvas: "#F9F5EF",
   /** Card White — cards, sheets, inputs, tab bar */
   white: "#FFFFFF",
   /** Dark Navy — body/heading ink + home hero card */
