@@ -232,7 +232,7 @@ export default function RootLayout() {
   }, [fontsLoaded, fontError]);
 
   if ((!fontsLoaded && !fontError) || showSplash) {
-    return <AppSplash />;
+    return <AppSplash mode="brief" fadeIn={false} />;
   }
 
   return (
