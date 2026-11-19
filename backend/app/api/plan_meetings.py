@@ -8,6 +8,7 @@ from typing import Any, Literal, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
+from ..services import voice_access
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
 from ..services.supabase_client import get_supabase_admin
@@ -494,6 +495,7 @@ async def transcribe_plan_meeting_audio(
 ):
     """Transcribe audio recording using OpenAI Whisper API."""
     _require_coordinator(current_user)
+    voice_access.require_voice_notes(get_user_organization_id(current_user))
     
     if not audio_file.filename:
         raise HTTPException(status_code=400, detail="Audio file is required.")
@@ -636,6 +638,7 @@ async def transcribe_and_resolve_names(
         - segment_ids: preserved for Stage 2 citation
         - flags: confidence issues, unresolved speakers, ambiguities
     """
+    voice_access.require_voice_notes(get_user_organization_id(current_user))
     _require_coordinator(current_user)
     organization_id = get_user_organization_id(current_user)
     supabase = get_supabase_admin()

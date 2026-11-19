@@ -6,7 +6,7 @@ from ..schemas.session import SessionCreate, SessionUpdate, MessageCreate
 from ..services import session_service, ai_service, alert_service, funding_service, message_service, shift_service
 from ..services.compliance_engine import run_compliance_check
 from ..services.compliance_engine import ComplianceBlockedError, COMPLIANCE_BLOCKED_MESSAGE
-from ..services import participant_service
+from ..services import participant_service, voice_access
 from ..services.settings_service import get_physical_exam_session_types
 from ..services import embedding_pipeline
 from ..services.embedding_pipeline import run_session_embedding_pipeline
@@ -1479,6 +1479,7 @@ async def upload_photo(session_id: str, file: UploadFile = File(...), current_us
 
 @router.post("/{session_id}/transcribe-audio")
 async def transcribe_audio(session_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    voice_access.require_voice_notes(get_user_organization_id(current_user))
     try:
         if not await session_service.get_session_by_id(session_id, current_user):
             raise HTTPException(status_code=404, detail="Session not found")

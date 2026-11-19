@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     langsmith_api_key: str = os.environ.get("LANGSMITH_API_KEY", "")
     langsmith_project: str = os.environ.get("LANGSMITH_PROJECT", "carecliq-chatbox")
     langsmith_tracing_enabled: bool = os.environ.get("LANGSMITH_TRACING_ENABLED", "false").lower() == "true"
+    # Which organisations may use voice recording (audio goes to OpenAI /
+    # Google outside Australia). Unset: the demo organisations only
+    # (services/voice_access.py). "all": every organisation. "none": none.
+    # A comma list of organisation ids: only those.
+    voice_notes_org_ids: str = os.environ.get("VOICE_NOTES_ORG_IDS", "")
     # Chatbox LLM provider — "anthropic" (production default) or "openai" (for
     # testing when the Anthropic account has no credit balance).
     chatbox_llm_provider: str = os.environ.get("CHATBOX_LLM_PROVIDER", "anthropic")
