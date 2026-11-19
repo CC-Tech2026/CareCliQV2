@@ -25,7 +25,10 @@ def test_names_sent_with_the_audio_reach_name_resolution():
 
     app.dependency_overrides[get_current_user] = lambda: MD
     try:
-        with patch.object(plan_meetings, "get_supabase_admin", return_value=client_db), \
+        # Voice recording is on only for listed organisations (voice_access);
+        # switch it on for this test's organisation.
+        with patch.object(plan_meetings.voice_access.settings, "voice_notes_org_ids", "all"), \
+             patch.object(plan_meetings, "get_supabase_admin", return_value=client_db), \
              patch.object(plan_meetings, "_build_openai_client", return_value=whisper), \
              patch("backend.app.services.plan_meeting_service.run_stage_1_name_resolution", stage_1):
             TestClient(app).post(

@@ -32,7 +32,7 @@ from ..services import (
     travel_expense_service,
 )
 from ..services.compliance_evidence_service import get_evidence_metadata, list_session_evidence_metadata
-from ..services import shift_review_service, shift_signature_service
+from ..services import shift_review_service, shift_signature_service, voice_access
 from ..services.object_storage import upload_evidence_bytes
 from ..services.evidence_access_service import verify_and_download_evidence
 from ..services.compliance_engine import ComplianceBlockedError, run_compliance_check
@@ -2137,6 +2137,7 @@ async def worker_transcribe_session_audio(
     _require_worker(current_user)
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
+    voice_access.require_voice_notes(org_id)
     session_notes = shift_service.list_session_notes(session_id, worker_id, org_id)
     if session_notes is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
