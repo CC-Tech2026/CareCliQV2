@@ -4,6 +4,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { STAFF_SEARCH, staffOption } from "@/lib/person-options";
+import { matchesPerson, workerSearchText } from "@/lib/person-identity";
 import { SidePanel } from "@/components/layout/SidePanel";
 import { ctaClass, outlineClass } from "@/components/layout/PageKit";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -47,6 +50,7 @@ export function TeamSheet({
   const [coordinator, setCoordinator] = useState<string>(NONE);
   const [main, setMain] = useState<string>(NONE);
   const [backups, setBackups] = useState<string[]>([]);
+  const [backupQuery, setBackupQuery] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -59,6 +63,11 @@ export function TeamSheet({
   const people = (staff.data ?? []).filter((p) => p.is_active !== false);
   const coordinators = people.filter((p) => p.role === "support_coordinator" || p.role === "managing_director");
   const workers = people.filter((p) => p.role === "support_worker");
+  // Ticked backups first, then everyone else; the search narrows the rest.
+  const backupChoices = workers
+    .filter((w) => w.id !== main)
+    .filter((w) => backups.includes(w.id) || matchesPerson(backupQuery, [workerSearchText(w)]))
+    .sort((a, b) => Number(backups.includes(b.id)) - Number(backups.includes(a.id)));
 
   async function save() {
     setSaving(true);
@@ -99,46 +108,63 @@ export function TeamSheet({
       ) : (
         <>
           <div className="space-y-2">
-            <Label htmlFor="team-coordinator">Coordinator</Label>
-            <Select value={coordinator} onValueChange={setCoordinator}>
-              <SelectTrigger id="team-coordinator"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>No coordinator</SelectItem>
-                {coordinators.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.full_name}{c.role === "managing_director" ? " (director)" : ""}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Coordinator</Label>
+            <SearchableSelect
+              value={coordinator}
+              onValueChange={setCoordinator}
+              options={[{ value: NONE, label: "No coordinator", keywords: "none" }, ...coordinators.map(staffOption)]}
+              placeholder="No coordinator"
+              searchPlaceholder={STAFF_SEARCH}
+              emptyText="No one matches"
+            />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="team-main">Main support worker</Label>
-            <Select value={main} onValueChange={(v) => { setMain(v); setBackups((b) => b.filter((id) => id !== v)); }}>
-              <SelectTrigger id="team-main"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>No main worker</SelectItem>
-                {workers.map((w) => <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Label>Main support worker</Label>
+            <SearchableSelect
+              value={main}
+              onValueChange={(v) => { setMain(v); setBackups((b) => b.filter((id) => id !== v)); }}
+              options={[{ value: NONE, label: "No main worker", keywords: "none" }, ...workers.map(staffOption)]}
+              placeholder="No main worker"
+              searchPlaceholder={STAFF_SEARCH}
+              emptyText="No support worker matches"
+            />
           </div>
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium" style={{ color: TEXT }}>Backup workers</legend>
             <p className="text-xs" style={{ color: MUTED }}>People who know this participant and can cover when the main worker is away.</p>
-            <ul className="mt-2 divide-y rounded-2xl border border-cc-border">
-              {workers.filter((w) => w.id !== main).map((w) => {
+            {workers.length > 8 && (
+              <Input
+                type="search"
+                value={backupQuery}
+                onChange={(e) => setBackupQuery(e.target.value)}
+                placeholder={STAFF_SEARCH}
+                aria-label="Search support workers"
+                className="mt-2"
+              />
+            )}
+            <ul className="mt-2 max-h-80 divide-y overflow-y-auto rounded-2xl border border-cc-border">
+              {backupChoices.map((w) => {
                 const checked = backups.includes(w.id);
+                const option = staffOption(w);
                 return (
                   <li key={w.id} className="border-cc-border">
-                    <label className="flex min-h-11 cursor-pointer items-center gap-3 px-4">
+                    <label className="flex min-h-11 cursor-pointer items-center gap-3 px-4 py-1.5">
                       <Checkbox
                         checked={checked}
                         onCheckedChange={(v) => setBackups((b) => (v ? [...b, w.id] : b.filter((id) => id !== w.id)))}
                       />
-                      <span className="text-sm" style={{ color: TEXT }}>{w.full_name}</span>
+                      <span className="min-w-0">
+                        <span className="block text-sm" style={{ color: TEXT }}>{w.full_name}</span>
+                        {option.detail && <span className="block text-xs" style={{ color: MUTED }}>{option.detail}</span>}
+                      </span>
                     </label>
                   </li>
                 );
               })}
               {workers.length === 0 && <li className="p-4 text-sm" style={{ color: MUTED }}>No active support workers.</li>}
+              {workers.length > 0 && backupChoices.length === 0 && (
+                <li className="p-4 text-sm" style={{ color: MUTED }}>No support worker matches "{backupQuery.trim()}".</li>
+              )}
             </ul>
           </fieldset>
         </>

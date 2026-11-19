@@ -60,7 +60,9 @@ it("heads the profile with who they are and where their NDIS plan stands", () =>
   render(<ProfileHeader overview={overview} actions={<button type="button">Add a shift</button>} />);
   expect(screen.getByRole("heading", { level: 1, name: "Ralph Edwards" })).toBeTruthy();
   expect(screen.getByText("Receiving supports")).toBeTruthy();
-  expect(screen.getByText(/Acquired brain injury · NDIS 430000001/)).toBeTruthy();
+  expect(screen.getByText(/Acquired brain injury/)).toBeTruthy();
+  expect(screen.getByText(/NDIS 430000001/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Copy NDIS number" })).toBeTruthy();
   expect(screen.getByText(/NDIS plan 1 Mar 2026 to 28 Feb 2027/)).toBeTruthy();
   expect(screen.getByText(/Plan-managed/)).toBeTruthy();
   expect(screen.getByText("High risk")).toBeTruthy();

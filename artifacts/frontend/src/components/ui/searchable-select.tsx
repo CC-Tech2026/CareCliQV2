@@ -10,7 +10,12 @@ import {
 export type SearchableOption = {
   value: string;
   label: string;
-  keywords?: string;
+  /** What the option is found by as well as its label: an NDIS number, a
+   * staff ID, a phone number. Each entry is matched on its own. */
+  keywords?: string | string[];
+  /** A second, muted line under the label that tells look-alikes apart:
+   * "NDIS 431990001 · Glenelg". */
+  detail?: string | null;
   /** Optional group heading. Options sharing a group render together under
    * one heading, in order of the group's first appearance; options with no
    * group render in a single unheaded group, same as before grouping existed. */
@@ -39,6 +44,9 @@ export function SearchableSelect({
   disabled,
   renderTrigger,
   renderOption,
+  id,
+  triggerClassName,
+  ariaLabel,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -49,6 +57,12 @@ export function SearchableSelect({
   disabled?: boolean;
   renderTrigger?: (selected: SearchableOption | undefined) => ReactNode;
   renderOption?: (option: SearchableOption, selected: boolean) => ReactNode;
+  /** For a <label htmlFor>. */
+  id?: string;
+  /** Size the trigger to match the form around it, e.g. "h-11". */
+  triggerClassName?: string;
+  /** Names the picker when there's no visible label for it. */
+  ariaLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
@@ -66,9 +80,14 @@ export function SearchableSelect({
         <button
           type="button"
           role="combobox"
+          id={id}
+          aria-label={ariaLabel}
           aria-expanded={open}
           disabled={disabled}
-          className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-xl border border-cc-border bg-cc-surface px-3 py-2 text-sm text-cc-text shadow-sm outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          className={cn(
+            "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-xl border border-cc-border bg-cc-surface px-3 py-2 text-sm text-cc-text shadow-sm outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+            triggerClassName,
+          )}
         >
           <span className={cn("truncate", !selected && "text-cc-muted")}>
             {renderTrigger
@@ -94,16 +113,23 @@ export function SearchableSelect({
                     <CommandItem
                       key={option.value}
                       value={option.value}
-                      keywords={[option.keywords ?? option.label]}
+                      keywords={[option.label, ...(Array.isArray(option.keywords) ? option.keywords : option.keywords ? [option.keywords] : [])].filter(Boolean)}
                       onSelect={() => {
                         onValueChange(option.value);
                         setOpen(false);
                       }}
                     >
                       <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
-                        {renderOption
-                          ? renderOption(option, isSelected)
-                          : option.label}
+                        {renderOption ? (
+                          renderOption(option, isSelected)
+                        ) : option.detail ? (
+                          <span className="min-w-0">
+                            <span className="block truncate">{option.label}</span>
+                            <span className="block truncate text-xs text-cc-muted">{option.detail}</span>
+                          </span>
+                        ) : (
+                          option.label
+                        )}
                       </span>
                       <Check
                         className={cn(

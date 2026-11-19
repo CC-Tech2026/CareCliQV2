@@ -1,3 +1,5 @@
+import { STAFF_SEARCH, staffOption } from "@/lib/person-options";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useEffect, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { HELP, INPUT, LABEL, PRIMARY_BUTTON, SECONDARY_BUTTON, SUBHEADING, SUBSECTION, TEXTAREA } from "@/components/participants/recordUi";
@@ -260,20 +262,17 @@ export function ParticipantShiftContextEditor({
         <h4 id="contacts-heading" className={SUBHEADING}>Key contacts</h4>
         <div className="max-w-sm space-y-1.5">
           <p className={LABEL} id="care-coordinator-label">{translate("participants.shiftContext.careCoordinator")}</p>
-          <Select
+          <SearchableSelect
             value={careCoordinatorId ?? "unassigned"}
             onValueChange={(value) => setCareCoordinatorId(value === "unassigned" ? null : value)}
-          >
-            <SelectTrigger aria-labelledby="care-coordinator-label" className="min-h-10 text-sm">
-              <SelectValue placeholder={translate("participants.shiftContext.unassigned")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="unassigned">{translate("participants.shiftContext.unassigned")}</SelectItem>
-              {coordinators.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            options={[
+              { value: "unassigned", label: translate("participants.shiftContext.unassigned"), keywords: "none" },
+              ...coordinators.map(staffOption),
+            ]}
+            placeholder={translate("participants.shiftContext.unassigned")}
+            searchPlaceholder={STAFF_SEARCH}
+            emptyText="No one matches"
+          />
           <p className={HELP}>{translate("participants.shiftContext.careCoordinatorHint")}</p>
         </div>
 

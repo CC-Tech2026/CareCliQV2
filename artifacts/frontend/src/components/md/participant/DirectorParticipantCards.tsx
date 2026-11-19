@@ -1,3 +1,4 @@
+import { CopyButton } from "@/components/ui/copy-button";
 import type { ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
 import { planManagementLabel } from "@/lib/directory-insights";
@@ -45,7 +46,6 @@ export function ProfileHeader({ overview, actions }: { overview: DirectorOvervie
     age != null ? `${age} years` : null,
     p.primary_disability,
     p.service_category === "aged_care" ? "Aged care" : null,
-    p.ndis_number ? `NDIS ${p.ndis_number}` : "NDIS number not recorded",
   ].filter(Boolean);
 
   const plan =
@@ -80,7 +80,17 @@ export function ProfileHeader({ overview, actions }: { overview: DirectorOvervie
           {p.preferred_name && p.preferred_name !== p.full_name && (
             <p className="text-sm" style={{ color: MUTED }}>Prefers to be called {p.preferred_name}</p>
           )}
-          <p className="text-sm" style={{ color: TEXT }}>{who.join(" · ")}</p>
+          <p className="flex flex-wrap items-center text-sm" style={{ color: TEXT }}>
+            {who.length > 0 && <span>{who.join(" · ")}&nbsp;·&nbsp;</span>}
+            {p.ndis_number ? (
+              <span className="inline-flex items-center gap-0.5">
+                NDIS {p.ndis_number}
+                <CopyButton value={p.ndis_number} label="NDIS number" />
+              </span>
+            ) : (
+              <span>NDIS number not recorded</span>
+            )}
+          </p>
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" style={{ color: MUTED }}>
             <span>{plan}</span>
             {planLeft && <span style={{ color: daysLeft != null && daysLeft <= 30 ? BAD : daysLeft != null && daysLeft <= 90 ? WARN : MUTED }}>· {planLeft}</span>}

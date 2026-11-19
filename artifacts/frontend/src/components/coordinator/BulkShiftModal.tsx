@@ -5,6 +5,7 @@
  * the way a fixed batch of recurring shifts did. A day the worker can't do
  * becomes an open shift, listed when it's made.
  */
+import { PARTICIPANT_SEARCH, participantOption, staffOption } from "@/lib/person-options";
 import { useState } from "react";
 import { format, addDays } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -18,7 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { detailIfShared, sharedNames, workerDetail, workerSearchText } from "@/lib/person-identity";
+import { detailIfShared, sharedNames, workerDetail } from "@/lib/person-identity";
 import {
   createShiftSeries,
   getParticipantPriceItemOptions,
@@ -225,16 +226,14 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers, init
               {/* Participant */}
               <div className="space-y-2">
                 <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.bulkShift.participant")}</label>
-                <Select value={participantId} onValueChange={chooseParticipant}>
-                  <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
-                    <SelectValue placeholder={translate("coordinator.bulkShift.selectParticipant")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {participants.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={participantId}
+                  onValueChange={chooseParticipant}
+                  options={participants.map(participantOption)}
+                  placeholder={translate("coordinator.bulkShift.selectParticipant")}
+                  searchPlaceholder={PARTICIPANT_SEARCH}
+                  emptyText="No participant matches"
+                />
               </div>
 
               {/* Worker (optional) */}
@@ -252,7 +251,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers, init
                   emptyText={translate("common.noResults")}
                   options={[
                     { value: "__none__", label: translate("coordinator.bulkShift.noAutoAssign"), keywords: "none open" },
-                    ...workers.map((w) => ({ value: w.id, label: w.full_name, keywords: workerSearchText(w) })),
+                    ...workers.map(staffOption),
                   ]}
                   renderTrigger={(selected) => {
                     const w = workers.find((x) => x.id === selected?.value);

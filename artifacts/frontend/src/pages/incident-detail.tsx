@@ -1,3 +1,5 @@
+import { STAFF_SEARCH, staffOption } from "@/lib/person-options";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useState, useEffect, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -866,20 +868,17 @@ export default function IncidentDetail({ id }: { id: string }) {
                   <p className="text-sm" style={{ color: MUTED }}>{translate("incidents.detail.noInvestigatorAssigned")}</p>
                 )}
                 <div className="flex gap-2">
-                  <Select value={selectedInvestigator} onValueChange={setSelectedInvestigator}>
-                    <SelectTrigger className="h-10 flex-1 rounded-full px-4 text-sm" style={{ borderColor: BORDER }}>
-                      <SelectValue placeholder={translate("incidents.detail.selectInvestigator")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {eligibleInvestigators.length === 0 ? (
-                        <div className="px-2 py-1.5 text-xs" style={{ color: MUTED }}>{translate("incidents.detail.investigatorNoOptions")}</div>
-                      ) : (
-                        eligibleInvestigators.map((m) => (
-                          <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <div className="min-w-0 flex-1">
+                    <SearchableSelect
+                      value={selectedInvestigator}
+                      onValueChange={setSelectedInvestigator}
+                      options={eligibleInvestigators.map(staffOption)}
+                      placeholder={translate("incidents.detail.selectInvestigator")}
+                      searchPlaceholder={STAFF_SEARCH}
+                      emptyText={translate("incidents.detail.investigatorNoOptions")}
+                      triggerClassName="h-10 rounded-full px-4"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() => assignInvestigatorMutation.mutate(selectedInvestigator)}
@@ -1067,16 +1066,16 @@ export default function IncidentDetail({ id }: { id: string }) {
           <PanelHeader icon={GraduationCap} title={translate("incidents.detail.assignTraining")} description={`Follow-up training after "${incident.title}".`} />
           <div className="mt-6 flex-1 space-y-5">
             <Field label={translate("incidents.detail.trainingWorker")} htmlFor="incident-training-worker">
-              <Select value={trainingWorkerId} onValueChange={setTrainingWorkerId}>
-                <SelectTrigger id="incident-training-worker" className="h-11 rounded-xl px-4 text-sm" style={{ borderColor: BORDER }}>
-                  <SelectValue placeholder={translate("incidents.detail.selectInvestigator")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(team ?? []).map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                id="incident-training-worker"
+                value={trainingWorkerId}
+                onValueChange={setTrainingWorkerId}
+                options={(team ?? []).map(staffOption)}
+                placeholder={translate("incidents.detail.selectInvestigator")}
+                searchPlaceholder={STAFF_SEARCH}
+                emptyText="No one matches"
+                triggerClassName="h-11 px-4"
+              />
             </Field>
             <div role="radiogroup" aria-label={translate("incidents.detail.trainingModule")} className="grid gap-2 sm:grid-cols-2">
               <ChoiceCard selected={trainingMode === "existing"} onSelect={() => setTrainingMode("existing")} icon={BookOpen} title={translate("incidents.detail.trainingPickExisting")} />

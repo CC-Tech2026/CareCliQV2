@@ -11,6 +11,7 @@
  * 3. Staff: who each worker is in Xero, matched by email or name; the
  *    director picks anyone who couldn't be matched.
  */
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
@@ -207,13 +208,18 @@ export function XeroPayrollSection() {
                         : "Not matched"}
                     </span>
                   </span>
-                  <Select value={w.employee_id ?? NOT_SET} onValueChange={(v) => void link(w.worker_id, v === NOT_SET ? null : v)} disabled={busy === w.worker_id}>
-                    <SelectTrigger className="h-9 w-full sm:w-56" aria-label={`Who ${w.name ?? "this worker"} is in Xero`}><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NOT_SET}>Choose an employee</SelectItem>
-                      {(options?.employees ?? []).map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="w-full sm:w-56">
+                    <SearchableSelect
+                      ariaLabel={`Who ${w.name ?? "this worker"} is in Xero`}
+                      value={w.employee_id ?? NOT_SET}
+                      onValueChange={(v) => void link(w.worker_id, v === NOT_SET ? null : v)}
+                      disabled={busy === w.worker_id}
+                      options={[{ value: NOT_SET, label: "Choose an employee", keywords: "none" }, ...(options?.employees ?? []).map((e) => ({ value: e.id, label: e.name }))]}
+                      placeholder="Choose an employee"
+                      searchPlaceholder="Search Xero employees by name"
+                      emptyText="No employee matches"
+                    />
+                  </div>
                 </li>
               ))}
             </ul>

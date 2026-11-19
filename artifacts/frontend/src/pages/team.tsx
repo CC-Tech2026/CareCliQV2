@@ -1,3 +1,6 @@
+import { matchesPerson } from "@/lib/person-identity";
+import { PARTICIPANT_SEARCH, participantOption } from "@/lib/person-options";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -486,12 +489,9 @@ export default function Team() {
   }
 
   const filteredWorkers = useMemo(() => {
-    const q = search.trim().toLowerCase();
     const matched = workers.filter((w) => {
-      const matchesSearch = !q
-        || w.full_name?.toLowerCase().includes(q)
-        || w.email?.toLowerCase().includes(q)
-        || (w.employee_id ?? "").toLowerCase().includes(q);
+      // Name, staff ID, email, phone (with or without spaces) or suburb.
+      const matchesSearch = matchesPerson(search, [w.full_name, w.employee_id, w.email, w.phone, w.suburb]);
       return matchesSearch && matchesActiveFilter(w, activeFilter) && matchesAttentionFilters(w, attentionFilters);
     });
     if (sortKey) {
@@ -1066,16 +1066,14 @@ export default function Team() {
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.assign.selectParticipant")}</label>
-            <Select value={assignPatientId} onValueChange={setAssignPatientId}>
-              <SelectTrigger>
-                <SelectValue placeholder={translate("team.assign.chooseParticipant")} />
-              </SelectTrigger>
-              <SelectContent>
-                {allParticipants.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={assignPatientId}
+              onValueChange={setAssignPatientId}
+              options={allParticipants.map(participantOption)}
+              placeholder={translate("team.assign.chooseParticipant")}
+              searchPlaceholder={PARTICIPANT_SEARCH}
+              emptyText="No participant matches"
+            />
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => { setAssignWorker(null); setAssignPatientId(""); }}>{translate("common.cancel")}</Button>

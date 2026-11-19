@@ -1,3 +1,5 @@
+import { PARTICIPANT_SEARCH, participantOption } from "@/lib/person-options";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useGetParticipants } from "@workspace/api-client-react";
@@ -320,7 +322,11 @@ export default function IncidentNew() {
   }
 
   const { data: participantsData } = useGetParticipants({});
-  const participants = (participantsData as { data?: Array<{ id: string; full_name: string; ndis_number?: string | null }> } | undefined)?.data ?? [];
+  // The API answers with a plain list (older builds wrapped it in { data }).
+  type IncidentParticipant = { id: string; full_name: string; ndis_number?: string | null; phone?: string | null; date_of_birth?: string | null; address?: string | null };
+  const participants: IncidentParticipant[] = Array.isArray(participantsData)
+    ? (participantsData as IncidentParticipant[])
+    : ((participantsData as { data?: IncidentParticipant[] } | undefined)?.data ?? []);
   const selectedParticipant = participants.find((p) => p.id === form.participant_id);
 
   const ndisReportable =
@@ -526,16 +532,16 @@ export default function IncidentNew() {
               htmlFor="incident-participant"
               optionalLabel={translate("common.optional")}
             >
-              <Select value={form.participant_id} onValueChange={(v) => set("participant_id", v)}>
-                <SelectTrigger id="incident-participant" className="h-11 rounded-xl px-4 text-sm" style={{ borderColor: BORDER }}>
-                  <SelectValue placeholder={translate("incidents.new.selectParticipant")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {participants.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                id="incident-participant"
+                value={form.participant_id}
+                onValueChange={(v) => set("participant_id", v)}
+                options={participants.map(participantOption)}
+                placeholder={translate("incidents.new.selectParticipant")}
+                searchPlaceholder={PARTICIPANT_SEARCH}
+                emptyText="No participant matches"
+                triggerClassName="h-11 px-4"
+              />
               {selectedParticipant?.ndis_number && (
                 <p className="text-xs" style={{ color: MUTED }}>
                   {translate("incidents.new.participantNdisNumber")}: <span className="font-medium" style={{ color: TEXT }}>{selectedParticipant.ndis_number}</span>

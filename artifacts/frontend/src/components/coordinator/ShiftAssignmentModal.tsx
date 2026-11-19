@@ -1,4 +1,5 @@
-﻿import { useEffect, useState, useRef } from "react";
+﻿import { staffOption } from "@/lib/person-options";
+import { useEffect, useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useGetParticipants } from "@workspace/api-client-react";
@@ -56,7 +57,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { detailIfShared, sharedNames, workerDetail, workerSearchText } from "@/lib/person-identity";
+import { detailIfShared, sharedNames, workerDetail } from "@/lib/person-identity";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -612,7 +613,7 @@ export function ShiftAssignmentModal({
   // they're listed here.
   const sameWorkerNames = sharedNames(workers.map((w) => w.full_name));
   const workerById = new Map(workers.map((w) => [w.id, w]));
-  const workerOption = (w: WorkerStats) => ({ value: w.id, label: w.full_name, keywords: workerSearchText(w) });
+  const workerOption = (w: WorkerStats) => staffOption(w);
   const workerOptionLabel = (id: string, label: string) => {
     const w = workerById.get(id);
     const detail = w ? workerDetail(w) : null;

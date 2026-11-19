@@ -1,3 +1,5 @@
+import { PARTICIPANT_SEARCH, participantOption } from "@/lib/person-options";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useMemo, useEffect } from "react";
 import { Link, Redirect, useLocation } from "wouter";
@@ -214,18 +216,15 @@ function ClinicalReportGenerator() {
         <div className="grid gap-4 p-5 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
           <div>
             <p className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>{translate("reports.generator.participant")}</p>
-            <select
-              title="Participant"
+            <SearchableSelect
               value={participantId}
-              onChange={(event) => setParticipantId(event.target.value)}
-              className="h-10 w-full rounded-xl border px-3 text-sm"
-              style={{ borderColor: BORDER, color: T1, background: SURFACE }}
-            >
-              <option value="">{translate("reports.generator.selectParticipant")}</option>
-              {(participants as any[]).map((participant) => (
-                <option key={participant.id} value={participant.id}>{participant.full_name}</option>
-              ))}
-            </select>
+              onValueChange={setParticipantId}
+              options={(participants as Array<{ id: string; full_name?: string | null; ndis_number?: string | null }>).map(participantOption)}
+              placeholder={translate("reports.generator.selectParticipant")}
+              searchPlaceholder={PARTICIPANT_SEARCH}
+              emptyText="No participant matches"
+              triggerClassName="h-10"
+            />
           </div>
           <div>
             <p className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>{translate("reports.generator.reportType")}</p>

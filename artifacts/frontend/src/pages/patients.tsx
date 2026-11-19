@@ -1,3 +1,4 @@
+import { matchesPerson } from "@/lib/person-identity";
 import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -2751,10 +2752,13 @@ export default function Patients() {
 
   const filteredParticipants = (participants ?? [])
     .filter((p: any) => {
-      const q = search.trim().toLowerCase();
-      const matchesSearch = !q
-        || p.full_name.toLowerCase().includes(q)
-        || (p.ndis_number ?? "").includes(q);
+      // Name, preferred name, NDIS number (with or without spaces), phone,
+      // email, address or suburb, date of birth, or their support worker.
+      const matchesSearch = matchesPerson(
+        search,
+        [p.full_name, p.preferred_name, p.ndis_number, p.phone, p.email, p.address, p.assigned_worker_name],
+        p.date_of_birth,
+      );
       const matchesStatus = statusFilter === "all" || p.plan_status === statusFilter;
       const matchesLetter = !letterFilter || p.full_name.toUpperCase().startsWith(letterFilter);
       return matchesSearch && matchesStatus && matchesLetter;

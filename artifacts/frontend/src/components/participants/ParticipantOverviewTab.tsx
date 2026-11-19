@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ArrowRight, Mail, MapPin, Pencil, Phone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CopyButton } from "@/components/ui/copy-button";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { safeFormat } from "@/lib/participant-format";
 import { ageFrom } from "@/lib/person-identity";
@@ -60,6 +61,22 @@ function NotSet({ text }: { text: string }) {
   return <span className="text-cc-muted">{text}</span>;
 }
 
+/** A value with a copy icon after it. */
+function Copyable({ value, label, children }: { value: string; label: string; children?: ReactNode }) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-1">
+      <span className="min-w-0 break-words">{children ?? value}</span>
+      <CopyButton value={value} label={label} />
+    </span>
+  );
+}
+
+/** 1992-05-14 as 14/05/1992, the way forms ask for it. */
+function dayMonthYear(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
 /** Someone to reach: name and role, then tap-to-call and tap-to-email links,
  * so a coordinator can contact them straight from the record. */
 function Contact({
@@ -68,13 +85,17 @@ function Contact({
   phone,
   email,
   notSet,
+  whose,
 }: {
   name?: string | null;
   sub?: string | null;
   phone?: string | null;
   email?: string | null;
   notSet: string;
+  /** Whose details, for the copy buttons: "GP" gives "Copy GP phone number". */
+  whose?: string;
 }) {
+  const prefix = whose ? `${whose} ` : "";
   if (!name && !sub && !phone && !email) return <NotSet text={notSet} />;
   return (
     <div className="space-y-1">
@@ -82,14 +103,20 @@ function Contact({
       {(phone || email) && (
         <p className="flex flex-wrap gap-x-4 gap-y-1">
           {phone && (
-            <a href={`tel:${phone.replace(/[^+\d]/g, "")}`} className="inline-flex items-center gap-1.5 text-cc-plum hover:underline">
-              <Phone className="h-3.5 w-3.5" aria-hidden /> {phone}
-            </a>
+            <span className="inline-flex items-center gap-1">
+              <a href={`tel:${phone.replace(/[^+\d]/g, "")}`} className="inline-flex items-center gap-1.5 text-cc-plum hover:underline">
+                <Phone className="h-3.5 w-3.5" aria-hidden /> {phone}
+              </a>
+              <CopyButton value={phone} label={`${prefix}phone number`} />
+            </span>
           )}
           {email && (
-            <a href={`mailto:${email}`} className="inline-flex items-center gap-1.5 break-all text-cc-plum hover:underline">
-              <Mail className="h-3.5 w-3.5" aria-hidden /> {email}
-            </a>
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <a href={`mailto:${email}`} className="inline-flex min-w-0 items-center gap-1.5 break-all text-cc-plum hover:underline">
+                <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden /> {email}
+              </a>
+              <CopyButton value={email} label={`${prefix}email`} />
+            </span>
           )}
         </p>
       )}
@@ -138,10 +165,10 @@ export function ParticipantOverviewTab({
         <dl className="divide-y divide-cc-border">
           <Row label={translate("patients.field.dateOfBirth")}>
             {participant.date_of_birth ? (
-              <>
+              <Copyable value={dayMonthYear(participant.date_of_birth)} label="date of birth">
                 {safeFormat(participant.date_of_birth)}
                 {age != null && <span className="text-cc-muted"> · {age} years</span>}
-              </>
+              </Copyable>
             ) : (
               <NotSet text={notSet} />
             )}
@@ -156,7 +183,9 @@ export function ParticipantOverviewTab({
           <Row label={translate("patients.field.primaryDisability")}>
             {participant.primary_disability || <NotSet text={notSet} />}
           </Row>
-          <Row label="NDIS number">{participant.ndis_number || <NotSet text={notSet} />}</Row>
+          <Row label="NDIS number">
+            {participant.ndis_number ? <Copyable value={participant.ndis_number} label="NDIS number" /> : <NotSet text={notSet} />}
+          </Row>
           <Row label={translate("patients.field.phone")}>
             <Contact phone={participant.phone} notSet={notSet} />
           </Row>
@@ -166,7 +195,7 @@ export function ParticipantOverviewTab({
           <Row label={translate("patients.field.address")}>
             {address ? (
               <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <span>{address}</span>
+                <Copyable value={address} label="home address" />
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`}
                   target="_blank"
@@ -202,10 +231,10 @@ export function ParticipantOverviewTab({
             <Contact name={careCoordinator?.full_name} notSet={notSet} />
           </Row>
           <Row label={translate("patients.field.billingContact")}>
-            <Contact name={participant.case_manager_name} phone={participant.case_manager_phone} notSet={notSet} />
+            <Contact name={participant.case_manager_name} phone={participant.case_manager_phone} notSet={notSet} whose="plan manager" />
           </Row>
           <Row label={translate("patients.field.gp")}>
-            <Contact name={participant.gp_name} sub={participant.gp_practice} phone={participant.gp_phone} notSet={notSet} />
+            <Contact name={participant.gp_name} sub={participant.gp_practice} phone={participant.gp_phone} notSet={notSet} whose="GP" />
           </Row>
           <Row label={translate("patients.field.emergencyContact")}>
             <Contact
@@ -213,10 +242,11 @@ export function ParticipantOverviewTab({
               sub={emergencyContact?.relationship}
               phone={emergencyContact?.phone}
               notSet={notSet}
+              whose="emergency contact"
             />
           </Row>
           <Row label={translate("patients.field.nextOfKin")}>
-            <Contact name={nextOfKin?.name} sub={nextOfKin?.relationship} phone={nextOfKin?.phone} notSet={notSet} />
+            <Contact name={nextOfKin?.name} sub={nextOfKin?.relationship} phone={nextOfKin?.phone} notSet={notSet} whose="next of kin" />
           </Row>
         </dl>
       </Section>

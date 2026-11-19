@@ -1,3 +1,6 @@
+import { STAFF_SEARCH, staffOption } from "@/lib/person-options";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { CopyButton } from "@/components/ui/copy-button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MD_DASHBOARD_KEY, WORKER_STATS_KEY } from "@/lib/query-keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -27,7 +30,6 @@ import {
   Link2,
   UserX,
   UserCheck,
-  Copy,
   ClipboardCheck,
   KeyRound,
   ChevronDown,
@@ -418,7 +420,6 @@ export function ContactLink({
   value: string;
   href: string;
 }) {
-  const { toast } = useToast();
   return (
     <span className="group inline-flex max-w-full min-w-0 items-center gap-1">
       <a
@@ -429,23 +430,7 @@ export function ContactLink({
         <Icon size={13} className="shrink-0" />{" "}
         <span className="min-w-0 break-all">{value}</span>
       </a>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.preventDefault();
-          Promise.resolve()
-            .then(() => navigator.clipboard.writeText(value))
-            .then(() => toast({ title: "Copied" }))
-            .catch(() =>
-              toast({ title: "Could not copy", variant: "destructive" }),
-            );
-        }}
-        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded transition-opacity hover:bg-black/5"
-        title="Copy"
-        aria-label={`Copy ${value}`}
-      >
-        <Copy size={11} />
-      </button>
+      <CopyButton value={value} label={href.startsWith("mailto:") ? "email" : href.startsWith("tel:") ? "phone number" : value} />
     </span>
   );
 }
@@ -958,6 +943,7 @@ export function WorkerDetail({
                 <span className="font-semibold" style={{ color: TEXT }}>
                   {worker.employee_id || "not assigned"}
                 </span>
+                {worker.employee_id && <CopyButton value={worker.employee_id} label="employee ID" className="ml-0.5" />}
               </p>
               <div
                 className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm"
@@ -1173,11 +1159,14 @@ function DetailRow({
   label,
   value,
   emptyText,
+  copyLabel,
 }: {
   label: string;
   value?: string | null;
   /** Shown, muted, when value is empty: a designed empty state instead of "N/A". */
   emptyText?: string;
+  /** Adds a copy icon after the value: "home address". */
+  copyLabel?: string;
 }) {
   return (
     <div
@@ -1189,10 +1178,11 @@ function DetailRow({
       </p>
       {value ? (
         <p
-          className="mt-0.5 break-words text-sm font-medium"
+          className="mt-0.5 flex items-center gap-1 break-words text-sm font-medium"
           style={{ color: TEXT }}
         >
-          {value}
+          <span className="min-w-0 break-words">{value}</span>
+          {copyLabel && <CopyButton value={value} label={copyLabel} />}
         </p>
       ) : (
         <p className="mt-0.5 text-sm" style={{ color: MUTED }}>
@@ -1574,6 +1564,7 @@ function PersonalInfoTab({
             label="Address"
             value={worker.address ?? undefined}
             emptyText="Not on file"
+            copyLabel="home address"
           />
           <DetailRow
             label="Suburb"
@@ -1821,25 +1812,20 @@ function CoordinatorAssignmentSection({ worker }: { worker: WorkerStats }) {
         scoped to.
       </p>
       <div className="mt-3 max-w-xs">
-        <Select
+        <SearchableSelect
           value={coordinatorId ?? "unassigned"}
           onValueChange={(value) =>
             assignMutation.mutate(value === "unassigned" ? null : value)
           }
           disabled={assignMutation.isPending}
-        >
-          <SelectTrigger className="h-9 text-xs">
-            <SelectValue placeholder="Unassigned" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="unassigned">Unassigned</SelectItem>
-            {coordinators.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.full_name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          options={[
+            { value: "unassigned", label: "Unassigned", keywords: "none" },
+            ...coordinators.map(staffOption),
+          ]}
+          placeholder="Unassigned"
+          searchPlaceholder={STAFF_SEARCH}
+          emptyText="No one matches"
+        />
       </div>
     </div>
   );

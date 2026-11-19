@@ -2545,7 +2545,7 @@ export const en: Dict = {
   "patients.toast.clinicalSaved": "Clinical records saved",
   "patients.toast.saveFailed": "Save failed",
   "patients.loadFailed": "Unable to load participant details.",
-  "patients.searchPlaceholder": "Search name, NDIS number…",
+  "patients.searchPlaceholder": "Name, NDIS number, phone or date of birth",
   "patients.allStatuses": "All Statuses",
   "patients.filterAll": "All",
   "patients.empty.title": "No participants found",
