@@ -74,25 +74,30 @@ function timeAgo(value: string) {
   return formatDate(value);
 }
 
+/** A titled part of the profile: a heading with a rule under it, then its
+ * content. Never a box: the profile's one surface holds them all. */
 export function Section({
-  icon: Icon,
   title,
   action,
   children,
   id,
+  count,
 }: {
-  icon: typeof Wallet;
+  /** Kept so older callers compile; headings carry no icon. */
+  icon?: typeof Wallet;
   title: string;
   action?: ReactNode;
   children: ReactNode;
   id?: string;
+  /** A small figure after the title, e.g. how many need a decision. */
+  count?: number;
 }) {
   return (
-    <section id={id} className="scroll-mt-28 rounded-3xl bg-cc-surface p-5 sm:p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-base font-semibold" style={{ color: TEXT }}>
-          <Icon size={17} style={{ color: MUTED }} aria-hidden />
+    <section id={id} aria-label={title} className="min-w-0 scroll-mt-28">
+      <div className="mb-1 flex min-h-10 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b pb-2" style={{ borderColor: BORDER }}>
+        <h2 className="text-base font-semibold" style={{ color: TEXT }}>
           {title}
+          {count != null && <span className="ml-2 text-sm font-normal tabular-nums" style={{ color: MUTED }}>{count}</span>}
         </h2>
         {action}
       </div>
@@ -138,8 +143,8 @@ export function FundingSection({ overview, onReview }: { overview: DirectorOverv
   const f = overview.funding;
   if (!f.has_plan) {
     return (
-      <Section icon={Wallet} title="Funding" action={<LinkButton onClick={onReview}>Set up the plan</LinkButton>}>
-        <p className="text-sm" style={{ color: MUTED }}>No NDIS plan is recorded, so spending can't be tracked yet.</p>
+      <Section title="NDIS plan budget" action={<LinkButton onClick={onReview}>Set up the plan</LinkButton>}>
+        <p className="py-3 text-sm" style={{ color: MUTED }}>No NDIS plan is recorded, so spending can't be tracked yet.</p>
       </Section>
     );
   }
@@ -155,21 +160,26 @@ export function FundingSection({ overview, onReview }: { overview: DirectorOverv
           : "Spending is in step with the plan's time.";
 
   return (
-    <Section icon={Wallet} title="Funding" action={<LinkButton onClick={onReview}>Plan and budgets</LinkButton>}>
-      <div className="grid grid-cols-3 gap-4">
-        <Figure value={money(f.total)} label="Plan total" />
-        <Figure value={money(f.used)} label="Used" />
-        <Figure value={money(f.remaining)} label="Remaining" tone={f.remaining <= 0 ? BAD : undefined} />
+    <Section title="NDIS plan budget" action={<LinkButton onClick={onReview}>Plan and goals</LinkButton>}>
+      <div className="grid grid-cols-3 gap-4 pt-3">
+        <Figure value={money(f.total)} label={f.unallocated ? "In support categories" : "Plan budget"} />
+        <Figure value={money(f.used)} label="Spent" />
+        <Figure value={money(f.remaining)} label={f.remaining < 0 ? "Over budget" : "Remaining"} tone={f.remaining <= 0 ? BAD : undefined} />
       </div>
+      {!!f.unallocated && f.unallocated > 0 && (
+        <p className="mt-3 text-sm" style={{ color: MUTED }}>
+          {money(f.unallocated)} of the {money(f.plan_total ?? f.total + f.unallocated)} plan isn't in a support category yet.
+        </p>
+      )}
 
       {f.percent_used != null && f.percent_time_elapsed != null && (
         <div className="mt-5 space-y-2.5">
           <div>
             <div className="mb-1 flex justify-between text-xs" style={{ color: MUTED }}>
-              <span>Funding used</span>
+              <span>Budget spent</span>
               <span className="tabular-nums font-medium" style={{ color: TEXT }}>{Math.round(f.percent_used)}%</span>
             </div>
-            <Bar percent={f.percent_used} color={paceTone} label={`${Math.round(f.percent_used)}% of funding used`} />
+            <Bar percent={f.percent_used} color={paceTone} label={`${Math.round(f.percent_used)}% of the budget spent`} />
           </div>
           <div>
             <div className="mb-1 flex justify-between text-xs" style={{ color: MUTED }}>
@@ -212,16 +222,16 @@ export function DeliverySection({ overview, onOpenSchedule, onOpenShifts }: { ov
   const q = overview.quality;
   const scoreTone = q.average_score == null ? MUTED : q.average_score >= 90 ? GOOD : q.average_score >= 75 ? WARN : BAD;
   return (
-    <Section icon={CalendarClock} title="Service delivery" action={<LinkButton onClick={onOpenShifts}>Shift history</LinkButton>}>
-      <p className="mb-3 text-xs font-medium" style={{ color: MUTED }}>Last 30 days</p>
+    <Section title="Support delivered" action={<LinkButton onClick={onOpenShifts}>Progress notes</LinkButton>}>
+      <p className="pb-2 pt-3 text-xs font-medium" style={{ color: MUTED }}>Last 30 days</p>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Figure value={d.completed_30d} label="shifts delivered" />
         <Figure value={`${d.hours_30d}h`} label="of support" />
         <Figure value={d.cancelled_30d} label="cancelled" tone={d.cancelled_30d ? WARN : undefined} />
-        <Figure value={q.average_score == null ? "N/A" : `${Math.round(q.average_score)}%`} label="note quality" tone={scoreTone} />
+        <Figure value={q.average_score == null ? "N/A" : `${Math.round(q.average_score)}%`} label="progress note quality" tone={scoreTone} />
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4" style={{ background: SOFT }}>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4" style={{ borderColor: BORDER }}>
         <div className="min-w-0">
           <p className="text-xs font-medium" style={{ color: MUTED }}>Next shift</p>
           {d.next_shift ? (
@@ -232,12 +242,14 @@ export function DeliverySection({ overview, onOpenSchedule, onOpenShifts }: { ov
           ) : (
             <p className="mt-0.5 text-sm font-semibold" style={{ color: WARN }}>Nothing rostered in the next 14 days</p>
           )}
-          <p className="mt-1 text-xs" style={{ color: d.unfilled_14d ? BAD : MUTED }}>
-            {d.upcoming_14d} rostered in the next 14 days
-            {d.unfilled_14d ? ` · ${d.unfilled_14d} without a worker` : ""}
-          </p>
+          {d.upcoming_14d > 0 && (
+            <p className="mt-1 text-xs" style={{ color: d.unfilled_14d ? BAD : MUTED }}>
+              {d.upcoming_14d} rostered in the next 14 days
+              {d.unfilled_14d ? ` · ${d.unfilled_14d} without a worker` : ""}
+            </p>
+          )}
         </div>
-        <LinkButton onClick={onOpenSchedule}>Open the schedule</LinkButton>
+        <LinkButton onClick={onOpenSchedule}>Open the roster</LinkButton>
       </div>
     </Section>
   );
@@ -250,11 +262,13 @@ export function RiskSection({
   onOpenIncident,
   onOpenComplaints,
   onOpenMedication,
+  onOpenNotes,
 }: {
   overview: DirectorOverview;
   onOpenIncident: (id?: string) => void;
   onOpenComplaints: () => void;
   onOpenMedication: () => void;
+  onOpenNotes?: () => void;
 }) {
   const r = overview.risk;
   const m = overview.medication;
@@ -291,14 +305,15 @@ export function RiskSection({
       onClick: onOpenMedication,
     },
     {
-      label: "Shift notes",
+      label: "Progress notes",
       value: overview.quality.needs_attention_30d ? `${overview.quality.needs_attention_30d} need attention` : "All in order",
       tone: overview.quality.needs_attention_30d ? WARN : GOOD,
       detail: `${overview.quality.notes_30d} written in the last 30 days.`,
+      onClick: onOpenNotes,
     },
   ];
   return (
-    <Section icon={ShieldAlert} title="Quality and risk">
+    <Section title="Safety and quality">
       <ul className="divide-y" style={{ borderColor: BORDER }}>
         {rows.map((row) => {
           const content = (
@@ -368,8 +383,7 @@ export function DocumentsSection({
   return (
     <Section
       id="documents"
-      icon={FileText}
-      title="Documents and data"
+      title="Documents"
       action={
         <div className="flex flex-wrap gap-2">
           <button
@@ -391,29 +405,29 @@ export function DocumentsSection({
         </div>
       }
     >
-      <p className="mb-3 text-sm" style={{ color: MUTED }}>
+      <p className="py-3 text-sm" style={{ color: MUTED }}>
         GP letters, clinical assessments, therapy reports and medication paperwork. Medication paperwork is read into the
         medication chart so it can be checked before workers use it.
       </p>
       {docs.isLoading ? (
-        <Skeleton className="h-24 w-full rounded-2xl" />
+        <Skeleton className="h-24 w-full rounded-xl" />
       ) : docs.isError ? (
         <p className="text-sm" style={{ color: BAD }}>Documents couldn't be loaded.</p>
       ) : docs.data && !docs.data.available && list.length === 0 ? (
-        <p className="rounded-2xl p-4 text-sm" style={{ background: SOFT, color: MUTED }}>
-          Document storage is being set up for your organisation. Medication paperwork can still be added from the care record.
+        <p className="text-sm" style={{ color: MUTED }}>
+          Document storage is being set up for your organisation. Medication paperwork can still be added under Support needs.
         </p>
       ) : list.length === 0 ? (
-        <p className="rounded-2xl p-4 text-sm" style={{ background: SOFT, color: MUTED }}>
+        <p className="text-sm" style={{ color: MUTED }}>
           Nothing filed yet. Import the GP summary and any clinical assessments so the record is complete for audit.
         </p>
       ) : (
         <ul className="divide-y border-t" style={{ borderColor: BORDER }}>
           {list.map((doc) => (
             <li key={`${doc.source}-${doc.id}`} className="flex items-center gap-3 py-3" style={{ borderColor: BORDER }}>
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: SOFT }}>
-                {doc.source === "medication" ? <Pill size={15} style={{ color: MUTED }} /> : <FileText size={15} style={{ color: MUTED }} />}
-              </span>
+              {doc.source === "medication"
+                ? <Pill size={16} aria-hidden className="shrink-0" style={{ color: MUTED }} />
+                : <FileText size={16} aria-hidden className="shrink-0" style={{ color: MUTED }} />}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium" style={{ color: TEXT }}>{doc.title}</p>
                 <p className="truncate text-xs" style={{ color: MUTED }}>
@@ -460,14 +474,16 @@ function PersonRow({ role, name, missing }: { role: string; name?: string | null
   );
 }
 
-export function CareTeamPanel({ overview, onChange }: { overview: DirectorOverview; onChange: () => void }) {
+/** Who supports them from your organisation: their care coordinator, the key
+ * worker and the backup workers who know them. */
+export function CareTeamPanel({ overview, onChange }: { overview: DirectorOverview; onChange?: () => void }) {
   const t = overview.team;
   return (
-    <Section icon={Users} title="Care team" action={<LinkButton onClick={onChange}>Change</LinkButton>}>
+    <Section title="Support team" action={onChange ? <LinkButton onClick={onChange}>Change</LinkButton> : undefined}>
       <div className="divide-y" style={{ borderColor: BORDER }}>
-        <PersonRow role="Coordinator" name={t.coordinator?.name} missing="Not set" />
-        <PersonRow role="Main worker" name={t.main_worker?.name} missing="Not set" />
-        <PersonRow role="Backup" name={t.backups.map((b) => b.name).join(", ") || null} missing="None" />
+        <PersonRow role="Care coordinator" name={t.coordinator?.name} missing="Not set" />
+        <PersonRow role="Key worker" name={t.main_worker?.name} missing="Not set" />
+        <PersonRow role="Backup workers" name={t.backups.map((b) => b.name).join(", ") || null} missing="None" />
       </div>
     </Section>
   );
@@ -524,13 +540,13 @@ export function AuditPanel({ participantId, onSeeAll }: { participantId: string;
   const trail = useOrgQuery(["director-participant", participantId, "audit"], { queryFn: () => getAuditTrail(participantId) });
   const entries = (trail.data?.entries ?? []).slice(0, 6);
   return (
-    <Section icon={History} title="Audit trail" action={<LinkButton onClick={onSeeAll}>Full history</LinkButton>}>
+    <Section title="Recent activity" action={<LinkButton onClick={onSeeAll}>Audit trail</LinkButton>}>
       {trail.isLoading ? (
-        <Skeleton className="h-28 w-full rounded-2xl" />
+        <Skeleton className="mt-3 h-28 w-full rounded-xl" />
       ) : entries.length === 0 ? (
-        <p className="text-sm" style={{ color: MUTED }}>No changes recorded yet.</p>
+        <p className="py-3 text-sm" style={{ color: MUTED }}>No changes recorded yet.</p>
       ) : (
-        <AuditList entries={entries} />
+        <div className="pt-3"><AuditList entries={entries} /></div>
       )}
     </Section>
   );

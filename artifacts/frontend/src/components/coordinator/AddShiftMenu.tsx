@@ -51,8 +51,8 @@ export function AddShiftMenu({
           <DropdownMenuItem onSelect={() => setMode("repeating")} className="items-start gap-3 py-2.5">
             <Repeat size={16} className="mt-0.5 shrink-0" />
             <span>
-              <span className="block text-sm font-medium">Repeating shifts</span>
-              <span className="block text-xs text-cc-muted">The same days and times each week</span>
+              <span className="block text-sm font-medium">Regular schedule</span>
+              <span className="block text-xs text-cc-muted">The same days and times every week or fortnight, kept going</span>
             </span>
           </DropdownMenuItem>
         </DropdownMenuContent>

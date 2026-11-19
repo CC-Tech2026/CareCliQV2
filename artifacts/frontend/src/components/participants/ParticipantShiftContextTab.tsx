@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Users, X as XIcon } from "lucide-react";
-import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { X as XIcon } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { HELP, INPUT, NOTE, PRIMARY_BUTTON, SUBHEADING } from "@/components/participants/recordUi";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
 import { ParticipantShiftContextEditor } from "@/components/participants/ParticipantShiftContextEditor";
@@ -17,31 +17,17 @@ interface ParticipantShiftContextTabProps {
   participantId: string;
 }
 
-/** "Shift Context" facet of the participant Detail archetype — coordinator only. */
+/** Daily support: what workers see about this participant before and during a
+ * shift, and the interests used to match them with a worker. */
 export function ParticipantShiftContextTab({ participantId }: ParticipantShiftContextTabProps) {
-  const { translate } = useAccessibility();
-
   return (
-    <section className="space-y-3">
-      <div className="rounded-2xl border border-violet-200/70 bg-violet-50/30 p-4">
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Users className="h-3.5 w-3.5 text-violet-700" />
-            <p className="text-[12px] font-semibold uppercase tracking-[0.13em] text-violet-800">{translate("patients.shiftContext.title")}</p>
-          </div>
-          <span className="text-[11px] px-2 py-0.5 rounded-full border border-violet-300 text-violet-700 font-semibold uppercase tracking-wide bg-violet-100">
-            Coordinator Authoring
-          </span>
-        </div>
-        <p className="text-[12px] leading-relaxed text-violet-700/80">
-          This information appears in the Support Worker My Shift experience. Keep instructions concise, current, and action-oriented.
-        </p>
-      </div>
-
+    <div className="space-y-5">
+      <p className={NOTE}>
+        Support workers see this in their app before and during each shift. Keep it short, current and practical.
+      </p>
       <ParticipantTagsSection participantId={participantId} />
-
       <ParticipantShiftContextEditor participantId={participantId} />
-    </section>
+    </div>
   );
 }
 
@@ -89,37 +75,35 @@ function ParticipantTagsSection({ participantId }: { participantId: string }) {
   if (isLoading) return null;
 
   return (
-    <div className="rounded-2xl border border-[var(--cc-border)] bg-cc-surface p-4">
-      <p className="text-[12px] font-semibold uppercase tracking-[0.13em]" style={{ color: "var(--cc-muted)" }}>Interests & preferences</p>
-      <p className="mt-1 text-[11px]" style={{ color: "var(--cc-muted)" }}>
-        Structured tags used to suggest a better-fitting support worker for this participant's shifts.
-      </p>
+    <section aria-labelledby="interests-heading" className="space-y-3 border-b border-cc-border pb-5">
+      <div>
+        <h4 id="interests-heading" className={SUBHEADING}>Interests and preferences</h4>
+        <p className={HELP}>Used to suggest support workers who share them.</p>
+      </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {tags.length === 0 && <p className="text-xs italic" style={{ color: "var(--cc-muted)" }}>Nothing on file yet.</p>}
+      <div className="flex flex-wrap gap-1.5">
+        {tags.length === 0 && <p className={HELP}>None added yet.</p>}
         {tags.map((tag) => (
           <span
             key={tag.id}
-            className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold"
-            style={{ borderColor: "var(--cc-border)", background: "var(--cc-soft)", color: "var(--cc-text)" }}
+            className="inline-flex items-center gap-1.5 rounded-full bg-cc-soft px-3 py-1 text-sm text-cc-text"
           >
             {tag.label}
-            <button type="button" onClick={() => removeMutation.mutate(tag.tag_id)} aria-label={`Remove ${tag.label}`} className="opacity-60 hover:opacity-100">
-              <XIcon size={11} />
+            <button type="button" onClick={() => removeMutation.mutate(tag.tag_id)} aria-label={`Remove ${tag.label}`} className="text-cc-muted hover:text-cc-text">
+              <XIcon size={13} />
             </button>
           </span>
         ))}
       </div>
 
-      <div className="mt-3 flex gap-2">
+      <div className="flex max-w-xl gap-2">
         <select
-          title="Add a tag"
+          aria-label="Add an interest"
           value={selectedTagId}
           onChange={(event) => setSelectedTagId(event.target.value)}
-          className="h-8 flex-1 rounded-lg border px-2 text-xs"
-          style={{ borderColor: "var(--cc-border)" }}
+          className={`${INPUT} min-h-10 flex-1`}
         >
-          <option value="">Add an interest...</option>
+          <option value="">Add an interest</option>
           {availableTags.map((tag) => (
             <option key={tag.id} value={tag.id}>{tag.categoryName} · {tag.label}</option>
           ))}
@@ -128,12 +112,11 @@ function ParticipantTagsSection({ participantId }: { participantId: string }) {
           type="button"
           disabled={!selectedTagId || addMutation.isPending}
           onClick={() => selectedTagId && addMutation.mutate(selectedTagId)}
-          className="rounded-lg px-3 text-xs font-bold text-white disabled:opacity-50"
-          style={{ background: "var(--cc-cta)" }}
+          className={PRIMARY_BUTTON}
         >
           Add
         </button>
       </div>
-    </div>
+    </section>
   );
 }

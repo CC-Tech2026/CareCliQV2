@@ -19,6 +19,7 @@ import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentMo
 import { AddShiftMenu } from "@/components/coordinator/AddShiftMenu";
 import { TaskTemplatePanel } from "@/components/coordinator/TaskTemplatePanel";
 import { SectionInfo } from "@/components/ui/section-info";
+import { safeRichText } from "@/lib/safe-html";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -36,6 +37,7 @@ import {
   Edit2,
   Trash2,
   DollarSign,
+  Plus,
   PlusCircle,
   CheckCircle2,
   CalendarDays,
@@ -69,12 +71,16 @@ import {
   ListChecks,
   Contact,
   CalendarPlus,
+  MoreHorizontal,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { SmartInput } from "@/components/SmartInput";
 import { ParticipantShiftContextEditor } from "@/components/participants/ParticipantShiftContextEditor";
@@ -641,10 +647,14 @@ function EditParticipantPanel({
 
   return (
     <div>
-      <Button size="sm" variant="outline" className="h-9 gap-1.5 text-[12px] shrink-0" onClick={() => setOpen(true)}>
-        <Edit className="h-3.5 w-3.5 shrink-0" />
-        <span>Edit personal details</span>
-      </Button>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text hover:bg-cc-soft"
+      >
+        <Edit className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <span>Edit details</span>
+      </button>
       <SidePanel
         open={open}
         onOpenChange={setOpen}
@@ -795,20 +805,14 @@ function SetupPlanPanel({
 
   return (
     <div>
-      <Button size="sm" variant="outline" className="h-9 gap-1.5 text-[12px] shrink-0" onClick={() => setOpen(true)}>
-        <PlusCircle className="h-3.5 w-3.5 shrink-0" />
-        {hasPlan ? (
-          <>
-            <span className="hidden min-[380px]:inline">Edit Plan Details</span>
-            <span className="min-[380px]:hidden">Edit Plan</span>
-          </>
-        ) : (
-          <>
-            <span className="hidden min-[380px]:inline">{translate("patients.setupPlan")}</span>
-            <span className="min-[380px]:hidden">Set Up Plan</span>
-          </>
-        )}
-      </Button>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text hover:bg-cc-soft"
+      >
+        {hasPlan ? <Edit className="h-3.5 w-3.5 shrink-0" aria-hidden /> : <PlusCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />}
+        {hasPlan ? "Edit plan" : "Set up plan"}
+      </button>
       <SidePanel
         open={open}
         onOpenChange={setOpen}
@@ -1014,9 +1018,29 @@ function SetupPlanPanel({
 
 export type ParticipantDetailTab = "overview" | "plan_goals" | "sessions" | "compliance" | "plan_meetings" | "care_profile" | "records";
 
+// A titled part of a record section: plain, separated by a rule from the one
+// above, never a box inside the page's own surface.
+const RECORD_SECTION = "space-y-4 border-t border-cc-border pt-6 first:border-t-0 first:pt-0";
+const RECORD_HEADING = "text-base font-semibold text-cc-text";
+
 // Also the MD's participant profile (onboard-participant.tsx), so both roles
 // work from the same record with the same actions.
-export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, onToggleFullScreen, syncUrl = true }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab; fullScreen?: boolean; onToggleFullScreen?: () => void; syncUrl?: boolean }) {
+export function ParticipantDetail({
+  id, onRefreshList, initialTab, fullScreen, onToggleFullScreen, syncUrl = true, bare = false, tab, onTabChange,
+}: {
+  id: string;
+  onRefreshList: () => void;
+  initialTab?: ParticipantDetailTab;
+  fullScreen?: boolean;
+  onToggleFullScreen?: () => void;
+  syncUrl?: boolean;
+  /** Just the section's content: the page around it (the director's profile)
+   *  already shows who this is, the actions and its own tabs. */
+  bare?: boolean;
+  /** Which section to show, when the page around it owns the tabs. */
+  tab?: ParticipantDetailTab;
+  onTabChange?: (tab: ParticipantDetailTab) => void;
+}) {
   const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const isCoordinator = user?.role === "support_coordinator" || user?.role === "managing_director";
@@ -1226,7 +1250,9 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
   });
   const [careProfileSection, setCareProfileSection] = useState<"context" | "clinical">("context");
   const [contactsOpen, setContactsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<ParticipantDetailTab>(initialTab === "records" ? "overview" : initialTab ?? "overview");
+  const [ownTab, setOwnTab] = useState<ParticipantDetailTab>(initialTab === "records" ? "overview" : initialTab ?? "overview");
+  const activeTab: ParticipantDetailTab = tab ?? ownTab;
+  const setActiveTab = (next: ParticipantDetailTab) => (onTabChange ? onTabChange(next) : setOwnTab(next));
 
   // Keep ?id=&tab= in sync with what's actually on screen, replacing (not
   // pushing) so tab clicks don't pollute history - browser back only needs
@@ -1408,9 +1434,10 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
 
 
   return (
-    <div className="flex flex-col min-h-full">
+    <div className={bare ? "min-w-0" : "flex flex-col min-h-full"}>
 
       {/* ── Sticky header ─────────────────────────────────────────────── */}
+      {!bare && (
       <div
         className="sticky top-0 z-10 px-3 pt-3 sm:px-5 sm:pt-5"
         style={{ background: "var(--cc-bg)" }}
@@ -1599,14 +1626,20 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
           })}
         </nav>
       </div>
+      )}
 
       {/* ── Tab content ───────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 pb-6" style={{ background: "var(--cc-surface)" }}>
-        <header className="rounded-xl border border-cc-border bg-cc-soft p-4 sm:p-5">
-          <p className="text-xs font-medium text-cc-muted">Participant record</p>
-          <h2 className="mt-1 text-lg font-semibold text-cc-text">{TABS.find(tab => tab.id === activeTab)?.label ?? "Overview"}</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-cc-muted">{tabDescriptions[activeTab]}</p>
-        </header>
+      <div
+        className={bare ? "space-y-6" : "flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 pb-6"}
+        style={bare ? undefined : { background: "var(--cc-surface)" }}
+      >
+        {!bare && (
+          <header className="rounded-xl border border-cc-border bg-cc-soft p-4 sm:p-5">
+            <p className="text-xs font-medium text-cc-muted">Participant record</p>
+            <h2 className="mt-1 text-lg font-semibold text-cc-text">{TABS.find(tab => tab.id === activeTab)?.label ?? "Overview"}</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-cc-muted">{tabDescriptions[activeTab]}</p>
+          </header>
+        )}
 
         {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
@@ -1623,7 +1656,7 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
               hasPlan={hasPlan}
               onSaved={() => { participantQuery.refetch(); onRefreshList(); billingPeriodCurrentQuery.refetch(); billingPeriodsQuery.refetch(); }}
             />) : undefined}
-            onViewPlan={() => setActiveTab("plan_goals")}
+            onViewPlan={bare ? undefined : () => setActiveTab("plan_goals")}
             onEditContacts={() => setContactsOpen(true)}
             invoiceSummary={isCoordinator ? <ParticipantInvoiceSummary participantId={id} onViewAll={() => setInvoicesOpen(true)} /> : undefined}
           />
@@ -1631,17 +1664,17 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
 
         {activeTab === "plan_goals" && (
           <>
-            <details open className="rounded-xl border border-cc-border p-4">
-              <summary className="cursor-pointer py-2 text-sm font-semibold text-cc-text">Plan details & funding</summary>
+            <section aria-labelledby="record-plan-funding" className={RECORD_SECTION}>
+              <h3 id="record-plan-funding" className={RECORD_HEADING}>NDIS plan and funding</h3>
               <ParticipantPlanTab
                 editAction={isCoordinator ? (<SetupPlanPanel
               participantId={id}
               budget={budget}
               onSaved={() => { participantQuery.refetch(); budgetQuery.refetch(); onRefreshList(); }}
             />) : undefined}
-                planDetails={<dl className="mb-4 grid gap-3 text-sm sm:grid-cols-2">{[
+                planDetails={<dl className="grid gap-4 text-sm sm:grid-cols-3">{[
                   ["Plan period", participant.plan_start_date ? safeFormat(participant.plan_start_date) + " to " + safeFormat(participant.plan_end_date) : "Not recorded"],
-                  ["Plan status", participant.plan_status || "Not recorded"],
+                  ["Plan status", participant.plan_status ? participant.plan_status.charAt(0).toUpperCase() + participant.plan_status.slice(1).replace(/_/g, " ") : "Not recorded"],
                   ["Plan management", planManagementTypeLabel(participant.plan_management_type, translate)],
                 ].map(([label, value]) => <div key={label}><dt className="text-cc-muted">{label}</dt><dd className="font-medium">{value}</dd></div>)}</dl>}
                 budget={budget}
@@ -1653,11 +1686,11 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
                 hasCategoryBudgets={hasCategoryBudgets}
                 categoryBudgets={categoryBudgets}
               />
-            </details>
+            </section>
             {isCoordinator && (
-              <details open className="rounded-xl border border-cc-border p-4">
-                <summary className="cursor-pointer py-2 text-sm font-semibold text-cc-text">Service agreement</summary>
-                <div className="pt-2">
+              <section aria-labelledby="record-agreement" className={RECORD_SECTION}>
+                <h3 id="record-agreement" className={RECORD_HEADING}>Service agreement</h3>
+                <div>
                   <ParticipantServiceAgreementSection
                     participantId={id}
                     participantName={participant.full_name}
@@ -1669,7 +1702,7 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
                     }}
                   />
                 </div>
-              </details>
+              </section>
             )}
             {isCoordinator && id && <ParticipantMeetGreetSummary participantId={id} />}
           </>
@@ -2313,69 +2346,72 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
 
           return (
             <>
-            <section className="space-y-4">
+            <section aria-labelledby="record-goals" className={RECORD_SECTION}>
               {/* Header — spans full width */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
-                  <h3 className="text-[16px] font-bold text-[#1A1A2E]">Goals & Tasks</h3>
-                  <p className="text-[12px] text-[#6A6A77] mt-0.5">Manage {participant.full_name}'s NDIS goals and support tasks</p>
+                  <h3 id="record-goals" className={RECORD_HEADING}>NDIS goals and support tasks</h3>
+                  <p className="mt-0.5 text-sm text-cc-muted">The goals in {participant.full_name}'s NDIS plan, and the tasks workers do on shift towards them.</p>
                 </div>
                 <div className="flex flex-wrap gap-2 shrink-0">
                   <button type="button"
                     onClick={() => { setCreateMode("goal"); setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalSupportCategory(""); setEditingGoal(null); setGoalDescriptionAiApplied(false); setGoalAiSuggestions(null); setGoalAiLoading(false); }}
-                    className="h-9 px-3 text-[12px] font-bold rounded-lg border border-purple-200 bg-white text-purple-700 hover:bg-purple-50">
-                    + Goal
+                    className="inline-flex h-10 items-center gap-1.5 rounded-full border border-cc-border bg-cc-surface px-4 text-sm font-medium text-cc-text hover:bg-cc-soft">
+                    <Plus size={14} aria-hidden /> Add a goal
                   </button>
-                  <button type="button" onClick={() => setShiftModalOpen(true)}
-                    className="flex items-center gap-1.5 h-9 px-3 text-[12px] font-bold rounded-lg bg-[#E8457A] text-white hover:bg-[#312E81]">
-                    <CalendarClock size={13} /> Add shift
-                  </button>
+                  {/* Embedded in the director's profile, its header has Add a shift. */}
+                  {!bare && (
+                    <button type="button" onClick={() => setShiftModalOpen(true)}
+                      className="inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-medium text-white hover:opacity-90"
+                      style={{ background: "var(--cc-cta)" }}>
+                      <CalendarClock size={14} aria-hidden /> Add a shift
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Content: Goals & Tasks list (full width) */}
-              <div className="space-y-4">
-                  {/* Goals missing support category — coordinator review */}
+              {/* Content: goals and their tasks, one list */}
+              <div className="space-y-5">
+              {/* Goals missing support category: coordinator review */}
               {goalsNeedingCategory.length > 0 && createMode !== "goal" && createMode !== "edit_goal" && (
-                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-900/80 p-4 space-y-2">
-                  <p className="text-[12px] font-bold text-amber-900">
-                    {goalsNeedingCategory.length} goal{goalsNeedingCategory.length !== 1 ? "s" : ""} need a support category
+                <div className="space-y-2 border-l-4 border-amber-400 pl-4">
+                  <p className="text-sm font-semibold text-cc-text">
+                    {goalsNeedingCategory.length} goal{goalsNeedingCategory.length !== 1 ? "s need" : " needs"} a support category
                   </p>
-                  <p className="text-[11px] text-amber-800">
-                    Link each goal to a funded NDIS budget line so billing and reporting stay accurate.
+                  <p className="text-sm text-cc-muted">
+                    Link each goal to a funded NDIS support category so billing and reporting stay accurate.
                   </p>
-                  <div className="space-y-1.5">
+                  <ul className="divide-y divide-cc-border">
                     {goalsNeedingCategory.map((goal) => (
-                      <div key={goal.id} className="flex items-center justify-between gap-2 rounded-md border border-amber-100 bg-white px-3 py-2">
-                        <span className="text-[12px] font-semibold text-[#1A1A2E] truncate">{goal.name}</span>
+                      <li key={goal.id} className="flex items-center justify-between gap-2 py-2">
+                        <span className="truncate text-sm text-cc-text">{goal.name}</span>
                         <button
                           type="button"
                           onClick={() => startEditGoal(goal)}
-                          className="shrink-0 text-[11px] font-bold text-amber-900 underline-offset-2 hover:underline"
+                          className="shrink-0 text-sm font-medium text-cc-plum hover:underline"
                         >
-                          Assign category
+                          Choose a category
                         </button>
-                      </div>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </div>
               )}
 
-              {/* Loading */}
               {ndisGoalsQuery.isLoading && (
-                <div className="flex items-center gap-2 py-4 text-[13px] text-[#6A6A77]"><Loader2 size={14} className="animate-spin" /> Loading goals…</div>
+                <p role="status" className="flex items-center gap-2 py-4 text-sm text-cc-muted"><Loader2 size={14} className="animate-spin" aria-hidden /> Loading goals</p>
               )}
 
-              {/* Empty state */}
               {!ndisGoalsQuery.isLoading && activeGoals.length === 0 && createMode !== "goal" && (
-                <div className="rounded-lg border border-purple-100/60 bg-purple-50/40 p-6 text-center">
-                  <Target className="h-8 w-8 text-[#6A6A77] opacity-30 mx-auto mb-2" />
-                  <p className="text-[13px] font-bold text-[#1A1A2E]">No active goals</p>
-                  <p className="text-[12px] text-[#6A6A77] mt-1">Click <strong>+ Goal</strong> to create the first NDIS goal for {participant.full_name}.</p>
+                <div className="py-6 text-center">
+                  <Target className="mx-auto mb-2 h-7 w-7 text-cc-muted" aria-hidden />
+                  <p className="text-sm font-semibold text-cc-text">No current goals</p>
+                  <p className="mt-1 text-sm text-cc-muted">Use Add a goal to record the first goal from {participant.full_name}'s NDIS plan.</p>
                 </div>
               )}
 
-              {/* Active goals */}
+              {activeGoals.length > 0 && (
+              <ul className="divide-y divide-cc-border border-y border-cc-border">
               {activeGoals.map((goal) => {
                 const goalTasks = participantTasks.filter((t) => t.goal_id === goal.id);
                 const areaStyle = AREA_COLORS[goal.goal_area] ?? AREA_COLORS.other;
@@ -2385,66 +2421,71 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
                   ? Math.round((progressData.evidence_count / progressData.sessions_count) * 100) : 0;
 
                 return (
-                  <div key={goal.id} className="rounded-lg border border-purple-100/60 bg-white">
+                  <li key={goal.id} className="py-4">
                     {/* Goal header */}
-                    <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="flex items-start gap-2 min-w-0 flex-1">
-                        <Target size={15} className="shrink-0 mt-0.5 text-[#E8457A]" />
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-bold text-[#1A1A2E] leading-snug break-words">{goal.name}</p>
-                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: areaStyle.bg, color: areaStyle.color }}>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                        <Target size={16} className="mt-0.5 shrink-0 text-cc-muted" aria-hidden />
+                        <div className="min-w-0 space-y-1">
+                          <p className="break-words text-sm font-semibold leading-snug text-cc-text">{goal.name}</p>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-cc-muted">
+                            <span className="rounded-full px-2 py-0.5 font-medium" style={{ background: areaStyle.bg, color: areaStyle.color }}>
                               {areaStyle.label}
                             </span>
-                            <span className="text-[10px] text-[#6A6A77]">{goalTasks.length} task{goalTasks.length !== 1 ? "s" : ""}</span>
+                            <span>{goalTasks.length} task{goalTasks.length !== 1 ? "s" : ""}</span>
+                            {goal.target_date && <span>· Target {safeFormat(goal.target_date)}</span>}
                             {!goal.support_category && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                                Needs category
+                              <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                                No support category
                               </span>
                             )}
-                            {goal.target_date && <span className="text-[10px] text-[#6A6A77]">Due {goal.target_date}</span>}
                           </div>
-                          {goal.description && <p className="text-[11px] text-[#6A6A77] mt-1 leading-relaxed line-clamp-2 [&_b]:font-semibold [&_strong]:font-semibold [&_i]:italic" dangerouslySetInnerHTML={{ __html: goal.description }} />}
+                          {goal.description && <div className="line-clamp-2 text-sm leading-relaxed text-cc-muted [&_b]:font-semibold [&_strong]:font-semibold [&_i]:italic" dangerouslySetInnerHTML={{ __html: safeRichText(goal.description) }} />}
                           {goal.success_criteria && (
-                            <p className="text-[11px] mt-1 px-2 py-1 rounded-lg bg-purple-50 text-[#6A6A77]">
-                              <span className="font-bold text-[#374151]">Success: </span>{goal.success_criteria}
+                            <p className="text-sm text-cc-muted">
+                              <span className="font-medium text-cc-text">Success looks like: </span>{goal.success_criteria}
                             </p>
                           )}
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-1.5 shrink-0 sm:justify-end">
+                      <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
                         <button type="button" onClick={() => { setCreateMode("tasks"); setLinkedGoalId(goal.id); setTaskTitle(""); setTaskInstructions(""); setTaskPurpose("goal"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); setAppliedTemplate(null); }}
-                          className="h-9 px-2.5 text-[11px] font-bold rounded border border-purple-200 text-purple-700 hover:bg-purple-50">
-                          + Task
+                          className="inline-flex min-h-9 items-center gap-1 rounded-full border border-cc-border px-3 text-sm font-medium text-cc-text hover:bg-cc-soft">
+                          <Plus size={14} aria-hidden /> Add a task
                         </button>
                         <button type="button" onClick={() => startEditGoal(goal)}
-                          className="h-9 w-9 flex items-center justify-center rounded hover:bg-gray-100" title="Edit goal">
-                          <Edit2 size={14} className="text-[#6A6A77]" />
+                          className="inline-flex min-h-9 items-center gap-1 rounded-full px-3 text-sm font-medium text-cc-text hover:bg-cc-soft">
+                          <Edit2 size={14} aria-hidden /> Edit
                         </button>
-                        <button type="button" onClick={() => completeGoalMut.mutate(goal.id)} disabled={completeGoalMut.isPending}
-                          className="h-9 w-9 flex items-center justify-center rounded hover:bg-green-50" title="Mark completed">
-                          <CheckCircle2 size={14} className="text-[#059669]" />
-                        </button>
-                        <button type="button" onClick={() => archiveGoalMut.mutate(goal.id)} disabled={archiveGoalMut.isPending}
-                          className="h-9 w-9 flex items-center justify-center rounded hover:bg-gray-100" title="Archive goal">
-                          <Archive size={14} className="text-[#6A6A77]" />
-                        </button>
-                        <button type="button"
-                          onClick={() => setProgressGoalId((prev) => prev === goal.id ? null : goal.id)}
-                          className="h-9 w-9 flex items-center justify-center rounded hover:bg-purple-50" title="View progress">
-                          <BarChart2 size={14} className={progressGoalId === goal.id ? "text-[#E8457A]" : "text-[#6A6A77]"} />
-                        </button>
-                        <button type="button"
-                          onClick={() => setTemplatesGoalId((prev) => prev === goal.id ? null : goal.id)}
-                          className="h-9 w-9 flex items-center justify-center rounded hover:bg-purple-50" title="Manage task templates">
-                          <LayoutTemplate size={14} className={templatesGoalId === goal.id ? "text-[#E8457A]" : "text-[#6A6A77]"} />
-                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" aria-label={`More for ${goal.name}`}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-cc-muted hover:bg-cc-soft hover:text-cc-text">
+                              <MoreHorizontal size={16} />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuItem onSelect={() => setProgressGoalId((prev) => prev === goal.id ? null : goal.id)}>
+                              <BarChart2 size={14} className="mr-2" aria-hidden /> {progressGoalId === goal.id ? "Hide progress" : "Progress, last 30 days"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => setTemplatesGoalId((prev) => prev === goal.id ? null : goal.id)}>
+                              <LayoutTemplate size={14} className="mr-2" aria-hidden /> {templatesGoalId === goal.id ? "Hide task templates" : "Task templates"}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem disabled={completeGoalMut.isPending} onSelect={() => completeGoalMut.mutate(goal.id)}>
+                              <CheckCircle2 size={14} className="mr-2" aria-hidden /> Mark as achieved
+                            </DropdownMenuItem>
+                            <DropdownMenuItem disabled={archiveGoalMut.isPending} onSelect={() => archiveGoalMut.mutate(goal.id)}>
+                              <Archive size={14} className="mr-2" aria-hidden /> Archive
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
 
                     {/* Task template management for this goal */}
                     {templatesGoalId === goal.id && (
-                      <div className="border-t border-purple-100/60 px-4 py-3 bg-purple-50/30">
+                      <div className="mt-3 border-l-2 border-cc-border pl-4 sm:ml-6">
                         <TaskTemplatePanel
                           participantId={id}
                           goal={goal}
@@ -2456,75 +2497,70 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
 
                     {/* Progress panel */}
                     {progressGoalId === goal.id && (
-                      <div className="border-t border-purple-100/60 px-4 py-3 bg-purple-50/30">
-                        {progressLoading && <p className="text-[12px] text-[#6A6A77] flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Loading progress…</p>}
+                      <div className="mt-3 space-y-3 border-l-2 border-cc-border pl-4 sm:ml-6">
+                        {progressLoading && <p className="flex items-center gap-1 text-sm text-cc-muted"><Loader2 size={12} className="animate-spin" aria-hidden /> Loading progress</p>}
                         {progressData && (
-                          <div className="space-y-3">
-                            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#6A6A77]">Progress: Last 30 Days</p>
-                            <div className="grid grid-cols-3 gap-2">
-                              {([["Sessions", progressData.sessions_count], ["With Evidence", progressData.evidence_count], ["Evidence Rate", `${pct}%`]] as [string, string | number][]).map(([l, v]) => (
-                                <div key={l} className="rounded-lg px-3 py-2 bg-white border border-purple-100/60 text-center">
-                                  <p className="text-[15px] font-semibold text-[#E8457A]">{v}</p>
-                                  <p className="text-[11px] font-semibold text-[#6A6A77]">{l}</p>
+                          <>
+                            <p className="text-sm font-medium text-cc-text">Progress in the last 30 days</p>
+                            <dl className="grid max-w-md grid-cols-3 gap-4">
+                              {([["shifts", progressData.sessions_count], ["with evidence", progressData.evidence_count], ["evidence rate", `${pct}%`]] as [string, string | number][]).map(([l, v]) => (
+                                <div key={l}>
+                                  <dd className="text-lg font-semibold tabular-nums text-cc-text">{v}</dd>
+                                  <dt className="text-xs text-cc-muted">{l}</dt>
                                 </div>
                               ))}
-                            </div>
-                            <div>
-                              <div className="flex justify-between text-[10px] font-semibold mb-1 text-[#6A6A77]"><span>Evidence rate</span><span>{pct}%</span></div>
-                              <div className="h-1.5 rounded-full overflow-hidden bg-purple-100">
-                                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct >= 70 ? "#22C55E" : pct >= 40 ? "#F59E0B" : "#EF4444" }} />
-                              </div>
+                            </dl>
+                            <div className="h-2 max-w-md overflow-hidden rounded-full bg-cc-soft" role="img" aria-label={`Evidence rate ${pct}%`}>
+                              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct >= 70 ? "#16A34A" : pct >= 40 ? "#D97706" : "#DC2626" }} />
                             </div>
                             {progressData.sessions.length > 0 && (
-                              <div className="space-y-1">
-                                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#6A6A77]">Recent Sessions</p>
+                              <ul className="max-w-md divide-y divide-cc-border">
                                 {progressData.sessions.slice(0, 4).map((s) => (
-                                  <div key={s.id} className="flex items-center justify-between rounded-lg px-3 py-1.5 bg-white text-[11px] border border-purple-100/60">
-                                    <span className="text-[#374151]">{s.session_date}</span>
-                                    <div className="flex items-center gap-2">
-                                      {s.notes && <span className="text-[#059669]">✓ Notes</span>}
-                                      {s.compliance_score != null && <span className={s.compliance_score >= 80 ? "text-[#059669]" : "text-[#D97706]"}>{s.compliance_score}%</span>}
-                                    </div>
-                                  </div>
+                                  <li key={s.id} className="flex items-center justify-between py-1.5 text-sm">
+                                    <span className="text-cc-text">{safeFormat(s.session_date)}</span>
+                                    <span className="flex items-center gap-3 text-cc-muted">
+                                      {s.notes && <span>Progress note written</span>}
+                                      {s.compliance_score != null && <span className={s.compliance_score >= 80 ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}>{s.compliance_score}%</span>}
+                                    </span>
+                                  </li>
                                 ))}
-                              </div>
+                              </ul>
                             )}
-                          </div>
+                          </>
                         )}
                       </div>
                     )}
 
                     {/* Tasks under this goal */}
-                    {goalTasks.length > 0 && (
-                      <div className="border-t border-purple-100/60 divide-y divide-gray-100">
+                    {goalTasks.length > 0 ? (
+                      <ul className="mt-2 divide-y divide-cc-border sm:ml-6">
                         {goalTasks.map((task) => (
-                          <div key={task.id} className="flex items-center justify-between px-4 py-2.5 pl-9">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <CheckCircle2 size={13} className="shrink-0 text-[#059669]" />
+                          <li key={task.id} className="flex items-center justify-between gap-2 py-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <ListChecks size={14} className="shrink-0 text-cc-muted" aria-hidden />
                               <div className="min-w-0">
-                                <p className="text-[12px] font-semibold text-[#1A1A2E] truncate">{task.name}</p>
-                                {task.description && <p className="text-[11px] text-[#6A6A77] truncate">{task.description}</p>}
+                                <p className="truncate text-sm text-cc-text">{task.name}</p>
+                                {task.description && <p className="truncate text-xs text-cc-muted">{task.description}</p>}
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0 ml-2">
-                              {task.is_mandatory && <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">Required</span>}
+                            <div className="ml-2 flex shrink-0 items-center gap-2">
+                              {task.is_mandatory && <span className="rounded-full bg-cc-soft px-2 py-0.5 text-xs font-medium text-cc-text">Required</span>}
                               <button type="button" onClick={() => deleteTaskMut.mutate(task.id)} disabled={deleteTaskMut.isPending}
-                                className="p-1 rounded hover:bg-red-50 text-[#9CA3AF] hover:text-red-500" title="Delete task">
-                                <X size={12} />
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-cc-muted hover:bg-cc-soft hover:text-red-600" aria-label={`Delete task ${task.name}`}>
+                                <X size={14} />
                               </button>
                             </div>
-                          </div>
+                          </li>
                         ))}
-                      </div>
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-sm text-cc-muted sm:ml-6">No tasks yet. Use Add a task to give workers something to do towards this goal.</p>
                     )}
-                    {goalTasks.length === 0 && (
-                      <div className="border-t border-purple-100/60 px-4 py-2.5 pl-9">
-                        <p className="text-[11px] text-[#9CA3AF] italic">No tasks yet. Click + Task to add one</p>
-                      </div>
-                    )}
-                  </div>
+                  </li>
                 );
               })}
+              </ul>
+              )}
 
               {/* Core support tasks (no goal) */}
               {(() => {
@@ -2532,58 +2568,54 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
                 if (coreTasks.length === 0) return null;
                 return (
                   <div className="space-y-1">
-                    <h4 className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest px-1">Core support, not linked to a goal</h4>
-                    <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
+                    <h4 className="text-sm font-semibold text-cc-text">Everyday support tasks, not linked to a goal</h4>
+                    <ul className="divide-y divide-cc-border">
                       {coreTasks.map((task) => (
-                        <div key={task.id} className="flex items-center justify-between px-4 py-2.5">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <ClipboardList size={13} className="shrink-0 text-[#6A6A77]" />
+                        <li key={task.id} className="flex items-center justify-between gap-2 py-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <ClipboardList size={14} className="shrink-0 text-cc-muted" aria-hidden />
                             <div className="min-w-0">
-                              <p className="text-[12px] font-semibold text-[#1A1A2E] truncate">{task.name}</p>
-                              {task.description && <p className="text-[11px] text-[#6A6A77] truncate">{task.description}</p>}
+                              <p className="truncate text-sm text-cc-text">{task.name}</p>
+                              {task.description && <p className="truncate text-xs text-cc-muted">{task.description}</p>}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0 ml-2">
-                            {task.is_mandatory && <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">Required</span>}
+                          <div className="ml-2 flex shrink-0 items-center gap-2">
+                            {task.is_mandatory && <span className="rounded-full bg-cc-soft px-2 py-0.5 text-xs font-medium text-cc-text">Required</span>}
                             <button type="button" onClick={() => deleteTaskMut.mutate(task.id)} disabled={deleteTaskMut.isPending}
-                              className="p-1 rounded hover:bg-red-50 text-[#9CA3AF] hover:text-red-500" title="Delete task">
-                              <X size={12} />
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-cc-muted hover:bg-cc-soft hover:text-red-600" aria-label={`Delete task ${task.name}`}>
+                              <X size={14} />
                             </button>
                           </div>
-                        </div>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
                 );
               })()}
 
-              {/* Archived / completed goals */}
+              {/* Achieved and archived goals */}
               {doneGoals.length > 0 && (
                 <div className="space-y-1">
-                  <button type="button" onClick={() => setShowArchivedGoals((v) => !v)}
-                    className="flex items-center gap-1.5 text-[11px] font-bold text-[#6A6A77] hover:text-[#374151] px-1">
-                    <Archive size={12} />
-                    {showArchivedGoals ? "Hide" : "Show"} archived & completed ({doneGoals.length})
+                  <button type="button" onClick={() => setShowArchivedGoals((v) => !v)} aria-expanded={showArchivedGoals}
+                    className="inline-flex min-h-9 items-center gap-1.5 text-sm font-medium text-cc-muted hover:text-cc-text">
+                    <Archive size={14} aria-hidden />
+                    {showArchivedGoals ? "Hide" : "Show"} achieved and archived goals ({doneGoals.length})
                   </button>
                   {showArchivedGoals && (
-                    <div className="space-y-1">
+                    <ul className="divide-y divide-cc-border">
                       {doneGoals.map((goal) => {
                         const areaStyle = AREA_COLORS[goal.goal_area] ?? AREA_COLORS.other;
                         return (
-                          <div key={goal.id} className="rounded-lg border border-gray-200 bg-gray-50/60 px-4 py-3 flex items-center justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-[12px] font-bold text-[#374151] truncate">{goal.name}</p>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: areaStyle.bg, color: areaStyle.color }}>{areaStyle.label}</span>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${goal.status === "completed" ? "bg-green-50 text-green-700" : "bg-gray-100 text-[#6A6A77]"}`}>
-                                  {goal.status === "completed" ? "Completed" : "Archived"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
+                          <li key={goal.id} className="flex items-center justify-between gap-3 py-2.5">
+                            <p className="min-w-0 flex-1 truncate text-sm text-cc-muted">{goal.name}</p>
+                            <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: areaStyle.bg, color: areaStyle.color }}>{areaStyle.label}</span>
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${goal.status === "completed" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" : "bg-cc-soft text-cc-muted"}`}>
+                              {goal.status === "completed" ? "Achieved" : "Archived"}
+                            </span>
+                          </li>
                         );
                       })}
-                    </div>
+                    </ul>
                   )}
                 </div>
               )}
@@ -2639,10 +2671,14 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
         )}
 
         {activeTab === "care_profile" && isCoordinator && (
-          <div className="space-y-4">
-            <details open={careProfileSection === "context"} className="rounded-xl border border-cc-border p-4"><summary className="cursor-pointer py-2 text-sm font-semibold">Daily support & care contacts</summary><ParticipantShiftContextTab participantId={id} /></details>
-            <details open={careProfileSection === "clinical"} className="rounded-xl border border-cc-border p-4"><summary className="cursor-pointer py-2 text-sm font-semibold">Medications & clinical records</summary>
-              <div className="space-y-3">
+          <div className="space-y-6">
+            <section aria-labelledby="record-daily-support" className={RECORD_SECTION}>
+              <h3 id="record-daily-support" className={RECORD_HEADING}>Daily support and key contacts</h3>
+              <ParticipantShiftContextTab participantId={id} />
+            </section>
+            <section id="record-clinical" aria-labelledby="record-clinical-heading" className={RECORD_SECTION}>
+              <h3 id="record-clinical-heading" className={RECORD_HEADING}>Medication and health information</h3>
+              <div className="space-y-6">
                 <ParticipantMedicationsPanel participantId={id} />
                 <ParticipantClinicalRecordEditor participantId={id} />
                 <ParticipantRestrictedTab
@@ -2653,7 +2689,7 @@ export function ParticipantDetail({ id, onRefreshList, initialTab, fullScreen, o
                   isSaving={saveRestricted.isPending}
                 />
               </div>
-            </details>
+            </section>
           </div>
         )}
 

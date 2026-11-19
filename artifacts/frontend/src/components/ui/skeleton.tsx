@@ -6,7 +6,8 @@ function Skeleton({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("animate-pulse rounded-md bg-primary/10", className)}
+      // Neutral grey: a loading shape, not a brand-coloured wash that reads as a warning.
+      className={cn("animate-pulse rounded-md bg-cc-soft", className)}
       {...props}
     />
   )

@@ -60,6 +60,10 @@ export type DirectorOverview = {
     total: number;
     used: number;
     remaining: number;
+    /** The plan's own figure; total is what its support categories hold. */
+    plan_total?: number;
+    /** Plan funding no support category holds yet. */
+    unallocated?: number;
     percent_used: number | null;
     percent_time_elapsed: number | null;
     ahead_by: number | null;

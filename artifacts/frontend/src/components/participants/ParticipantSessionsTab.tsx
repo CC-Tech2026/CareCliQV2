@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { CalendarDays, ChevronDown, ExternalLink, Search, User } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { safeFormat, statusBadge, complianceTone } from "@/lib/participant-format";
 import { shiftNoteSubtitle, shiftNoteTitle, type ShiftNoteLike } from "@/lib/shift-note-title";
@@ -27,7 +26,8 @@ function matchesSearch(session: SessionRecord, query: string): boolean {
   return haystack.includes(query);
 }
 
-/** "Shift History" facet of the participant Detail archetype. */
+/** Every shift with this participant and its progress note, newest first: one
+ * list, each row opening in place to the full note. */
 export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessionsTabProps) {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -39,25 +39,31 @@ export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessi
   }, [sessions, search]);
 
   return (
-    <section className="rounded-2xl border border-cc-border bg-cc-surface p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <CalendarDays className="h-3.5 w-3.5 text-[#E8457A]" />
-          <h4 className="text-[13px] font-semibold text-cc-text">Shift History</h4>
-          <span className="rounded-full bg-[#EDE3FC] px-2.5 py-0.5 text-[11px] font-semibold text-[#E8457A]">
-            {filtered.length}{filtered.length !== sessions.length ? ` of ${sessions.length}` : ""}
-          </span>
+    <section aria-labelledby="shifts-heading" className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 id="shifts-heading" className="text-base font-semibold text-cc-text">
+            Progress notes
+            <span className="ml-2 text-sm font-normal tabular-nums text-cc-muted">
+              {filtered.length}{filtered.length !== sessions.length ? ` of ${sessions.length}` : ""}
+            </span>
+          </h3>
+          <p className="mt-0.5 text-sm text-cc-muted">
+            Each shift's note, newest first. A shift without a note yet shows on the Summary and the roster.
+          </p>
         </div>
         {sessions.length > 0 && (
-          <div className="relative w-full sm:w-56">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-cc-muted" />
-            <Input
+          <label className="relative w-full sm:w-72">
+            <span className="sr-only">Search progress notes</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cc-muted" aria-hidden />
+            <input
+              type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search shift, worker, notes…"
-              className="h-8 rounded-lg border-cc-border pl-8 text-[12px]"
+              placeholder="Worker, date or words in a note"
+              className="min-h-10 w-full rounded-full border border-cc-border bg-cc-surface pl-9 pr-4 text-sm text-cc-text placeholder:text-cc-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-cc-plum/40"
             />
-          </div>
+          </label>
         )}
       </div>
 
@@ -66,111 +72,80 @@ export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessi
           {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
         </div>
       ) : sessions.length === 0 ? (
-        <div className="rounded-xl bg-cc-surface border border-cc-border p-6 text-center">
-          <CalendarDays className="h-8 w-8 text-cc-muted opacity-30 mx-auto mb-2" />
-          <p className="text-[13px] font-semibold text-cc-text">No shifts yet</p>
-          <p className="text-[11px] text-cc-muted mt-1">Shifts with this participant will appear here.</p>
+        <div className="py-8 text-center">
+          <CalendarDays className="mx-auto mb-2 h-7 w-7 text-cc-muted" aria-hidden />
+          <p className="text-sm font-semibold text-cc-text">No progress notes yet</p>
+          <p className="mt-1 text-sm text-cc-muted">Each shift's progress note appears here once the worker writes it.</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl bg-cc-surface border border-cc-border p-6 text-center">
-          <Search className="h-8 w-8 text-cc-muted opacity-30 mx-auto mb-2" />
-          <p className="text-[13px] font-semibold text-cc-text">No shifts match "{search}"</p>
-        </div>
+        <p className="py-8 text-center text-sm text-cc-muted">No progress notes match "{search.trim()}".</p>
       ) : (
-        <div className="space-y-2">
+        <ul className="divide-y divide-cc-border border-y border-cc-border">
           {filtered.map((session) => {
             const isOpen = expandedId === session.id;
             const notesText = session.translated_english_note || session.compliance_input_text || session.notes;
+            const title = shiftNoteTitle(session as ShiftNoteLike, { participant: false });
             return (
-              <div
-                key={session.id}
-                className="rounded-xl bg-cc-surface border overflow-hidden transition-colors"
-                style={{ borderColor: isOpen ? "rgba(232,69,122,0.35)" : "rgba(221,214,254,0.5)" }}
-              >
-                {/* Row header — always visible, most relevant info at a glance */}
+              <li key={session.id}>
                 <button
                   type="button"
                   onClick={() => setExpandedId(isOpen ? null : session.id)}
-                  className="w-full text-left px-3 py-3 hover:bg-[#ECECEC]/60 transition-colors"
+                  aria-expanded={isOpen}
+                  className="w-full py-3 text-left transition-colors hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
                 >
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      {/* One participant's history: the day leads, then the times and who worked it. */}
-                      <p className="text-[13px] font-bold text-cc-text truncate">
-                        {shiftNoteTitle(session as ShiftNoteLike, { participant: false })}
-                      </p>
-                      <p className="text-[11px] text-cc-muted mt-0.5 truncate">
+                      <p className="truncate text-sm font-semibold text-cc-text">{title}</p>
+                      <p className="mt-0.5 truncate text-xs text-cc-muted">
                         {shiftNoteSubtitle(session as ShiftNoteLike) || `${session.duration_minutes || 0} min`}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex shrink-0 items-center gap-2">
                       {session.compliance_score != null && (
-                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${complianceTone(session.compliance_score)}`}>
-                          {session.compliance_score}%
+                        <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${complianceTone(session.compliance_score)}`}>
+                          Note quality {session.compliance_score}%
                         </span>
                       )}
-                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold capitalize ${statusBadge(session.status || "")}`}>
-                        {session.status || "draft"}
+                      <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize ${statusBadge(session.status || "")}`}>
+                        {(session.status || "draft").replace(/_/g, " ")}
                       </span>
                       <ChevronDown
-                        size={14}
-                        className="text-cc-muted opacity-50 shrink-0 transition-transform"
+                        size={16}
+                        aria-hidden
+                        className="shrink-0 text-cc-muted transition-transform"
                         style={{ transform: isOpen ? "rotate(180deg)" : "none" }}
                       />
                     </div>
                   </div>
                   {!isOpen && notesText && (
-                    <p className="mt-1.5 text-[11px] text-cc-muted line-clamp-2 leading-relaxed">
-                      {notesText}
-                    </p>
+                    <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-cc-muted">{notesText}</p>
                   )}
                 </button>
 
-                {/* Expanded — most relevant detail inline, full page one click away */}
                 {isOpen && (
-                  <div className="border-t border-cc-border p-3 space-y-3">
-                    <Link
-                      href={`/sessions/${session.id}`}
-                      className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#FDF0F4]"
-                      style={{ color: "var(--cc-plum)", borderColor: "rgba(232,69,122,0.3)" }}
-                    >
-                      <ExternalLink size={12} /> Open full shift details
-                    </Link>
+                  <div className="space-y-3 pb-4">
+                    <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+                      <div>
+                        <dt className="text-xs text-cc-muted">Date</dt>
+                        <dd className="text-cc-text">{safeFormat(session.session_date)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-cc-muted">Length</dt>
+                        <dd className="tabular-nums text-cc-text">{session.duration_minutes || 0} min</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-cc-muted">Support worker</dt>
+                        <dd className="text-cc-text">{session.worker_name || <span className="text-cc-muted">Not recorded</span>}</dd>
+                      </div>
+                    </dl>
 
-                    <div className="flex flex-wrap gap-2">
-                      <div className="rounded-lg border border-cc-border bg-[#ECECEC] px-3 py-2 flex-1 min-w-[110px]">
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted">Date</p>
-                        <p className="text-[13px] font-bold text-cc-text mt-0.5">{safeFormat(session.session_date)}</p>
+                    {notesText ? (
+                      <div>
+                        <p className="text-xs text-cc-muted">Progress note</p>
+                        <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-cc-text">{notesText}</p>
                       </div>
-                      <div className="rounded-lg border border-cc-border bg-[#ECECEC] px-3 py-2 flex-1 min-w-[110px]">
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted">Duration</p>
-                        <p className="text-[13px] font-bold text-cc-text mt-0.5">{session.duration_minutes || 0} min</p>
-                      </div>
-                      <div className="rounded-lg border border-cc-border bg-[#ECECEC] px-3 py-2 flex-1 min-w-[110px]">
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted flex items-center gap-1">
-                          <User size={9} /> Support Worker
-                        </p>
-                        <p className="text-[13px] font-bold text-cc-text mt-0.5 truncate">
-                          {session.worker_name || <span className="italic font-medium text-cc-muted">Not recorded</span>}
-                        </p>
-                      </div>
-                      {session.compliance_score != null && (
-                        <div className="rounded-lg border border-cc-border bg-[#ECECEC] px-3 py-2 flex-1 min-w-[110px]">
-                          <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted mb-1">Compliance</p>
-                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${complianceTone(session.compliance_score)}`}>
-                            {session.compliance_score}%
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {notesText && (
-                      <div className="rounded-lg border border-cc-border bg-[#ECECEC] px-3 py-2.5">
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted mb-1.5">Notes</p>
-                        <p className="text-[12px] text-cc-text leading-relaxed whitespace-pre-wrap line-clamp-6">
-                          {notesText}
-                        </p>
-                      </div>
+                    ) : (
+                      <p className="text-sm text-cc-muted">No progress note written for this shift.</p>
                     )}
 
                     {(session.original_language_input || session.translated_english_note) && (
@@ -182,12 +157,19 @@ export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessi
                         translationProvider={session.translation_provider ?? undefined}
                       />
                     )}
+
+                    <Link
+                      href={`/sessions/${session.id}`}
+                      className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-cc-plum hover:underline"
+                    >
+                      Open the full shift record <ArrowRight size={14} aria-hidden />
+                    </Link>
                   </div>
                 )}
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </section>
   );

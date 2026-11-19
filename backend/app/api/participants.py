@@ -606,25 +606,26 @@ async def get_compliance_breakdown(
     sessions = await get_sessions_by_participant(participant_id, current_user)
     scored = [float(s["compliance_score"]) for s in sessions if s.get("compliance_score") is not None]
     avg_score = round(sum(scored) / len(scored), 1) if scored else None
+    notes_text = f"all {len(scored)} progress notes" if len(scored) != 1 else "its 1 progress note"
     if avg_score is None:
-        sessions_status, sessions_detail = "none", "No scored sessions yet."
+        sessions_status, sessions_detail = "none", "No progress notes have a quality score yet."
     elif avg_score >= 85:
-        sessions_status, sessions_detail = "good", f"Averaging {avg_score}% across {len(scored)} scored session(s)."
+        sessions_status, sessions_detail = "good", f"Average quality {avg_score}% across {notes_text}."
     elif avg_score >= 60:
-        sessions_status, sessions_detail = "attention", f"Averaging {avg_score}% across {len(scored)} scored session(s)."
+        sessions_status, sessions_detail = "attention", f"Average quality {avg_score}% across {notes_text}. Below 85% needs review."
     else:
-        sessions_status, sessions_detail = "critical", f"Averaging {avg_score}% across {len(scored)} scored session(s)."
+        sessions_status, sessions_detail = "critical", f"Average quality {avg_score}% across {notes_text}. Below 60% needs action."
 
     # Medications
     from ..services import medication_service
     medications = medication_service.list_medications(participant_id, str(org_id))
     pending = [m for m in medications if m.get("status") == "pending_verification"]
     if pending:
-        med_status, med_detail = "attention", f"{len(pending)} medication(s) awaiting verification."
+        med_status, med_detail = "attention", f"{len(pending)} medication{'s' if len(pending) != 1 else ''} waiting to be verified."
     elif not medications:
         med_status, med_detail = "none", "No medications on file."
     else:
-        med_status, med_detail = "good", f"{len(medications)} medication(s) on file, all verified."
+        med_status, med_detail = "good", f"{len(medications)} medication{'s' if len(medications) != 1 else ''} on file, all verified."
 
     # Incidents
     try:

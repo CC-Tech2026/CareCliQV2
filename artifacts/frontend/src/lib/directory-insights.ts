@@ -173,8 +173,9 @@ export function budgetUsage(
 }
 
 export function planManagementLabel(type?: string | null): string | null {
-  if (type === "NDIA-managed") return "NDIA managed";
-  if (type === "plan-managed") return "Plan managed";
-  if (type === "self-managed") return "Self managed";
+  // The NDIS's own spelling: NDIA-managed, plan-managed, self-managed.
+  if (type === "NDIA-managed") return "NDIA-managed";
+  if (type === "plan-managed") return "Plan-managed";
+  if (type === "self-managed") return "Self-managed";
   return null;
 }

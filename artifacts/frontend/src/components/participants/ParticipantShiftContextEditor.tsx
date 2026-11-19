@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { HELP, INPUT, LABEL, PRIMARY_BUTTON, SECONDARY_BUTTON, SUBHEADING, SUBSECTION, TEXTAREA } from "@/components/participants/recordUi";
 import {
   Select,
   SelectContent,
@@ -229,303 +228,142 @@ export function ParticipantShiftContextEditor({
   }
 
   return (
-    <section className="cc-surface-card space-y-4 border border-cc-border p-4">
-      <p className="text-[12px] font-black uppercase tracking-[0.13em] text-cc-plum">
-        {translate("participants.shiftContext.title")}
-      </p>
-      <p className="text-[12px] text-cc-muted">
-        {translate("participants.shiftContext.hint")}
-      </p>
-
-      <div className="rounded-xl border border-cc-border p-3 space-y-3">
-        <p className="text-[11px] font-black uppercase tracking-wide text-cc-plum">
-          {translate("participants.shiftContext.briefing")}
-        </p>
+    <div className="space-y-5">
+      <section aria-labelledby="briefing-heading" className={SUBSECTION}>
+        <div>
+          <h4 id="briefing-heading" className={SUBHEADING}>{translate("participants.shiftContext.briefing")}</h4>
+          <p className={HELP}>{translate("participants.shiftContext.hint")}</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label={translate("participants.shiftContext.preferredName")}
+            value={preferredName}
+            onChange={setPreferredName}
+          />
+        </div>
         <TextArea
           label={translate("participants.shiftContext.aboutParticipant")}
           value={backgroundSummary}
           onChange={setBackgroundSummary}
         />
-        <div>
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-cc-muted">
-            {translate("participants.shiftContext.criticalAlerts")}
-          </p>
-          {briefingAlerts.map((alert, i) => (
-            <div key={i} className="mb-2 flex gap-2">
-              <Input
-                placeholder={translate(
-                  "participants.shiftContext.alertPlaceholder",
-                )}
-                value={alert}
-                onChange={(e) =>
-                  setBriefingAlerts((prev) =>
-                    prev.map((v, j) => (j === i ? e.target.value : v)),
-                  )
-                }
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() =>
-                  setBriefingAlerts((prev) => prev.filter((_, j) => j !== i))
-                }
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={briefingAlerts.length >= 3}
-            onClick={() => setBriefingAlerts((prev) => [...prev, ""])}
-          >
-            <Plus className="mr-1 h-3.5 w-3.5" />{" "}
-            {translate("participants.shiftContext.addAlert")}
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field
-          label={translate("participants.shiftContext.preferredName")}
-          value={preferredName}
-          onChange={setPreferredName}
+        <ListEditor
+          label={translate("participants.shiftContext.criticalAlerts")}
+          items={briefingAlerts}
+          setItems={setBriefingAlerts}
+          placeholder={translate("participants.shiftContext.alertPlaceholder")}
+          addLabel={translate("participants.shiftContext.addAlert")}
+          max={3}
         />
-      </div>
+      </section>
 
-      <div className="rounded-xl border border-cc-border p-3 space-y-3">
-        <p className="text-[11px] font-black uppercase tracking-wide text-cc-plum">
-          {translate("participants.shiftContext.careCoordinatorHeading")}
-        </p>
-        <p className="text-[12px] text-cc-muted">
-          {translate("participants.shiftContext.careCoordinatorHint")}
-        </p>
-        <div className="max-w-xs space-y-1">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">
-            {translate("participants.shiftContext.careCoordinator")}
-          </p>
+      <section aria-labelledby="contacts-heading" className={SUBSECTION}>
+        <h4 id="contacts-heading" className={SUBHEADING}>Key contacts</h4>
+        <div className="max-w-sm space-y-1.5">
+          <p className={LABEL} id="care-coordinator-label">{translate("participants.shiftContext.careCoordinator")}</p>
           <Select
             value={careCoordinatorId ?? "unassigned"}
-            onValueChange={(value) =>
-              setCareCoordinatorId(value === "unassigned" ? null : value)
-            }
+            onValueChange={(value) => setCareCoordinatorId(value === "unassigned" ? null : value)}
           >
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue
-                placeholder={translate("participants.shiftContext.unassigned")}
-              />
+            <SelectTrigger aria-labelledby="care-coordinator-label" className="min-h-10 text-sm">
+              <SelectValue placeholder={translate("participants.shiftContext.unassigned")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="unassigned">
-                {translate("participants.shiftContext.unassigned")}
-              </SelectItem>
+              <SelectItem value="unassigned">{translate("participants.shiftContext.unassigned")}</SelectItem>
               {coordinators.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.full_name}
-                </SelectItem>
+                <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <p className={HELP}>{translate("participants.shiftContext.careCoordinatorHint")}</p>
         </div>
-      </div>
 
-      <div className="rounded-xl border border-cc-border p-3 space-y-3">
-        <p className="text-[11px] font-black uppercase tracking-wide text-cc-plum">
-          {translate("participants.shiftContext.billingContactHeading")}
-        </p>
-        <p className="text-[12px] text-cc-muted">
-          {translate("participants.shiftContext.billingContactHint")}
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field
-            label={translate("participants.shiftContext.caseManagerName")}
-            value={caseManagerName}
-            onChange={setCaseManagerName}
-          />
-          <Field
-            label={translate("participants.shiftContext.caseManagerPhone")}
-            value={caseManagerPhone}
-            onChange={setCaseManagerPhone}
-          />
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-cc-border p-3 space-y-3">
-        <p className="text-[11px] font-black uppercase tracking-wide text-cc-plum">
-          {translate("participants.shiftContext.emergencyContactHeading")}
-        </p>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field
-            label={translate("participants.shiftContext.emergencyContactName")}
-            value={emergencyContactName}
-            onChange={setEmergencyContactName}
-          />
-          <Field
-            label={translate("participants.shiftContext.emergencyContactPhone")}
-            value={emergencyContactPhone}
-            onChange={setEmergencyContactPhone}
-          />
-          <Field
-            label={translate(
-              "participants.shiftContext.emergencyContactRelationship",
-            )}
-            value={emergencyContactRelationship}
-            onChange={setEmergencyContactRelationship}
-          />
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-cc-border p-3 space-y-3">
-        <p className="text-[11px] font-black uppercase tracking-wide text-cc-plum">
-          {translate("participants.shiftContext.nextOfKinHeading")}
-        </p>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field
-            label={translate("participants.shiftContext.nextOfKinName")}
-            value={nextOfKinName}
-            onChange={setNextOfKinName}
-          />
-          <Field
-            label={translate("participants.shiftContext.nextOfKinPhone")}
-            value={nextOfKinPhone}
-            onChange={setNextOfKinPhone}
-          />
-          <Field
-            label={translate("participants.shiftContext.nextOfKinRelationship")}
-            value={nextOfKinRelationship}
-            onChange={setNextOfKinRelationship}
-          />
-        </div>
-      </div>
-
-      <TextArea
-        label={translate("participants.shiftContext.likesDislikes")}
-        value={likesDislikes}
-        onChange={setLikesDislikes}
-      />
-      <TextArea
-        label={translate("participants.shiftContext.sensory")}
-        value={sensory}
-        onChange={setSensory}
-      />
-      <TextArea
-        label={translate("participants.shiftContext.cultural")}
-        value={cultural}
-        onChange={setCultural}
-      />
-      <TextArea
-        label={translate("participants.shiftContext.communicationStyle")}
-        value={communicationStyle}
-        onChange={setCommunicationStyle}
-      />
-      <TextArea
-        label={translate("participants.shiftContext.communicationGuidance")}
-        value={communicationGuidance}
-        onChange={setCommunicationGuidance}
-      />
-      <TextArea
-        label={translate("participants.shiftContext.previousVisits")}
-        value={previousVisitNotes}
-        onChange={setPreviousVisitNotes}
-      />
-
-      <div>
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-cc-muted">
-          {translate("participants.shiftContext.preferredActivities")}
-        </p>
-        {activities.map((item, i) => (
-          <div key={i} className="mb-2 flex gap-2">
-            <Input
-              value={item}
-              onChange={(e) =>
-                setActivities((prev) =>
-                  prev.map((v, j) => (j === i ? e.target.value : v)),
-                )
-              }
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() =>
-                setActivities((prev) => prev.filter((_, j) => j !== i))
-              }
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+        <fieldset className="space-y-2">
+          <legend className={LABEL}>{translate("participants.shiftContext.billingContactHeading")}</legend>
+          <p className={HELP}>{translate("participants.shiftContext.billingContactHint")}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={translate("participants.shiftContext.caseManagerName")} value={caseManagerName} onChange={setCaseManagerName} />
+            <Field label={translate("participants.shiftContext.caseManagerPhone")} value={caseManagerPhone} onChange={setCaseManagerPhone} type="tel" />
           </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setActivities((prev) => [...prev, ""])}
-        >
-          <Plus className="mr-1 h-3.5 w-3.5" />{" "}
-          {translate("participants.shiftContext.addActivity")}
-        </Button>
-      </div>
+        </fieldset>
 
-      <div>
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-cc-muted">
-          {translate("participants.shiftContext.behaviouralNotes")}
-        </p>
-        {behaviouralNotes.map((note, i) => (
-          <div key={i} className="mb-2 space-y-1">
-            <Input
-              placeholder={translate("participants.shiftContext.noteTitle")}
-              value={note.title}
-              onChange={(e) =>
-                setBehaviouralNotes((prev) =>
-                  prev.map((n, j) =>
-                    j === i ? { ...n, title: e.target.value } : n,
-                  ),
-                )
-              }
-            />
-            <textarea
-              className="cc-field w-full rounded-xl px-3 py-2 text-sm min-h-[72px]"
-              placeholder={translate(
-                "participants.shiftContext.notePlaceholder",
-              )}
-              value={note.body}
-              onChange={(e) =>
-                setBehaviouralNotes((prev) =>
-                  prev.map((n, j) =>
-                    j === i ? { ...n, body: e.target.value } : n,
-                  ),
-                )
-              }
-            />
+        <fieldset className="space-y-2">
+          <legend className={LABEL}>{translate("participants.shiftContext.emergencyContactHeading")}</legend>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label={translate("participants.shiftContext.emergencyContactName")} value={emergencyContactName} onChange={setEmergencyContactName} />
+            <Field label={translate("participants.shiftContext.emergencyContactPhone")} value={emergencyContactPhone} onChange={setEmergencyContactPhone} type="tel" />
+            <Field label={translate("participants.shiftContext.emergencyContactRelationship")} value={emergencyContactRelationship} onChange={setEmergencyContactRelationship} />
           </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            setBehaviouralNotes((prev) => [
-              ...prev,
-              {
-                title: translate("participants.shiftContext.defaultNoteTitle"),
-                body: "",
-              },
-            ])
-          }
-        >
-          <Plus className="mr-1 h-3.5 w-3.5" />{" "}
-          {translate("participants.shiftContext.addNote")}
-        </Button>
-      </div>
+        </fieldset>
 
-      <Button disabled={saving} onClick={save} className="cc-btn-primary">
-        {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        {translate("participants.shiftContext.save")}
-      </Button>
-    </section>
+        <fieldset className="space-y-2">
+          <legend className={LABEL}>{translate("participants.shiftContext.nextOfKinHeading")}</legend>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label={translate("participants.shiftContext.nextOfKinName")} value={nextOfKinName} onChange={setNextOfKinName} />
+            <Field label={translate("participants.shiftContext.nextOfKinPhone")} value={nextOfKinPhone} onChange={setNextOfKinPhone} type="tel" />
+            <Field label={translate("participants.shiftContext.nextOfKinRelationship")} value={nextOfKinRelationship} onChange={setNextOfKinRelationship} />
+          </div>
+        </fieldset>
+      </section>
+
+      <section aria-labelledby="preferences-heading" className={SUBSECTION}>
+        <h4 id="preferences-heading" className={SUBHEADING}>Preferences and communication</h4>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <TextArea label={translate("participants.shiftContext.likesDislikes")} value={likesDislikes} onChange={setLikesDislikes} />
+          <TextArea label={translate("participants.shiftContext.sensory")} value={sensory} onChange={setSensory} />
+          <TextArea label={translate("participants.shiftContext.cultural")} value={cultural} onChange={setCultural} />
+          <TextArea label={translate("participants.shiftContext.communicationStyle")} value={communicationStyle} onChange={setCommunicationStyle} />
+        </div>
+        <TextArea label={translate("participants.shiftContext.communicationGuidance")} value={communicationGuidance} onChange={setCommunicationGuidance} />
+      </section>
+
+      <section aria-labelledby="activities-heading" className={SUBSECTION}>
+        <h4 id="activities-heading" className={SUBHEADING}>Activities and behaviour support</h4>
+        <ListEditor
+          label={translate("participants.shiftContext.preferredActivities")}
+          items={activities}
+          setItems={setActivities}
+          addLabel={translate("participants.shiftContext.addActivity")}
+        />
+        <TextArea label={translate("participants.shiftContext.previousVisits")} value={previousVisitNotes} onChange={setPreviousVisitNotes} />
+        <div className="space-y-3">
+          <p className={LABEL}>{translate("participants.shiftContext.behaviouralNotes")}</p>
+          {behaviouralNotes.map((note, i) => (
+            <div key={i} className="space-y-2">
+              <input
+                aria-label={`${translate("participants.shiftContext.noteTitle")} ${i + 1}`}
+                className={INPUT}
+                placeholder={translate("participants.shiftContext.noteTitle")}
+                value={note.title}
+                onChange={(e) => setBehaviouralNotes((prev) => prev.map((n, j) => (j === i ? { ...n, title: e.target.value } : n)))}
+              />
+              <textarea
+                aria-label={`${note.title || translate("participants.shiftContext.noteTitle")} ${i + 1}`}
+                className={TEXTAREA}
+                placeholder={translate("participants.shiftContext.notePlaceholder")}
+                value={note.body}
+                onChange={(e) => setBehaviouralNotes((prev) => prev.map((n, j) => (j === i ? { ...n, body: e.target.value } : n)))}
+              />
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() =>
+              setBehaviouralNotes((prev) => [...prev, { title: translate("participants.shiftContext.defaultNoteTitle"), body: "" }])
+            }
+            className={SECONDARY_BUTTON}
+          >
+            <Plus className="h-4 w-4" aria-hidden /> {translate("participants.shiftContext.addNote")}
+          </button>
+        </div>
+      </section>
+
+      <div className="border-t border-cc-border pt-5">
+        <button type="button" disabled={saving} onClick={save} className={PRIMARY_BUTTON}>
+          {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+          {translate("participants.shiftContext.save")}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -533,18 +371,18 @@ function Field({
   label,
   value,
   onChange,
+  type = "text",
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  type?: string;
 }) {
   return (
-    <div className="space-y-1">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">
-        {label}
-      </p>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} />
-    </div>
+    <label className="block space-y-1.5">
+      <span className={LABEL}>{label}</span>
+      <input type={type} className={INPUT} value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
   );
 }
 
@@ -558,15 +396,58 @@ function TextArea({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="space-y-1">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">
-        {label}
-      </p>
-      <textarea
-        className="cc-field w-full rounded-xl px-3 py-2 text-sm min-h-[72px] resize-none"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </div>
+    <label className="block space-y-1.5">
+      <span className={LABEL}>{label}</span>
+      <textarea className={TEXTAREA} value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
   );
+}
+
+function ListEditor({
+  items,
+  setItems,
+  placeholder,
+  addLabel,
+  max,
+  label,
+}: {
+  items: string[];
+  setItems: (update: (prev: string[]) => string[]) => void;
+  placeholder?: string;
+  addLabel: string;
+  max?: number;
+  label: string;
+}) {
+  return (
+  <div className="space-y-2">
+    <p className={LABEL}>{label}</p>
+    {items.map((item, i) => (
+      <div key={i} className="flex gap-2">
+        <input
+          aria-label={`${label} ${i + 1}`}
+          className={INPUT}
+          placeholder={placeholder}
+          value={item}
+          onChange={(e) => setItems((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))}
+        />
+        <button
+          type="button"
+          aria-label={`Remove ${label.toLowerCase()} ${i + 1}`}
+          onClick={() => setItems((prev) => prev.filter((_, j) => j !== i))}
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-cc-muted hover:bg-cc-soft hover:text-cc-text"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    ))}
+    <button
+      type="button"
+      disabled={max != null && items.length >= max}
+      onClick={() => setItems((prev) => [...prev, ""])}
+      className={SECONDARY_BUTTON}
+    >
+      <Plus className="h-4 w-4" aria-hidden /> {addLabel}
+    </button>
+  </div>
+);
 }

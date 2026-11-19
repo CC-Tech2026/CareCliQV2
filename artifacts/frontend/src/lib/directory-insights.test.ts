@@ -70,6 +70,6 @@ describe("budgetUsage", () => {
 });
 
 it("labels plan management types", () => {
-  expect(planManagementLabel("plan-managed")).toBe("Plan managed");
+  expect(planManagementLabel("plan-managed")).toBe("Plan-managed");
   expect(planManagementLabel("unknown")).toBeNull();
 });
