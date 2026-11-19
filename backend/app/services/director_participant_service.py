@@ -82,7 +82,7 @@ AUDIT_LABELS: dict[str, str] = {
     "participant_portal.identity_failed": "Failed a portal identity check",
     "participant_portal.not_using_recorded": "Recorded that the portal isn't being used",
     "worker.participant.viewed": "Viewed the participant's profile",
-    "worker.sessions.viewed": "Viewed the participant's shift notes",
+    "worker.sessions.viewed": "Viewed the participant's progress notes",
     "worker.safety_protocol.acknowledged": "Acknowledged the safety plan",
 }
 
@@ -171,8 +171,16 @@ def intake_for_participant(participant_id: str, org_id: str) -> Optional[dict[st
 # ── The summary ──────────────────────────────────────────────────────────────
 
 def _funding(budget: dict[str, Any], plan_start: Optional[date], plan_end: Optional[date], today: date) -> dict[str, Any]:
-    total = float(budget.get("total_funding") or budget.get("total_allocated") or 0)
+    # Once the plan is split into support categories, the budget is what those
+    # categories hold, and spent and remaining are measured against it (as the
+    # coordinators' record does). Mixing the plan's overall figure with the
+    # categories' remainder showed $68,500 total, $441 spent, $29,559 left.
+    plan_total = float(budget.get("total_funding") or 0)
+    allocated = float(budget.get("total_allocated") or 0)
+    has_categories = bool(budget.get("budgets"))
+    total = allocated if has_categories else (plan_total or allocated)
     used = float(budget.get("total_used") or 0)
+    unallocated = round(plan_total - allocated, 2) if has_categories and plan_total > allocated else 0.0
     percent_used = round(used / total * 100, 1) if total else None
     percent_time = None
     if plan_start and plan_end and plan_end > plan_start:
@@ -195,7 +203,11 @@ def _funding(budget: dict[str, Any], plan_start: Optional[date], plan_end: Optio
         "plan_number": budget.get("plan_number"),
         "total": total,
         "used": used,
-        "remaining": float(budget.get("total_remaining") or max(total - used, 0)),
+        # Negative when more has been delivered than the budget holds.
+        "remaining": round(total - used, 2),
+        # The plan's own figure, and how much of it no support category holds yet.
+        "plan_total": plan_total or total,
+        "unallocated": unallocated,
         "percent_used": percent_used,
         "percent_time_elapsed": percent_time,
         "ahead_by": round(percent_used - percent_time, 1) if percent_used is not None and percent_time is not None else None,
@@ -446,11 +458,11 @@ def decisions_for(summary: dict[str, Any], today: date) -> list[dict[str, Any]]:
 
     team = summary.get("team") or {}
     if not team.get("main_worker"):
-        add("no_main_worker", "warning", "No main worker", "Nobody is set as this participant's main support worker.", "team")
+        add("no_main_worker", "warning", "No key worker", "No support worker is set as this participant's key worker.", "team")
     elif not team.get("backups"):
-        add("no_backup", "warning", "No backup worker", "If the main worker is away, no one familiar can step in.", "team")
+        add("no_backup", "warning", "No backup worker", "If the key worker is away, no one familiar can step in.", "team")
     if not team.get("coordinator"):
-        add("no_coordinator", "warning", "No coordinator", "Nobody is responsible for this participant day to day.", "team")
+        add("no_coordinator", "warning", "No care coordinator", "Nobody in your team is responsible for this participant's support day to day.", "team")
 
     agreement = summary.get("agreement")
     if not agreement:
@@ -468,7 +480,7 @@ def decisions_for(summary: dict[str, Any], today: date) -> list[dict[str, Any]]:
     quality = summary.get("quality") or {}
     if quality.get("needs_attention_30d"):
         n = quality["needs_attention_30d"]
-        add("notes", "warning", f"{n} shift note{'s need' if n != 1 else ' needs'} attention", "From the last 30 days.", "quality")
+        add("notes", "warning", f"{n} progress note{'s need' if n != 1 else ' needs'} attention", "Written in the last 30 days.", "quality")
 
     medication = summary.get("medication") or {}
     if medication.get("pending_verification"):

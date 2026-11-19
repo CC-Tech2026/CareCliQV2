@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { DollarSign } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { money } from "@/lib/participant-format";
@@ -18,7 +17,19 @@ interface ParticipantPlanTabProps {
   categoryBudgets: NonNullable<BudgetSummary["budgets"]>;
 }
 
-/** "NDIS Plan" facet of the participant Detail archetype. */
+function Bar({ percent, over }: { percent: number; over?: boolean }) {
+  return (
+    <div className="h-2 overflow-hidden rounded-full bg-cc-soft">
+      <div
+        className={`h-full rounded-full ${over ? "bg-red-600" : "bg-[var(--cc-plum)]"}`}
+        style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+      />
+    </div>
+  );
+}
+
+/** The NDIS plan: its dates and management, the budget and what's been spent,
+ * and each support category. Plain figures and rows, no boxes. */
 export function ParticipantPlanTab({
   editAction,
   planDetails,
@@ -32,145 +43,97 @@ export function ParticipantPlanTab({
   categoryBudgets,
 }: ParticipantPlanTabProps) {
   const { translate, translateParams } = useAccessibility();
+  const usedPercent = totalBudget > 0 ? Math.round((usedBudget / totalBudget) * 100) : 0;
+  const planFunding = Number(budget?.total_funding ?? 0);
+  const unallocated = hasCategoryBudgets && planFunding > totalBudget ? planFunding - totalBudget : 0;
 
   return (
-    <section className="rounded-2xl border border-cc-border bg-cc-surface p-4">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <DollarSign className="h-3.5 w-3.5 text-[#E8457A]" />
-        <h4 className="text-[13px] font-semibold text-cc-text">
-          {translate("patients.section.ndisFunding")}
-        </h4>
-        <div className="ml-auto">{editAction}</div>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">{planDetails}</div>
+        {editAction}
       </div>
-      {planDetails}
+
       {isLoading ? (
         <Skeleton className="h-24 w-full rounded-xl" />
       ) : budget?.has_plan === false ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
+        <p className="border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
           {translate("patients.plan.noActive")}
-        </div>
+        </p>
       ) : (
-        <div className="space-y-3">
-          {/* Plan meta */}
-          {budget?.plan_number && (
-            <div className="rounded-lg bg-cc-surface border border-cc-border px-3 py-2">
-              <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted mb-1">
-                {translate("patients.field.planNumber")}
-              </p>
-              <p className="text-[12px] font-bold text-cc-text">
-                {budget.plan_number}
-              </p>
+        <div className="space-y-5">
+          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div>
+              <dd className="text-xl font-semibold tabular-nums text-cc-text">{money(totalBudget || budget?.total_funding)}</dd>
+              <dt className="text-xs text-cc-muted">{unallocated ? "In support categories" : translate("patients.budget.total")}</dt>
             </div>
-          )}
-          {/* Total / Used / Remaining — computed rollup of the category rows below once any exist */}
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              {
-                lbl: translate("patients.budget.total"),
-                val: money(totalBudget || budget?.total_funding),
-                flagged: false,
-              },
-              {
-                lbl: translate("patients.budget.used"),
-                val: money(usedBudget),
-                flagged: false,
-              },
-              {
-                lbl: translate("patients.budget.remaining"),
-                val: money(remainingBudget),
-                flagged: isOverspent,
-              },
-            ].map(({ lbl, val, flagged }) => (
-              <div
-                key={lbl}
-                className={`rounded-lg border px-3 py-2 ${flagged ? "bg-red-50 border-red-200" : "bg-cc-surface border-cc-border"}`}
-              >
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-cc-muted leading-none mb-1">
-                  {lbl}
-                </p>
-                <p
-                  className={`text-[12px] font-semibold truncate ${flagged ? "text-red-700" : "text-cc-text"}`}
-                >
-                  {val}
-                </p>
+            <div>
+              <dd className="text-xl font-semibold tabular-nums text-cc-text">{money(usedBudget)}</dd>
+              <dt className="text-xs text-cc-muted">{translate("patients.budget.used")}</dt>
+            </div>
+            <div>
+              <dd className={`text-xl font-semibold tabular-nums ${isOverspent ? "text-red-700 dark:text-red-400" : "text-cc-text"}`}>
+                {money(remainingBudget)}
+              </dd>
+              <dt className="text-xs text-cc-muted">{isOverspent ? "Over budget" : translate("patients.budget.remaining")}</dt>
+            </div>
+            {budget?.plan_number && (
+              <div>
+                <dd className="text-xl font-semibold tabular-nums text-cc-text">{budget.plan_number}</dd>
+                <dt className="text-xs text-cc-muted">{translate("patients.field.planNumber")}</dt>
               </div>
-            ))}
-          </div>
+            )}
+          </dl>
+
+          {unallocated > 0 && (
+            <p className="text-sm text-cc-muted">
+              {money(unallocated)} of the {money(planFunding)} plan isn't in a support category yet.
+            </p>
+          )}
+
           {isOverspent && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-bold text-red-700">
-              Plan is over budget, spending exceeds total allocated funding.
-            </div>
+            <p className="border-l-4 border-red-500 pl-3 text-sm font-medium text-red-700 dark:text-red-400">
+              More has been delivered than the budget holds.
+            </p>
           )}
-          {/* Budget utilisation bar */}
+
           {totalBudget > 0 && (
-            <div className="rounded-xl border border-cc-border bg-cc-surface p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[12px] font-bold text-cc-text">
-                  {translate("patients.budget.utilisation")}
-                </span>
-                <span className="text-[11px] font-semibold text-cc-muted">
-                  {Math.round((usedBudget / totalBudget) * 100)}%
-                </span>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-cc-text">{translate("patients.budget.utilisation")}</span>
+                <span className="tabular-nums text-cc-muted">{usedPercent}%</span>
               </div>
-              <div className="h-2 rounded-full bg-[#EDE3FC] overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${isOverspent ? "bg-red-500" : "bg-[#E8457A]"}`}
-                  style={{
-                    width: `${Math.min(100, Math.round((usedBudget / totalBudget) * 100))}%`,
-                  }}
-                />
-              </div>
+              <Bar percent={usedPercent} over={isOverspent} />
             </div>
           )}
-          {/* Category breakdown — every category with a budget, so this reconciles with the
-              Total/Remaining rollup above (which sums across all categories, not just core). */}
-          {hasCategoryBudgets &&
-            (() => {
-              if (categoryBudgets.length === 0) return null;
-              return (
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-cc-muted">
-                    {translate("patients.budget.byCategory")}
-                  </p>
-                  {categoryBudgets.map((item) => (
-                    <div
-                      key={item.category || item.category_label}
-                      className={`rounded-xl border p-3 ${item.overspent ? "border-red-200 bg-red-50" : "border-cc-border bg-cc-surface"}`}
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <span className="text-[12px] font-bold text-cc-text truncate">
-                          {item.category_label || item.category}
-                        </span>
-                        <span
-                          className={`text-[11px] font-semibold shrink-0 ${item.overspent ? "text-red-700" : "text-cc-muted"}`}
-                        >
-                          {item.overspent
-                            ? "Over budget"
-                            : `${item.percent_used ?? 0}%`}
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-[#EDE3FC] overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${item.overspent ? "bg-red-500" : "bg-[#E8457A]"}`}
-                          style={{
-                            width: `${Math.min(100, Math.max(0, item.percent_used ?? 0))}%`,
-                          }}
-                        />
-                      </div>
-                      <p className="mt-1.5 text-[11px] font-medium text-cc-muted">
-                        {translateParams("patients.budget.categoryUsage", {
-                          used: money(item.used),
-                          remaining: money(item.remaining),
-                          allocated: money(item.allocated),
-                        })}
-                      </p>
+
+          {hasCategoryBudgets && categoryBudgets.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-cc-text">{translate("patients.budget.byCategory")}</h4>
+              <ul className="mt-1 divide-y divide-cc-border">
+                {categoryBudgets.map((item) => (
+                  <li key={item.category || item.category_label} className="space-y-1.5 py-3">
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="truncate font-medium text-cc-text">{item.category_label || item.category}</span>
+                      <span className={`shrink-0 tabular-nums ${item.overspent ? "font-medium text-red-700 dark:text-red-400" : "text-cc-muted"}`}>
+                        {item.overspent ? "Over budget" : `${item.percent_used ?? 0}%`}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              );
-            })()}
+                    <Bar percent={item.percent_used ?? 0} over={item.overspent} />
+                    <p className="text-xs text-cc-muted">
+                      {translateParams("patients.budget.categoryUsage", {
+                        used: money(item.used),
+                        remaining: money(item.remaining),
+                        allocated: money(item.allocated),
+                      })}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
-    </section>
+    </div>
   );
 }

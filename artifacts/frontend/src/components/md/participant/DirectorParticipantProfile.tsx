@@ -1,20 +1,19 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  CalendarPlus,
   CheckCircle2,
   ChevronDown,
-  ClipboardList,
   Download,
   FileSignature,
   PauseCircle,
   PlayCircle,
   XCircle,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,10 +21,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { AddShiftMenu } from "@/components/coordinator/AddShiftMenu";
 import { ParticipantRecordsTab } from "@/components/participants/ParticipantRecordsTab";
 import { PortalAccessCard } from "@/components/participant-portal/PortalAccessCard";
 import { ParticipantDetail, type ParticipantDetailTab } from "@/pages/patients";
@@ -41,120 +42,154 @@ import {
   BAD,
   BORDER,
   CareTeamPanel,
+  DeliverySection,
   DocumentsSection,
+  FundingSection,
   GOOD,
   MUTED,
-  PLUM,
+  RiskSection,
   SOFT,
+  Section,
   TEXT,
   WARN,
   formatDate,
 } from "./DirectorParticipantSections";
-import {
-  AgreementsCard,
-  CareProfileCard,
-  DeliveryBand,
-  FilesCard,
-  PlanGlanceCard,
-  RecentShiftsCard,
-  SummaryBand,
-} from "./DirectorParticipantCards";
+import { AgreementsSection, ProfileHeader, RecentShiftsSection, SupportNeedsSection } from "./DirectorParticipantCards";
 import { ArchiveSheet, AuditSheet, ServicesSheet, TeamSheet, UploadSheet, type ServicesMode } from "./DirectorParticipantSheets";
 
 /**
- * The managing director's participant profile. Built for oversight and
- * decisions rather than day-to-day care: what needs the director's call
- * first, then funding against time, delivery, quality and risk, the care
- * team, documents and the audit trail. Director-only powers (changing the
- * team, suspending or ending services, portal access, importing and exporting
- * records) sit here; the coordinator's working record opens in a side panel
- * for anything hands-on.
+ * The managing director's participant profile: one page per participant.
+ * A plain header (who they are, where the NDIS plan stands, the main actions),
+ * one row of sections, and one surface for the section open. The Summary is
+ * the director's view (what needs a decision, budget against time, delivery,
+ * safety, the support team); every other section is the same record the
+ * coordinators work from, shown in place rather than in a side panel.
  */
+
+type ProfileTab = "summary" | "documents" | Exclude<ParticipantDetailTab, "records">;
+
+const TABS: { id: ProfileTab; label: string }[] = [
+  { id: "summary", label: "Summary" },
+  { id: "overview", label: "Details & contacts" },
+  { id: "care_profile", label: "Support needs" },
+  { id: "plan_goals", label: "NDIS plan & goals" },
+  { id: "sessions", label: "Progress notes" },
+  { id: "compliance", label: "Compliance" },
+  { id: "documents", label: "Documents & agreements" },
+  { id: "plan_meetings", label: "Plan reviews & meetings" },
+];
+const TAB_IDS = new Set<string>(TABS.map((t) => t.id));
 
 const ACTION_LABEL: Record<DecisionAction, string> = {
   plan: "Review the plan",
-  funding: "Review funding",
+  funding: "Review the budget",
   incident: "Open the incident",
   complaint: "Open complaints",
-  roster: "Open the schedule",
-  team: "Change the team",
+  roster: "Open the roster",
+  team: "Change the support team",
   agreement: "Open the agreement",
-  quality: "Review notes",
+  quality: "Review progress notes",
   medication: "Check medication",
 };
+
+// The section open is kept in the address (?section=), so a refresh, a link
+// or Back returns to it.
+function readSection(): ProfileTab {
+  try {
+    const s = new URLSearchParams(window.location.search).get("section");
+    return s && TAB_IDS.has(s) ? (s as ProfileTab) : "summary";
+  } catch {
+    return "summary";
+  }
+}
+
+function writeSection(tab: ProfileTab) {
+  try {
+    const url = new URL(window.location.href);
+    if (tab === "summary") url.searchParams.delete("section");
+    else url.searchParams.set("section", tab);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    /* only a convenience */
+  }
+}
 
 function Decisions({ decisions, firstName, onAct }: { decisions: Decision[]; firstName: string; onAct: (d: Decision) => void }) {
   if (decisions.length === 0) {
     return (
-      <div className="flex items-center gap-3 rounded-3xl bg-cc-surface px-5 py-4 sm:px-6">
-        <CheckCircle2 size={20} style={{ color: GOOD }} aria-hidden />
-        <p className="text-sm" style={{ color: TEXT }}>
+      <p className="flex items-center gap-2.5 text-sm" style={{ color: TEXT }}>
+        <CheckCircle2 size={18} aria-hidden className="shrink-0" style={{ color: GOOD }} />
+        <span>
           <span className="font-semibold">Nothing needs your decision.</span>{" "}
-          <span style={{ color: MUTED }}>Funding, delivery, the team and the paperwork for {firstName} are all on track.</span>
-        </p>
-      </div>
+          <span style={{ color: MUTED }}>The plan, funding, support team and paperwork for {firstName} are on track.</span>
+        </span>
+      </p>
     );
   }
   return (
-    <section aria-labelledby="decisions-heading" className="overflow-hidden rounded-3xl bg-cc-surface">
-      <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-5 sm:px-6">
-        <h2 id="decisions-heading" className="text-base font-semibold" style={{ color: TEXT }}>Needs your decision</h2>
-        <span className="text-sm tabular-nums" style={{ color: MUTED }}>{decisions.length}</span>
-      </div>
-      <ul>
+    <Section title="Needs your decision" count={decisions.length}>
+      <ul className="divide-y" style={{ borderColor: BORDER }}>
         {decisions.map((d) => (
-          <li key={d.key} className="border-t" style={{ borderColor: BORDER }}>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 sm:px-6">
-              <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: d.tone === "danger" ? BAD : WARN }} />
-              <div className="min-w-[min(100%,16rem)] flex-1">
-                <p className="text-sm font-semibold" style={{ color: TEXT }}>{d.title}</p>
-                {d.detail && <p className="mt-0.5 text-sm" style={{ color: MUTED }}>{d.detail}</p>}
-              </div>
-              <button
-                type="button"
-                onClick={() => onAct(d)}
-                className="ml-6 inline-flex min-h-10 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium transition hover:bg-cc-soft sm:ml-0"
-                style={{ color: TEXT }}
-              >
-                {ACTION_LABEL[d.action]} <ArrowRight size={14} aria-hidden />
-              </button>
+          <li key={d.key} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
+            <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: d.tone === "danger" ? BAD : WARN }} />
+            <div className="min-w-0 flex-1 basis-60">
+              <p className="text-sm font-semibold" style={{ color: TEXT }}>
+                <span className="sr-only">{d.tone === "danger" ? "Urgent: " : "Check: "}</span>
+                {d.title}
+              </p>
+              {d.detail && <p className="mt-0.5 text-sm" style={{ color: MUTED }}>{d.detail}</p>}
             </div>
+            <button
+              type="button"
+              onClick={() => onAct(d)}
+              className="ml-6 inline-flex min-h-10 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium transition hover:bg-cc-soft sm:ml-0"
+              style={{ color: TEXT }}
+            >
+              {ACTION_LABEL[d.action]} <ArrowRight size={14} aria-hidden />
+            </button>
           </li>
         ))}
       </ul>
-    </section>
+    </Section>
   );
 }
 
 function StatusBanner({ overview, onResume }: { overview: DirectorOverview; onResume: () => void }) {
   const intake = overview.intake;
-  if (!intake) return null;
-  if (intake.status === "inactive") {
-    return (
-      <div className="flex flex-wrap items-center gap-3 rounded-3xl px-5 py-4 sm:px-6" style={{ background: "var(--cc-amber-tint)" }}>
-        <PauseCircle size={20} style={{ color: WARN }} aria-hidden />
-        <p className="min-w-0 flex-1 text-sm" style={{ color: TEXT }}>
-          <span className="font-semibold">Services suspended{intake.suspended_at ? ` since ${formatDate(intake.suspended_at)}` : ""}.</span>{" "}
-          {intake.suspended_reason && <span style={{ color: MUTED }}>{intake.suspended_reason}</span>}
-        </p>
-        <Button size="sm" onClick={onResume} className="rounded-full text-white" style={{ background: "var(--cc-green)" }}>Resume services</Button>
-      </div>
-    );
-  }
-  if (intake.status === "exited") {
-    return (
-      <div className="flex flex-wrap items-center gap-3 rounded-3xl px-5 py-4 sm:px-6" style={{ background: SOFT }}>
-        <XCircle size={20} style={{ color: MUTED }} aria-hidden />
-        <p className="min-w-0 flex-1 text-sm" style={{ color: TEXT }}>
-          <span className="font-semibold">Services ended{intake.last_service_date ? ` on ${formatDate(intake.last_service_date)}` : ""}.</span>{" "}
-          {intake.exit_reason && <span style={{ color: MUTED }}>{intake.exit_reason}</span>}{" "}
-          <span style={{ color: MUTED }}>The record is kept for the retention period.</span>
-        </p>
-      </div>
-    );
-  }
-  return null;
+  if (!intake || (intake.status !== "inactive" && intake.status !== "exited")) return null;
+  const suspended = intake.status === "inactive";
+  return (
+    <div
+      role="status"
+      className="flex flex-wrap items-center gap-3 border-l-4 px-4 py-3"
+      style={{ borderColor: suspended ? WARN : MUTED, background: suspended ? "var(--cc-amber-tint)" : SOFT }}
+    >
+      {suspended ? <PauseCircle size={18} aria-hidden style={{ color: WARN }} /> : <XCircle size={18} aria-hidden style={{ color: MUTED }} />}
+      <p className="min-w-0 flex-1 text-sm" style={{ color: TEXT }}>
+        {suspended ? (
+          <>
+            <span className="font-semibold">Services suspended{intake.suspended_at ? ` since ${formatDate(intake.suspended_at)}` : ""}.</span>{" "}
+            {intake.suspended_reason && <span style={{ color: MUTED }}>{intake.suspended_reason}</span>}
+          </>
+        ) : (
+          <>
+            <span className="font-semibold">Services ended{intake.last_service_date ? ` on ${formatDate(intake.last_service_date)}` : ""}.</span>{" "}
+            {intake.exit_reason && <span style={{ color: MUTED }}>{intake.exit_reason}</span>}{" "}
+            <span style={{ color: MUTED }}>The record is kept for the retention period.</span>
+          </>
+        )}
+      </p>
+      {suspended && (
+        <Button size="sm" onClick={onResume} className="rounded-full text-white" style={{ background: "var(--cc-cta)" }}>
+          Resume services
+        </Button>
+      )}
+    </div>
+  );
 }
+
+const outlineButton =
+  "inline-flex min-h-10 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum";
 
 export function DirectorParticipantProfile({
   participantId,
@@ -174,7 +209,8 @@ export function DirectorParticipantProfile({
     queryFn: () => getDirectorOverview(participantId),
   });
 
-  const [careRecordTab, setCareRecordTab] = useState<ParticipantDetailTab | null>(null);
+  const [tab, setTabState] = useState<ProfileTab>(readSection);
+  const tabsRef = useRef<HTMLElement>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
@@ -183,7 +219,31 @@ export function DirectorParticipantProfile({
   const [auditOpen, setAuditOpen] = useState(false);
   const [archiveDoc, setArchiveDoc] = useState<ParticipantDocument | null>(null);
   const [servicesMode, setServicesMode] = useState<ServicesMode | null>(null);
-  const [documentsOpen, setDocumentsOpen] = useState(false);
+
+  // A different participant opens on their Summary.
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    setTabState("summary");
+    writeSection("summary");
+  }, [participantId]);
+
+  function setTab(next: ProfileTab) {
+    setTabState(next);
+    writeSection(next);
+  }
+  // On a narrow screen the row of sections scrolls: keep the open one in view.
+  useEffect(() => {
+    tabsRef.current
+      ?.querySelector<HTMLElement>('[aria-current="page"]')
+      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [tab]);
+  // From a link inside the page (a decision, "All support needs"): open the
+  // section and bring its tab into view.
+  function openTab(next: ProfileTab) {
+    setTab(next);
+    tabsRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
 
   function refresh() {
     void qc.invalidateQueries({ queryKey: [user?.organizationId ?? "__no_org__", "director-participant", participantId] });
@@ -192,37 +252,40 @@ export function DirectorParticipantProfile({
 
   const back = (
     <button
+      type="button"
       onClick={onBack}
       className="-ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-full px-2 text-sm font-medium transition-colors hover:bg-cc-soft"
       style={{ color: MUTED }}
     >
-      <ArrowLeft size={15} /> Participants
+      <ArrowLeft size={15} aria-hidden /> Participants
     </button>
   );
 
   if (overviewQuery.isLoading) {
     return (
-      <div className="space-y-6 pb-10">
+      <div className="space-y-5 pb-10" role="status" aria-label="Loading the participant">
         {back}
-        <Skeleton className="h-16 w-2/3 rounded-2xl" />
-        <Skeleton className="h-10 w-full rounded-2xl" />
-        <Skeleton className="h-40 w-full rounded-3xl" />
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <Skeleton className="h-80 rounded-3xl" />
-          <Skeleton className="h-80 rounded-3xl" />
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-16 w-16 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-full max-w-xl" />
+          </div>
         </div>
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-96 w-full rounded-2xl" />
       </div>
     );
   }
   if (overviewQuery.isError || !overviewQuery.data) {
     return (
-      <div className="space-y-6 pb-10">
+      <div className="space-y-5 pb-10">
         {back}
-        <div role="alert" className="rounded-3xl bg-cc-surface px-6 py-14 text-center">
-          <AlertTriangle size={26} className="mx-auto mb-3" style={{ color: WARN }} />
+        <div role="alert" className="rounded-2xl border border-cc-border bg-cc-surface px-6 py-14 text-center">
+          <AlertTriangle size={26} className="mx-auto mb-3" style={{ color: WARN }} aria-hidden />
           <h2 className="text-base font-semibold" style={{ color: TEXT }}>This participant couldn't be loaded</h2>
           <p className="mx-auto mt-2 max-w-md text-sm" style={{ color: MUTED }}>{(overviewQuery.error as Error | null)?.message ?? "Try again in a moment."}</p>
-          <button type="button" onClick={() => void overviewQuery.refetch()} className="mt-5 min-h-11 rounded-full border border-cc-border px-5 text-sm font-semibold" style={{ color: TEXT }}>Try again</button>
+          <button type="button" onClick={() => void overviewQuery.refetch()} className={`${outlineButton} mt-5`} style={{ color: TEXT }}>Try again</button>
         </div>
       </div>
     );
@@ -239,13 +302,13 @@ export function DirectorParticipantProfile({
       case "plan":
       case "funding":
       case "agreement":
-        setCareRecordTab("plan_goals");
+        openTab("plan_goals");
         break;
       case "quality":
-        setCareRecordTab("compliance");
+        openTab("compliance");
         break;
       case "medication":
-        setCareRecordTab("care_profile");
+        openTab("care_profile");
         break;
       case "team":
         setTeamOpen(true);
@@ -269,125 +332,151 @@ export function DirectorParticipantProfile({
     else navigate(`/md/schedule?shiftId=${encodeURIComponent(shiftId)}`);
   }
 
-  return (
-    <div className="space-y-5 pb-10">
-      <header className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {back}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCareRecordTab("overview")}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full px-5 text-sm font-medium text-white transition hover:opacity-90"
-              style={{ background: "var(--cc-cta)" }}
-            >
-              <ClipboardList size={16} aria-hidden /> Open care record
-            </button>
-            <button
-              type="button"
-              onClick={() => setIntakeOpen(true)}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-5 text-sm font-medium transition hover:bg-cc-soft"
-              style={{ color: TEXT }}
-            >
-              <FileSignature size={16} aria-hidden /> Intake form
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-cc-border bg-cc-surface px-4 text-sm font-medium transition hover:bg-cc-soft"
-                  style={{ color: TEXT }}
-                >
-                  Director actions <ChevronDown size={15} aria-hidden />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-60">
-                <DropdownMenuItem onSelect={() => setTeamOpen(true)} disabled={exited}>Change the care team</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setPortalOpen(true)}>Manage portal access</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setUploadOpen(true)}>Import a document</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setExportOpen(true)}>
-                  <Download size={14} className="mr-2" /> Export records
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setAuditOpen(true)}>View the audit trail</DropdownMenuItem>
-                {!exited && <DropdownMenuSeparator />}
-                {status === "inactive" && (
-                  <DropdownMenuItem onSelect={() => setServicesMode("resume")}>
-                    <PlayCircle size={14} className="mr-2" /> Resume services
-                  </DropdownMenuItem>
-                )}
-                {status === "active" && (
-                  <DropdownMenuItem onSelect={() => setServicesMode("suspend")}>
-                    <PauseCircle size={14} className="mr-2" /> Suspend services
-                  </DropdownMenuItem>
-                )}
-                {!exited && (
-                  <DropdownMenuItem onSelect={() => setServicesMode("end")} style={{ color: BAD }}>
-                    <XCircle size={14} className="mr-2" /> End services
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-        <SummaryBand overview={o} />
-      </header>
+  const actions = (
+    <>
+      {!exited && (
+        <AddShiftMenu participant={{ id: participantId, full_name: p.full_name }}>
+          <button
+            type="button"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+            style={{ background: "var(--cc-cta)" }}
+          >
+            <CalendarPlus size={16} aria-hidden /> Add a shift
+          </button>
+        </AddShiftMenu>
+      )}
+      <button type="button" onClick={() => setIntakeOpen(true)} className={outlineButton} style={{ color: TEXT }}>
+        <FileSignature size={16} aria-hidden /> Intake form
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className={outlineButton} style={{ color: TEXT }}>
+            More actions <ChevronDown size={15} aria-hidden />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuItem onSelect={() => setTeamOpen(true)} disabled={exited}>Change the support team</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setPortalOpen(true)}>Manage participant portal access</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setUploadOpen(true)}>Import a document</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setExportOpen(true)}>
+            <Download size={14} className="mr-2" aria-hidden /> Export records
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setAuditOpen(true)}>View the audit trail</DropdownMenuItem>
+          {!exited && <DropdownMenuSeparator />}
+          {status === "inactive" && (
+            <DropdownMenuItem onSelect={() => setServicesMode("resume")}>
+              <PlayCircle size={14} className="mr-2" aria-hidden /> Resume services
+            </DropdownMenuItem>
+          )}
+          {status === "active" && (
+            <DropdownMenuItem onSelect={() => setServicesMode("suspend")}>
+              <PauseCircle size={14} className="mr-2" aria-hidden /> Suspend services
+            </DropdownMenuItem>
+          )}
+          {!exited && (
+            <DropdownMenuItem onSelect={() => setServicesMode("end")} style={{ color: BAD }}>
+              <XCircle size={14} className="mr-2" aria-hidden /> End services
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
 
-      <StatusBanner overview={o} onResume={() => setServicesMode("resume")} />
+  const summary = (
+    <div className="space-y-8">
       {!exited && <Decisions decisions={o.decisions} firstName={firstName} onAct={act} />}
-
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
-        <div className="min-w-0 space-y-5">
-          <DeliveryBand overview={o} />
-          <div className="grid items-start gap-5 lg:grid-cols-2">
-            <CareProfileCard
-              overview={o}
-              onOpenCare={() => setCareRecordTab("care_profile")}
-              onOpenMedication={() => setCareRecordTab("care_profile")}
-              onOpenRisks={() => navigate(o.risk.incidents_open.length || !o.risk.complaints_open.length ? "/incidents" : "/onboard-participant/complaints")}
-            />
-            <div className="min-w-0 space-y-5">
-              <PlanGlanceCard overview={o} onReview={() => setCareRecordTab("plan_goals")} />
-              <FilesCard participantId={participantId} onUpload={() => setUploadOpen(true)} onManage={() => setDocumentsOpen(true)} />
-            </div>
-          </div>
-          <AgreementsCard
-            overview={o}
-            onOpenAgreement={() => setCareRecordTab("plan_goals")}
-            onOpenIntake={() => setIntakeOpen(true)}
-            onManagePortal={() => setPortalOpen(true)}
-          />
+      <div className="grid items-start gap-x-10 gap-y-8 lg:grid-cols-2">
+        <div className="min-w-0 space-y-8">
+          <FundingSection overview={o} onReview={() => openTab("plan_goals")} />
+          <DeliverySection overview={o} onOpenSchedule={() => navigate("/md/schedule")} onOpenShifts={() => openTab("sessions")} />
+          <SupportNeedsSection overview={o} onOpenNeeds={() => openTab("care_profile")} onOpenMedication={() => openTab("care_profile")} />
         </div>
-        <div className="min-w-0 space-y-5 xl:sticky xl:top-24">
-          <RecentShiftsCard overview={o} onOpenShift={openShift} onNewShift={() => navigate("/coordinator/rostering")} />
-          <CareTeamPanel overview={o} onChange={() => setTeamOpen(true)} />
+        <div className="min-w-0 space-y-8">
+          <CareTeamPanel overview={o} onChange={exited ? undefined : () => setTeamOpen(true)} />
+          <RiskSection
+            overview={o}
+            onOpenIncident={(incidentId) => navigate(incidentId ? `/incidents/${incidentId}` : "/incidents")}
+            onOpenComplaints={() => navigate("/onboard-participant/complaints")}
+            onOpenMedication={() => openTab("care_profile")}
+            onOpenNotes={() => openTab("compliance")}
+          />
+          <RecentShiftsSection overview={o} onOpenShift={openShift} onSeeAll={() => navigate("/md/schedule")} />
           <AuditPanel participantId={participantId} onSeeAll={() => setAuditOpen(true)} />
         </div>
       </div>
+    </div>
+  );
 
-      <Sheet open={documentsOpen} onOpenChange={setDocumentsOpen}>
-        <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-2xl">
-          <SheetHeader className="sr-only">
-            <SheetTitle>Documents for {p.full_name}</SheetTitle>
-            <SheetDescription>Open, file, archive or export {firstName}'s documents.</SheetDescription>
-          </SheetHeader>
-          <div className="p-4 sm:p-6">
-            <DocumentsSection participantId={participantId} onUpload={() => setUploadOpen(true)} onExport={() => setExportOpen(true)} onArchive={setArchiveDoc} />
-          </div>
-        </SheetContent>
-      </Sheet>
+  const documents = (
+    <div className="space-y-8">
+      <AgreementsSection
+        overview={o}
+        onOpenAgreement={() => openTab("plan_goals")}
+        onOpenIntake={() => setIntakeOpen(true)}
+        onManagePortal={() => setPortalOpen(true)}
+      />
+      <DocumentsSection participantId={participantId} onUpload={() => setUploadOpen(true)} onExport={() => setExportOpen(true)} onArchive={setArchiveDoc} />
+    </div>
+  );
 
-      {/* The coordinator's working record, for anything hands-on. */}
-      <Sheet open={careRecordTab !== null} onOpenChange={(v) => { if (!v) { setCareRecordTab(null); refresh(); } }}>
-        <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-4xl">
-          <SheetHeader className="sr-only">
-            <SheetTitle>Care record for {p.full_name}</SheetTitle>
-            <SheetDescription>Personal details, care, plan and goals, shifts, compliance and meetings.</SheetDescription>
-          </SheetHeader>
-          {careRecordTab && (
-            <ParticipantDetail key={careRecordTab} id={participantId} onRefreshList={refresh} initialTab={careRecordTab} syncUrl={false} />
-          )}
-        </SheetContent>
-      </Sheet>
+  const current = TABS.find((t) => t.id === tab) ?? TABS[0];
+
+  return (
+    <div className="space-y-5 pb-10">
+      {back}
+      <ProfileHeader overview={o} actions={actions} />
+      <StatusBanner overview={o} onResume={() => setServicesMode("resume")} />
+
+      <nav
+        ref={tabsRef}
+        aria-label={`Sections of ${p.full_name}'s profile`}
+        className="sticky top-0 z-20 -mx-1 scroll-mt-4 overflow-x-auto border-b px-1"
+        style={{ borderColor: BORDER, background: "var(--cc-bg)" }}
+      >
+        <ul className="flex min-w-max gap-1">
+          {TABS.map((t) => {
+            const active = t.id === tab;
+            return (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  aria-current={active ? "page" : undefined}
+                  className="relative min-h-11 whitespace-nowrap px-3 text-sm font-medium transition-colors hover:text-cc-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum"
+                  style={{ color: active ? TEXT : MUTED }}
+                >
+                  {t.label}
+                  {active && <span aria-hidden className="absolute inset-x-3 -bottom-px h-0.5 rounded-full" style={{ background: "var(--cc-plum)" }} />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      <div
+        role="region"
+        aria-label={current.label}
+        className="min-w-0 rounded-2xl border bg-cc-surface p-4 sm:p-6"
+        style={{ borderColor: BORDER }}
+      >
+        {tab === "summary" ? (
+          summary
+        ) : tab === "documents" ? (
+          documents
+        ) : (
+          <ParticipantDetail
+            key={participantId}
+            id={participantId}
+            onRefreshList={refresh}
+            syncUrl={false}
+            bare
+            tab={tab}
+            onTabChange={(next) => setTab(next === "records" ? "documents" : next)}
+          />
+        )}
+      </div>
 
       <Sheet open={intakeOpen} onOpenChange={(v) => { setIntakeOpen(v); if (!v) onIntakeChanged(); }}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
@@ -402,8 +491,8 @@ export function DirectorParticipantProfile({
       <Sheet open={portalOpen} onOpenChange={(v) => { setPortalOpen(v); if (!v) refresh(); }}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
           <SheetHeader>
-            <SheetTitle>Portal access</SheetTitle>
-            <SheetDescription>Who can sign in to see {firstName}'s schedule, plan and documents. Only you can give or remove access.</SheetDescription>
+            <SheetTitle>Participant portal access</SheetTitle>
+            <SheetDescription>Who can sign in to see {firstName}'s schedule, plan and documents: the participant, their nominee or family. Only you can give or remove access.</SheetDescription>
           </SheetHeader>
           <div className="mt-4"><PortalAccessCard participantId={participantId} /></div>
         </SheetContent>

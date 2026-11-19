@@ -1039,28 +1039,26 @@ export function PlanMeetingCapture({ participantId, participantName }: PlanMeeti
   const clearFilter = () => { setDateFrom(""); setDateTo(""); };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Mic size={14} style={{ color: PLUM }} />
-            <p className="font-black text-[13px]" style={{ color: TEXT }}>Record Your Meetings with Easy Capture</p>
-          </div>
-          {meetings.length > 0 && (
-            <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>
-              <span className="font-black" style={{ color: TEXT }}>{meetings.length}</span> recorded
-            </p>
-          )}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold" style={{ color: TEXT }}>
+            Plan reviews and meetings
+            {meetings.length > 0 && <span className="ml-2 text-sm font-normal tabular-nums" style={{ color: MUTED }}>{meetings.length}</span>}
+          </h3>
+          <p className="mt-0.5 max-w-2xl text-sm" style={{ color: MUTED }}>
+            Record a plan review or meeting with Easy Capture to keep the transcript and summary, and get goals and tasks suggested from what was said.
+          </p>
         </div>
-        <Button
-          size="sm"
-          className="rounded-xl gap-1 px-3 shrink-0"
-          style={{ background: "var(--cc-cta)", color: "#fff" }}
+        <button
+          type="button"
+          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-medium text-white hover:opacity-90"
+          style={{ background: "var(--cc-cta)" }}
           onClick={() => setRecording(true)}
         >
-          <FileText size={12} /> Record meeting
-        </Button>
+          <Mic size={15} aria-hidden /> Record a meeting
+        </button>
       </div>
 
       {/* Date filter */}
@@ -1108,41 +1106,28 @@ export function PlanMeetingCapture({ participantId, participantName }: PlanMeeti
 
       {/* Empty state — filtered to zero results */}
       {!meetingsQuery.isLoading && meetings.length === 0 && hasFilter && (
-        <div className="rounded-xl p-6 text-center" style={{ background: SOFT, border: `1px dashed ${BORDER}` }}>
-          <p className="font-black text-[13px] mb-1" style={{ color: TEXT }}>No meetings in this date range</p>
-          <p className="text-[12px]" style={{ color: MUTED }}>Try a different range, or clear the filter to see all meetings.</p>
+        <div className="border-y py-6 text-center" style={{ borderColor: BORDER }}>
+          <p className="text-sm font-semibold" style={{ color: TEXT }}>No meetings in these dates</p>
+          <p className="mt-1 text-sm" style={{ color: MUTED }}>Try other dates, or clear them to see every meeting.</p>
           <button
             type="button"
             onClick={clearFilter}
-            className="mt-3 text-[12px] font-semibold hover:opacity-70 transition-opacity"
+            className="mt-2 min-h-10 text-sm font-medium hover:underline"
             style={{ color: PLUM }}
           >
-            Clear filter
+            Clear the dates
           </button>
         </div>
       )}
 
       {/* Empty state — no meetings recorded at all */}
       {!meetingsQuery.isLoading && meetings.length === 0 && !hasFilter && (
-        <div className="rounded-xl p-6 text-center" style={{ background: SOFT, border: `1px dashed ${BORDER}` }}>
-          <div
-            className="w-10 h-10 rounded-full mx-auto mb-3 flex items-center justify-center"
-            style={{ background: "rgba(55,48,163,0.08)" }}
-          >
-            <MessageSquare size={18} style={{ color: PLUM }} />
-          </div>
-          <p className="font-black text-[13px] mb-1" style={{ color: TEXT }}>No plan meetings recorded yet</p>
-          <p className="text-[12px]" style={{ color: MUTED }}>
-            Record a meeting to capture participant priorities and get AI-suggested goals and task templates.
+        <div className="border-y py-8 text-center" style={{ borderColor: BORDER }}>
+          <MessageSquare size={24} className="mx-auto mb-2" style={{ color: MUTED }} aria-hidden />
+          <p className="text-sm font-semibold" style={{ color: TEXT }}>No plan reviews or meetings recorded yet</p>
+          <p className="mx-auto mt-1 max-w-md text-sm" style={{ color: MUTED }}>
+            The next plan review or check-in with {participantName.split(" ")[0]} and their family is a good one to record.
           </p>
-          <Button
-            size="sm"
-            className="mt-4 rounded-xl gap-1 px-4"
-            style={{ background: "var(--cc-cta)", color: "#fff" }}
-            onClick={() => setRecording(true)}
-          >
-            <FileText size={12} /> Record first meeting
-          </Button>
         </div>
       )}
 

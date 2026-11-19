@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { HELP, INPUT, LABEL, PRIMARY_BUTTON, SECONDARY_BUTTON, SUBHEADING, SUBSECTION, TEXTAREA } from "@/components/participants/recordUi";
 import { useToast } from "@/hooks/use-toast";
 import { jsonFetch } from "@/services/http";
 import type { ParticipantAllergy } from "@/services/shiftService";
@@ -93,69 +92,70 @@ export function ParticipantClinicalRecordEditor({ participantId }: Props) {
   }
 
   return (
-    <section className="cc-surface-card space-y-4 border border-cc-border p-4">
-      <p className="text-[12px] font-black uppercase tracking-[0.13em] text-cc-plum">{translate("participants.clinicalRecord.contactTitle")}</p>
-      <div className="grid gap-3 sm:grid-cols-3">
+    <section aria-labelledby="health-heading" className={SUBSECTION}>
+      <h4 id="health-heading" className={SUBHEADING}>{translate("participants.clinicalRecord.contactTitle")}</h4>
+      <div className="grid gap-4 sm:grid-cols-3">
         <Field label={translate("participants.shiftContext.gpName")} value={gpName} onChange={setGpName} />
-        <Field label={translate("participants.shiftContext.gpPhone")} value={gpPhone} onChange={setGpPhone} />
+        <Field label={translate("participants.shiftContext.gpPhone")} value={gpPhone} onChange={setGpPhone} type="tel" />
         <Field label={translate("participants.shiftContext.gpPractice")} value={gpPractice} onChange={setGpPractice} />
       </div>
 
-      <div>
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-cc-muted">{translate("participants.shiftContext.currentConditions")}</p>
-        <textarea
-          className="cc-field w-full rounded-xl px-3 py-2 text-sm min-h-[72px] resize-none"
-          value={currentConditions}
-          onChange={(e) => setCurrentConditions(e.target.value)}
-        />
-      </div>
+      <label className="block space-y-1.5">
+        <span className={LABEL}>{translate("participants.shiftContext.currentConditions")}</span>
+        <textarea className={TEXTAREA} value={currentConditions} onChange={(e) => setCurrentConditions(e.target.value)} />
+      </label>
 
-      <div>
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-cc-muted">{translate("participants.shiftContext.allergies")}</p>
+      <div className="space-y-2">
+        <p className={LABEL}>{translate("participants.shiftContext.allergies")}</p>
+        {allergies.length === 0 && <p className={HELP}>No allergies recorded.</p>}
         {allergies.map((item, i) => (
-          <div key={i} className="mb-2 grid gap-2 sm:grid-cols-[1fr_120px_auto]">
-            <Input
+          <div key={i} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_auto]">
+            <input
+              aria-label={`${translate("participants.shiftContext.allergen")} ${i + 1}`}
+              className={INPUT}
               placeholder={translate("participants.shiftContext.allergen")}
               value={item.allergen}
-              onChange={(e) =>
-                setAllergies((prev) => prev.map((a, j) => (j === i ? { ...a, allergen: e.target.value } : a)))
-              }
+              onChange={(e) => setAllergies((prev) => prev.map((a, j) => (j === i ? { ...a, allergen: e.target.value } : a)))}
             />
             <select
-              className="cc-field rounded-md px-2 text-sm h-9"
+              aria-label={`Severity ${i + 1}`}
+              className={INPUT}
               value={item.severity}
-              onChange={(e) =>
-                setAllergies((prev) => prev.map((a, j) => (j === i ? { ...a, severity: e.target.value } : a)))
-              }
+              onChange={(e) => setAllergies((prev) => prev.map((a, j) => (j === i ? { ...a, severity: e.target.value } : a)))}
             >
               <option value="mild">{translate("participants.shiftContext.severity.mild")}</option>
               <option value="moderate">{translate("participants.shiftContext.severity.moderate")}</option>
               <option value="severe">{translate("participants.shiftContext.severity.severe")}</option>
               <option value="anaphylactic">{translate("participants.shiftContext.severity.anaphylactic")}</option>
             </select>
-            <Button type="button" variant="ghost" size="icon" onClick={() => setAllergies((prev) => prev.filter((_, j) => j !== i))}>
+            <button
+              type="button"
+              aria-label={`Remove allergy ${i + 1}`}
+              onClick={() => setAllergies((prev) => prev.filter((_, j) => j !== i))}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-cc-muted hover:bg-cc-soft hover:text-cc-text"
+            >
               <Trash2 className="h-4 w-4" />
-            </Button>
+            </button>
           </div>
         ))}
-        <Button type="button" variant="outline" size="sm" onClick={() => setAllergies((prev) => [...prev, { allergen: "", severity: "mild" }])}>
-          <Plus className="mr-1 h-3.5 w-3.5" /> {translate("participants.shiftContext.addAllergy")}
-        </Button>
+        <button type="button" onClick={() => setAllergies((prev) => [...prev, { allergen: "", severity: "mild" }])} className={SECONDARY_BUTTON}>
+          <Plus className="h-4 w-4" aria-hidden /> {translate("participants.shiftContext.addAllergy")}
+        </button>
       </div>
 
-      <Button disabled={saving} onClick={save} className="cc-btn-primary">
-        {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+      <button type="button" disabled={saving} onClick={save} className={PRIMARY_BUTTON}>
+        {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
         {translate("participants.clinicalRecord.save")}
-      </Button>
+      </button>
     </section>
   );
 }
 
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
   return (
-    <div className="space-y-1">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">{label}</p>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} />
-    </div>
+    <label className="block space-y-1.5">
+      <span className={LABEL}>{label}</span>
+      <input type={type} className={INPUT} value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
   );
 }

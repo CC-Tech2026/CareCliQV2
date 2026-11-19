@@ -1,4 +1,4 @@
-import { Receipt } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { jsonFetch } from "@/services/http";
@@ -27,8 +27,8 @@ const amount = (cents: number, currency: string) =>
     cents / 100,
   );
 
-/** One-line invoice snapshot for the participant overview. The full list,
- * older years and downloads live in the Records & invoices side panel. */
+/** This financial year's invoices for the participant, in one line of
+ * figures. The full list, older years and downloads open from "All invoices". */
 export function ParticipantInvoiceSummary({
   participantId,
   onViewAll,
@@ -48,62 +48,47 @@ export function ParticipantInvoiceSummary({
   );
 
   return (
-    <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Receipt className="h-3.5 w-3.5 text-[#E8457A]" />
-          <h4 className="text-[13px] font-black text-[#1A1A2E]">
-            Invoices, financial year {fy.label}
-          </h4>
-        </div>
+    <section aria-label={`Invoices, financial year ${fy.label}`} className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-base font-semibold text-cc-text">
+          Invoices, financial year {fy.label}
+        </h3>
         <button
           type="button"
           onClick={onViewAll}
-          className="min-h-9 text-[11px] font-bold text-[#E8457A] hover:opacity-70"
+          className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-cc-plum hover:underline"
         >
-          View all invoices
+          All invoices <ArrowRight className="h-4 w-4" aria-hidden />
         </button>
       </div>
       {isLoading ? (
         <Skeleton className="h-12 w-full rounded-xl" />
       ) : isError || !data ? (
-        <p className="text-[12px] text-[#6A6A77]">
-          Invoice totals could not be loaded.
-        </p>
+        <p className="text-sm text-cc-muted">Invoice totals could not be loaded.</p>
       ) : data.count === 0 ? (
-        <p className="text-[12px] text-[#6A6A77]">
-          No invoices issued this financial year.
-        </p>
+        <p className="text-sm text-cc-muted">No invoices issued this financial year.</p>
       ) : (
-        <dl className="grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-white p-3">
-            <dt className="text-[10px] font-bold uppercase tracking-wide text-[#6A6A77]">
-              Invoices
-            </dt>
-            <dd className="mt-1 text-[15px] font-black tabular-nums text-[#1A1A2E]">
-              {data.count}
-            </dd>
+        <dl className="grid grid-cols-3 gap-4">
+          <div>
+            <dd className="text-xl font-semibold tabular-nums text-cc-text">{data.count}</dd>
+            <dt className="text-xs text-cc-muted">invoices</dt>
           </div>
-          <div className="rounded-xl bg-white p-3">
-            <dt className="text-[10px] font-bold uppercase tracking-wide text-[#6A6A77]">
-              Billed
-            </dt>
-            <dd className="mt-1 text-[15px] font-black tabular-nums text-[#1A1A2E]">
+          <div>
+            <dd className="text-xl font-semibold tabular-nums text-cc-text">
               {amount(data.total_cents, data.currency)}
             </dd>
+            <dt className="text-xs text-cc-muted">billed</dt>
           </div>
-          <div className="rounded-xl bg-white p-3">
-            <dt className="text-[10px] font-bold uppercase tracking-wide text-[#6A6A77]">
-              Unpaid
-            </dt>
-            <dd className="mt-1 text-[15px] font-black tabular-nums text-[#1A1A2E]">
+          <div>
+            <dd className="text-xl font-semibold tabular-nums text-cc-text">
               {amount(data.unpaid_cents, data.currency)}
             </dd>
-            {data.overdue_count > 0 && (
-              <p className="mt-0.5 text-[11px] font-semibold text-red-700">
-                {data.overdue_count} overdue
-              </p>
-            )}
+            <dt className="text-xs text-cc-muted">
+              unpaid
+              {data.overdue_count > 0 && (
+                <span className="font-medium text-red-700 dark:text-red-400"> · {data.overdue_count} overdue</span>
+              )}
+            </dt>
           </div>
         </dl>
       )}

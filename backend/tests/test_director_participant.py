@@ -100,3 +100,25 @@ def test_only_the_managing_director_can_use_it(role):
     assert client.get("/api/director/participants/p-1/overview").status_code == 403
     assert client.get("/api/director/participants/p-1/audit-trail").status_code == 403
     assert client.post("/api/director/participants/p-1/services", json={"action": "end", "reason": "x"}).status_code == 403
+
+
+def test_funding_adds_up_when_the_plan_is_split_into_support_categories():
+    from backend.app.services.director_participant_service import _funding
+
+    budget = {
+        "has_plan": True, "total_funding": 68500, "total_allocated": 30000, "total_used": 441,
+        "budgets": [{"category": "core", "category_label": "Core Supports", "allocated": 30000, "used": 441, "remaining": 29559}],
+    }
+    f = _funding(budget, date(2026, 6, 2), date(2027, 6, 2), TODAY)
+    # Total, spent and remaining describe the same budget...
+    assert (f["total"], f["used"], f["remaining"]) == (30000, 441, 29559)
+    assert f["percent_used"] == 1.5
+    # ...and the part of the plan no category holds is said separately.
+    assert (f["plan_total"], f["unallocated"]) == (68500, 38500)
+
+
+def test_funding_without_categories_uses_the_plan_figure_and_can_go_negative():
+    from backend.app.services.director_participant_service import _funding
+
+    f = _funding({"has_plan": True, "total_funding": 10000, "total_used": 10400, "budgets": []}, None, None, TODAY)
+    assert (f["total"], f["remaining"], f["unallocated"]) == (10000, -400, 0)

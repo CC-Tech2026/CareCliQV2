@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 import { SidePanel } from "@/components/layout/SidePanel";
+import { HELP, SECONDARY_BUTTON, SUBHEADING, SUBSECTION } from "@/components/participants/recordUi";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -203,23 +204,21 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
   };
 
   return (
-    <section className="cc-surface-card space-y-4 border border-cc-border p-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Pill className="h-3.5 w-3.5 text-cc-plum" />
-          <p className="text-[12px] font-black uppercase tracking-[0.13em] text-cc-plum">
-            {translate("participants.medications.title")}
-          </p>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => setAddOpen(true)}>
-          <Plus className="mr-1 h-3.5 w-3.5" /> {translate("participants.medications.add")}
-        </Button>
+    <section aria-labelledby="medications-heading" className={SUBSECTION}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 id="medications-heading" className={`${SUBHEADING} flex items-center gap-2`}>
+          <Pill className="h-4 w-4 text-cc-muted" aria-hidden />
+          {translate("participants.medications.title")}
+        </h4>
+        <button type="button" onClick={() => setAddOpen(true)} className={SECONDARY_BUTTON}>
+          <Plus className="h-4 w-4" aria-hidden /> {translate("participants.medications.add")}
+        </button>
       </div>
 
       {loading ? (
         <div className="py-4 text-sm text-cc-muted">{translate("participants.shiftContext.loading")}</div>
       ) : medications.length === 0 ? (
-        <p className="text-[12px] text-cc-muted">{translate("participants.medications.empty")}</p>
+        <p className={HELP}>{translate("participants.medications.empty")}</p>
       ) : (
         <div className="divide-y divide-cc-border rounded-xl border border-cc-border overflow-hidden">
           {medications.map((m) => {
@@ -232,11 +231,11 @@ export function ParticipantMedicationsPanel({ participantId }: Props) {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-[13px] font-bold text-cc-text">{m.name}{m.strength ? ` · ${m.strength}` : ""}</p>
-                      <span className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase" style={{ background: style.bg, color: style.text }}>
+                      <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ background: style.bg, color: style.text }}>
                         {translate(`participants.medications.status.${m.status}`)}
                       </span>
                       {m.is_prn && (
-                        <span className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase bg-cc-soft text-cc-plum">
+                        <span className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-cc-soft text-cc-plum">
                           {translate("participants.medications.prn")}
                         </span>
                       )}

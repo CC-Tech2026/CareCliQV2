@@ -1,7 +1,7 @@
 import { Lock, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { HELP, LABEL, PRIMARY_BUTTON, SUBHEADING, SUBSECTION, TEXTAREA } from "@/components/participants/recordUi";
 
 export type RestrictedClinicalDraft = {
   restricted_behavioural_notes: string;
@@ -19,13 +19,14 @@ interface ParticipantRestrictedTabProps {
 }
 
 const FIELDS = [
-  { key: "restricted_behavioural_notes" as const, label: "Behavioural Notes (Restricted)", placeholder: "Document restricted behavioural observations and incidents…" },
-  { key: "behaviour_support_plan"       as const, label: "Behaviour Support Plan",         placeholder: "Summarise the participant's current behaviour support plan…" },
-  { key: "medications"                  as const, label: "Medications (legacy notes)",     placeholder: "Freeform medication notes — superseded by the structured Medications panel above, kept for historical records…" },
-  { key: "medical_alerts"               as const, label: "Medical Alerts",                 placeholder: "Contraindications, emergency protocols, and other alerts not covered by allergies…" },
+  { key: "restricted_behavioural_notes" as const, label: "Behaviour notes", placeholder: "Behaviours of concern seen, and what was done" },
+  { key: "behaviour_support_plan"       as const, label: "Behaviour support plan",  placeholder: "A summary of the current behaviour support plan, including any regulated restrictive practices" },
+  { key: "medical_alerts"               as const, label: "Medical alerts",          placeholder: "Contraindications, emergency protocols and other alerts not covered by allergies" },
+  { key: "medications"                  as const, label: "Older medication notes",  placeholder: "Free-text medication notes from before the medication chart. Kept for the record." },
 ];
 
-/** "Clinical Records" facet of the participant Detail archetype — coordinator only. */
+/** Restricted clinical information: seen only by care coordinators and the
+ * managing director. */
 export function ParticipantRestrictedTab({
   isLoading,
   draft,
@@ -36,43 +37,37 @@ export function ParticipantRestrictedTab({
   const { translate } = useAccessibility();
 
   return (
-    <section className="rounded-2xl border border-orange-200/70 bg-orange-50/30 p-4 space-y-4">
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          <Lock className="h-3.5 w-3.5 text-orange-600" />
-          <p className="text-[12px] font-semibold uppercase tracking-[0.13em] text-orange-700">{translate("patients.restricted.title")}</p>
-        </div>
-        <span className="text-[11px] px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 font-semibold uppercase tracking-wide bg-orange-100">{translate("patients.restricted.coordinatorOnly")}</span>
+    <section aria-labelledby="restricted-heading" className={SUBSECTION}>
+      <div className="space-y-1">
+        <h4 id="restricted-heading" className={`${SUBHEADING} flex items-center gap-2`}>
+          <Lock className="h-4 w-4 text-cc-muted" aria-hidden />
+          {translate("patients.restricted.title")}
+        </h4>
+        <p className={HELP}>
+          Only care coordinators and the managing director can see this. Handle it under the participant's privacy consent.
+        </p>
       </div>
-      <p className="text-[12px] text-orange-700/80 leading-relaxed">
-        This section contains restricted information visible only to support coordinators and the managing director. Handle in accordance with the participant's privacy consent and NDIS guidelines.
-      </p>
       {isLoading ? (
         <div className="space-y-3">
           {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {FIELDS.map(({ key, label, placeholder }) => (
-            <div key={key} className="space-y-1.5">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">{label}</p>
+            <label key={key} className="block space-y-1.5">
+              <span className={LABEL}>{label}</span>
               <textarea
-                className="w-full rounded-xl border border-orange-200 bg-cc-surface px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 min-h-[80px]"
+                className={TEXTAREA}
                 placeholder={placeholder}
                 value={draft?.[key] ?? ""}
                 onChange={(e) => draft && onDraftChange({ ...draft, [key]: e.target.value })}
               />
-            </div>
+            </label>
           ))}
-          <Button
-            size="sm"
-            disabled={isSaving || !draft}
-            onClick={onSave}
-            className="bg-orange-600 hover:bg-orange-700 text-white gap-1.5"
-          >
-            {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          <button type="button" disabled={isSaving || !draft} onClick={onSave} className={PRIMARY_BUTTON}>
+            {isSaving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
             {translate("patients.restricted.save")}
-          </Button>
+          </button>
         </div>
       )}
     </section>

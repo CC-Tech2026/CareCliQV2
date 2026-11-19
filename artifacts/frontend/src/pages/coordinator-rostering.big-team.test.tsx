@@ -68,7 +68,8 @@ it("lays a big team's week out by person, on who's rostered, with a switch to ev
   await waitFor(() => expect(screen.getByRole("region", BY_PERSON).textContent).toContain("Zoe Unrostered"));
   // Remembered on this device.
   expect(localStorage.getItem("carecliq.roster.showEveryone")).toBe("1");
-});
+  // A whole board of 20 people renders twice: more than the default 5s when the full suite runs at once.
+}, 15_000);
 
 it("never shows two people under one name, by person or by hour", async () => {
   renderPage();
@@ -85,7 +86,7 @@ it("never shows two people under one name, by person or by hour", async () => {
   // Full names over the columns: "Sam N" would be three people.
   expect(columns.textContent).not.toMatch(/Sam N(?![a-z])/);
   expect(localStorage.getItem("carecliq.roster.layout")).toBe("calendar");
-});
+}, 15_000);
 
 it("finds a worker on the board by staff ID", async () => {
   renderPage();

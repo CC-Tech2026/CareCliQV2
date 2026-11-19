@@ -44,7 +44,7 @@ it("shows each participant's worker, plan and budget, and filters to those witho
   expect(screen.getAllByText("Not assigned").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Priya Nair").length).toBeGreaterThan(0);
   expect(screen.getAllByText("25% used").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("Plan managed").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Plan-managed").length).toBeGreaterThan(0);
   fireEvent.click(screen.getByRole("button", { name: /No support worker 1/ }));
   expect(screen.queryByRole("button", { name: /Sam Morgan/ })).toBeNull();
   expect(screen.getByRole("button", { name: /Alex Taylor/ })).toBeTruthy();
