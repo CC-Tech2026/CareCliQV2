@@ -38,7 +38,7 @@ export function suburbFromAddress(address?: string | null): string | null {
 }
 
 /** Ways someone might type a date of birth: 1941-01-15, 15/01/1941, 15/1/1941. */
-function birthDateForms(dob?: string | null): string[] {
+export function birthDateForms(dob?: string | null): string[] {
   if (!dob) return [];
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dob);
   if (!match) return [dob];
@@ -59,6 +59,17 @@ export function matchesPerson(
   const haystack = [...fields, ...birthDateForms(dob)]
     .filter((f): f is string => !!f)
     .map((f) => f.toLowerCase());
+  // A number (phone, NDIS number, staff ID, date) matches as one number,
+  // whatever spaces, dashes or brackets either side has, and an Australian
+  // phone typed as +61 4.. finds one stored as 04... It never falls back to
+  // matching its parts separately, so "0400 100 201" doesn't find someone
+  // who merely has a 100 and a 201 somewhere in their record.
+  if (/^[\d\s+()\-./]+$/.test(q) && /\d/.test(q)) {
+    const digits = q.replace(/\D/g, "");
+    const forms = digits.startsWith("61") && digits.length === 11 ? [digits, `0${digits.slice(2)}`] : [digits];
+    const fieldDigits = haystack.map((f) => f.replace(/\D/g, "")).filter(Boolean);
+    return forms.some((d) => fieldDigits.some((f) => f.includes(d)));
+  }
   const squashed = haystack.map((f) => f.replace(/\s+/g, ""));
   const qSquashed = q.replace(/\s+/g, "");
   if (/\d/.test(qSquashed) && squashed.some((f) => f.includes(qSquashed))) return true;

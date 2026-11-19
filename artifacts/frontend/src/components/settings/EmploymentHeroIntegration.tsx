@@ -10,6 +10,7 @@
  * Employment Hero's logo isn't bundled, so the tile shows the name in the
  * logo slot.
  */
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, Send } from "lucide-react";
@@ -196,14 +197,15 @@ function ChooseEmployee({ item, employees }: { item: EmploymentHeroAttention; em
     <div className="flex flex-wrap items-end gap-3">
       <div className="min-w-[14rem] flex-1 space-y-1.5">
         <Label htmlFor={`eh-worker-${item.worker_id}`} className="text-[13px]">Who is {name} in {NAME}?</Label>
-        <Select value={choice} onValueChange={setChoice}>
-          <SelectTrigger id={`eh-worker-${item.worker_id}`}><SelectValue placeholder="Choose the employee" /></SelectTrigger>
-          <SelectContent>
-            {employees.map((e) => (
-              <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          id={`eh-worker-${item.worker_id}`}
+          value={choice ?? ""}
+          onValueChange={setChoice}
+          options={employees.map((e) => ({ value: String(e.id), label: e.name, keywords: String(e.id) }))}
+          placeholder="Choose the employee"
+          searchPlaceholder="Search employees by name"
+          emptyText="No employee matches"
+        />
       </div>
       <Button variant="outline" onClick={save} disabled={!choice || saving} className="gap-1.5">
         {saving && <Loader2 className="h-4 w-4 animate-spin" />}

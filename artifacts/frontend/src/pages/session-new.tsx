@@ -1,3 +1,5 @@
+import { PARTICIPANT_SEARCH, participantOption } from "@/lib/person-options";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -170,20 +172,16 @@ export default function SessionNew() {
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
                     <FieldLabel>{translate("sessions.new.participant")}</FieldLabel>
-                    <Select onValueChange={val => { field.onChange(val); setSelectedParticipantId(val); }}>
-                      <SelectTrigger
-                        disabled={isLoading}
-                        className="rounded-xl h-[42px] text-[13px]"
-                        style={{ borderColor: BORDER }}
-                      >
-                        <SelectValue placeholder={translate("sessions.new.selectParticipant")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {participants?.map((p: any) => (
-                          <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={field.value ?? ""}
+                      onValueChange={(val) => { field.onChange(val); setSelectedParticipantId(val); }}
+                      disabled={isLoading}
+                      options={((participants ?? []) as Array<{ id: string; full_name?: string | null }>).map(participantOption)}
+                      placeholder={translate("sessions.new.selectParticipant")}
+                      searchPlaceholder={PARTICIPANT_SEARCH}
+                      emptyText="No participant matches"
+                      triggerClassName="h-[42px]"
+                    />
                   </FormItem>
                 )}
               />

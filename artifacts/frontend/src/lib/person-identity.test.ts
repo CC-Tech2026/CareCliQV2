@@ -26,6 +26,17 @@ it("matches on any field, every word, birth date forms and spaced numbers", () =
   expect(matchesPerson("", fields)).toBe(true);
 });
 
+it("matches a typed number as one number, never in pieces", () => {
+  const liam = ["Liam Carter", "431990001", "0400 100 201"];
+  const zoe = ["Zoe Mitchell", "431990002", "0400 100 999", "Unit 201, 100 King St"];
+  expect(matchesPerson("0400 100 201", liam)).toBe(true);
+  expect(matchesPerson("0400 100 201", zoe)).toBe(false);
+  expect(matchesPerson("0400-100-201", liam)).toBe(true);
+  expect(matchesPerson("+61 400 100 201", liam)).toBe(true);
+  expect(matchesPerson("4319 90001", liam)).toBe(true);
+  expect(matchesPerson("liam 0400", liam)).toBe(true);
+});
+
 it("finds names held by more than one person, ignoring case", () => {
   expect([...sharedNames(["Jo Smith", "jo smith ", "Ben Ito"])]).toEqual(["jo smith"]);
 });

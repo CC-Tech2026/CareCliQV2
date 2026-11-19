@@ -1,3 +1,5 @@
+import { PARTICIPANT_SEARCH, participantOption } from "@/lib/person-options";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
@@ -626,7 +628,7 @@ export function ActiveParticipantsPage({
     .filter((r) =>
       matchesPerson(
         q,
-        [r.intake.full_name, r.preferred, r.intake.ndis_number, r.suburb, r.snapshot?.address, ...(r.snapshot?.workers ?? [])],
+        [r.intake.full_name, r.preferred, r.intake.ndis_number, r.intake.phone, r.intake.email, r.suburb, r.snapshot?.address, ...(r.snapshot?.workers ?? [])],
         r.dob,
       ),
     )
@@ -1285,15 +1287,16 @@ function LogComplaintSheet({
         <form id="log-complaint-form" onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-4">
           <div className="space-y-1.5">
             <label className={label} htmlFor="complaint-participant">Who is it about?</label>
-            <Select value={participantId} onValueChange={setParticipantId}>
-              <SelectTrigger id="complaint-participant" className="h-11 rounded-xl">
-                <SelectValue placeholder="Choose a participant" />
-              </SelectTrigger>
-              <SelectContent>
-                {participants.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                <SelectItem value={OTHER}>Someone not in the list</SelectItem>
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              id="complaint-participant"
+              value={participantId}
+              onValueChange={setParticipantId}
+              options={[...participants.map(participantOption), { value: OTHER, label: "Someone not in the list", keywords: "other not listed" }]}
+              placeholder="Choose a participant"
+              searchPlaceholder={PARTICIPANT_SEARCH}
+              emptyText="No participant matches"
+              triggerClassName="h-11"
+            />
             {participantId === OTHER && (
               <Input aria-label="Their name" placeholder="Their name" value={otherName} onChange={(e) => setOtherName(e.target.value)} className="mt-2 h-11 rounded-xl" />
             )}
@@ -1725,7 +1728,8 @@ export default function ParticipantOnboardingBoard() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search participants"
+              placeholder="Name, NDIS number, phone or date of birth"
+              aria-label="Search participants"
               className="h-11 rounded-full bg-cc-surface pl-11 pr-9 text-sm"
             />
             {search && (
