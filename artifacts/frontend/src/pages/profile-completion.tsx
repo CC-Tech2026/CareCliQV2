@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Loader2, Save, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { Label } from "@/components/ui/label";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
 import { useToast } from "@/hooks/use-toast";
@@ -116,7 +117,15 @@ export default function ProfileCompletion() {
           </div>
           <div>
             <Label>{translate("profileCompletion.address")}</Label>
-            <Input value={profile.address || ""} onChange={(e) => setProfile({ ...profile, address: e.target.value })} className="mt-1 rounded-xl" />
+            <div className="mt-1">
+              <AddressAutocomplete
+                value={profile.address || ""}
+                onChange={(v) => setProfile((p) => ({ ...p, address: v }))}
+                onPick={(a) => setProfile((p) => ({ ...p, address: a.formatted, ...(a.suburb ? { suburb: a.suburb } : {}) }))}
+                placeholder="Start typing your address"
+                className="rounded-xl"
+              />
+            </div>
           </div>
         </div>
         <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-[#ECECEC] p-4 text-sm text-[#6A6A77]">

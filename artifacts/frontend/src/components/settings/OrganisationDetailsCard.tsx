@@ -3,6 +3,7 @@ import { Check, CircleAlert, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -209,7 +210,20 @@ export function OrganisationDetailsCard({ profileAbn }: { profileAbn?: string | 
         })}
         {field("email", "Accounts email", { error: emailError, placeholder: "accounts@example.com.au", type: "email", inputMode: "email" })}
         {field("phone", "Phone", { placeholder: "08 8123 4567", inputMode: "tel" })}
-        {field("address", "Business address", { placeholder: "Street, suburb, state, postcode", wide: true })}
+        {canEdit ? (
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="org-address" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>Business address</Label>
+            <AddressAutocomplete
+              id="org-address"
+              value={form.address}
+              onChange={(v) => setForm((f) => ({ ...f, address: v }))}
+              placeholder="Start typing your business address"
+              className="rounded-lg"
+            />
+          </div>
+        ) : (
+          field("address", "Business address", { placeholder: "Street, suburb, state, postcode", wide: true })
+        )}
       </div>
 
       {!canEdit && (

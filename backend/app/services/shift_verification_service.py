@@ -601,6 +601,82 @@ def _active_verification(shift_id: str) -> Optional[dict[str, Any]]:
     return found[0] if found else None
 
 
+# An incident written up a little after the shift still belongs to it.
+_INCIDENT_GRACE = timedelta(hours=2)
+
+
+def _parse_ts(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def incidents_for_shifts(org_id: str, shifts: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Incidents that belong to each shift: reported from it (shift or
+    session link), or about the same participant and dated during the shift
+    (incidents filed later from the office carry no link). One query."""
+    if not shifts:
+        return {}
+    participant_ids = sorted({str(s["participant_id"]) for s in shifts if s.get("participant_id")})
+    if not participant_ids:
+        return {}
+    starts = [t for s in shifts if (t := _parse_ts(s.get("clocked_in_at") or s.get("scheduled_start")))]
+    since = (min(starts) - _INCIDENT_GRACE) if starts else None
+    try:
+        query = (
+            get_supabase_admin().table("incidents")
+            .select("id, reference_number, title, severity, status, incident_type, incident_date, created_at, participant_id, shift_id, session_id")
+            .eq("organization_id", org_id)
+            .in_("participant_id", participant_ids)
+        )
+        if since is not None:
+            query = query.gte("created_at", since.isoformat())
+        rows = _safe_rows(query.execute().data)
+    except Exception as exc:
+        logger.warning("Verification queue: couldn't load incidents: %s", exc)
+        return {}
+
+    out: dict[str, list[dict[str, Any]]] = {}
+    for shift in shifts:
+        sid = str(shift.get("id") or "")
+        session_id = str(shift.get("session_id") or "")
+        start = _parse_ts(shift.get("clocked_in_at") or shift.get("scheduled_start"))
+        end = _parse_ts(shift.get("clocked_out_at") or shift.get("scheduled_end"))
+        found = []
+        for inc in rows:
+            if str(inc.get("participant_id") or "") != str(shift.get("participant_id") or ""):
+                continue
+            linked = str(inc.get("shift_id") or "") == sid or (session_id and str(inc.get("session_id") or "") == session_id)
+            if linked:
+                how = "reported_on_shift"
+            else:
+                if inc.get("shift_id"):
+                    continue  # it belongs to another shift
+                when = _parse_ts(inc.get("incident_date"))
+                if not (when and start and end and start - _INCIDENT_GRACE <= when <= end + _INCIDENT_GRACE):
+                    continue
+                how = "during_shift"
+            found.append(
+                {
+                    "id": inc.get("id"),
+                    "reference_number": inc.get("reference_number"),
+                    "title": inc.get("title"),
+                    "severity": inc.get("severity"),
+                    "status": inc.get("status"),
+                    "incident_type": inc.get("incident_type"),
+                    "incident_date": inc.get("incident_date"),
+                    "link": how,
+                }
+            )
+        if found:
+            out[sid] = found
+    return out
+
+
 def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
     """Completed shifts in this org that have no shift_verifications row yet."""
     supabase = get_supabase_admin()
@@ -644,6 +720,7 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
     from .shift_review_service import office_review_states
 
     review_states = office_review_states([str(s.get("id")) for s in pending])
+    incidents = incidents_for_shifts(org_id, pending)
     out: list[dict[str, Any]] = []
     for shift in pending:
         session = _get_session_for_shift(shift)
@@ -676,6 +753,8 @@ def list_pending_verifications(org_id: str) -> list[dict[str, Any]]:
                 # "changes_requested": back with the worker; "sent_back": the
                 # worker has made the changes and it's ready to look at again.
                 "review_state": review_states.get(str(shift.get("id"))),
+                # Incidents from this shift, so they're seen before approving.
+                "incidents": incidents.get(str(shift.get("id")), []),
             }
         )
     return out
@@ -729,34 +808,74 @@ async def list_price_item_options_for_participant(participant_id: str, org_id: s
         .is_("valid_to", "null")
         .execute()
     )
-    items = _safe_rows(items_result.data)
+    org_items = _safe_rows(items_result.data)
+
+    # The organisation's own list is often short (sometimes one item), but
+    # approving prices from the national catalogue anyway, so offer every
+    # current catalogue item too. The organisation's row wins for its codes
+    # (it may carry their own price).
+    try:
+        catalogue = agreement_support_service.catalogue_cached()
+    except Exception as exc:  # the picker still works with the org's own list
+        logger.warning("Price item picker: national catalogue unavailable: %s", exc)
+        catalogue = []
+    by_code: dict[str, dict[str, Any]] = {}
+    for row in catalogue:
+        code = str(row.get("item_code") or "")
+        if code:
+            by_code[code] = {**row, "_source": "catalogue"}
+    for row in org_items:
+        code = str(row.get("item_code") or "")
+        if code:
+            by_code[code] = {**row, "_source": "organisation"}
+
+    # What the participant's service agreement covers: its lines' codes and
+    # the same support at other times (Saturday, evening, ...).
+    agreement_codes: set[str] = set()
+    try:
+        line_codes = [
+            str(line.get("support_item_code"))
+            for _agreement, line in agreement_support_service._verification_lines(str(participant_id), org_id)
+            if line.get("support_item_code")
+        ]
+        if line_codes:
+            agreement_codes.update(line_codes)
+            for group in agreement_support_service.support_groups(line_codes, catalogue or None).values():
+                agreement_codes.update(str(r.get("item_code")) for r in group if r.get("item_code"))
+    except Exception as exc:
+        logger.warning("Price item picker: couldn't read agreement lines: %s", exc)
 
     out: list[dict[str, Any]] = []
-    for item in items:
+    for code, item in by_code.items():
         category = resolve_price_item_budget_category(item)
-        if allowed_categories is not None and category not in allowed_categories:
+        in_agreement = code in agreement_codes
+        if allowed_categories is not None and category not in allowed_categories and not in_agreement:
             continue
-        category_number = item.get("category_number")
+        # The code's first two digits are the NDIS support category; a stored
+        # category_number can be wrong on hand-loaded price lists.
+        category_number = code[:2] if code[:2].isdigit() else item.get("category_number")
         out.append(
             {
-                "item_code": item.get("item_code"),
+                "item_code": code,
                 "name": item.get("name"),
                 "description": item.get("description"),
                 "unit": item.get("unit"),
                 "support_purpose": item.get("support_purpose"),
                 "support_category": category,
                 # The real NDIS Support Category (e.g. "01" / "Assistance with
-                # Daily Life") — finer-grained than support_category's 3-bucket
-                # split above, for grouping the picker so 357 items across 13
-                # categories aren't one flat list.
+                # Daily Life"), for grouping the picker.
                 "category_number": category_number,
                 "category_label": support_category_number_label(category_number),
                 "day_type": item.get("day_type"),
                 "time_type": item.get("time_type"),
                 "support_intensity": item.get("support_intensity"),
                 "price_national": item.get("price_national"),
+                "source": item["_source"],
+                "in_agreement": in_agreement,
             }
         )
+    # Agreement items first, then the organisation's own, then by code.
+    out.sort(key=lambda o: (not o["in_agreement"], o["source"] != "organisation", o["item_code"]))
     return out
 
 

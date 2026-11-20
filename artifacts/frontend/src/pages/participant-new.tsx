@@ -6,6 +6,7 @@ import { useState } from "react";
 import { createParticipantIntake, type WebIntakeForm } from "@/services/participantIntakeService";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
@@ -247,7 +248,24 @@ export default function ParticipantNew() {
                 <FormField control={form.control} name="street_address" render={({ field }) => (
                   <FormItem className="sm:col-span-2 lg:col-span-3">
                     <FieldLabel icon={MapPin}>{translate("patients.field.streetAddress")}</FieldLabel>
-                    <FormControl><Input placeholder={translate("patients.placeholder.streetAddress")} autoComplete="address-line1" data-testid="input-street-address" {...field} /></FormControl>
+                    <FormControl>
+                      <AddressAutocomplete
+                        placeholder={translate("patients.placeholder.streetAddress")}
+                        data-testid="input-street-address"
+                        name={field.name}
+                        ref={field.ref}
+                        onBlur={field.onBlur}
+                        value={field.value ?? ""}
+                        onChange={(v) => field.onChange(v)}
+                        fill="street"
+                        onPick={(a) => {
+                          // One pick fills suburb, state and postcode too.
+                          if (a.suburb) form.setValue("suburb", a.suburb, { shouldDirty: true })
+                          if (a.state) form.setValue("state", a.state, { shouldDirty: true })
+                          if (a.postcode) form.setValue("postcode", a.postcode, { shouldDirty: true })
+                        }}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />

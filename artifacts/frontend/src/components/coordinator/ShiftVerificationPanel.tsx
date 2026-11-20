@@ -18,6 +18,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   getShiftVerificationQueue,
   getShiftPriceItemOptions,
@@ -336,63 +337,41 @@ export function ShiftVerificationCard({
           style={{ borderColor: BORDER }}
         >
           <DollarSign size={13} style={{ color: T3 }} className="shrink-0" />
-          <select
-            aria-label="Price item"
-            value={priceItemCode}
-            onChange={(e) => {
-              setPriceTouched(true);
-              setPriceItemCode(e.target.value);
-            }}
-            disabled={priceItemsLoading || verifyMutation.isPending}
-            className="flex-1 min-w-0 w-full sm:w-auto rounded-lg border px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 dark:text-white"
-            style={
-              {
-                borderColor: BORDER,
-                color: T1,
-                "--tw-ring-color": PLUM,
-              } as React.CSSProperties
-            }
-          >
-            <option value="">
-              {priceItemsLoading
-                ? "Loading price items…"
-                : "Select a price item…"}
-            </option>
-            {(() => {
-              const sorted = [...priceItems].sort(
-                (a, b) =>
-                  (a.category_number ?? "").localeCompare(
-                    b.category_number ?? "",
-                  ) || a.item_code.localeCompare(b.item_code),
-              );
-              const groups = new Map<string, typeof sorted>();
-              for (const p of sorted) {
-                const label =
-                  p.category_label ??
-                  (p.category_number
-                    ? `Category ${p.category_number}`
-                    : "Other");
-                const bucket = groups.get(label);
-                if (bucket) bucket.push(p);
-                else groups.set(label, [p]);
-              }
-              return [...groups.entries()].map(([label, items]) => (
-                <optgroup key={label} label={label}>
-                  {items.map((p) => (
-                    <option key={p.item_code} value={p.item_code}>
-                      {p.item_code}:{" "}
-                      {p.name || p.support_purpose || "Unnamed item"}
-                      {p.price_national != null
-                        ? p.unit === "E"
-                          ? ` ($${p.price_national.toFixed(2)} flat)`
-                          : ` ($${p.price_national.toFixed(2)}/hr)`
-                        : ""}
-                    </option>
-                  ))}
-                </optgroup>
-              ));
-            })()}
-          </select>
+          <div className="min-w-0 flex-1">
+            <SearchableSelect
+              ariaLabel="Price item"
+              value={priceItemCode}
+              onValueChange={(v) => {
+                setPriceTouched(true);
+                setPriceItemCode(v);
+              }}
+              options={priceItems.map((p) => ({
+                value: p.item_code,
+                label: `${p.item_code}: ${p.name || p.support_purpose || "Unnamed item"}`,
+                detail:
+                  [
+                    p.price_national != null
+                      ? p.unit === "E"
+                        ? `$${p.price_national.toFixed(2)} flat`
+                        : `$${p.price_national.toFixed(2)}/hr`
+                      : null,
+                    p.category_label,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || null,
+                keywords: [p.item_code, p.name ?? "", p.category_label ?? "", p.support_purpose ?? ""],
+                group: p.in_agreement
+                  ? "In their service agreement"
+                  : p.source === "organisation"
+                    ? "Your price list"
+                    : (p.category_label ?? (p.category_number ? `Category ${p.category_number}` : "Other")),
+              }))}
+              placeholder={priceItemsLoading ? "Loading price items…" : "Select a price item…"}
+              searchPlaceholder="Search by code, name or category"
+              emptyText="No price item matches. Try the code or a word from its name."
+              disabled={priceItemsLoading || verifyMutation.isPending}
+            />
+          </div>
           <button
             onClick={() => verifyMutation.mutate()}
             disabled={!priceItemCode || verifyMutation.isPending}

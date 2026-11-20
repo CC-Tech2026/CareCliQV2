@@ -3,12 +3,14 @@ import { useSearch } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  ArrowRight,
   Check,
   CheckCircle2,
   Circle,
   Languages,
   Loader2,
   MapPin,
+  ShieldAlert,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,6 +34,7 @@ import {
 } from "@/components/coordinator/ScheduleLiveCard";
 import { appLocalDateKey, formatAppDate, formatAppTime } from "@/lib/datetime";
 import { SectionInfo } from "@/components/ui/section-info";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 
 type Approved = { item: ShiftVerificationQueueItem; billed: number };
 
@@ -358,6 +361,29 @@ function ShiftReview({
     staleTime: 60_000,
   });
   const options = priceItems.data ?? [];
+  const priceOptions = useMemo<SearchableOption[]>(() => {
+    const list: SearchableOption[] = options.map((o) => {
+      const price =
+        o.price_national != null ? `${money(o.price_national)}${o.unit === "E" ? "" : "/hr"}` : null;
+      return {
+        value: o.item_code,
+        label: `${o.item_code}: ${o.name || o.support_purpose || ""}`,
+        detail: [price, o.category_label].filter(Boolean).join(" · ") || null,
+        keywords: [o.item_code, o.name ?? "", o.category_label ?? "", o.support_purpose ?? "", o.day_type ?? "", o.time_type ?? ""],
+        group: o.in_agreement
+          ? translate("schedule.groupAgreement")
+          : o.source === "organisation"
+            ? translate("schedule.groupOrganisation")
+            : o.category_label || o.support_category || undefined,
+      };
+    });
+    // A suggested or recorded code that isn't in the list still prices from
+    // the NDIS catalogue, so keep it choosable.
+    if (priceItemCode && !list.some((o) => o.value === priceItemCode)) {
+      list.unshift({ value: priceItemCode, label: priceItemCode, keywords: [priceItemCode] });
+    }
+    return list;
+  }, [options, priceItemCode, translate]);
 
   // What approving would bill, checked against the service agreement: the
   // code the times worked suggest, the line it counts against, the rate and
@@ -399,6 +425,15 @@ function ShiftReview({
           : "schedule.rateCatalogue";
     return translateParams(key, { rate: money(rate) });
   })();
+
+  // Everything still needed before Approve can be pressed, in plain words.
+  const needs = [
+    noteMissing && translate("schedule.need.note"),
+    !priceItemCode && translate("schedule.need.price"),
+    extraReasonMissing && translate("schedule.need.extraReason"),
+    agreementReasonMissing && translate("schedule.need.agreementReason"),
+    overLimit && translate("schedule.need.overLimit"),
+  ].filter((x): x is string => Boolean(x));
 
   const approve = useMutation({
     mutationFn: () =>
@@ -551,6 +586,45 @@ function ShiftReview({
               {warnings.map((w) => <li key={w}>{w}</li>)}
             </ul>
           </div>
+        )}
+
+        {(item.incidents?.length ?? 0) > 0 && (
+          <section
+            aria-label={translate("schedule.incidents")}
+            className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-100"
+          >
+            <h3 className="flex items-center gap-1.5 font-semibold">
+              <ShieldAlert size={15} aria-hidden /> {translate("schedule.incidents")}
+            </h3>
+            {!approved && <p className="mt-1">{translate("schedule.incidentRead")}</p>}
+            <ul className="mt-3 space-y-2">
+              {item.incidents!.map((inc) => (
+                <li key={inc.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-white/70 px-3 py-2 dark:bg-black/20">
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-cc-text">
+                      {inc.title || humanise(inc.incident_type) || translate("schedule.incidents")}
+                    </span>
+                    <span className="block text-xs text-cc-muted">
+                      {[
+                        inc.reference_number,
+                        inc.severity ? humanise(inc.severity) : null,
+                        inc.status ? humanise(inc.status) : null,
+                        translate(inc.link === "reported_on_shift" ? "schedule.incidentReportedOnShift" : "schedule.incidentDuringShift"),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </span>
+                  <a
+                    href={`/incidents/${encodeURIComponent(inc.id)}`}
+                    className="inline-flex min-h-9 items-center gap-1 rounded-full border border-red-300 bg-cc-surface px-3 text-xs font-semibold text-red-800 hover:bg-red-100 dark:border-red-700 dark:text-red-200"
+                  >
+                    {translate("schedule.incidentOpen")} <ArrowRight size={12} aria-hidden />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         <section>
@@ -742,35 +816,25 @@ function ShiftReview({
 
         {!approved && (
           <div>
-            <label className="block text-sm font-semibold text-cc-text">
+            <label htmlFor={`price-item-${item.shift_id}`} className="block text-sm font-semibold text-cc-text">
               {translate("schedule.priceItem")}
-              <select
-                value={priceItemCode}
-                onChange={(e) => {
-                  setPriceTouched(true);
-                  setPriceItemCode(e.target.value);
-                }}
-                disabled={priceItems.isLoading || approve.isPending}
-                className="mt-1.5 min-h-11 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm font-normal"
-              >
-                <option value="">
-                  {translate(priceItems.isLoading ? "schedule.loadingPriceItems" : "schedule.pickPriceItem")}
-                </option>
-                {/* The suggested code can be one the organisation hasn't loaded;
-                    it still prices from the NDIS catalogue. */}
-                {priceItemCode && !options.some((o) => o.item_code === priceItemCode) && (
-                  <option value={priceItemCode}>{priceItemCode}</option>
-                )}
-                {options.map((o) => (
-                  <option key={o.item_code} value={o.item_code}>
-                    {o.item_code}: {o.name || o.support_purpose || ""}
-                    {o.price_national != null
-                      ? ` (${money(o.price_national)}${o.unit === "E" ? "" : "/hr"})`
-                      : ""}
-                  </option>
-                ))}
-              </select>
             </label>
+            <div className="mt-1.5">
+              <SearchableSelect
+                id={`price-item-${item.shift_id}`}
+                value={priceItemCode}
+                onValueChange={(v) => {
+                  setPriceTouched(true);
+                  setPriceItemCode(v);
+                }}
+                options={priceOptions}
+                placeholder={translate(priceItems.isLoading ? "schedule.loadingPriceItems" : "schedule.pickPriceItem")}
+                searchPlaceholder={translate("schedule.searchPriceItems")}
+                emptyText={translate("schedule.noPriceItemMatch")}
+                disabled={priceItems.isLoading || approve.isPending}
+                triggerClassName="min-h-11"
+              />
+            </div>
             {suggestedCode && priceItemCode === suggestedCode && (
               <p className="mt-1 text-xs text-cc-muted">{translate("schedule.suggestedCode")}</p>
             )}
@@ -894,9 +958,9 @@ function ShiftReview({
                 {translate("schedule.requestChanges")}
               </button>
             )}
-            {noteMissing && (
-              <p className="me-auto flex min-h-11 items-center text-sm text-cc-muted">
-                {translate("schedule.noteMissing")}
+            {needs.length > 0 && !approve.isPending && (
+              <p className="me-auto flex min-h-11 items-center text-sm text-cc-muted" aria-live="polite">
+                {translate("schedule.toApprove")} {needs.join("; ")}
               </p>
             )}
             <button

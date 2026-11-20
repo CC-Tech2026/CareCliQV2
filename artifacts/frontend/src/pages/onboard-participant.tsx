@@ -26,6 +26,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -3215,7 +3216,29 @@ function IntakeFormBlock({
 
           <IntakeFormSection icon={MapPin} title="Address" {...sectionEditProps}>
             <div className="grid sm:grid-cols-3 gap-3">
-              <Field editing={editing} label="Street address" value={draft.street_address} onChange={(v) => onChange({ street_address: v })} />
+              {editing ? (
+                <div className="space-y-1">
+                  <label htmlFor="intake-street-address" className="text-[10px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Street address</label>
+                  <AddressAutocomplete
+                    id="intake-street-address"
+                    value={draft.street_address ?? ""}
+                    onChange={(v) => onChange({ street_address: v })}
+                    fill="street"
+                    onPick={(a) =>
+                      onChange({
+                        street_address: a.street || a.formatted,
+                        ...(a.suburb ? { suburb: a.suburb } : {}),
+                        ...(a.state ? { state: a.state } : {}),
+                        ...(a.postcode ? { postcode: a.postcode } : {}),
+                      })
+                    }
+                    placeholder="Start typing the address"
+                    className="h-9 text-sm"
+                  />
+                </div>
+              ) : (
+                <Field editing={false} label="Street address" value={draft.street_address} />
+              )}
               <Field editing={editing} label="Suburb" value={draft.suburb} onChange={(v) => onChange({ suburb: v })} />
               <Field editing={editing} label="State" value={draft.state} onChange={(v) => onChange({ state: v })} />
             </div>

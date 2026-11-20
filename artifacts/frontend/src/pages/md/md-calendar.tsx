@@ -526,7 +526,7 @@ export default function MDCalendarPage() {
                       type="button"
                       onClick={() => setSelectedDay(day)}
                       aria-pressed={selected}
-                      aria-label={`${format(day, "EEEE d MMMM")}: ${dayShiftList.length} shifts${vacantCount ? `, ${vacantCount} unfilled` : ""}, ${dayEvs.length} meetings`}
+                      aria-label={loading ? format(day, "EEEE d MMMM") : `${format(day, "EEEE d MMMM")}: ${dayShiftList.length} shifts${vacantCount ? `, ${vacantCount} unfilled` : ""}, ${dayEvs.length} meetings`}
                       className={`flex min-h-[72px] flex-col items-stretch gap-1 p-1.5 text-left transition-colors sm:min-h-[116px] ${(i + 1) % 7 ? "border-r" : ""} border-b ${selected ? "" : "hover:bg-cc-soft"}`}
                       style={{ borderColor: BORDER, background: selected ? "var(--cc-brand-purple-soft)" : undefined }}
                     >
@@ -570,7 +570,9 @@ export default function MDCalendarPage() {
                   </h2>
                   <p className="text-xs" style={{ color: MUTED }}>
                     {isAppToday(effectiveDay) ? `${format(effectiveDay, "EEEE d MMMM")} · ` : ""}
-                    {dayShifts.length} {dayShifts.length === 1 ? "shift" : "shifts"} · {dayEvents.length} {dayEvents.length === 1 ? "meeting" : "meetings"}
+                    {loading
+                      ? "Loading the day"
+                      : `${dayShifts.length} ${dayShifts.length === 1 ? "shift" : "shifts"} · ${dayEvents.length} ${dayEvents.length === 1 ? "meeting" : "meetings"}`}
                   </p>
                 </div>
                 <button

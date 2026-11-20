@@ -7,7 +7,10 @@ vi.mock("@/hooks/useOrgQuery", () => ({
 }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ user: { organizationId: "org-1", role: state.role } }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: state.toast }) }));
-vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({ setQueryData: vi.fn() }) }));
+vi.mock("@tanstack/react-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-query")>()),
+  useQueryClient: () => ({ setQueryData: vi.fn() }),
+}));
 vi.mock("@/lib/api-fetch", () => ({
   apiFetch: vi.fn(async () => ({ ok: true, json: async () => ({ level: "warn" }) })),
 }));

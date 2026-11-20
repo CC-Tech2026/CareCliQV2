@@ -9,6 +9,7 @@ from .api import myob as myob_api
 from .api import employment_hero as employment_hero_api
 from .api import shift_series as shift_series_api
 from .api import leave_cover as leave_cover_api
+from .api import address_search as address_search_api
 from .api import payroll_export as payroll_export_api
 from .api import xero_payroll as xero_payroll_api
 from .api import public_v1 as public_v1_api
@@ -242,6 +243,7 @@ app.include_router(chatbox.router, prefix="/api")
 app.include_router(worker_scheduling.router, prefix="/api")
 app.include_router(worker_performance.router, prefix="/api")
 app.include_router(worker_travel.router, prefix="/api")
+app.include_router(address_search_api.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(worker.router, prefix="/api")
 app.include_router(privacy.router, prefix="/api")
