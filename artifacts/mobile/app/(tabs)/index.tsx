@@ -400,6 +400,13 @@ export default function HomeScreen() {
       badgeTone: expiredCount > 0 ? "danger" : "warning",
     },
     {
+      key: "travel",
+      icon: "map",
+      label: "Travel claims",
+      accent: colors.success,
+      href: "/worker/travel",
+    },
+    {
       key: "toolkit",
       icon: "briefcase",
       label: t("nav.toolkit"),
