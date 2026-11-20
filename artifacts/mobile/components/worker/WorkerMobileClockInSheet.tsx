@@ -3,7 +3,6 @@ import { Feather } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat } from "@/components/KeyboardAvoidingViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
@@ -77,8 +77,8 @@ export function WorkerMobileClockInSheet({
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    <KeyboardAvoidingViewCompat
+      behavior="padding"
       style={[styles.overlay, { paddingTop: insets.top + 16 }]}
     >
       <Pressable
@@ -317,7 +317,7 @@ export function WorkerMobileClockInSheet({
           </ScrollView>
         )}
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingViewCompat>
   );
 }
 

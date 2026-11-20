@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
@@ -54,14 +55,15 @@ export function IncompleteDocsEndShiftModal({
   };
 
   return (
-    <Modal
+    <Modal statusBarTranslucent navigationBarTranslucent
       visible={visible}
       transparent
       animationType="fade"
       onRequestClose={handleClose}
     >
       <View style={[styles.overlay, { paddingTop: insets.top + 16 }]}>
-        <ScrollView
+        <KeyboardAwareScrollViewCompat
+          bottomOffset={24}
           accessibilityViewIsModal
           style={[styles.sheet, { backgroundColor: colors.card }]}
           contentContainerStyle={{
@@ -241,7 +243,7 @@ export function IncompleteDocsEndShiftModal({
               </Pressable>
             </View>
           )}
-        </ScrollView>
+        </KeyboardAwareScrollViewCompat>
       </View>
     </Modal>
   );

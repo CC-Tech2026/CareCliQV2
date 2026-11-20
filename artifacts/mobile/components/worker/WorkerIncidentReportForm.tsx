@@ -1,3 +1,4 @@
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
@@ -267,9 +268,11 @@ export function WorkerIncidentReportForm({
   participantName,
   sessionId,
   shiftAddress,
-  initialReportType = "safety_hazard",
+  // Nothing is chosen for the worker: an answer they didn't pick could be
+  // filed by tapping through. Every choice starts empty.
+  initialReportType = "",
   initialBehaviourSubtype = "",
-  initialSeverity = "medium",
+  initialSeverity = "",
   initialDescription = "",
   initialWorkerActions = "",
   onSubmitted,
@@ -359,7 +362,7 @@ export function WorkerIncidentReportForm({
   };
 
   const handleSubmit = async () => {
-    if (!descValid || submitting) return;
+    if (!everythingAnswered || submitting) return;
     setSubmitting(true);
 
     const payload = {
@@ -543,8 +546,20 @@ export function WorkerIncidentReportForm({
     t("incidents.form.stepReview"),
   ];
 
+  const typeChosen =
+    !!reportType &&
+    (reportType !== "participant_behaviour" || !!behaviourSubtype);
   const stepValid =
-    step === 3 ? descValid : step === 4 ? safetyConfirmed : true;
+    step === 1
+      ? typeChosen
+      : step === 2
+        ? !!severity
+        : step === 3
+          ? descValid
+          : step === 4
+            ? safetyConfirmed
+            : true;
+  const everythingAnswered = typeChosen && !!severity && descValid && safetyConfirmed;
 
   const goNext = () => {
     if (!stepValid) return;
@@ -664,7 +679,7 @@ export function WorkerIncidentReportForm({
           </View>
         </View>
       </Modal>
-      <ScrollView
+      <KeyboardAwareScrollViewCompat
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
@@ -672,6 +687,7 @@ export function WorkerIncidentReportForm({
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        bottomOffset={24}
       >
         <View style={styles.stepHeader}>
           <Text
@@ -1162,18 +1178,22 @@ export function WorkerIncidentReportForm({
               <ReviewRow
                 label={t("incidents.form.reportType")}
                 value={
-                  TYPE_META[reportType]
-                    ? t(TYPE_META[reportType].label)
-                    : typeLabel
+                  !reportType
+                    ? "Not chosen yet"
+                    : TYPE_META[reportType]
+                      ? t(TYPE_META[reportType].label)
+                      : typeLabel
                 }
                 colors={colors}
               />
               <ReviewRow
                 label={t("incidents.form.severity")}
                 value={
-                  SEVERITY_META[severity]
-                    ? t(SEVERITY_META[severity].label)
-                    : severityLabel
+                  !severity
+                    ? "Not chosen yet"
+                    : SEVERITY_META[severity]
+                      ? t(SEVERITY_META[severity].label)
+                      : severityLabel
                 }
                 colors={colors}
               />
@@ -1198,14 +1218,32 @@ export function WorkerIncidentReportForm({
               />
             </View>
 
+            {!everythingAnswered ? (
+              <Text
+                accessibilityRole="alert"
+                style={[
+                  styles.stepHint,
+                  { color: colors.destructive, fontFamily: FontFamily.interMedium },
+                ]}
+              >
+                {`Still to answer: ${[
+                  !typeChosen ? "what kind of incident (step 1)" : null,
+                  !severity ? "how serious it is (step 2)" : null,
+                  !descValid ? "what happened (step 3)" : null,
+                  !safetyConfirmed ? "the safety check (step 4)" : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}.`}
+              </Text>
+            ) : null}
             <Pressable
               onPress={handleSubmit}
-              disabled={!descValid || submitting}
+              disabled={!everythingAnswered || submitting}
               style={[
                 styles.submitBtn,
                 {
                   backgroundColor: colors.primary,
-                  opacity: descValid ? 1 : 0.5,
+                  opacity: everythingAnswered ? 1 : 0.5,
                 },
               ]}
             >
@@ -1286,7 +1324,7 @@ export function WorkerIncidentReportForm({
             </Pressable>
           ) : null}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </>
   );
 }

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -9,6 +11,8 @@ from ..core.access import get_user_id, get_user_organization_id
 from ..core.timezone import app_today, coerce_timezone, participant_timezone, request_timezone, shift_local_date
 from . import session_service, shift_service
 from .supabase_client import get_supabase_admin
+
+logger = logging.getLogger(__name__)
 
 
 def _worker_profile_name(worker_id: str, current_user: dict[str, Any]) -> tuple[str, str]:
@@ -195,6 +199,28 @@ def _needs_compliance_fix(session: dict[str, Any]) -> bool:
     return len(str(notes).strip()) < 20
 
 
+def _attach_shifts(sessions: list[dict[str, Any]], worker_id: str) -> None:
+    """Mark each session with its shift (id, and whether it's finished)."""
+    ids = sorted({str(s["id"]) for s in sessions if s.get("id")})
+    if not ids:
+        return
+    try:
+        rows = (
+            get_supabase_admin().table("shifts")
+            .select("id, session_id, status, clocked_out_at")
+            .in_("session_id", ids).eq("worker_id", worker_id).execute().data or []
+        )
+    except Exception as exc:
+        logger.debug("to-do shift lookup failed: %s", exc)
+        return
+    by_session = {str(r["session_id"]): r for r in rows if r.get("session_id")}
+    for s in sessions:
+        shift = by_session.get(str(s.get("id")))
+        if shift:
+            s["_shift_id"] = shift.get("id")
+            s["_shift_finished"] = shift.get("status") == "completed" or bool(shift.get("clocked_out_at"))
+
+
 def _session_action_item(session: dict[str, Any], kind: str, title: str) -> dict[str, Any]:
     participant = session.get("participants") or {}
     participant_name = participant.get("full_name") or session.get("participant_name") or "Participant"
@@ -211,6 +237,10 @@ def _session_action_item(session: dict[str, Any], kind: str, title: str) -> dict
         "severity": "high" if kind == "compliance_fix" else "medium",
         "action_url": f"/sessions/{session.get('id')}" if session.get("id") else "/sessions",
         "reference_id": session.get("id"),
+        # The shift these notes belong to, so the app opens that shift's own
+        # notes (live, or finished) rather than a separate session screen.
+        "shift_id": session.get("_shift_id"),
+        "shift_finished": bool(session.get("_shift_finished")),
     }
 
 
@@ -283,6 +313,7 @@ async def build_worker_landing_dashboard(current_user: dict[str, Any]) -> dict[s
     pending_fixes = [s for s in sessions if _needs_compliance_fix(s)]
 
     action_items = _shift_action_items(today_shifts_raw + upcoming_shifts_raw[:3])
+    _attach_shifts(incomplete[:6] + pending_fixes[:6], worker_id)
     for session in incomplete[:6]:
         action_items.append(_session_action_item(session, "incomplete_session", "Complete session documentation"))
     for session in pending_fixes[:6]:

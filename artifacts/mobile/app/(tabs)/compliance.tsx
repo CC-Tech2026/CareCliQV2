@@ -577,6 +577,26 @@ export default function ComplianceTabScreen() {
   );
 
   const listFooter = (
+    <View style={{ gap: 10 }}>
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push("/worker/travel" as never)}
+      style={[
+        styles.pastLink,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
+      <Feather name="map" size={16} color={colors.primary} />
+      <Text
+        style={[
+          styles.pastLinkText,
+          { color: colors.foreground, fontFamily: FontFamily.interSemiBold },
+        ]}
+      >
+        Travel claims
+      </Text>
+      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+    </Pressable>
     <Pressable
       accessibilityRole="button"
       onPress={() => router.push("/worker/past-shifts" as never)}
@@ -608,6 +628,7 @@ export default function ComplianceTabScreen() {
       ) : null}
       <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
     </Pressable>
+    </View>
   );
 
   return (

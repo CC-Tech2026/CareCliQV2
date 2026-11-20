@@ -2,7 +2,16 @@ import { Feather } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import React, { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { KeyboardAvoidingViewCompat } from "@/components/KeyboardAvoidingViewCompat";
 
 import { useToast } from "@/context/ToastContext";
 import { useColors } from "@/hooks/useColors";
@@ -272,8 +281,8 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled, onStatusCha
         );
       })}
 
-      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={reset}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <Modal statusBarTranslucent navigationBarTranslucent visible={modalVisible} transparent animationType="fade" onRequestClose={reset}>
+        <KeyboardAvoidingViewCompat style={styles.modalOverlay} behavior="padding">
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {followUp ? (
               <>
@@ -426,7 +435,7 @@ export function WorkerMobileMedicationChecklist({ shiftId, disabled, onStatusCha
               </Pressable>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingViewCompat>
       </Modal>
     </View>
   );

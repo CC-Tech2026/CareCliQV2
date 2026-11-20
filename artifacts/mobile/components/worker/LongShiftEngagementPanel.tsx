@@ -40,7 +40,6 @@ export function LongShiftEngagementPanel({
   checkinStatus,
   breakStatus,
   sessionElapsed,
-  onCheckin,
   onReportIncident,
   disabled,
 }: Props) {
@@ -62,11 +61,7 @@ export function LongShiftEngagementPanel({
   const canStartBreak =
     breakStatus?.can_start_break ?? (!onBreak && completedBreaks === 0);
 
-  const checkinsCompleted = checkinStatus?.checkins_completed ?? 0;
   const checkinsRequired = checkinStatus?.checkins_required ?? 0;
-  const checkinOverdue = Boolean(checkinStatus?.checkin_overdue);
-  const canSubmitCheckin = Boolean(checkinStatus?.can_submit_checkin);
-  const usesRandomSchedule = Boolean(checkinStatus?.uses_random_schedule);
   const isLongShift = checkinStatus?.applicable ?? checkinsRequired > 0;
 
   useEffect(() => {
@@ -158,8 +153,6 @@ export function LongShiftEngagementPanel({
   if (!isLongShift) return null;
 
   const actionBusy = disabled || breakMutation.isPending;
-  const checkinDueNow = canSubmitCheckin && !onBreak;
-  const checkinDisabled = actionBusy || onBreak || !canSubmitCheckin;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -178,55 +171,15 @@ export function LongShiftEngagementPanel({
       <View style={styles.header}>
         <Feather name="activity" size={16} color={colors.primary} />
         <Text style={[styles.title, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
-          Long shift activity
+          Breaks
         </Text>
       </View>
 
       <Text style={[styles.desc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-        Shifts over 4 hours need periodic check-ins. You may log one break per shift when you step
-        away from the participant.
+        Log a break when you step away from the participant. You can log one break per shift.
       </Text>
 
-      {checkinsRequired > 0 && (
-        <Text style={[styles.counter, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-          Check-ins this shift:{" "}
-          <Text style={{ color: colors.primary, fontFamily: "Inter_700Bold" }}>
-            {checkinsCompleted} of {checkinsRequired}
-          </Text>
-          {checkinOverdue && !onBreak && !canSubmitCheckin ? "  ·  awaiting prompt" : ""}
-        </Text>
-      )}
-
       <View style={styles.actions}>
-        <Pressable
-          onPress={onCheckin}
-          disabled={checkinDisabled}
-          style={[
-            styles.btn,
-            checkinDueNow
-              ? { backgroundColor: colors.primary, borderColor: colors.primary }
-              : { backgroundColor: "transparent", borderColor: colors.border },
-            { opacity: checkinDisabled ? 0.5 : 1 },
-          ]}
-        >
-          <Feather
-            name="message-circle"
-            size={14}
-            color={checkinDueNow ? colors.primaryForeground : colors.foreground}
-          />
-          <Text
-            style={[
-              styles.btnText,
-              {
-                color: checkinDueNow ? colors.primaryForeground : colors.foreground,
-                fontFamily: "Inter_700Bold",
-              },
-            ]}
-          >
-            {checkinDueNow ? "Check in (due)" : "Check in"}
-          </Text>
-        </Pressable>
-
         <Pressable
           onPress={handleBreakPress}
           disabled={actionBusy || (!onBreak && breakLimitReached)}
@@ -298,12 +251,6 @@ export function LongShiftEngagementPanel({
       {!onBreak && !breakLimitReached && !canStartBreak && breakStatus?.block_reason === "break_in_progress" && (
         <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
           A break is already in progress. Tap End break when you return.
-        </Text>
-      )}
-
-      {usesRandomSchedule && !onBreak && !canSubmitCheckin && checkinStatus?.block_reason === "not_due_yet" && (
-        <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-          You will get a push notification when it is time to check in. Keep notifications enabled for CareCliQ.
         </Text>
       )}
 

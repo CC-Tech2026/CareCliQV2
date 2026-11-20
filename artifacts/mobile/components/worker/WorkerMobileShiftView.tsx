@@ -137,7 +137,7 @@ export function WorkerMobileShiftView(props: Props) {
   return (
     <View style={{ flex: 1 }}>
       <WorkerMobileShiftContent {...props} onDialog={setDialog} />
-      <Modal
+      <Modal statusBarTranslucent navigationBarTranslucent
         visible={dialog !== null}
         transparent
         animationType="slide"
@@ -1052,7 +1052,7 @@ function WorkerMobileShiftContent({
           onOpenIncidentReport={openIncidentReport}
           tz={shift.timezone}
         />
-        <Modal
+        <Modal statusBarTranslucent navigationBarTranslucent
           visible={incidentDraft !== null}
           animationType="slide"
           presentationStyle="pageSheet"
@@ -1164,7 +1164,7 @@ function WorkerMobileShiftContent({
           onCancel={() => setShowIncompleteEndModal(false)}
           onConfirm={handleConfirmIncompleteEnd}
         />
-        <Modal
+        <Modal statusBarTranslucent navigationBarTranslucent
           visible={incidentDraft !== null}
           animationType="slide"
           presentationStyle="pageSheet"

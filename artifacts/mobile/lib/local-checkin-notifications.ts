@@ -130,11 +130,15 @@ function notificationContent(
     shiftId: string;
     sessionId?: string | null;
     scheduledCheckinId: string;
+    participantName?: string | null;
   },
 ) {
   return {
-    title: "Compliance Check-in Required",
-    body: "Please complete your compliance check-in within 5 minutes.",
+    // Names the participant; never says how many check-ins there are.
+    title: params.participantName ? `Time to check in with ${params.participantName}` : "Time to check in",
+    body: params.participantName
+      ? `Tap to answer a few quick questions about how ${params.participantName} is going. Please do it in the next 5 minutes.`
+      : "Tap to answer a few quick questions. Please do it in the next 5 minutes.",
     sound: true as const,
     priority: Notifications.AndroidNotificationPriority.MAX,
     ...(Platform.OS === "android"
@@ -311,6 +315,8 @@ export async function syncLocalCheckinNotifications(params: {
   sessionId?: string | null;
   checkinStatus?: CheckinWindowStatus | null;
   shiftActive: boolean;
+  /** First name, for "Time to check in with Liam". */
+  participantName?: string | null;
 }): Promise<void> {
   const Notifications = await loadNotifications();
   if (!Notifications) return;
@@ -364,6 +370,7 @@ export async function syncLocalCheckinNotifications(params: {
       shiftId,
       sessionId,
       scheduledCheckinId: item.id,
+      participantName: params.participantName,
     });
 
     // Still in the future — schedule an exact wake-up alarm.

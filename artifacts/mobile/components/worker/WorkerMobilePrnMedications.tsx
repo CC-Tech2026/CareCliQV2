@@ -2,7 +2,16 @@ import { Feather } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import React, { useRef, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { KeyboardAvoidingViewCompat } from "@/components/KeyboardAvoidingViewCompat";
 
 import { ActiveVoiceRecording, type VoiceRecordingControls } from "@/components/worker/WorkerMobileComposer";
 import { useOffline } from "@/context/OfflineContext";
@@ -255,8 +264,8 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
         </View>
       ))}
 
-      <Modal visible={!!doseTarget} transparent animationType="fade" onRequestClose={() => setDoseTarget(null)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <Modal statusBarTranslucent navigationBarTranslucent visible={!!doseTarget} transparent animationType="fade" onRequestClose={() => setDoseTarget(null)}>
+        <KeyboardAvoidingViewCompat style={styles.modalOverlay} behavior="padding">
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               {doseTarget?.name}
@@ -308,11 +317,11 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
               <Text style={[styles.cancelBtnText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Cancel</Text>
             </Pressable>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingViewCompat>
       </Modal>
 
-      <Modal visible={!!effectTarget} transparent animationType="fade" onRequestClose={() => setEffectTarget(null)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <Modal statusBarTranslucent navigationBarTranslucent visible={!!effectTarget} transparent animationType="fade" onRequestClose={() => setEffectTarget(null)}>
+        <KeyboardAvoidingViewCompat style={styles.modalOverlay} behavior="padding">
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Effect observed</Text>
             <Text style={[styles.modalSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -331,7 +340,7 @@ export function WorkerMobilePrnMedications({ shiftId, sessionId, disabled }: Pro
               <Text style={[styles.cancelBtnText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Cancel</Text>
             </Pressable>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingViewCompat>
       </Modal>
     </View>
   );

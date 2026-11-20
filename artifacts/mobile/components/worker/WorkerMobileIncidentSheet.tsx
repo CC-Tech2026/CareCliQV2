@@ -132,15 +132,9 @@ export function WorkerMobileIncidentSheet({
         participantName={participantName}
         sessionId={sessionId}
         shiftAddress={shiftAddress}
-        initialReportType={isRp ? "participant_behaviour" : "safety_hazard"}
-        initialBehaviourSubtype={isRp ? "physical" : ""}
-        initialSeverity={isRp ? "high" : "medium"}
+        // The worker chooses the type and how serious it is; only their own
+        // note is carried over. Nothing is written in their name.
         initialDescription={isRp ? rpPrefill : notePrefill}
-        initialWorkerActions={
-          isRp
-            ? "Followed participant safety protocol and documented the incident."
-            : ""
-        }
         bottomInset={insets.bottom}
         onSubmitted={() => onFiled(sourceNoteId)}
         onCancel={onClose}

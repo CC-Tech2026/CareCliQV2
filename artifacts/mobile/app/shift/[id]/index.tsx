@@ -174,6 +174,7 @@ export default function ShiftDetailScreen() {
         sessionId,
         checkinStatus,
         shiftActive: isSessionActive && !isShiftCompletedForList(shift),
+        participantName: (shift.participant_name ?? "").trim().split(/\s+/)[0] || null,
       });
     };
     run();

@@ -4,7 +4,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   RefreshControl,
@@ -13,6 +12,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat } from "@/components/KeyboardAvoidingViewCompat";
 
 import { ComplianceScoreRing } from "@/components/worker/compliance/ComplianceScoreRing";
 import { ShiftConversation } from "@/components/worker/review/ShiftConversation";
@@ -205,9 +205,9 @@ export default function ShiftRecordScreen() {
 
   return (
     <WorkerStackScreen headerTitle="" minimalHeader showBack cardsOnBackground>
-      <KeyboardAvoidingView
+      <KeyboardAvoidingViewCompat
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior="padding"
       >
         <ScrollView
           contentContainerStyle={styles.content}
@@ -387,6 +387,16 @@ export default function ShiftRecordScreen() {
             sending={sending}
             onSend={reply}
           />
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push(`/shift/${id}/travel` as never)}
+            style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16 }}
+          >
+            <Feather name="map" size={16} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 15 }}>
+              Claim travel for this shift
+            </Text>
+          </Pressable>
         </ScrollView>
 
         {status === "changes_requested" ? (
@@ -435,7 +445,7 @@ export default function ShiftRecordScreen() {
             </Pressable>
           </View>
         ) : null}
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingViewCompat>
     </WorkerStackScreen>
   );
 }

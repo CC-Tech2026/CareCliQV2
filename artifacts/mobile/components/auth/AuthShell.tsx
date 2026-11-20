@@ -1,12 +1,12 @@
 import { Image } from "expo-image";
 import React from "react";
 import {
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat } from "@/components/KeyboardAvoidingViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
@@ -30,9 +30,9 @@ export function AuthShell({ children, footer }: Props) {
   const insets = useSafeAreaInsets();
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingViewCompat
       style={[styles.root, { backgroundColor: auth.shellBg }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior="padding"
     >
       <View style={[styles.toggle, { top: insets.top + 10 }]}>
         <AuthThemeToggle variant="icon" />
@@ -72,7 +72,7 @@ export function AuthShell({ children, footer }: Props) {
           {footer ? <View style={styles.footer}>{footer}</View> : null}
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingViewCompat>
   );
 }
 

@@ -28,8 +28,42 @@ RANDOM_CHECKIN_BAND_SECS = 6 * 3600
 RANDOM_CHECKIN_COUNT_OPTIONS_SHORT_BAND = (1, 2)
 RANDOM_CHECKIN_COUNT_OPTIONS = (2, 3)
 
-COMPLIANCE_CHECKIN_TITLE = "Compliance Check-in Required"
-COMPLIANCE_CHECKIN_BODY = "Please complete your compliance check-in within 5 minutes."
+COMPLIANCE_CHECKIN_TITLE = "Time to check in"
+COMPLIANCE_CHECKIN_BODY = "Tap to answer a few quick questions. Please do it in the next 5 minutes."
+
+
+def checkin_wording(first_name: Optional[str]) -> tuple[str, str]:
+    """What the worker's phone says when a random check-in is due. It names
+    the participant and never says how many check-ins there are or when the
+    next one is: they're random on purpose."""
+    name = (first_name or "").strip()
+    if not name:
+        return COMPLIANCE_CHECKIN_TITLE, COMPLIANCE_CHECKIN_BODY
+    return (
+        f"Time to check in with {name}",
+        f"Tap to answer a few quick questions about how {name} is going. Please do it in the next 5 minutes.",
+    )
+
+
+def _participant_first_name_for_shift(shift_id: str) -> Optional[str]:
+    try:
+        rows = (
+            get_supabase_admin().table("shifts").select("participant_id").eq("id", shift_id).limit(1).execute().data or []
+        )
+        pid = rows[0].get("participant_id") if rows else None
+        if not pid:
+            return None
+        people = (
+            get_supabase_admin().table("participants").select("full_name, preferred_name").eq("id", str(pid)).limit(1).execute().data or []
+        )
+        if not people:
+            return None
+        person = people[0]
+        name = (person.get("preferred_name") or person.get("full_name") or "").strip()
+        return name.split()[0] if name else None
+    except Exception as exc:  # the wording must never stop a check-in going out
+        logger.debug("check-in name lookup failed for shift %s: %s", shift_id, exc)
+        return None
 
 _SCHEMA_PROBE: Optional[bool] = None
 
@@ -391,18 +425,19 @@ async def _send_compliance_checkin_push(
         "scheduled_checkin_id": scheduled_checkin_id,
         "action_url": f"/my-shifts/{shift_id}",
     }
+    title, body = checkin_wording(_participant_first_name_for_shift(shift_id))
     fcm_sent = await send_fcm_to_user(
         worker_id,
-        title=COMPLIANCE_CHECKIN_TITLE,
-        body=COMPLIANCE_CHECKIN_BODY,
+        title=title,
+        body=body,
         data=data,
         android_channel_id="safety-alerts",
     )
     if not fcm_sent:
         await send_push_to_user(
             worker_id,
-            title=COMPLIANCE_CHECKIN_TITLE,
-            body=COMPLIANCE_CHECKIN_BODY,
+            title=title,
+            body=body,
             data=data,
             priority="high",
         )
@@ -474,8 +509,8 @@ async def _prompt_scheduled_checkin(row: dict[str, Any], session: dict, shift: d
         user_id=worker_id,
         organization_id=str(row.get("organization_id") or "") or None,
         event_type="compliance_checkin",
-        title=COMPLIANCE_CHECKIN_TITLE,
-        body=COMPLIANCE_CHECKIN_BODY,
+        title=checkin_wording(_participant_first_name_for_shift(shift_id))[0],
+        body=checkin_wording(_participant_first_name_for_shift(shift_id))[1],
         severity="high",
         shift_id=shift_id,
         action_url=f"/my-shifts/{shift_id}",

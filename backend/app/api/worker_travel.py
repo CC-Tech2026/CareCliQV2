@@ -43,6 +43,7 @@ async def worker_shift_mileage_estimate(shift_id: str, current_user: dict = Depe
 class MileageExpenseBody(BaseModel):
     claimed_km: float = Field(gt=0, le=2000)
     calculated_km: float | None = Field(default=None, gt=0, le=2000)
+    trip_details: str | None = Field(default=None, max_length=1000)
 
 
 @router.post("/shifts/{shift_id}/mileage", status_code=201)
@@ -58,6 +59,30 @@ async def worker_save_mileage(
         organization_id=get_user_organization_id(current_user),
         claimed_km=body.claimed_km,
         calculated_km=body.calculated_km,
+        trip_details=body.trip_details,
+    )
+
+
+@router.post("/shifts/{shift_id}/mileage-claim", status_code=201)
+async def worker_save_mileage_with_evidence(
+    shift_id: str,
+    claimed_km: float = Form(..., gt=0, le=2000),
+    calculated_km: float | None = Form(default=None),
+    trip_details: str | None = Form(default=None, max_length=1000),
+    evidence: UploadFile | None = File(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    """A car trip with its evidence: what it was for, and an optional photo
+    (odometer, parking or toll receipt)."""
+    _require_worker(current_user)
+    return await travel_expense_service.upsert_mileage_expense(
+        shift_id=shift_id,
+        worker_id=get_user_id(current_user),
+        organization_id=get_user_organization_id(current_user),
+        claimed_km=claimed_km,
+        calculated_km=calculated_km,
+        trip_details=trip_details,
+        evidence=evidence,
     )
 
 
@@ -67,6 +92,7 @@ async def worker_save_transit(
     amount_cents: int = Form(...),
     transit_type: str = Form(...),
     receipt: UploadFile | None = File(default=None),
+    trip_details: str | None = Form(default=None, max_length=1000),
     current_user: dict = Depends(get_current_user),
 ):
     _require_worker(current_user)
@@ -77,6 +103,7 @@ async def worker_save_transit(
         amount_cents=amount_cents,
         transit_type=transit_type,
         receipt=receipt,
+        trip_details=trip_details,
     )
 
 
