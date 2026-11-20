@@ -1,27 +1,22 @@
 import { Feather } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
+import { AuthShell } from "@/components/auth/AuthShell";
+import { FontFamily } from "@/constants/typography";
 import { getAuthColors } from "@/constants/auth-colors";
 import { usePreferences } from "@/context/PreferencesContext";
 import { requestPasswordReset } from "@/lib/auth-api";
 
 export default function ForgotPasswordScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { resolvedScheme, t } = usePreferences();
   const auth = getAuthColors(resolvedScheme);
@@ -39,67 +34,102 @@ export default function ForgotPasswordScreen() {
       await requestPasswordReset(email.trim());
       setSent(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("auth.forgot.error.sendFailed"));
+      setError(
+        err instanceof Error ? err.message : t("auth.forgot.error.sendFailed"),
+      );
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: auth.shellBg }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={[styles.themeToggle, { top: insets.top + 8 }]}>
-        <AuthThemeToggle />
-      </View>
-
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 56, paddingBottom: insets.bottom + 24 }]}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.brandRow}>
-          <Image source={require("@/assets/images/logo.png")} style={styles.logo} contentFit="contain" />
-          <View style={[styles.brandDivider, { backgroundColor: auth.inputBorder }]} />
-          <Text style={[styles.workspace, { color: auth.marketingMuted, fontFamily: "Inter_700Bold" }]}>
-            {t("auth.forgot.workspace").toUpperCase()}
-          </Text>
-        </View>
-
-        <Pressable onPress={() => router.replace("/login" as never)} style={styles.backLink}>
-          <Feather name="arrow-left" size={14} color={auth.plum} />
-          <Text style={[styles.backLinkText, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
+    <AuthShell>
+      <View style={styles.stack}>
+        <Pressable
+          onPress={() => router.replace("/login" as never)}
+          style={styles.backLink}
+          accessibilityRole="link"
+        >
+          <Feather name="arrow-left" size={16} color={auth.plum} />
+          <Text
+            style={[
+              styles.backLinkText,
+              { color: auth.plum, fontFamily: FontFamily.interSemiBold },
+            ]}
+          >
             {t("auth.forgot.backToLogin")}
           </Text>
         </Pressable>
 
         <View style={styles.intro}>
-          <Text style={[styles.title, { color: auth.text, fontFamily: "Inter_700Bold" }]}>
+          <Text
+            accessibilityRole="header"
+            style={[
+              styles.title,
+              { color: auth.text, fontFamily: FontFamily.display },
+            ]}
+          >
             {t("auth.forgot.title")}
           </Text>
-          <Text style={[styles.subtitle, { color: auth.muted, fontFamily: "Inter_500Medium" }]}>
+          <Text
+            style={[
+              styles.subtitle,
+              { color: auth.muted, fontFamily: FontFamily.interRegular },
+            ]}
+          >
             {t("auth.forgot.subtitle")}
           </Text>
         </View>
 
         {sent ? (
-          <View style={[styles.successCard, { borderColor: auth.inputBorder, backgroundColor: auth.inputBg }]}>
-            <Feather name="check-circle" size={32} color={auth.plum} />
-            <Text style={[styles.successTitle, { color: auth.text, fontFamily: "Inter_700Bold" }]}>
+          <View
+            style={[styles.successCard, { backgroundColor: auth.noticeBg }]}
+          >
+            <Feather name="check-circle" size={28} color={auth.plum} />
+            <Text
+              style={[
+                styles.successTitle,
+                { color: auth.text, fontFamily: FontFamily.interSemiBold },
+              ]}
+            >
               {t("auth.forgot.checkEmail")}
             </Text>
-            <Text style={[styles.successBody, { color: auth.muted, fontFamily: "Inter_400Regular" }]}>
+            <Text
+              style={[
+                styles.successBody,
+                { color: auth.muted, fontFamily: FontFamily.interRegular },
+              ]}
+            >
               {t("auth.forgot.sentMessage")}
             </Text>
           </View>
         ) : (
           <View style={styles.form}>
-            <Text style={[styles.label, { color: auth.plum, fontFamily: "Inter_700Bold" }]}>
-              {t("auth.forgot.email").toUpperCase()}
+            <Text
+              style={[
+                styles.label,
+                { color: auth.text, fontFamily: FontFamily.interSemiBold },
+              ]}
+            >
+              {t("auth.forgot.email")}
             </Text>
-            <View style={[styles.inputWrap, { backgroundColor: auth.inputBg, borderColor: auth.inputBorder }]}>
-              <Feather name="mail" size={16} color={auth.muted} style={styles.inputIcon} />
+            <View
+              style={[
+                styles.inputWrap,
+                {
+                  backgroundColor: auth.inputBg,
+                  borderColor: error ? auth.error : auth.inputBorder,
+                },
+              ]}
+            >
+              <Feather
+                name="mail"
+                size={18}
+                color={auth.muted}
+                style={styles.inputIcon}
+              />
               <TextInput
+                accessibilityLabel={t("auth.forgot.email")}
                 value={email}
                 onChangeText={(value) => {
                   setEmail(value);
@@ -111,75 +141,101 @@ export default function ForgotPasswordScreen() {
                 autoCapitalize="none"
                 autoComplete="email"
                 editable={!busy}
-                style={[styles.input, { color: auth.text, fontFamily: "Inter_500Medium" }]}
+                returnKeyType="send"
+                onSubmitEditing={() => void handleSubmit()}
+                style={[
+                  styles.input,
+                  { color: auth.text, fontFamily: FontFamily.interMedium },
+                ]}
               />
             </View>
             {error ? (
-              <Text style={[styles.error, { color: auth.error, fontFamily: "Inter_500Medium" }]}>{error}</Text>
+              <Text
+                style={[
+                  styles.error,
+                  { color: auth.error, fontFamily: FontFamily.interMedium },
+                ]}
+              >
+                {error}
+              </Text>
             ) : null}
             <Pressable
               onPress={handleSubmit}
               disabled={busy || !email.trim()}
-              style={[styles.submitBtn, { backgroundColor: auth.cta, opacity: busy || !email.trim() ? 0.4 : 1 }]}
+              accessibilityRole="button"
+              style={[
+                styles.submitBtn,
+                {
+                  backgroundColor: auth.cta,
+                  opacity: busy || !email.trim() ? 0.4 : 1,
+                },
+              ]}
             >
               {busy ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={[styles.submitText, { fontFamily: "Inter_700Bold" }]}>{t("auth.forgot.submit")}</Text>
+                <Text
+                  style={[
+                    styles.submitText,
+                    { fontFamily: FontFamily.interSemiBold },
+                  ]}
+                >
+                  {t("auth.forgot.submit")}
+                </Text>
               )}
             </Pressable>
           </View>
         )}
-
-        <Text style={[styles.footer, { color: auth.footer, fontFamily: "Inter_500Medium" }]}>
-          {t("auth.forgot.footer")}
-        </Text>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </AuthShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  themeToggle: { position: "absolute", right: 16, zIndex: 20 },
-  scroll: { paddingHorizontal: 24, gap: 20 },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  logo: { width: 54, height: 36 },
-  brandDivider: { width: 1, height: 16 },
-  workspace: { fontSize: 10, letterSpacing: 2 },
-  backLink: { flexDirection: "row", alignItems: "center", gap: 6 },
-  backLinkText: { fontSize: 12 },
-  intro: { gap: 6 },
-  title: { fontSize: 26, letterSpacing: -0.3 },
-  subtitle: { fontSize: 14, lineHeight: 20 },
-  form: { gap: 12 },
-  label: { fontSize: 11, letterSpacing: 0.8 },
-  inputWrap: {
-    height: 48,
-    borderWidth: 1,
-    borderRadius: 16,
+  stack: { gap: 20, flexGrow: 1 },
+  backLink: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
+    gap: 6,
+    alignSelf: "flex-start",
+    minHeight: 32,
+  },
+  backLinkText: { fontSize: 15 },
+  intro: { gap: 8, alignItems: "center" },
+  title: {
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.4,
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
+    maxWidth: 320,
+  },
+  form: { gap: 8 },
+  label: { fontSize: 14 },
+  inputWrap: {
+    height: 54,
+    borderWidth: 1,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
   },
   inputIcon: { marginRight: 10 },
-  input: { flex: 1, fontSize: 14 },
-  error: { fontSize: 12 },
+  input: { flex: 1, fontSize: 16, height: "100%" },
+  error: { fontSize: 13 },
   submitBtn: {
-    height: 56,
-    borderRadius: 16,
+    height: 54,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 8,
+    marginTop: 12,
   },
-  submitText: { color: "#FFFFFF", fontSize: 15 },
-  successCard: {
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 20,
-    gap: 8,
-  },
-  successTitle: { fontSize: 15, marginTop: 4 },
-  successBody: { fontSize: 13, lineHeight: 19 },
-  footer: { fontSize: 11, lineHeight: 16, marginTop: 12 },
+  submitText: { color: "#FFFFFF", fontSize: 16 },
+  successCard: { borderRadius: 16, padding: 20, gap: 8 },
+  successTitle: { fontSize: 17, marginTop: 4 },
+  successBody: { fontSize: 15, lineHeight: 22 },
 });

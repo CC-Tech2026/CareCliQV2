@@ -1,0 +1,45 @@
+{
+  "about": "Example notes with the result the NDIS note rules give them. Checked against the server rules (backend/tests/test_note_rule_parity.py) and the app's offline copy (artifacts/frontend/src/lib/note-rule-parity.test.ts), so the two can't drift apart. pass / warning / fail per rule; rules not listed aren't asserted.",
+  "cases": [
+    {
+      "text": "Helped Sam with lunch today and then we went for a walk to the park nearby.",
+      "expect": { "R3": "fail", "R12": "warning" }
+    },
+    {
+      "text": "Sam engaged well with lunch preparation and chopped the carrots, then reported feeling full. We walked to the park and Sam chose the swings. Sam appeared calm the whole time and stated the walk was fun.",
+      "expect": { "R3": "warning", "R12": "pass", "R6": "pass", "R7": "pass", "R8": "pass", "R9": "pass" }
+    },
+    {
+      "text": "Sam engaged in lunch preparation from 12:00 to 12:40, chopping the carrots and washing the lettuce. Sam reported feeling full afterwards. We walked to the park at 1pm and Sam chose the swings, then demonstrated waiting for a turn. Sam appeared calm and stated the walk was fun. On the way home Sam crossed two roads with verbal prompts only, and we stopped at the shop where Sam paid for a drink with the right change and thanked the cashier. We arrived home at 2pm and Sam rested on the couch.",
+      "expect": { "R3": "pass", "R12": "pass", "R6": "pass", "R9": "pass" }
+    },
+    {
+      "text": "Sam engaged with the shopping and chose the items at the supermarket today. Good session, no concerns, went well and everything was the same as usual for Sam.",
+      "expect": { "R3": "fail", "R12": "pass" }
+    },
+    {
+      "text": "I think Sam was tired after the bus trip to the library and the long walk home.",
+      "expect": { "R6": "fail" }
+    },
+    {
+      "text": "Sam is wheelchair bound and needed help getting into the car this morning for the trip.",
+      "expect": { "R7": "fail" }
+    },
+    {
+      "text": "I gave the medication to Sam at lunch and then we watched a film together at home.",
+      "expect": { "R8": "fail" }
+    },
+    {
+      "text": "Sam tripped on the step at 3pm and grazed a knee, so I cleaned it and called the coordinator.",
+      "expect": { "R9": "fail" }
+    },
+    {
+      "text": "Sam said hello and smiled at the neighbour, then chose a snack and enjoyed it on the porch.",
+      "expect": { "R12": "warning" }
+    },
+    {
+      "text": "Sam was taken by ambulance to the emergency department after a seizure in the lounge room.",
+      "expect": { "R9": "fail" }
+    }
+  ]
+}

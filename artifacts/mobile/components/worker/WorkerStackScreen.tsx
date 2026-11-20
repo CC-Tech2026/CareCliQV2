@@ -3,8 +3,12 @@ import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { WorkerBottomNav, workerBottomNavHeight } from "@/components/worker/WorkerBottomNav";
+import {
+  WorkerBottomNav,
+  workerBottomNavHeight,
+} from "@/components/worker/WorkerBottomNav";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
+import type { GuideId } from "@/lib/guides";
 import { WorkerPageSubheader } from "@/components/worker/WorkerPageSubheader";
 import { useColors } from "@/hooks/useColors";
 
@@ -18,6 +22,8 @@ type Props = {
   minimalHeader?: boolean;
   /** When true, the content area uses the app background (for white cards on a subtle base). */
   cardsOnBackground?: boolean;
+  /** Shows a "?" in the header that opens this screen's guide. */
+  guide?: GuideId;
   children: React.ReactNode;
 };
 
@@ -29,6 +35,7 @@ export function WorkerStackScreen({
   showBack = true,
   minimalHeader,
   cardsOnBackground,
+  guide,
   children,
 }: Props) {
   const colors = useColors();
@@ -39,11 +46,27 @@ export function WorkerStackScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <WorkerMobileHeader title={headerTitle} showBack={showBack} minimal={minimalHeader} />
+      <WorkerMobileHeader
+        title={headerTitle}
+        showBack={showBack}
+        minimal={minimalHeader}
+        guide={guide}
+      />
       {pageTitle ? (
-        <WorkerPageSubheader title={pageTitle} subtitle={subtitle} showSignOut={showSignOut} />
+        <WorkerPageSubheader
+          title={pageTitle}
+          subtitle={subtitle}
+          showSignOut={showSignOut}
+        />
       ) : null}
-      <View style={[styles.body, { backgroundColor: bodyBackground, paddingBottom: navPad }]}>{children}</View>
+      <View
+        style={[
+          styles.body,
+          { backgroundColor: bodyBackground, paddingBottom: navPad },
+        ]}
+      >
+        {children}
+      </View>
       <View style={styles.bottomNav}>
         <WorkerBottomNav />
       </View>

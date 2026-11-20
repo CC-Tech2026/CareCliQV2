@@ -326,6 +326,173 @@ async def remove_worker_own_tag(tag_id: str, current_user: dict = Depends(get_cu
     return None
 
 
+# ── Worker's own skills ──────────────────────────────────────────────────────
+# A worker can list the skills they offer. What they add is saved unconfirmed
+# (is_certified=False, the same as skills read from an uploaded resume), and
+# rostering only counts certified skills, so a self-added skill never changes
+# who can be rostered until the office confirms it. Confirmed skills can only
+# be removed by the office.
+
+MAX_SKILL_LENGTH = 80
+
+
+def _org_skill_suggestions(supabase: Any, org_id: str, own: set[str]) -> list[str]:
+    """Skills this organisation's participants need, then ones colleagues list."""
+    seen: dict[str, str] = {}
+    for table in ("participant_required_skills", "worker_skills"):
+        try:
+            rows = supabase.table(table).select("skill").eq("organization_id", org_id).limit(500).execute().data or []
+        except Exception:
+            rows = []
+        for row in rows:
+            skill = str(row.get("skill") or "").strip()
+            if skill and skill.lower() not in seen and skill.lower() not in own:
+                seen[skill.lower()] = skill
+    return sorted(seen.values(), key=str.lower)[:40]
+
+
+@router.get("/me/skills")
+async def worker_own_skills(current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    supabase = get_supabase_admin()
+    rows = (
+        supabase.table("worker_skills")
+        .select("skill, is_certified, certified_at, expires_at")
+        .eq("user_id", get_user_id(current_user))
+        .order("skill")
+        .execute()
+        .data
+        or []
+    )
+    own = {str(r.get("skill") or "").strip().lower() for r in rows}
+    return {"skills": rows, "suggestions": _org_skill_suggestions(supabase, org_id, own)}
+
+
+class WorkerOwnSkillBody(BaseModel):
+    skill: str = Field(min_length=1, max_length=MAX_SKILL_LENGTH)
+
+
+@router.post("/me/skills", status_code=201)
+async def add_worker_own_skill(body: WorkerOwnSkillBody, current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    skill = " ".join(body.skill.split())
+    if not skill:
+        raise HTTPException(status_code=422, detail="Enter a skill.")
+    worker_id = get_user_id(current_user)
+    supabase = get_supabase_admin()
+    existing = (
+        supabase.table("worker_skills")
+        .select("skill, is_certified, certified_at, expires_at")
+        .eq("user_id", worker_id)
+        .ilike("skill", skill)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if existing:
+        # Already listed (perhaps confirmed by the office): never downgrade it.
+        return existing[0]
+    row = {"user_id": worker_id, "organization_id": org_id, "skill": skill, "is_certified": False}
+    result = supabase.table("worker_skills").insert(row).execute()
+    return (result.data or [row])[0]
+
+
+@router.delete("/me/skills/{skill}", status_code=204)
+async def remove_worker_own_skill(skill: str, current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    supabase = get_supabase_admin()
+    rows = (
+        supabase.table("worker_skills")
+        .select("skill, is_certified")
+        .eq("user_id", worker_id)
+        .eq("skill", skill)
+        .execute()
+        .data
+        or []
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Skill not found.")
+    if any(r.get("is_certified") for r in rows):
+        raise HTTPException(
+            status_code=409,
+            detail="Your office has confirmed this skill. Ask your coordinator if it should be removed.",
+        )
+    supabase.table("worker_skills").delete().eq("user_id", worker_id).eq("skill", skill).eq("is_certified", False).execute()
+    return None
+
+
+# ── Who to contact at the office ──────────────────────────────────────────────
+# For "I'm sick", "I can't make my shift" and the like: the worker's own
+# coordinator and the organisation's office line. Only people in the worker's
+# own organisation, and only names, phones and emails.
+
+
+@router.get("/me/office-contacts")
+async def worker_office_contacts(current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    supabase = get_supabase_admin()
+
+    office: dict[str, Any] = {}
+    try:
+        rows = (
+            supabase.table("organizations")
+            .select("display_name, organization_name, name, contact_number, email")
+            .eq("organization_id", org_id)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        if rows:
+            org = rows[0]
+            office = {
+                "name": org.get("display_name") or org.get("organization_name") or org.get("name"),
+                "phone": (org.get("contact_number") or "").strip() or None,
+                "email": (org.get("email") or "").strip() or None,
+            }
+    except Exception as exc:
+        logger.debug("office contact lookup failed: %s", exc)
+
+    coordinator = None
+    try:
+        me = (
+            supabase.table("users").select("coordinator_id").eq("id", get_user_id(current_user)).limit(1).execute().data
+            or []
+        )
+        coordinator_id = me[0].get("coordinator_id") if me else None
+        if coordinator_id:
+            rows = (
+                supabase.table("users")
+                .select("full_name, phone, email, organization_id")
+                .eq("id", coordinator_id)
+                .limit(1)
+                .execute()
+                .data
+                or []
+            )
+            if rows and str(rows[0].get("organization_id")) == str(org_id):
+                coordinator = {
+                    "name": rows[0].get("full_name"),
+                    "phone": (rows[0].get("phone") or "").strip() or None,
+                    "email": (rows[0].get("email") or "").strip() or None,
+                }
+    except Exception as exc:
+        logger.debug("coordinator contact lookup failed: %s", exc)
+
+    return {"office": office or None, "coordinator": coordinator}
+
+
 class MatchingPreferencesBody(BaseModel):
     matching_opt_in: bool
 
@@ -2024,6 +2191,78 @@ async def worker_list_session_notes(
     return notes
 
 
+class NoteCheckBody(BaseModel):
+    # The English text of the draft (the legal record). Translate first.
+    text: str = Field(default="", max_length=8000)
+    session_id: Optional[str] = None
+    participant_id: Optional[str] = None
+    task_id: Optional[str] = None
+    # Guide questions the worker chose to skip.
+    skipped: list[str] = Field(default_factory=list)
+
+
+@router.post("/notes/check")
+async def worker_check_note(body: NoteCheckBody, current_user: dict = Depends(get_current_user)):
+    """Live help while writing: the real NDIS note rules (R3, R5 to R12) run
+    on the draft, with a plain message for each rule that isn't passing and
+    the next guide question (note_guidance_service). No AI involved."""
+    from ..services import note_guidance_service
+
+    _require_worker(current_user)
+    worker_id = str(get_user_id(current_user) or "")
+    org_id = get_user_organization_id(current_user)
+    supabase = get_supabase_admin()
+
+    participant_id = body.participant_id
+    goal_ids: list[str] = []
+    if body.session_id:
+        session = shift_service._get_worker_session_or_none(body.session_id, worker_id, org_id)
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        participant_id = str(session.get("patient_id") or participant_id or "") or None
+        shift = shift_service.get_shift_for_session(session)
+        if shift and body.task_id:
+            goal_id = shift_service._goal_id_for_shift_task(shift, body.task_id)
+            if goal_id:
+                goal_ids = [str(goal_id)]
+    participant: dict = {}
+    if participant_id:
+        participant = await _assigned_participant(participant_id, current_user)
+
+    first_name = str(participant.get("preferred_name") or participant.get("full_name") or "").strip().split(" ")[0]
+    has_goals = False
+    previous: list[dict] = []
+    if participant_id:
+        try:
+            has_goals = bool(
+                supabase.table("ndis_goals").select("id").eq("participant_id", participant_id)
+                .eq("organization_id", org_id).eq("status", "active").limit(1).execute().data
+            )
+        except Exception:
+            has_goals = False
+        try:
+            previous = (
+                supabase.table("sessions")
+                .select("id, patient_id, worker_id, session_date, compliance_input_text, translated_english_note, notes")
+                .eq("patient_id", participant_id).eq("worker_id", worker_id).eq("organization_id", org_id)
+                .neq("id", body.session_id or "00000000-0000-0000-0000-000000000000")
+                .order("session_date", desc=True).limit(5).execute().data
+            ) or []
+        except Exception:
+            previous = []
+
+    return note_guidance_service.check_draft(
+        body.text,
+        participant_name=first_name or None,
+        goal_ids=goal_ids,
+        participant_has_goals=has_goals,
+        previous_notes=previous,
+        skipped=body.skipped,
+        participant_id=participant_id,
+        worker_id=worker_id,
+    )
+
+
 @router.post("/sessions/{session_id}/notes")
 async def worker_sync_session_notes(
     session_id: str,
@@ -2153,14 +2392,16 @@ async def worker_transcribe_session_audio(
         )
 
     try:
-        text = await ai_service.transcribe_audio(contents, filename)
+        text, language = await ai_service.transcribe_audio_with_language(contents, filename)
         transcript = (text or "").strip()
         if not transcript:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Could not transcribe audio. Please try again with clearer speech.",
             )
-        return {"transcript": transcript}
+        # The language heard lets the app save the worker's own words and a
+        # translated English note, instead of treating every voice note as English.
+        return {"transcript": transcript, "language": language}
     except HTTPException:
         raise
     except Exception as exc:

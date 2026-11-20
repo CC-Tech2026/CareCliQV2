@@ -8,7 +8,7 @@ export default function WorkerAvailabilityScreen() {
   const t = useT();
 
   return (
-    <WorkerStackScreen headerTitle={t("nav.availability")} cardsOnBackground showBack>
+    <WorkerStackScreen headerTitle={t("nav.availability")} cardsOnBackground showBack guide="availability">
       <ProfileAvailabilityPanel bottomInset={24} footerBottom={0} />
     </WorkerStackScreen>
   );

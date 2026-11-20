@@ -11,6 +11,7 @@ export default function IncidentDetailScreen() {
 
   return (
     <WorkerStackScreen
+      guide="incidents"
       headerTitle={t("incidents.detail.pageTitle")}
       cardsOnBackground
       showBack

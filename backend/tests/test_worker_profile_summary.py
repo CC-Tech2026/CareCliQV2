@@ -81,3 +81,36 @@ async def test_update_my_profile_rejects_out_of_range_experience_years():
         with pytest.raises(HTTPException) as exc:
             await users_api.update_my_profile({"profile_experience_years": 999}, WORKER)
     assert exc.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_my_profile_saves_date_of_birth():
+    mock_supabase = MagicMock()
+    mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{"id": "worker-1", "date_of_birth": "1990-11-20"}]
+    )
+    with patch.object(users_api, "get_supabase_admin", return_value=mock_supabase):
+        await users_api.update_my_profile({"date_of_birth": "1990-11-20"}, WORKER)
+    assert mock_supabase.table.return_value.update.call_args.args[0]["date_of_birth"] == "1990-11-20"
+
+
+@pytest.mark.asyncio
+async def test_update_my_profile_clears_date_of_birth():
+    mock_supabase = MagicMock()
+    mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{"id": "worker-1", "date_of_birth": None}]
+    )
+    with patch.object(users_api, "get_supabase_admin", return_value=mock_supabase):
+        await users_api.update_my_profile({"date_of_birth": ""}, WORKER)
+    assert mock_supabase.table.return_value.update.call_args.args[0]["date_of_birth"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", ["20/11/1990", "2999-01-01", "2020-01-01", "1800-01-01"])
+async def test_update_my_profile_rejects_bad_date_of_birth(value):
+    mock_supabase = MagicMock()
+    with patch.object(users_api, "get_supabase_admin", return_value=mock_supabase):
+        with pytest.raises(HTTPException) as exc:
+            await users_api.update_my_profile({"date_of_birth": value}, WORKER)
+    assert exc.value.status_code == 422
+    mock_supabase.table.return_value.update.assert_not_called()

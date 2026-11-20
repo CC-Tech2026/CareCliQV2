@@ -6,7 +6,12 @@ import type {
 } from "@/lib/worker-api";
 
 export const MIN_EVIDENCE_NOTE_CHARS = 20;
-export const SESSION_NOTE_MAX = 500;
+/**
+ * Longest single note the app accepts. Generous on purpose: notes are
+ * evidence, so a long voice note must never be cut down. The app never trims
+ * text to this; over it, the worker is told and their draft is kept.
+ */
+export const SESSION_NOTE_MAX = 8000;
 
 /**
  * Timezone comes from the worker's branch (office) via /auth/me; shift

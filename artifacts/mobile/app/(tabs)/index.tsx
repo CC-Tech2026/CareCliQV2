@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -16,15 +16,31 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ShiftStatusBadge } from "@/components/worker/ShiftStatusBadge";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
+import {
+  BirthdayCard,
+  CalendarCard,
+  TodoCard,
+} from "@/components/worker/home/HomeCards";
+import { useBirthday } from "@/hooks/worker/useBirthday";
+import { HomeCarousel } from "@/components/worker/home/HomeCarousel";
+import {
+  formatDayKey,
+  useWorkerCalendar,
+} from "@/hooks/worker/useWorkerCalendar";
+import { useWorkerTodo } from "@/hooks/worker/useWorkerTodo";
 import { FontFamily } from "@/constants/typography";
 import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
 import { useWorkerLandingDashboard } from "@/hooks/worker/useWorkerLandingDashboard";
 import { useColors, type ThemeColors } from "@/hooks/useColors";
 import type { DashboardShiftSummary } from "@/lib/dashboard-api";
-import { listMyCredentials } from "@/lib/resource-api";
+import {
+  getTrainingRecommendations,
+  listMyCredentials,
+} from "@/lib/resource-api";
 import type { ShiftVisualState } from "@/lib/worker-api";
 import {
+  formatTime,
   findInProgressShift,
   formatHomeDateLabel,
   greetingForHour,
@@ -41,7 +57,10 @@ type QuickAccessTileConfig = {
   label: string;
   accent: string;
   href: string;
+  /** A short status line under the label, e.g. "2 expiring". */
   badge?: string;
+  /** Status line in the warning or danger colour instead of muted. */
+  badgeTone?: "muted" | "warning" | "danger";
 };
 
 function QuickAccessTile({
@@ -81,9 +100,21 @@ function QuickAccessTile({
         </Text>
         {tile.badge ? (
           <Text
+            numberOfLines={1}
             style={[
               styles.tileBadgeText,
-              { color: tile.accent, fontFamily: FontFamily.interBold },
+              {
+                color:
+                  tile.badgeTone === "danger"
+                    ? colors.destructive
+                    : tile.badgeTone === "warning"
+                      ? colors.warning
+                      : colors.mutedForeground,
+                fontFamily:
+                  tile.badgeTone && tile.badgeTone !== "muted"
+                    ? FontFamily.interSemiBold
+                    : FontFamily.interRegular,
+              },
             ]}
           >
             {tile.badge}
@@ -185,6 +216,27 @@ export default function HomeScreen() {
       (credentials ?? []).filter((item) => item.status === "expiring").length,
     [credentials],
   );
+  const expiredCount = useMemo(
+    () =>
+      (credentials ?? []).filter((item) => item.status === "expired").length,
+    [credentials],
+  );
+  const { data: training } = useQuery({
+    queryKey: ["training", "recommendations"],
+    queryFn: getTrainingRecommendations,
+    enabled: isAuthenticated,
+  });
+  const trainingToDo = (training?.recommendations ?? []).length;
+  const todo = useWorkerTodo();
+  const calendar = useWorkerCalendar();
+  const urgentCount = todo.items.filter((i) => i.tone === "danger").length;
+  const nextEvent = calendar.upcoming[0];
+  const birthday = useBirthday();
+
+  // First open on their birthday: the full-screen celebration, once a year.
+  useEffect(() => {
+    if (birthday.shouldCelebrate) router.push("/birthday" as never);
+  }, [birthday.shouldCelebrate, router]);
 
   const displayName = resolveWorkerDisplayName({
     landingFullName: landing.data?.worker.full_name,
@@ -192,6 +244,9 @@ export default function HomeScreen() {
     authFullName: user?.full_name,
     fallback: "there",
   });
+  // The greeting uses the first name when the profile has one (the full name
+  // wraps onto two lines); we never guess it by splitting the full name.
+  const greetingName = landing.data?.worker.first_name?.trim() || displayName;
   const greetingPeriod = greetingForHour();
   const greetingKey =
     greetingPeriod === "morning"
@@ -221,8 +276,59 @@ export default function HomeScreen() {
     ? shifts.filter((shift) => shift.id !== featuredShift.id)
     : shifts;
   const progress = total > 0 ? Math.min(1, Math.max(0, done / total)) : 0;
+  const nextShift = landing.data?.next_shift ?? null;
+
+  // One plain line about today: on shift now, what's left, or a day off.
+  const remainingToday = shifts.filter(
+    (s) => s.visual_state !== "completed",
+  ).length;
+  const startsAt = featuredShift?.scheduled_start
+    ? formatTime(featuredShift.scheduled_start, featuredShift.timezone)
+    : "";
+  const dayStatus: {
+    icon: keyof typeof Feather.glyphMap;
+    text: string;
+    color: string;
+    bg: string;
+  } = inProgressShift
+    ? {
+        icon: "activity",
+        text: t("home.status.onShift", {
+          name: inProgressShift.participant_name,
+        }),
+        color: colors.success,
+        bg: colors.statusDocumentedBg,
+      }
+    : featuredShift
+      ? {
+          icon: "clock",
+          text:
+            remainingToday === 1
+              ? t("home.status.oneLeft", { time: startsAt })
+              : t("home.status.manyLeft", {
+                  count: String(remainingToday),
+                  time: startsAt,
+                }),
+          color: colors.primary,
+          bg: colors.activeBg,
+        }
+      : total > 0
+        ? {
+            icon: "check-circle",
+            text: t("home.status.allDone"),
+            color: colors.success,
+            bg: colors.statusDocumentedBg,
+          }
+        : {
+            icon: "sun",
+            text: t("home.status.dayOff"),
+            color: colors.primary,
+            bg: colors.activeBg,
+          };
 
   const handleRefresh = () => {
+    todo.refetch();
+    calendar.refetch();
     void landing.refetch();
     void queryClient.invalidateQueries({
       queryKey: ["dashboard", "worker-landing"],
@@ -246,18 +352,38 @@ export default function HomeScreen() {
       href: "/(tabs)/participants",
     },
     {
-      key: "availability",
+      key: "calendar",
       icon: "calendar",
-      label: t("nav.availability"),
+      label: t("home.calendar.tile"),
       accent: colors.primary,
+      href: "/worker/calendar",
+      badge: nextEvent
+        ? t("home.calendar.next", {
+            date: formatDayKey(nextEvent.dayKey, {
+              day: "numeric",
+              month: "short",
+            }),
+          })
+        : undefined,
+    },
+    {
+      key: "availability",
+      icon: "clock",
+      label: t("nav.availability"),
+      accent: colors.navy,
       href: "/worker/availability",
     },
     {
-      key: "toolkit",
-      icon: "briefcase",
-      label: t("nav.toolkit"),
-      accent: colors.navy,
-      href: "/toolkit",
+      key: "training",
+      icon: "book-open",
+      label: t("nav.training"),
+      accent: colors.success,
+      href: "/training",
+      badge:
+        trainingToDo > 0
+          ? t("home.training.toDo", { count: String(trainingToDo) })
+          : undefined,
+      badgeTone: "warning",
     },
     {
       key: "credentials",
@@ -266,16 +392,192 @@ export default function HomeScreen() {
       accent: colors.warning,
       href: "/credentials",
       badge:
-        expiringCount > 0
-          ? t("settings.credentialsExpiring", { count: expiringCount })
-          : undefined,
+        expiredCount > 0
+          ? t("home.credentials.expired", { count: String(expiredCount) })
+          : expiringCount > 0
+            ? t("settings.credentialsExpiring", { count: expiringCount })
+            : undefined,
+      badgeTone: expiredCount > 0 ? "danger" : "warning",
+    },
+    {
+      key: "toolkit",
+      icon: "briefcase",
+      label: t("nav.toolkit"),
+      accent: colors.blue,
+      href: "/toolkit",
+    },
+    {
+      key: "office",
+      icon: "phone",
+      label: t("office.tile"),
+      accent: colors.pink,
+      href: "/worker/contact-office",
+    },
+    {
+      key: "guides",
+      icon: "help-circle",
+      label: t("guide.allTitle"),
+      accent: colors.navy,
+      href: "/worker/guides",
     },
   ];
+
+  const todayCard = (
+    <View style={[styles.hero, { backgroundColor: colors.heroCard }]}>
+      <View style={styles.heroTop}>
+        <View style={styles.heroIcon}>
+          <Feather
+            name={inProgressShift ? "activity" : "calendar"}
+            size={22}
+            color="#FFFFFF"
+          />
+        </View>
+        <Text
+          style={[
+            styles.heroLabel,
+            {
+              color: colors.heroMuted,
+              fontFamily: FontFamily.interSemiBold,
+            },
+          ]}
+        >
+          {t(
+            inProgressShift
+              ? "dashboard.homeActiveShift"
+              : featuredShift
+                ? "dashboard.homeNextShift"
+                : "dashboard.todaysShifts",
+          )}
+        </Text>
+      </View>
+      <Text
+        style={[
+          styles.heroStat,
+          { color: "#FFFFFF", fontFamily: FontFamily.h1 },
+        ]}
+      >
+        {featuredShift?.participant_name ??
+          t(
+            total === 0
+              ? "dashboard.noShiftsToday"
+              : "dashboard.homeDayComplete",
+          )}
+      </Text>
+      <Text style={[styles.heroDetail, { color: colors.heroMuted }]}>
+        {featuredShift
+          ? [
+              featuredShift.time_label,
+              shortLocationLabel(featuredShift.participant_address),
+            ]
+              .filter(Boolean)
+              .join(" / ")
+          : t(
+              total === 0
+                ? "dashboard.noShiftsDetail"
+                : "dashboard.homeDayCompleteDetail",
+            )}
+      </Text>
+      {/* Nothing left today: show what's next, so the card is still useful. */}
+      {!featuredShift && nextShift ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push(`/shift/${nextShift.id}` as never)}
+          style={({ pressed }) => [
+            styles.nextBox,
+            { opacity: pressed ? 0.8 : 1 },
+          ]}
+        >
+          <Text
+            style={[
+              styles.nextLabel,
+              { color: colors.heroMuted, fontFamily: FontFamily.interSemiBold },
+            ]}
+          >
+            {t("home.today.nextShift")}
+          </Text>
+          <Text
+            style={[styles.nextName, { fontFamily: FontFamily.interSemiBold }]}
+          >
+            {nextShift.participant_name}
+          </Text>
+          <Text
+            style={[
+              styles.nextWhen,
+              { color: colors.heroMuted, fontFamily: FontFamily.interRegular },
+            ]}
+          >
+            {[nextShift.date_label, nextShift.time_label]
+              .filter(Boolean)
+              .join("  ·  ")}
+          </Text>
+        </Pressable>
+      ) : null}
+      <View style={styles.heroSpacer} />
+      <Pressable
+        onPress={openContinue}
+        style={[styles.continueBtn, { backgroundColor: colors.primary }]}
+        accessibilityRole="button"
+      >
+        <Text
+          style={[
+            styles.continueText,
+            {
+              color: colors.primaryForeground,
+              fontFamily: FontFamily.interSemiBold,
+            },
+          ]}
+        >
+          {t(
+            inProgressShift
+              ? "dashboard.continueSession"
+              : featuredShift
+                ? "dashboard.homeReviewShift"
+                : "dashboard.homeViewSchedule",
+          )}
+        </Text>
+        <Feather
+          name="arrow-right"
+          size={20}
+          color={colors.primaryForeground}
+        />
+      </Pressable>
+      {total > 0 ? (
+        <View style={styles.progressSummary}>
+          <Text style={[styles.heroLabel, { color: colors.heroMuted }]}>
+            {t("dashboard.homeCompleted", { done, total })}
+          </Text>
+          <View
+            accessibilityRole="progressbar"
+            accessibilityLabel={t("dashboard.todaysShifts")}
+            accessibilityValue={{
+              min: 0,
+              max: total,
+              now: Math.min(done, total),
+            }}
+            style={[
+              styles.progressTrack,
+              { backgroundColor: colors.progressTrack },
+            ]}
+          >
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: (progress * 100 + "%") as `${number}%`,
+                  backgroundColor: colors.success,
+                },
+              ]}
+            />
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <WorkerMobileHeader title={t("nav.home")} />
+      <WorkerMobileHeader title={t("nav.home")} guide="home" />
 
       {landing.isLoading && !landing.data ? (
         <View style={styles.loading}>
@@ -296,30 +598,49 @@ export default function HomeScreen() {
             />
           }
         >
+          {/* Date, greeting, then one line that says what today looks like. */}
           <Text
             style={[
-              styles.greeting,
-              { color: colors.foreground, fontFamily: FontFamily.h1 },
-            ]}
-          >
-            {t("dashboard.greetingWithName", { greeting, name: displayName })}
-          </Text>
-          <Text
-            style={[
-              styles.subtitle,
+              styles.dateLine,
               {
                 color: colors.mutedForeground,
-                fontFamily: FontFamily.interRegular,
+                fontFamily: FontFamily.interMedium,
               },
             ]}
           >
-            {landing.data
-              ? t("dashboard.shiftsTodayMeta", {
-                  date: dateLabel,
-                  count: total,
-                })
-              : dateLabel}
+            {dateLabel}
           </Text>
+          <Text
+            accessibilityRole="header"
+            style={[
+              styles.greeting,
+              { color: colors.foreground, fontFamily: FontFamily.display },
+            ]}
+          >
+            {t("dashboard.greetingWithName", { greeting, name: greetingName })}
+          </Text>
+          {landing.data ? (
+            <View
+              style={[styles.statusPill, { backgroundColor: dayStatus.bg }]}
+            >
+              <Feather
+                name={dayStatus.icon}
+                size={15}
+                color={dayStatus.color}
+              />
+              <Text
+                style={[
+                  styles.statusText,
+                  {
+                    color: dayStatus.color,
+                    fontFamily: FontFamily.interSemiBold,
+                  },
+                ]}
+              >
+                {dayStatus.text}
+              </Text>
+            </View>
+          ) : null}
 
           {landing.isError ? (
             <View
@@ -343,122 +664,43 @@ export default function HomeScreen() {
             </View>
           ) : null}
           {landing.data ? (
-            <View style={[styles.hero, { backgroundColor: colors.heroCard }]}>
-              <View style={styles.heroTop}>
-                <View style={styles.heroIcon}>
-                  <Feather
-                    name={inProgressShift ? "activity" : "calendar"}
-                    size={22}
-                    color="#FFFFFF"
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.heroLabel,
-                    {
-                      color: colors.heroMuted,
-                      fontFamily: FontFamily.interSemiBold,
-                    },
-                  ]}
-                >
-                  {t(
-                    inProgressShift
-                      ? "dashboard.homeActiveShift"
-                      : featuredShift
-                        ? "dashboard.homeNextShift"
-                        : "dashboard.todaysShifts",
-                  )}
-                </Text>
-              </View>
-              <Text
-                style={[
-                  styles.heroStat,
-                  { color: "#FFFFFF", fontFamily: FontFamily.h1 },
-                ]}
-              >
-                {featuredShift?.participant_name ??
-                  t(
-                    total === 0
-                      ? "dashboard.noShiftsToday"
-                      : "dashboard.homeDayComplete",
-                  )}
-              </Text>
-              <Text style={[styles.heroDetail, { color: colors.heroMuted }]}>
-                {featuredShift
+            <HomeCarousel
+              pages={[
+                ...(birthday.isBirthday
                   ? [
-                      featuredShift.time_label,
-                      shortLocationLabel(featuredShift.participant_address),
+                      {
+                        key: "birthday",
+                        label: t("birthday.tab"),
+                        render: () => (
+                          <BirthdayCard firstName={birthday.firstName} />
+                        ),
+                      },
                     ]
-                      .filter(Boolean)
-                      .join(" / ")
-                  : t(
-                      total === 0
-                        ? "dashboard.noShiftsDetail"
-                        : "dashboard.homeDayCompleteDetail",
-                    )}
-              </Text>
-              <Pressable
-                onPress={openContinue}
-                style={[
-                  styles.continueBtn,
-                  { backgroundColor: colors.primary },
-                ]}
-                accessibilityRole="button"
-              >
-                <Text
-                  style={[
-                    styles.continueText,
-                    {
-                      color: colors.primaryForeground,
-                      fontFamily: FontFamily.interSemiBold,
-                    },
-                  ]}
-                >
-                  {t(
-                    inProgressShift
-                      ? "dashboard.continueSession"
-                      : featuredShift
-                        ? "dashboard.homeReviewShift"
-                        : "dashboard.homeViewSchedule",
-                  )}
-                </Text>
-                <Feather
-                  name="arrow-right"
-                  size={20}
-                  color={colors.primaryForeground}
-                />
-              </Pressable>
-              {total > 0 ? (
-                <View style={styles.progressSummary}>
-                  <Text style={[styles.heroLabel, { color: colors.heroMuted }]}>
-                    {t("dashboard.homeCompleted", { done, total })}
-                  </Text>
-                  <View
-                    accessibilityRole="progressbar"
-                    accessibilityLabel={t("dashboard.todaysShifts")}
-                    accessibilityValue={{
-                      min: 0,
-                      max: total,
-                      now: Math.min(done, total),
-                    }}
-                    style={[
-                      styles.progressTrack,
-                      { backgroundColor: colors.progressTrack },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: (progress * 100 + "%") as `${number}%`,
-                          backgroundColor: colors.success,
-                        },
-                      ]}
+                  : []),
+                {
+                  key: "today",
+                  label: t("home.tab.today"),
+                  render: () => todayCard,
+                },
+                {
+                  key: "todo",
+                  label: t("home.tab.todo"),
+                  badge: todo.items.length || undefined,
+                  urgent: urgentCount > 0,
+                  render: () => <TodoCard items={todo.items} />,
+                },
+                {
+                  key: "calendar",
+                  label: t("home.tab.calendar"),
+                  render: () => (
+                    <CalendarCard
+                      byDay={calendar.byDay}
+                      upcoming={calendar.upcoming}
                     />
-                  </View>
-                </View>
-              ) : null}
-            </View>
+                  ),
+                },
+              ]}
+            />
           ) : null}
 
           {!landing.data || remainingShifts.length === 0 ? null : (
@@ -535,12 +777,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 24,
   },
-  greeting: { fontSize: 24, lineHeight: 31, marginBottom: 8 },
-  subtitle: { fontSize: 14, lineHeight: 21, marginBottom: 24 },
+  dateLine: { fontSize: 14, lineHeight: 20, marginBottom: 2 },
+  greeting: { fontSize: 28, lineHeight: 34, letterSpacing: -0.4 },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 8,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginTop: 12,
+    marginBottom: 22,
+  },
+  statusText: { fontSize: 14 },
+  heroSpacer: { flexGrow: 1, minHeight: 20 },
+  subtitle: { fontSize: 14, lineHeight: 21, marginBottom: 20 },
   hero: {
-    borderRadius: 16,
+    flexGrow: 1,
+    borderRadius: 20,
     padding: 20,
-    marginBottom: 20,
+    minHeight: 330,
   },
   heroLabel: {
     flexShrink: 1,
@@ -576,7 +833,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   continueBtn: {
-    marginTop: 20,
+    marginTop: 0,
     minHeight: 56,
     justifyContent: "space-between",
     flexDirection: "row",
@@ -587,7 +844,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   continueText: { flexShrink: 1, fontSize: 16, lineHeight: 22 },
-  quickAccessTitle: { marginTop: 24 },
+  nextBox: {
+    marginTop: 18,
+    borderRadius: 16,
+    padding: 14,
+    gap: 3,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  nextLabel: { fontSize: 13 },
+  nextName: { fontSize: 18, color: "#FFFFFF" },
+  nextWhen: { fontSize: 14 },
+  quickAccessTitle: { marginTop: 28 },
   quickGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -613,8 +880,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   tileCopy: { flex: 1, minWidth: 0, gap: 1 },
-  tileLabel: { fontSize: 13, lineHeight: 18 },
-  tileBadgeText: { fontSize: 11, lineHeight: 15 },
+  tileLabel: { fontSize: 15, lineHeight: 20 },
+  tileBadgeText: { fontSize: 12, lineHeight: 16 },
   sectionTitle: { fontSize: 20, lineHeight: 26, marginBottom: 14 },
   shiftCard: {
     borderWidth: 1,

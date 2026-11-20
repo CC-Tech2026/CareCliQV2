@@ -1,12 +1,7 @@
 import { FontFamily } from "@/constants/typography";
 import { getAppTimezone } from "@/lib/shift-utils";
 import { Feather } from "@expo/vector-icons";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -74,9 +69,10 @@ function trendLabel(
   total: number,
   t: ReturnType<typeof useT>,
 ): string {
-  const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: getAppTimezone() }).format(new Date());
-  if (value === todayKey)
-    return t("compliance.today");
+  const todayKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: getAppTimezone(),
+  }).format(new Date());
+  if (value === todayKey) return t("compliance.today");
   // Parse as local noon so date-only ISO strings don't shift a day in western timezones.
   const date = new Date(`${value}T12:00:00`);
   if (Number.isNaN(date.getTime()))
@@ -291,17 +287,27 @@ export default function ComplianceTabScreen() {
   const reviews = reviewsData?.shifts ?? [];
   const counts = reviewsData?.counts;
 
-  const loading = isLoading || detailLoading || (reviewsLoading && !reviewsData);
+  const loading =
+    isLoading || detailLoading || (reviewsLoading && !reviewsData);
   const latest = overview?.latest_session ?? null;
   // The latest result opens that shift's record, never the live session.
   const latestShiftId = useMemo(() => {
     if (!latest?.id) return null;
-    return reviewsData?.shifts.find((s) => s.session_id === latest.id)?.shift_id ?? null;
+    return (
+      reviewsData?.shifts.find((s) => s.session_id === latest.id)?.shift_id ??
+      null
+    );
   }, [latest?.id, reviewsData]);
   const trend = detail?.trend ?? [];
   const rules = detail?.rules ?? [];
   const failedRules = detail?.failed_rules ?? [];
-  const latestScore = latest?.compliance_score ?? overview?.average_score ?? 0;
+  // A shift that ended with nothing written comes back as 0. The review list
+  // shows that as not scored yet, so the latest-result card says the same
+  // rather than "0 / 100, Non-compliant".
+  const latestRaw = latest ? latest.compliance_score : overview?.average_score;
+  const latestScored = latestRaw != null && Number(latestRaw) > 0;
+  const latestScore = latestScored ? Number(latestRaw) : 0;
+  const trendHasScores = (detail?.trend ?? []).some((p) => p.avg_score != null);
   const latestStatus =
     (latest?.compliance_status as WorkerCompliance["status"] | undefined) ??
     overview?.status;
@@ -331,13 +337,20 @@ export default function ComplianceTabScreen() {
       <Pressable
         accessibilityRole="button"
         disabled={!latestShiftId}
-        onPress={() => latestShiftId && router.push(`/shift/${latestShiftId}/record` as never)}
+        onPress={() =>
+          latestShiftId &&
+          router.push(`/shift/${latestShiftId}/record` as never)
+        }
         style={[
           styles.latestCard,
           { backgroundColor: colors.card, borderColor: colors.border },
         ]}
       >
-        <ComplianceScoreRing score={latestScore} size={52} />
+        <ComplianceScoreRing
+          score={latestScore}
+          size={52}
+          empty={!latestScored}
+        />
         <View style={styles.latestCopy}>
           <Text
             style={[
@@ -353,19 +366,23 @@ export default function ComplianceTabScreen() {
               { color: colors.foreground, fontFamily: FontFamily.interBold },
             ]}
           >
-            {Math.round(latestScore)} / 100
+            {latestScored
+              ? `${Math.round(latestScore)} / 100`
+              : t("compliance.notScored")}
           </Text>
         </View>
-        <View style={[styles.statusChip, { backgroundColor: tone.bg }]}>
-          <Text
-            style={[
-              styles.statusChipText,
-              { color: tone.color, fontFamily: FontFamily.interSemiBold },
-            ]}
-          >
-            {statusLabel(latestStatus, t)}
-          </Text>
-        </View>
+        {latestScored ? (
+          <View style={[styles.statusChip, { backgroundColor: tone.bg }]}>
+            <Text
+              style={[
+                styles.statusChipText,
+                { color: tone.color, fontFamily: FontFamily.interSemiBold },
+              ]}
+            >
+              {statusLabel(latestStatus, t)}
+            </Text>
+          </View>
+        ) : null}
         {latestShiftId ? (
           <Feather
             name="chevron-right"
@@ -472,45 +489,61 @@ export default function ComplianceTabScreen() {
           >
             {t("compliance.scoreTrend")}
           </Text>
-          <View style={styles.trendWrap}>
-            {trend.map((point, index) => {
-              const hasScore = point.avg_score != null;
-              const value = point.avg_score ?? 0;
-              const height = hasScore ? Math.max(6, value * 0.56) : 6;
-              return (
-                <View key={`${point.date}-${index}`} style={styles.trendCol}>
-                  <View
+          {!trendHasScores ? (
+            <Text
+              style={[
+                styles.trendEmpty,
+                { color: colors.mutedForeground, fontFamily: FontFamily.body },
+              ]}
+            >
+              {t("compliance.trendEmpty")}
+            </Text>
+          ) : (
+            <>
+              <View style={styles.trendWrap}>
+                {trend.map((point, index) => {
+                  const hasScore = point.avg_score != null;
+                  const value = point.avg_score ?? 0;
+                  const height = hasScore ? Math.max(6, value * 0.56) : 6;
+                  return (
+                    <View
+                      key={`${point.date}-${index}`}
+                      style={styles.trendCol}
+                    >
+                      <View
+                        style={[
+                          styles.trendBar,
+                          {
+                            height,
+                            backgroundColor: hasScore
+                              ? trendBarColor(value, colors)
+                              : colors.border,
+                            opacity: hasScore ? 0.85 : 0.45,
+                          },
+                        ]}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+              <View style={styles.trendLabels}>
+                {trend.map((point, index) => (
+                  <Text
+                    key={`label-${point.date}-${index}`}
                     style={[
-                      styles.trendBar,
+                      styles.trendLabel,
                       {
-                        height,
-                        backgroundColor: hasScore
-                          ? trendBarColor(value, colors)
-                          : colors.border,
-                        opacity: hasScore ? 0.85 : 0.45,
+                        color: colors.mutedForeground,
+                        fontFamily: FontFamily.body,
                       },
                     ]}
-                  />
-                </View>
-              );
-            })}
-          </View>
-          <View style={styles.trendLabels}>
-            {trend.map((point, index) => (
-              <Text
-                key={`label-${point.date}-${index}`}
-                style={[
-                  styles.trendLabel,
-                  {
-                    color: colors.mutedForeground,
-                    fontFamily: FontFamily.body,
-                  },
-                ]}
-              >
-                {trendLabel(point.date, index, trend.length, t)}
-              </Text>
-            ))}
-          </View>
+                  >
+                    {trendLabel(point.date, index, trend.length, t)}
+                  </Text>
+                ))}
+              </View>
+            </>
+          )}
         </View>
       ) : null}
 
@@ -529,8 +562,15 @@ export default function ComplianceTabScreen() {
           : ""}
       </Text>
       {counts && counts.changes_requested > 0 ? (
-        <Text style={[styles.reviewHint, { color: colors.warning, fontFamily: FontFamily.interSemiBold }]}>
-          {t("review.overview.needsYou", { count: String(counts.changes_requested) })}
+        <Text
+          style={[
+            styles.reviewHint,
+            { color: colors.warning, fontFamily: FontFamily.interSemiBold },
+          ]}
+        >
+          {t("review.overview.needsYou", {
+            count: String(counts.changes_requested),
+          })}
         </Text>
       ) : null}
     </View>
@@ -540,15 +580,30 @@ export default function ComplianceTabScreen() {
     <Pressable
       accessibilityRole="button"
       onPress={() => router.push("/worker/past-shifts" as never)}
-      style={[styles.pastLink, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[
+        styles.pastLink,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
     >
       <Feather name="archive" size={16} color={colors.primary} />
-      <Text style={[styles.pastLinkText, { color: colors.foreground, fontFamily: FontFamily.interSemiBold }]}>
+      <Text
+        style={[
+          styles.pastLinkText,
+          { color: colors.foreground, fontFamily: FontFamily.interSemiBold },
+        ]}
+      >
         {t("review.overview.pastShifts")}
       </Text>
       {counts && counts.verified > 0 ? (
-        <Text style={[styles.pastLinkCount, { color: colors.mutedForeground, fontFamily: FontFamily.body }]}>
-          {t("review.overview.verifiedCount", { count: String(counts.verified) })}
+        <Text
+          style={[
+            styles.pastLinkCount,
+            { color: colors.mutedForeground, fontFamily: FontFamily.body },
+          ]}
+        >
+          {t("review.overview.verifiedCount", {
+            count: String(counts.verified),
+          })}
         </Text>
       ) : null}
       <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
@@ -558,7 +613,10 @@ export default function ComplianceTabScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <WorkerMobileHeader title={t("nav.compliance")} />
+      <WorkerMobileHeader
+        title={t("nav.compliance")}
+        guide={segment === "incidents" ? "incidents" : "compliance"}
+      />
 
       <View style={styles.segmentWrap}>
         <View style={[styles.segmentTrack, elevatedCardShadow(isDark)]}>
@@ -834,6 +892,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 5,
   },
   trendLabels: { flexDirection: "row", gap: 6, marginTop: 4 },
+  trendEmpty: { fontSize: 14, lineHeight: 20, marginTop: 6 },
   trendLabel: { flex: 1, textAlign: "center", fontSize: 11 },
   historyTitle: {
     fontSize: 16,

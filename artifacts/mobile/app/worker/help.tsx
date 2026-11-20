@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
+import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -50,12 +51,17 @@ function isWithinBusinessHours(config: SupportConfig | null): boolean {
 
 export default function WorkerHelpScreen() {
   const t = useT();
+  const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ tab?: string }>();
 
   const initialTab: Tab =
-    params.tab === "issues" ? "issues" : params.tab === "contact" ? "contact" : "faq";
+    params.tab === "issues"
+      ? "issues"
+      : params.tab === "contact"
+        ? "contact"
+        : "faq";
 
   const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState("");
@@ -63,11 +69,17 @@ export default function WorkerHelpScreen() {
   const [issues, setIssues] = useState<KnownIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
-  const [supportConfig, setSupportConfig] = useState<SupportConfig | null>(null);
+  const [supportConfig, setSupportConfig] = useState<SupportConfig | null>(
+    null,
+  );
   const [contactLoading, setContactLoading] = useState(true);
 
   useEffect(() => {
-    if (params.tab === "issues" || params.tab === "faq" || params.tab === "contact") {
+    if (
+      params.tab === "issues" ||
+      params.tab === "faq" ||
+      params.tab === "contact"
+    ) {
       setTab(params.tab);
     }
   }, [params.tab]);
@@ -106,12 +118,16 @@ export default function WorkerHelpScreen() {
     const term = query.trim().toLowerCase();
     if (!term) return faq;
     return faq.filter((article) => {
-      const hay = `${article.title} ${article.body_markdown} ${(article.tags ?? []).join(" ")}`.toLowerCase();
+      const hay =
+        `${article.title} ${article.body_markdown} ${(article.tags ?? []).join(" ")}`.toLowerCase();
       return hay.includes(term);
     });
   }, [faq, query]);
 
-  const tabs: { id: Tab; labelKey: "help.tab.faq" | "help.tab.issues" | "help.tab.contact" }[] = [
+  const tabs: {
+    id: Tab;
+    labelKey: "help.tab.faq" | "help.tab.issues" | "help.tab.contact";
+  }[] = [
     { id: "faq", labelKey: "help.tab.faq" },
     { id: "issues", labelKey: "help.tab.issues" },
     { id: "contact", labelKey: "help.tab.contact" },
@@ -119,21 +135,78 @@ export default function WorkerHelpScreen() {
 
   const inHours = isWithinBusinessHours(supportConfig);
   const supportPhone = supportConfig?.support_phone?.trim() || "";
-  const supportEmail = supportConfig?.support_email?.trim() || "support@carecliq.com.au";
+  const supportEmail =
+    supportConfig?.support_email?.trim() || "support@carecliq.com.au";
 
   return (
     <SettingsSubScreen showBottomNav={false} title={t("help.title")}>
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingBottom: insets.bottom + 24 },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        {/* Step-by-step guides first: most questions are "how do I...". */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/worker/guides" as never)}
+          style={({ pressed }) => [
+            styles.guidesCard,
+            { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 },
+          ]}
+        >
+          <Feather
+            name="book-open"
+            size={22}
+            color={colors.primaryForeground}
+          />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text
+              style={[
+                styles.guidesTitle,
+                {
+                  color: colors.primaryForeground,
+                  fontFamily: "Inter_600SemiBold",
+                },
+              ]}
+            >
+              {t("guide.allTitle")}
+            </Text>
+            <Text
+              style={[
+                styles.guidesBody,
+                {
+                  color: colors.primaryForeground,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
+            >
+              {t("guide.helpLink")}
+            </Text>
+          </View>
+          <Feather
+            name="chevron-right"
+            size={20}
+            color={colors.primaryForeground}
+          />
+        </Pressable>
+        <Text
+          style={[
+            styles.subtitle,
+            { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+          ]}
+        >
           {t("help.subtitle")}
         </Text>
 
         <View style={styles.section}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabs}
+          >
             {tabs.map((item) => {
               const active = tab === item.id;
               return (
@@ -148,7 +221,9 @@ export default function WorkerHelpScreen() {
                   <Text
                     style={{
                       color: active ? colors.primary : colors.mutedForeground,
-                      fontFamily: active ? "Inter_700Bold" : "Inter_600SemiBold",
+                      fontFamily: active
+                        ? "Inter_700Bold"
+                        : "Inter_600SemiBold",
                       fontSize: 12,
                     }}
                   >
@@ -159,180 +234,313 @@ export default function WorkerHelpScreen() {
             })}
           </ScrollView>
           <View style={[styles.tabPanel, { backgroundColor: colors.card }]}>
-          {loading ? (
-            <View style={styles.loading}>
-              <ActivityIndicator color={colors.primary} />
-            </View>
-          ) : null}
-
-          {!loading && tab === "faq" ? (
-            <View style={styles.faqWrap}>
-              <View
-                style={[
-                  styles.searchRow,
-                  { backgroundColor: colors.background, borderColor: colors.border },
-                ]}
-              >
-                <Feather name="search" size={16} color={colors.mutedForeground} />
-                <TextInput
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder={t("help.faq.search")}
-                  placeholderTextColor={colors.mutedForeground}
-                  style={[styles.searchInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
-                />
-              </View>
-
-              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                {filteredFaq.length === 0 ? (
-                  <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 13 }}>
-                    {t("help.faq.empty")}
-                  </Text>
-                ) : (
-                  filteredFaq.map((article, index) => {
-                    const expanded = expandedSlug === article.slug;
-                    return (
-                      <View
-                        key={article.slug}
-                        style={[
-                          index < filteredFaq.length - 1 && {
-                            borderBottomWidth: StyleSheet.hairlineWidth,
-                            borderBottomColor: colors.soft,
-                          },
-                        ]}
-                      >
-                        <Pressable
-                          onPress={() =>
-                            setExpandedSlug((prev) => (prev === article.slug ? null : article.slug))
-                          }
-                          style={[styles.faqItem, expanded && { backgroundColor: colors.activeBg }]}
-                        >
-                          <Text
-                            style={{
-                              flex: 1,
-                              color: expanded ? colors.primary : colors.foreground,
-                              fontFamily: expanded ? "Inter_700Bold" : "Inter_500Medium",
-                              fontSize: 14,
-                            }}
-                          >
-                            {article.title}
-                          </Text>
-                          <Feather
-                            name={expanded ? "chevron-up" : "chevron-down"}
-                            size={18}
-                            color={expanded ? colors.primary : colors.mutedForeground}
-                          />
-                        </Pressable>
-                        {expanded ? (
-                          <View style={styles.faqBody}>
-                            <Text
-                              style={[
-                                styles.articleBody,
-                                { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-                              ]}
-                            >
-                              {article.body_markdown}
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    );
-                  })
-                )}
-              </View>
-            </View>
-          ) : null}
-
-          {!loading && tab === "issues" ? (
-            <View style={styles.issuesWrap}>
-              {issues.length === 0 ? (
-                <View
-                  style={[
-                    styles.card,
-                    styles.emptyIssues,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                  ]}
-                >
-                  <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 13 }}>
-                    {t("help.issues.empty")}
-                  </Text>
-                </View>
-              ) : (
-                issues.map((issue) => (
-                  <View
-                    key={issue.id}
-                    style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  >
-                    <Text style={[styles.articleTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                      {issue.title}
-                    </Text>
-                    <Text style={[styles.articleBody, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                      {issue.description}
-                    </Text>
-                    {issue.workaround ? (
-                      <Text
-                        style={{
-                          color: colors.foreground,
-                          fontFamily: "Inter_400Regular",
-                          fontSize: 13,
-                          marginTop: 8,
-                        }}
-                      >
-                        <Text style={{ fontFamily: "Inter_700Bold" }}>{t("help.issues.workaround")} </Text>
-                        {issue.workaround}
-                      </Text>
-                    ) : null}
-                  </View>
-                ))
-              )}
-            </View>
-          ) : null}
-
-          {tab === "contact" ? (
-            contactLoading ? (
+            {loading ? (
               <View style={styles.loading}>
                 <ActivityIndicator color={colors.primary} />
               </View>
-            ) : (
-              <View style={styles.contactWrap}>
-                {!inHours ? (
-                  <View style={[styles.notice, { backgroundColor: colors.statusProgressBg }]}>
-                    <Text style={{ color: colors.warning, fontFamily: "Inter_500Medium", fontSize: 13, lineHeight: 18 }}>
-                      {supportConfig?.outside_hours_message || t("help.chat.outsideHours")}
-                    </Text>
-                  </View>
-                ) : null}
+            ) : null}
 
-                <View style={[styles.card, styles.contactCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.articleTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                    {t("help.chat.fallbackTitle")}
-                  </Text>
+            {!loading && tab === "faq" ? (
+              <View style={styles.faqWrap}>
+                <View
+                  style={[
+                    styles.searchRow,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Feather
+                    name="search"
+                    size={16}
+                    color={colors.mutedForeground}
+                  />
+                  <TextInput
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder={t("help.faq.search")}
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[
+                      styles.searchInput,
+                      {
+                        color: colors.foreground,
+                        fontFamily: "Inter_400Regular",
+                      },
+                    ]}
+                  />
+                </View>
 
-                  {supportPhone ? (
-                    <Pressable
-                      onPress={() => void Linking.openURL(`tel:${supportPhone.replace(/\s/g, "")}`)}
-                      style={[styles.contactBtn, { backgroundColor: colors.success, borderColor: colors.success }]}
+                <View
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  {filteredFaq.length === 0 ? (
+                    <Text
+                      style={{
+                        color: colors.mutedForeground,
+                        fontFamily: "Inter_500Medium",
+                        fontSize: 13,
+                      }}
                     >
-                      <Feather name="phone" size={16} color="#FFFFFF" />
-                      <Text style={{ color: "#FFFFFF", fontFamily: "Inter_700Bold", fontSize: 14 }}>
-                        {t("help.chat.callNow", { phone: supportPhone })}
-                      </Text>
-                    </Pressable>
-                  ) : null}
-
-                  <Pressable
-                    onPress={() => void Linking.openURL(`mailto:${supportEmail}`)}
-                    style={[styles.contactBtn, { borderColor: colors.border }]}
-                  >
-                    <Feather name="mail" size={16} color={colors.primary} />
-                    <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 14 }}>
-                      {supportEmail}
+                      {t("help.faq.empty")}
                     </Text>
-                  </Pressable>
+                  ) : (
+                    filteredFaq.map((article, index) => {
+                      const expanded = expandedSlug === article.slug;
+                      return (
+                        <View
+                          key={article.slug}
+                          style={[
+                            index < filteredFaq.length - 1 && {
+                              borderBottomWidth: StyleSheet.hairlineWidth,
+                              borderBottomColor: colors.soft,
+                            },
+                          ]}
+                        >
+                          <Pressable
+                            onPress={() =>
+                              setExpandedSlug((prev) =>
+                                prev === article.slug ? null : article.slug,
+                              )
+                            }
+                            style={[
+                              styles.faqItem,
+                              expanded && { backgroundColor: colors.activeBg },
+                            ]}
+                          >
+                            <Text
+                              style={{
+                                flex: 1,
+                                color: expanded
+                                  ? colors.primary
+                                  : colors.foreground,
+                                fontFamily: expanded
+                                  ? "Inter_700Bold"
+                                  : "Inter_500Medium",
+                                fontSize: 14,
+                              }}
+                            >
+                              {article.title}
+                            </Text>
+                            <Feather
+                              name={expanded ? "chevron-up" : "chevron-down"}
+                              size={18}
+                              color={
+                                expanded
+                                  ? colors.primary
+                                  : colors.mutedForeground
+                              }
+                            />
+                          </Pressable>
+                          {expanded ? (
+                            <View style={styles.faqBody}>
+                              <Text
+                                style={[
+                                  styles.articleBody,
+                                  {
+                                    color: colors.mutedForeground,
+                                    fontFamily: "Inter_400Regular",
+                                  },
+                                ]}
+                              >
+                                {article.body_markdown}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    })
+                  )}
                 </View>
               </View>
-            )
-          ) : null}
+            ) : null}
+
+            {!loading && tab === "issues" ? (
+              <View style={styles.issuesWrap}>
+                {issues.length === 0 ? (
+                  <View
+                    style={[
+                      styles.card,
+                      styles.emptyIssues,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: colors.mutedForeground,
+                        fontFamily: "Inter_500Medium",
+                        fontSize: 13,
+                      }}
+                    >
+                      {t("help.issues.empty")}
+                    </Text>
+                  </View>
+                ) : (
+                  issues.map((issue) => (
+                    <View
+                      key={issue.id}
+                      style={[
+                        styles.card,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.articleTitle,
+                          {
+                            color: colors.foreground,
+                            fontFamily: "Inter_700Bold",
+                          },
+                        ]}
+                      >
+                        {issue.title}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.articleBody,
+                          {
+                            color: colors.mutedForeground,
+                            fontFamily: "Inter_400Regular",
+                          },
+                        ]}
+                      >
+                        {issue.description}
+                      </Text>
+                      {issue.workaround ? (
+                        <Text
+                          style={{
+                            color: colors.foreground,
+                            fontFamily: "Inter_400Regular",
+                            fontSize: 13,
+                            marginTop: 8,
+                          }}
+                        >
+                          <Text style={{ fontFamily: "Inter_700Bold" }}>
+                            {t("help.issues.workaround")}{" "}
+                          </Text>
+                          {issue.workaround}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ))
+                )}
+              </View>
+            ) : null}
+
+            {tab === "contact" ? (
+              contactLoading ? (
+                <View style={styles.loading}>
+                  <ActivityIndicator color={colors.primary} />
+                </View>
+              ) : (
+                <View style={styles.contactWrap}>
+                  {!inHours ? (
+                    <View
+                      style={[
+                        styles.notice,
+                        { backgroundColor: colors.statusProgressBg },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: colors.warning,
+                          fontFamily: "Inter_500Medium",
+                          fontSize: 13,
+                          lineHeight: 18,
+                        }}
+                      >
+                        {supportConfig?.outside_hours_message ||
+                          t("help.chat.outsideHours")}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <View
+                    style={[
+                      styles.card,
+                      styles.contactCard,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.articleTitle,
+                        {
+                          color: colors.foreground,
+                          fontFamily: "Inter_700Bold",
+                        },
+                      ]}
+                    >
+                      {t("help.chat.fallbackTitle")}
+                    </Text>
+
+                    {supportPhone ? (
+                      <Pressable
+                        onPress={() =>
+                          void Linking.openURL(
+                            `tel:${supportPhone.replace(/\s/g, "")}`,
+                          )
+                        }
+                        style={[
+                          styles.contactBtn,
+                          {
+                            backgroundColor: colors.success,
+                            borderColor: colors.success,
+                          },
+                        ]}
+                      >
+                        <Feather name="phone" size={16} color="#FFFFFF" />
+                        <Text
+                          style={{
+                            color: "#FFFFFF",
+                            fontFamily: "Inter_700Bold",
+                            fontSize: 14,
+                          }}
+                        >
+                          {t("help.chat.callNow", { phone: supportPhone })}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+
+                    <Pressable
+                      onPress={() =>
+                        void Linking.openURL(`mailto:${supportEmail}`)
+                      }
+                      style={[
+                        styles.contactBtn,
+                        { borderColor: colors.border },
+                      ]}
+                    >
+                      <Feather name="mail" size={16} color={colors.primary} />
+                      <Text
+                        style={{
+                          color: colors.foreground,
+                          fontFamily: "Inter_700Bold",
+                          fontSize: 14,
+                        }}
+                      >
+                        {supportEmail}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )
+            ) : null}
           </View>
         </View>
       </ScrollView>
@@ -341,6 +549,16 @@ export default function WorkerHelpScreen() {
 }
 
 const styles = StyleSheet.create({
+  guidesCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 6,
+  },
+  guidesTitle: { fontSize: 16 },
+  guidesBody: { fontSize: 13, lineHeight: 18, opacity: 0.9 },
   scroll: { paddingHorizontal: 16, paddingTop: 4 },
   subtitle: { fontSize: 12, lineHeight: 17, marginBottom: 14 },
   section: { gap: 0 },
@@ -351,7 +569,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  tabPanel: { borderBottomLeftRadius: 14, borderBottomRightRadius: 14, borderTopRightRadius: 14, padding: 12 },
+  tabPanel: {
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    borderTopRightRadius: 14,
+    padding: 12,
+  },
   loading: { paddingVertical: 40, alignItems: "center" },
   faqWrap: { gap: 12 },
   searchRow: {
@@ -385,7 +608,11 @@ const styles = StyleSheet.create({
   articleTitle: { fontSize: 17, lineHeight: 22 },
   articleBody: { fontSize: 14, lineHeight: 21 },
   issuesWrap: { gap: 12 },
-  emptyIssues: { alignItems: "center", paddingVertical: 28, paddingHorizontal: 14 },
+  emptyIssues: {
+    alignItems: "center",
+    paddingVertical: 28,
+    paddingHorizontal: 14,
+  },
   contactWrap: { gap: 12 },
   notice: { borderRadius: 14, padding: 14 },
   contactCard: { padding: 14, gap: 8 },
