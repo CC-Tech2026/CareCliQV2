@@ -59,7 +59,7 @@ function destination(alert: HubComplianceAlert) {
   if (alert.source === "shifts")
     return { href: "/md/schedule", label: "Review schedule" };
   if (alert.source === "participants")
-    return { href: "/patients", label: "Review participants" };
+    return { href: "/onboard-participant/active", label: "Review participants" };
   if (alert.source === "worker-notes")
     return { href: "/md/staff", label: "Review staff" };
   return { href: "/md/compliance", label: "Review compliance" };
@@ -349,7 +349,7 @@ export default function MDServiceDeliveryPage() {
         </p>
         <nav aria-label="Care management" className="flex flex-wrap gap-2">
           {[
-            ["Participants", "/patients"],
+            ["Participants", "/onboard-participant/active"],
             ["Calendar", "/md/calendar"],
             ["Staff directory", "/md/staff"],
           ].map(([label, href]) => (
