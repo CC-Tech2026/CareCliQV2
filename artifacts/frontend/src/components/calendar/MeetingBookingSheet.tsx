@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { CalendarDays, Clock, Mail, MapPin, Mic, Phone, Plus, Users, Video, X } from "lucide-react";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { SidePanel } from "@/components/layout/SidePanel";
@@ -327,7 +328,7 @@ export function MeetingBookingSheet({
       title={editing ? editing.title : "Book a meeting"}
       description={
         editing && editing.event_date
-          ? `Booked for ${format(parseISO(editing.event_date), "EEEE d MMMM")}.`
+          ? `Booked for ${format(displayDate(editing.event_date), "EEEE d MMMM")}.`
           : "Everyone you invite gets it in their own calendar: Google, Outlook or Apple."
       }
       footer={

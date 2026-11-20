@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from "react";
 import { Cake, Award, Sparkles, Heart, AlertTriangle } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { getStaffCommunity, type CommunityItem } from "@/services/hubService";
 
@@ -36,7 +37,7 @@ function CommunityRow({ item, idx }: { item: CommunityItem; idx: number }) {
   const cfg  = TYPE_CONFIG[item.type] ?? TYPE_CONFIG.shoutout;
   const Icon = cfg.icon;
   const av   = AVATAR_COLORS[idx % AVATAR_COLORS.length];
-  const date = item.date ? format(parseISO(item.date), "d MMM") : null;
+  const date = item.date ? format(displayDate(item.date), "d MMM") : null;
 
   return (
     <div

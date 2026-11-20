@@ -354,6 +354,8 @@ def list_series(supabase, org_id: str, *, participant_id: Optional[str] = None, 
             "participant_name": (participants.get(str(r["participant_id"])) or {}).get("full_name") or "Participant",
             "worker_name": (w or {}).get("full_name"),
             "next_start": info.get("next_start"),
+            # The participant's zone: the schedule's times are on that clock.
+            "timezone": str(participant_timezone(str(r["participant_id"]), organization_id=org_id)),
             "upcoming_count": info.get("count", 0),
             "upcoming_open": info.get("open", 0),
         })

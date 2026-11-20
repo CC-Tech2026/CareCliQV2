@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Link, Redirect, useLocation } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO, differenceInDays, isAfter, subDays } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import {
   useGetSessions, useGetParticipants, useGetUnreadAlerts,
   useGetComplianceOverview,
@@ -259,7 +260,7 @@ function ClinicalReportGenerator() {
                   <FileText className="h-4 w-4" style={{ color: PLUM }} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[12px] font-bold" style={{ color: T1 }}>{report.title || report.report_type}</p>
-                    <p className="text-[11px]" style={{ color: T3 }}>{report.created_at ? format(parseISO(report.created_at), "dd MMM yyyy") : "Saved"}</p>
+                    <p className="text-[11px]" style={{ color: T3 }}>{report.created_at ? format(displayDate(report.created_at), "dd MMM yyyy") : "Saved"}</p>
                   </div>
                   {(report.file_path || report.file_url) && (
                     <button type="button" onClick={() => void openReportFile(report.id)} className="text-[12px] font-bold" style={{ color: PLUM }}>
@@ -342,7 +343,7 @@ function HubSection() {
                           {s.participant_name ?? translate("reports.unknownParticipant")}
                         </p>
                         <p className="text-[11px]" style={{ color: T3 }}>
-                          {[format(parseISO(s.session_date), "MMM d"), shiftNoteSubtitle(s as ShiftNoteLike)].filter(Boolean).join(" · ")}
+                          {[format(displayDate(s.session_date), "MMM d"), shiftNoteSubtitle(s as ShiftNoteLike)].filter(Boolean).join(" · ")}
                         </p>
                       </div>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0"
@@ -391,8 +392,8 @@ function HubSection() {
                 <Link key={s.id} href={`/sessions/${s.id}`}>
                   <div className="flex items-center gap-4 px-5 py-3 hover:bg-slate-50 cursor-pointer transition-colors group">
                     <div className="shrink-0 text-center w-10">
-                      <p className="text-[11px] font-bold uppercase" style={{ color: T3 }}>{format(parseISO(s.session_date), "MMM")}</p>
-                      <p className="text-[18px] font-black leading-none" style={{ color: T2 }}>{format(parseISO(s.session_date), "d")}</p>
+                      <p className="text-[11px] font-bold uppercase" style={{ color: T3 }}>{format(displayDate(s.session_date), "MMM")}</p>
+                      <p className="text-[18px] font-black leading-none" style={{ color: T2 }}>{format(displayDate(s.session_date), "d")}</p>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? translate("reports.unknown")}</p>
@@ -471,7 +472,7 @@ function SessionReportsSection() {
                 <Link key={s.id} href={`/sessions/${s.id}`}>
                   <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 cursor-pointer transition-colors group">
                     <div className="shrink-0 w-20 text-center hidden sm:block">
-                      <p className="text-[11px] font-bold" style={{ color: T3 }}>{format(parseISO(s.session_date), "dd MMM yyyy")}</p>
+                      <p className="text-[11px] font-bold" style={{ color: T3 }}>{format(displayDate(s.session_date), "dd MMM yyyy")}</p>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? translate("reports.unknown")}</p>
@@ -549,7 +550,7 @@ export function IncidentReportsSection() {
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{inc.title ?? "Incident Report"}</p>
                       <p className="text-[11px]" style={{ color: T3 }}>
-                        {inc.participant_name ?? "N/A"} · {format(parseISO(inc.incident_date ?? inc.created_at), "d MMM yyyy")}
+                        {inc.participant_name ?? "N/A"} · {format(displayDate(inc.incident_date ?? inc.created_at), "d MMM yyyy")}
                       </p>
                     </div>
                     <SeverityBadge sev={inc.severity ?? "medium"} />
@@ -635,7 +636,7 @@ function ParticipantNotesSection() {
                         <div className="px-5 py-4 hover:bg-slate-50 cursor-pointer transition-colors group">
                           <div className="flex items-center justify-between mb-2">
                             <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: T3 }}>
-                              {format(parseISO(s.session_date), "EEEE, d MMM yyyy")}
+                              {format(displayDate(s.session_date), "EEEE, d MMM yyyy")}
                             </p>
                             <ComplianceBadge score={s.compliance_score} />
                           </div>
@@ -774,7 +775,7 @@ function ComplianceReportsSection() {
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name}</p>
                           <p className="text-[11px]" style={{ color: T3 }}>
-                            {[format(parseISO(s.session_date), "d MMM yyyy"), shiftNoteSubtitle(s as ShiftNoteLike)].filter(Boolean).join(" · ")}
+                            {[format(displayDate(s.session_date), "d MMM yyyy"), shiftNoteSubtitle(s as ShiftNoteLike)].filter(Boolean).join(" · ")}
                           </p>
                         </div>
                         <ComplianceBadge score={s.compliance_score} />
@@ -975,7 +976,7 @@ function AIInsightsSection() {
                   <div className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 cursor-pointer transition-colors group border-t" style={{ borderColor: BORDER }}>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? "N/A"}</p>
-                      <p className="text-[11px]" style={{ color: T3 }}>{format(parseISO(s.session_date), "MMM d")}</p>
+                      <p className="text-[11px]" style={{ color: T3 }}>{format(displayDate(s.session_date), "MMM d")}</p>
                     </div>
                     <ComplianceBadge score={s.compliance_score} />
                   </div>
@@ -1086,7 +1087,7 @@ function ExportCentreSection() {
         head: [["Participant", "Date", "Type", "Score", "Status"]],
         body: sessions_list.map((s: any) => [
           s.participant_name ?? "N/A",
-          format(parseISO(s.session_date), "dd/MM/yyyy"),
+          format(displayDate(s.session_date), "dd/MM/yyyy"),
           (s.session_type ?? "N/A").replace(/_/g, " "),
           s.compliance_score != null ? `${Math.round(s.compliance_score)}%` : "Draft",
           scoreLabel(s.compliance_score ?? 0),
@@ -1097,7 +1098,7 @@ function ExportCentreSection() {
 
     if (type === "session_csv") {
       const rows = (sessions as any[]).map(s => [
-        s.id, s.participant_name ?? "", format(parseISO(s.session_date), "dd/MM/yyyy"),
+        s.id, s.participant_name ?? "", format(displayDate(s.session_date), "dd/MM/yyyy"),
         (s.session_type ?? "").replace(/_/g, " "), s.duration_minutes ?? "",
         s.compliance_score != null ? `${Math.round(s.compliance_score)}%` : "Draft",
         s.status ?? "",

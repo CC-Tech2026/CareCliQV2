@@ -10,6 +10,7 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import {
   AlertTriangle, BadgeCheck, ClipboardCheck,
   ShieldAlert, UserRound, ArrowRight, CheckCircle2,
@@ -62,7 +63,7 @@ const SEV_RANK: Record<Severity, number> = { critical: 0, high: 1, medium: 2, lo
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function safeDate(v?: string | null) {
   if (!v) return "";
-  try { return format(parseISO(v), "d MMM"); } catch { return v; }
+  try { return format(displayDate(v), "d MMM"); } catch { return v; }
 }
 
 function daysLeft(expiry?: string | null) {

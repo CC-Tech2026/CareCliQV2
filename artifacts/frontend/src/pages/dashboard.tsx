@@ -2,6 +2,7 @@ import { Link, Redirect } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { format, parseISO } from "date-fns";
+import { appNow, displayDate } from "@/lib/datetime";
 import { useState, type ComponentType } from "react";
 import { ComplianceDetailCard } from "@/components/compliance/ComplianceDetailCard";
 import { ComplianceTrendChart } from "@/components/compliance/ComplianceTrendChart";
@@ -64,7 +65,7 @@ const CORAL = DS.BRAND.secondary;
 function safeDate(value?: string | null, fallback = "Not recorded") {
   if (!value) return fallback;
   try {
-    return format(parseISO(value), "MMM d");
+    return format(displayDate(value), "MMM d");
   } catch {
     return value;
   }
@@ -224,7 +225,7 @@ function initials(name?: string | null) {
 function sessionTime(value?: string | null) {
   if (!value) return "Time not recorded";
   try {
-    return format(parseISO(value), "h:mm a");
+    return format(displayDate(value), "h:mm a");
   } catch {
     return safeDate(value);
   }
@@ -968,7 +969,7 @@ function WorkerDashboardView({
   const { user } = useAuth();
   const { translate } = useAccessibility();
   const firstName = (user?.full_name || "there").split(" ")[0];
-  const dateLabel = format(new Date(), "EEEE d MMMM");
+  const dateLabel = format(appNow(), "EEEE d MMMM");
 
   const complianceQuery = useOrgQuery(["worker", "compliance-detail", trendDays], {
     queryFn: () => getWorkerComplianceDetail(trendDays),
@@ -1106,7 +1107,7 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
-            {format(new Date(), "EEEE, d MMMM yyyy")}
+            {format(appNow(), "EEEE, d MMMM yyyy")}
           </p>
           <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
             {greeting}, {firstName}

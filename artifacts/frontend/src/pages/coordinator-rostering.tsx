@@ -47,7 +47,7 @@ import { UnassignedShiftPanel }   from "@/components/coordinator/UnassignedShift
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { appLocalDateKey } from "@/lib/datetime";
+import { appLocalDateKey, appNow, appTodayKey, isOtherBranchZone, zoneAbbreviation, zonedDate } from "@/lib/datetime";
 import CoordinatorLivePage from "./coordinator-live";
 import CoordinatorMonitorPage from "./coordinator-monitor";
 
@@ -92,9 +92,11 @@ function statusCfg(s: string | null | undefined, translate: (key: string) => str
   return { ...cfg, label: translate(cfg.labelKey) };
 }
 
+/** The shift's start on its own clock (its participant's branch), for
+ * placing it on a day and showing its time. Not for arithmetic. */
 function parseStart(s: CoordinatorShiftRecord): Date | null {
   if (!s.scheduled_start) return null;
-  try { return parseISO(s.scheduled_start); } catch { return null; }
+  try { return zonedDate(s.scheduled_start, s.timezone); } catch { return null; }
 }
 
 function ShiftChip({ shift }: { shift: CoordinatorShiftRecord }) {
@@ -265,8 +267,11 @@ function DayPanel({
           dayShifts.map((shift) => {
             const cfg   = statusCfg(shift.status, translate);
             const start = parseStart(shift);
-            const end   = shift.scheduled_end ? parseISO(shift.scheduled_end) : null;
-            const durMs = start && end ? end.getTime() - start.getTime() : null;
+            const end   = shift.scheduled_end ? zonedDate(shift.scheduled_end, shift.timezone) : null;
+            // Length from the real instants, so a daylight-saving night counts right.
+            const durMs = shift.scheduled_start && shift.scheduled_end
+              ? new Date(shift.scheduled_end).getTime() - new Date(shift.scheduled_start).getTime()
+              : null;
             const durH  = durMs != null ? (durMs / 3600000).toFixed(1) : null;
             return (
               <div key={shift.id} className="rounded-xl border p-3.5" style={{ borderColor: BORDER, borderLeftWidth: 3, borderLeftColor: cfg.color }}>
@@ -278,6 +283,7 @@ function DayPanel({
                     <Clock3 size={11} />
                     {start ? format(start, "h:mm a") : "N/A"}
                     {end ? ` – ${format(end, "h:mm a")}` : ""}
+                    {shift.scheduled_start && isOtherBranchZone(shift.timezone) ? ` ${zoneAbbreviation(shift.scheduled_start, shift.timezone)}` : ""}
                     {durH ? ` · ${durH}h` : ""}
                   </span>
                 </div>
@@ -352,9 +358,10 @@ export default function CoordinatorRosteringPage() {
     setSavedLayout(layout);
     try { localStorage.setItem(LAYOUT_STORAGE_KEY, layout); } catch { /* private window */ }
   };
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [weekStart,    setWeekStart]    = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [selectedDay,  setSelectedDay]  = useState(new Date());
+  // Today in the business location, not wherever this computer is.
+  const [currentMonth, setCurrentMonth] = useState(() => appNow());
+  const [weekStart,    setWeekStart]    = useState(() => startOfWeek(appNow(), { weekStartsOn: 1 }));
+  const [selectedDay,  setSelectedDay]  = useState(() => appNow());
   const [statusFilter, setStatusFilter] = useState("all");
   const [workerFilter, setWorkerFilter] = useState("all");
   const [assignOpen,   setAssignOpen]   = useState(false);
@@ -415,8 +422,8 @@ export default function CoordinatorRosteringPage() {
   const openShiftsQuery = useOrgQuery(["coordinator", "open-shifts"], {
     queryFn: () =>
       listCoordinatorShifts({
-        start_date: `${format(addDays(new Date(), -14), "yyyy-MM-dd")}T00:00:00Z`,
-        end_date: `${format(addDays(new Date(), 91), "yyyy-MM-dd")}T23:59:59Z`,
+        start_date: `${format(addDays(appNow(), -14), "yyyy-MM-dd")}T00:00:00Z`,
+        end_date: `${format(addDays(appNow(), 91), "yyyy-MM-dd")}T23:59:59Z`,
         status: "unassigned",
         limit: 1000,
       }),
@@ -481,7 +488,7 @@ export default function CoordinatorRosteringPage() {
   }, [workers]);
 
   const todayKey       = appLocalDateKey(new Date().toISOString());
-  const shiftsToday    = shifts.filter((s) => s.scheduled_start && appLocalDateKey(s.scheduled_start) === todayKey);
+  const shiftsToday    = shifts.filter((s) => s.scheduled_start && appLocalDateKey(s.scheduled_start, s.timezone) === todayKey);
   const activeShifts   = shifts.filter((s) => s.status === "in_progress" || s.status === "clocked_in");
   const scheduledCount = shifts.filter((s) => s.status === "scheduled").length;
 
@@ -513,7 +520,7 @@ export default function CoordinatorRosteringPage() {
     setViewMode("day");
   };
   const handleToday = () => {
-    const now = new Date();
+    const now = appNow();
     setCurrentMonth(now);
     setWeekStart(startOfWeek(now, { weekStartsOn: 1 }));
     setSelectedDay(now);
@@ -530,7 +537,7 @@ export default function CoordinatorRosteringPage() {
     getShiftDetail(shiftId)
       .then((shift) => {
         if (cancelled || !shift?.scheduled_start) return;
-        const target = parseISO(shift.scheduled_start);
+        const target = zonedDate(shift.scheduled_start, shift.timezone);
         setPageTab("roster");
         setViewMode("roster");
         setCurrentMonth(target);
@@ -543,7 +550,7 @@ export default function CoordinatorRosteringPage() {
 
   const showShiftOnRoster = (shift: CoordinatorShiftRecord) => {
     if (!shift.scheduled_start) return;
-    const target = parseISO(shift.scheduled_start);
+    const target = zonedDate(shift.scheduled_start, shift.timezone);
     setOpenListOpen(false);
     setPageTab("roster");
     setViewMode("roster");
@@ -967,7 +974,7 @@ export default function CoordinatorRosteringPage() {
         onFindWorker={(shift) => { setOpenListOpen(false); setFindWorkerFor(shift); }}
         onAddOpenShift={() => {
           setOpenListOpen(false);
-          setAssignTarget({ worker: null, date: format(new Date(), "yyyy-MM-dd") });
+          setAssignTarget({ worker: null, date: appTodayKey() });
           setAssignOpen(true);
         }}
       />

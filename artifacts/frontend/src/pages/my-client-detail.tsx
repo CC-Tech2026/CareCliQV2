@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { useLocation } from "wouter";
 import {
   AlertTriangle,
@@ -143,7 +144,7 @@ const SPEECH_LANGUAGE_CODES: Record<string, string> = {
 function safeDate(value?: string | null, notRecorded = "Not recorded") {
   if (!value) return notRecorded;
   try {
-    return format(parseISO(value), "d MMM yyyy");
+    return format(displayDate(value), "d MMM yyyy");
   } catch {
     return value;
   }

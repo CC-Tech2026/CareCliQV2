@@ -207,6 +207,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The app reads the caller's zone from every response (org_context).
+    expose_headers=["X-CareCliQ-Timezone"],
 )
 # CCQ-104: attach organisation_id to every request from the JWT claim.
 # Runs after CORS so preflight OPTIONS requests pass through unaffected.

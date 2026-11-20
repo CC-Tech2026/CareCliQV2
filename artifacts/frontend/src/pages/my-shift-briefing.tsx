@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { Link, useLocation, useParams } from "wouter";
 import {
   AlertTriangle,
@@ -29,7 +30,7 @@ import { useWorkerTutorialOptional } from "@/hooks/useWorkerTutorial";
 function formatNoteDate(value?: string | null) {
   if (!value) return "";
   try {
-    return format(parseISO(value), "d MMM yyyy");
+    return format(displayDate(value), "d MMM yyyy");
   } catch {
     return value;
   }
@@ -38,7 +39,7 @@ function formatNoteDate(value?: string | null) {
 function formatUpdatedDate(value?: string | null) {
   if (!value) return "";
   try {
-    return format(parseISO(value), "d MMM yyyy");
+    return format(displayDate(value), "d MMM yyyy");
   } catch {
     return value;
   }

@@ -2,13 +2,15 @@ import { PersonPreview } from "./PersonPreview";
 import { detailIfShared, sharedNames } from "@/lib/person-identity";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { Phone, Mail, Target, CalendarClock, Ban, UserSearch, Repeat } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { datetimeLocalValueToUtcIso, utcIsoToDatetimeLocalValue } from "@/lib/datetime";
+import { datetimeLocalValueToUtcIso, utcIsoToDatetimeLocalValue, zonedDate } from "@/lib/datetime";
+import { ShiftZoneNote } from "@/components/branches/ShiftZoneNote";
+import { ZoneLabel } from "@/components/branches/ZoneLabel";
 import { SidePanel } from "@/components/layout/SidePanel";
 import { ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
@@ -158,16 +160,17 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
   });
 
   const openReschedule = () => {
-    setDraftStart(shift?.scheduled_start ? utcIsoToDatetimeLocalValue(shift.scheduled_start) : "");
-    setDraftEnd(shift?.scheduled_end ? utcIsoToDatetimeLocalValue(shift.scheduled_end) : "");
+    // The shift's own zone (its participant's branch), not the viewer's.
+    setDraftStart(shift?.scheduled_start ? utcIsoToDatetimeLocalValue(shift.scheduled_start, shift.timezone) : "");
+    setDraftEnd(shift?.scheduled_end ? utcIsoToDatetimeLocalValue(shift.scheduled_end, shift.timezone) : "");
     setRescheduling(true);
   };
 
   const handleSaveReschedule = () => {
     if (!draftStart) return;
     rescheduleMut.mutate({
-      scheduled_start: datetimeLocalValueToUtcIso(draftStart),
-      scheduled_end: draftEnd ? datetimeLocalValueToUtcIso(draftEnd) : undefined,
+      scheduled_start: datetimeLocalValueToUtcIso(draftStart, shift?.timezone),
+      scheduled_end: draftEnd ? datetimeLocalValueToUtcIso(draftEnd, shift?.timezone) : undefined,
     });
   };
 
@@ -189,8 +192,9 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
     cancelMut.mutate();
   };
 
-  const start = shift?.scheduled_start ? parseISO(shift.scheduled_start) : null;
-  const end = shift?.scheduled_end ? parseISO(shift.scheduled_end) : null;
+  // Shown on the shift's own clock, whatever zone the viewer is in.
+  const start = shift?.scheduled_start ? zonedDate(shift.scheduled_start, shift.timezone) : null;
+  const end = shift?.scheduled_end ? zonedDate(shift.scheduled_end, shift.timezone) : null;
   const goalsWithTasks = (goalsQuery.data ?? [])
     .map((goal) => ({ goal, tasks: (tasksQuery.data ?? []).filter((t) => t.goal_id === goal.id) }))
     .filter(({ tasks }) => tasks.length > 0);
@@ -205,6 +209,7 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
         description={
           <>
             {start && format(start, "EEE d MMM, h:mm a")}{end ? ` – ${format(end, "h:mm a")}` : ""}
+            {shift?.scheduled_start && <ZoneLabel tz={shift.timezone} at={shift.scheduled_start} className="ml-1" />}
             {shift?.shift_type ? ` · ${shift.shift_type.replace(/_/g, " ")}` : ""}
           </>
         }
@@ -269,6 +274,7 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
               <label className="text-sm font-medium" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.end")}</label>
               <DateTimePicker value={draftEnd} onChange={setDraftEnd} />
             </div>
+            <ShiftZoneNote tz={shift?.timezone} sampleIso={draftStart ? datetimeLocalValueToUtcIso(draftStart, shift?.timezone) : null} />
             <div className="flex items-center justify-end gap-2">
               <button type="button" onClick={() => setRescheduling(false)} disabled={rescheduleMut.isPending} className={ghostClass}>
                 {translate("coordinator.shiftAssign.rescheduleDiscard")}

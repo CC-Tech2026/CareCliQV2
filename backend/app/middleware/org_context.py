@@ -30,6 +30,9 @@ from ..core.timezone import reset_request_timezone, set_request_timezone, user_t
 
 logger = logging.getLogger(__name__)
 
+# The calling user's zone, on every authenticated response (see main.py CORS).
+TIMEZONE_HEADER = "X-CareCliQ-Timezone"
+
 # Paths that do NOT require an org context.
 # Prefix-matched: any path starting with one of these strings is exempt.
 #
@@ -161,6 +164,13 @@ class OrgContextMiddleware(BaseHTTPMiddleware):
         request.state.timezone = tz
         token = set_request_timezone(tz)
         try:
-            return await call_next(request)
+            response = await call_next(request)
         finally:
             reset_request_timezone(token)
+        # Tell the app which zone this person is on now, so a change to the
+        # business location or their branch shows straight away in every
+        # open session instead of after their next sign-in.
+        zone_name = getattr(tz, "key", None) or str(tz or "")
+        if zone_name:
+            response.headers[TIMEZONE_HEADER] = zone_name
+        return response

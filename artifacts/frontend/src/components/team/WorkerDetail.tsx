@@ -122,7 +122,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
-import { datetimeLocalValueToUtcIso, appTodayKey } from "@/lib/datetime";
+import { datetimeLocalValueToUtcIso, appTodayKey, formatAppTime, isOtherBranchZone, zoneAbbreviation } from "@/lib/datetime";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -3750,10 +3750,13 @@ function formatShiftTimeRange(s: ShiftHistoryRow): string | null {
   const start = s.clocked_in_at || s.scheduled_start;
   const end = s.clocked_out_at || s.scheduled_end;
   if (!start || !end) return null;
-  const startLabel = safeFormat(start, "h:mm a");
-  const endLabel = safeFormat(end, "h:mm a");
+  // On the shift's own clock (its participant's branch), with the zone when
+  // that differs from the viewer's.
+  const startLabel = formatAppTime(start, s.timezone);
+  const endLabel = formatAppTime(end, s.timezone);
   if (!startLabel || !endLabel) return null;
-  return `${startLabel} – ${endLabel}`;
+  const zone = isOtherBranchZone(s.timezone) ? ` ${zoneAbbreviation(start, s.timezone)}` : "";
+  return `${startLabel} – ${endLabel}${zone}`;
 }
 
 /** A plain summary row - clicking it opens the full audit trail as a side
@@ -3913,8 +3916,8 @@ export function ShiftAuditPanel({
   const sleepoverMut = useMutation({
     mutationFn: () =>
       markShiftSleepover(shift.id, {
-        sleepover_start: datetimeLocalValueToUtcIso(sleepoverStart),
-        sleepover_end: datetimeLocalValueToUtcIso(sleepoverEnd),
+        sleepover_start: datetimeLocalValueToUtcIso(sleepoverStart, shift.timezone),
+        sleepover_end: datetimeLocalValueToUtcIso(sleepoverEnd, shift.timezone),
       }),
     onSuccess: () => {
       toast({ title: "Shift marked as sleepover" });
@@ -3932,8 +3935,8 @@ export function ShiftAuditPanel({
   const callOutMut = useMutation({
     mutationFn: () =>
       logShiftCallOut(shift.id, {
-        start: datetimeLocalValueToUtcIso(callOutStart),
-        end: datetimeLocalValueToUtcIso(callOutEnd),
+        start: datetimeLocalValueToUtcIso(callOutStart, shift.timezone),
+        end: datetimeLocalValueToUtcIso(callOutEnd, shift.timezone),
         note: callOutNote || undefined,
       }),
     onSuccess: () => {

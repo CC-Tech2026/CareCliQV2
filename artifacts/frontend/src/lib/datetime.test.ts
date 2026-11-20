@@ -60,3 +60,40 @@ describe("branch zones", () => {
     expect(fmt("2026-08-24T07:30:00.000Z", "Mars/Olympus")).toMatch(/5:00\s*pm/i);
   });
 });
+
+describe("showing times on the right clock", () => {
+  it("reads a timestamp on a given zone's wall clock, whatever the browser's zone", async () => {
+    const { zonedDate } = await import("@/lib/datetime");
+    // 22:30 UTC is 9:00 am the next day in Adelaide (ACDT) and 9:30 am in Melbourne (AEDT).
+    const adelaide = zonedDate("2026-11-19T22:30:00Z", "Australia/Adelaide");
+    expect([adelaide.getDate(), adelaide.getHours(), adelaide.getMinutes()]).toEqual([20, 9, 0]);
+    const melbourne = zonedDate("2026-11-19T22:30:00Z", "Australia/Melbourne");
+    expect([melbourne.getDate(), melbourne.getHours(), melbourne.getMinutes()]).toEqual([20, 9, 30]);
+  });
+
+  it("keeps a plain date as that day and leaves app-built dates alone", async () => {
+    const { displayDate } = await import("@/lib/datetime");
+    const day = displayDate("2026-11-20");
+    expect([day.getFullYear(), day.getMonth(), day.getDate()]).toEqual([2026, 10, 20]);
+    const cell = new Date(2026, 10, 20);
+    expect(displayDate(cell)).toBe(cell);
+    const stamp = displayDate("2026-11-19T22:30:00Z", "Australia/Adelaide");
+    expect([stamp.getDate(), stamp.getHours()]).toEqual([20, 9]);
+  });
+
+  it("switches zone when the API says the location changed, and tells the app", async () => {
+    const { getAppTimezone, noteServerTimezone, setAppTimezone, TIMEZONE_CHANGED_EVENT } = await import("@/lib/datetime");
+    setAppTimezone("Australia/Adelaide");
+    const heard: string[] = [];
+    const listener = (e: Event) => heard.push((e as CustomEvent<string>).detail);
+    window.addEventListener(TIMEZONE_CHANGED_EVENT, listener);
+    noteServerTimezone("Australia/Adelaide");
+    noteServerTimezone("not a zone");
+    expect(heard).toEqual([]);
+    noteServerTimezone("Australia/Melbourne");
+    expect(getAppTimezone()).toBe("Australia/Melbourne");
+    expect(heard).toEqual(["Australia/Melbourne"]);
+    window.removeEventListener(TIMEZONE_CHANGED_EVENT, listener);
+    setAppTimezone(null);
+  });
+});

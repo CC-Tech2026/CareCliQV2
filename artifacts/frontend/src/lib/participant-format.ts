@@ -1,11 +1,19 @@
 import { format, parseISO } from "date-fns";
+import { zonedDate } from "@/lib/datetime";
 
 /** Shared formatting/status helpers for participant detail + list views. */
 
-export function safeFormat(dateStr?: string | null, fmt = "d MMM yyyy") {
+/**
+ * Format a date or timestamp from the API. A plain date ("1992-05-14") is
+ * that calendar day. A timestamp is shown on the clock of `tz` (a shift's
+ * or participant's zone) or else the user's own business location, never
+ * the zone the computer happens to be in.
+ */
+export function safeFormat(dateStr?: string | null, fmt = "d MMM yyyy", tz?: string | null) {
   if (!dateStr) return "N/A";
   try {
-    return format(parseISO(dateStr), fmt);
+    const isTimestamp = /T\d{2}:\d{2}/.test(dateStr);
+    return format(isTimestamp ? zonedDate(dateStr, tz) : parseISO(dateStr), fmt);
   } catch {
     return dateStr;
   }

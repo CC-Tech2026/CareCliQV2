@@ -1,4 +1,5 @@
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { MessageSquare } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRoute } from "wouter";
@@ -81,7 +82,7 @@ export default function WorkerFeedbackPage() {
           </h1>
           <p className="text-xs font-bold" style={{ color: MUTED }}>
             {data.submitted_at
-              ? format(parseISO(data.submitted_at), "EEEE d MMMM yyyy")
+              ? format(displayDate(data.submitted_at), "EEEE d MMMM yyyy")
               : ""}
           </p>
         </div>
@@ -117,7 +118,7 @@ export default function WorkerFeedbackPage() {
       ) : (
         <p className="text-center text-sm font-bold text-emerald-700">
           {translateParams("feedback.acknowledged", {
-            date: format(parseISO(data.acknowledged_at!), "d MMM yyyy 'at' h:mm a"),
+            date: format(displayDate(data.acknowledged_at!), "d MMM yyyy 'at' h:mm a"),
           })}
         </p>
       )}

@@ -1,3 +1,4 @@
+import { displayDate } from "@/lib/datetime";
 ﻿import { format, parseISO } from "date-fns";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -23,7 +24,7 @@ export type ComplianceTrendPoint = {
 
 function formatDay(value: string) {
   try {
-    return format(parseISO(value), "MMM d");
+    return format(displayDate(value), "MMM d");
   } catch {
     return value;
   }

@@ -1,3 +1,4 @@
+import { appZone } from "@/lib/datetime";
 import type { PlanMeetingType } from "@/services/coordinatorService";
 
 /** Meeting types in the words NDIS providers use, with a line on when each fits. */
@@ -48,9 +49,9 @@ export function formatMeetingDate(value: string | null | undefined): string {
   if (!value) return "";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
-  const date = d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+  const date = d.toLocaleDateString("en-AU", { ...(/T\d{2}:\d{2}/.test(value) ? { timeZone: appZone() } : {}), day: "numeric", month: "short", year: "numeric" });
   if (!/T\d{2}:\d{2}/.test(value)) return date;
-  const time = d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" }).replace(" ", "").toLowerCase();
+  const time = d.toLocaleTimeString("en-AU", { timeZone: appZone(), hour: "numeric", minute: "2-digit" }).replace(" ", "").toLowerCase();
   return `${date}, ${time}`;
 }
 

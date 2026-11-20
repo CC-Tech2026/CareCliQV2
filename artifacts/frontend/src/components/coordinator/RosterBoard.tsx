@@ -55,7 +55,7 @@ import {
   type Fit,
 } from "./rosterShared";
 import { CALENDAR_LEGEND, CALENDAR_MINUTE_PX, RosterCalendar, snapMinutes, swallowNextClick } from "./RosterCalendar";
-import { appLocalDateKey, appMinutesOfDay, datetimeLocalValueToUtcIso, formatAppTime } from "@/lib/datetime";
+import { appLocalDateKey, appMinutesOfDay, datetimeLocalValueToUtcIso, displayDate, formatAppTime, zonedDate } from "@/lib/datetime";
 import { clock } from "./rosterShared";
 
 const PLUM   = "var(--cc-plum)";
@@ -229,7 +229,7 @@ function ShiftDragClone({ shift }: { shift: CoordinatorShiftRecord }) {
       </p>
       {start && (
         <p className="text-[11px] font-medium opacity-80" style={{ color: clrs.color }}>
-          {format(start, "EEE d MMM")}, {formatAppTime(shift.scheduled_start!, shift.timezone)}{end ? ` – ${formatAppTime(shift.scheduled_end!, shift.timezone)}` : ""}
+          {format(zonedDate(shift.scheduled_start!, shift.timezone), "EEE d MMM")}, {formatAppTime(shift.scheduled_start!, shift.timezone)}{end ? ` – ${formatAppTime(shift.scheduled_end!, shift.timezone)}` : ""}
           <ZoneLabel tz={shift.timezone} at={shift.scheduled_start!} className="ml-1" />
         </p>
       )}
@@ -294,7 +294,7 @@ function UnassignModal({
             {translateParams("coordinator.dnd.removeWorkerDesc", {
               worker: workerName,
               shift: shift.participant_name || translate("coordinator.dnd.thisShift"),
-              date: start ? ` on ${format(start, "d MMM")}` : "",
+              date: start && shift.scheduled_start ? ` on ${format(zonedDate(shift.scheduled_start, shift.timezone), "d MMM")}` : "",
             })}
           </p>
         </div>
@@ -513,7 +513,7 @@ export function RosterBoard({
   const retimeShift = useCallback(async (shift: CoordinatorShiftRecord, start: string, end: string) => {
     const newDay = appLocalDateKey(start, shift.timezone);
     const movedDay = !!shift.scheduled_start && newDay !== appLocalDateKey(shift.scheduled_start, shift.timezone);
-    const label = `${movedDay ? `${format(parseISO(newDay), "EEE d MMM")}, ` : ""}${clock(appMinutesOfDay(start, shift.timezone))} to ${clock(appMinutesOfDay(end, shift.timezone))}`;
+    const label = `${movedDay ? `${format(displayDate(newDay), "EEE d MMM")}, ` : ""}${clock(appMinutesOfDay(start, shift.timezone))} to ${clock(appMinutesOfDay(end, shift.timezone))}`;
     let warning: string | undefined;
     try {
       if (!isOpenShift(shift)) {

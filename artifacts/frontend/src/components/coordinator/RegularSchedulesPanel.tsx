@@ -16,7 +16,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { detailIfShared, matchesPerson, sharedNames, workerDetail, workerSearchText } from "@/lib/person-identity";
-import { formatAppTime } from "@/lib/datetime";
+import { appTodayKey, displayDate, formatAppTime, isOtherBranchZone, zoneAbbreviation, zonedDate } from "@/lib/datetime";
 import {
   changeShiftSeries,
   endShiftSeries,
@@ -33,9 +33,10 @@ const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-const today = () => format(new Date(), "yyyy-MM-dd");
+// Today in the user's business location, not wherever the computer is.
+const today = () => appTodayKey();
 const hhmm = (t: string) => t.slice(0, 5);
-const dayText = (iso: string) => format(parseISO(iso), "EEE d MMM");
+const dayText = (iso: string) => format(displayDate(iso), "EEE d MMM");
 
 /** What happened, after a schedule is started or changed. */
 export function SeriesOutcome({
@@ -434,7 +435,7 @@ export function RegularSchedulesPanel({
                           {s.worker_name ? `${s.worker_name}${detail ? ` · ${detail}` : ""}` : "Open shifts"}
                         </p>
                         <p className="mt-0.5 text-[12px]" style={{ color: MUTED }}>
-                          {s.next_start ? `Next ${format(parseISO(s.next_start), "EEE d MMM")}, ${formatAppTime(s.next_start)}` : "Nothing coming up"}
+                          {s.next_start ? `Next ${format(zonedDate(s.next_start, s.timezone), "EEE d MMM")}, ${formatAppTime(s.next_start, s.timezone)}${isOtherBranchZone(s.timezone) ? ` ${zoneAbbreviation(s.next_start, s.timezone)}` : ""}` : "Nothing coming up"}
                           {" · "}
                           {s.end_date ? `until ${dayText(s.end_date)}` : "keeps going"}
                         </p>

@@ -21,7 +21,7 @@ import {
 import { Link, useLocation } from "wouter";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { SectionInfo } from "@/components/ui/section-info";
-import { appLocalDateKey } from "@/lib/datetime";
+import { appLocalDateKey, appNow, appTodayKey, isOtherBranchZone, zoneAbbreviation, zonedDate } from "@/lib/datetime";
 import {
   anonymiseName,
   formatShiftBlockTime,
@@ -42,7 +42,8 @@ const MIN_BLOCK_PX = 30;
 
 function shiftOnLocalDay(shift: CalendarShift, d: Date): boolean {
   if (!shift.scheduled_start) return false;
-  return appLocalDateKey(shift.scheduled_start) === format(d, "yyyy-MM-dd");
+  // The shift's own calendar day (its participant's branch).
+  return appLocalDateKey(shift.scheduled_start, shift.timezone) === format(d, "yyyy-MM-dd");
 }
 
 function shiftsOnDay(shifts: CalendarShift[], d: Date) {
@@ -61,7 +62,8 @@ function timeOffOnDay(blocks: TimeOffBlock[], d: Date) {
 function parseStart(shift: CalendarShift): Date | null {
   if (!shift.scheduled_start) return null;
   try {
-    return parseISO(shift.scheduled_start);
+    // On the shift's own clock; for showing, not arithmetic.
+    return zonedDate(shift.scheduled_start, shift.timezone);
   } catch {
     return null;
   }
@@ -169,7 +171,7 @@ function WorkerMonthGrid({
           );
           const off = timeOffOnDay(timeOff, day);
           const isSelected = isSameDay(day, selectedDay);
-          const today = isToday(day);
+          const today = (format(day, "yyyy-MM-dd") === appTodayKey());
           const inMonth = isSameMonth(day, month);
 
           return (
@@ -257,7 +259,7 @@ function WorkerDayPanel({
           <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
             {format(day, "EEEE")}
           </p>
-          <p className="text-xl font-black" style={{ color: isToday(day) ? PLUM : TEXT }}>
+          <p className="text-xl font-black" style={{ color: (format(day, "yyyy-MM-dd") === appTodayKey()) ? PLUM : TEXT }}>
             {format(day, "d MMMM yyyy")}
           </p>
         </div>
@@ -297,8 +299,10 @@ function WorkerDayPanel({
           dayShifts.map((shift) => {
             const cfg = shiftStatusCfg(shift, translate);
             const start = parseStart(shift);
-            const end = shift.scheduled_end ? parseISO(shift.scheduled_end) : null;
-            const durMs = start && end ? end.getTime() - start.getTime() : null;
+            const end = shift.scheduled_end ? zonedDate(shift.scheduled_end, shift.timezone) : null;
+            const durMs = shift.scheduled_start && shift.scheduled_end
+              ? new Date(shift.scheduled_end).getTime() - new Date(shift.scheduled_start).getTime()
+              : null;
             const durH = durMs != null ? (durMs / 3600000).toFixed(1) : null;
 
             return (
@@ -324,6 +328,7 @@ function WorkerDayPanel({
                     <Clock3 size={11} />
                     {start ? format(start, "h:mm a") : translate("common.emDash")}
                     {end ? ` – ${format(end, "h:mm a")}` : ""}
+                    {shift.scheduled_start && isOtherBranchZone(shift.timezone) ? ` ${zoneAbbreviation(shift.scheduled_start, shift.timezone)}` : ""}
                     {durH ? ` · ${durH}h` : ""}
                   </span>
                 </div>
@@ -358,9 +363,9 @@ export default function WorkerScheduleCalendar() {
   const { translate, translateParams } = useAccessibility();
   const [, setLocation] = useLocation();
   const [viewMode, setViewMode] = useState<ViewMode>("month");
-  const [month, setMonth] = useState(() => startOfMonth(new Date()));
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [selectedDay, setSelectedDay] = useState(() => new Date());
+  const [month, setMonth] = useState(() => startOfMonth(appNow()));
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(appNow(), { weekStartsOn: 1 }));
+  const [selectedDay, setSelectedDay] = useState(() => appNow());
   const [confirmShift, setConfirmShift] = useState<CalendarShift | null>(null);
   const [syncOpen, setSyncOpen] = useState(false);
 
@@ -441,7 +446,7 @@ export default function WorkerScheduleCalendar() {
     else setWeekStart((w) => new Date(w.getTime() + 7 * 86400000));
   };
   const handleToday = () => {
-    const now = new Date();
+    const now = appNow();
     setMonth(startOfMonth(now));
     setWeekStart(startOfWeek(now, { weekStartsOn: 1 }));
     setSelectedDay(now);
@@ -605,7 +610,7 @@ export default function WorkerScheduleCalendar() {
                 className="rounded-2xl border bg-card p-3"
                 style={{ borderColor: BORDER }}
               >
-                <p className="mb-2 text-xs font-black uppercase" style={{ color: isToday(day) ? PLUM : MUTED }}>
+                <p className="mb-2 text-xs font-black uppercase" style={{ color: (format(day, "yyyy-MM-dd") === appTodayKey()) ? PLUM : MUTED }}>
                   {format(day, "EEE d MMM")}
                 </p>
                 {off.length > 0 && (

@@ -1,3 +1,4 @@
+import { displayDate, isOtherBranchZone, zoneAbbreviation, zonedDate } from "@/lib/datetime";
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -107,8 +108,8 @@ function RequestCard({ request }: { request: ScheduleRequest }) {
         </p>
       )}
       <p className="mt-2 text-[10px] font-bold" style={{ color: MUTED }}>
-        {translate("scheduleRequests.submitted")} {format(parseISO(request.created_at), "d MMM yyyy")}
-        {request.resolved_at && ` · ${translate("scheduleRequests.resolved")} ${format(parseISO(request.resolved_at), "d MMM yyyy")}`}
+        {translate("scheduleRequests.submitted")} {format(displayDate(request.created_at), "d MMM yyyy")}
+        {request.resolved_at && ` · ${translate("scheduleRequests.resolved")} ${format(displayDate(request.resolved_at), "d MMM yyyy")}`}
       </p>
     </div>
   );
@@ -346,7 +347,7 @@ export default function WorkerScheduleRequests() {
               <option value="">{translate("scheduleRequests.selectShift")}</option>
               {(shiftsData?.shifts ?? []).map((s: WorkerShift) => (
                 <option key={s.id} value={s.id}>
-                  {s.participant_name} · {s.scheduled_start ? format(parseISO(s.scheduled_start), "EEE d MMM h:mm a") : s.id}
+                  {s.participant_name} · {s.scheduled_start ? `${format(zonedDate(s.scheduled_start, s.timezone), "EEE d MMM h:mm a")}${isOtherBranchZone(s.timezone) ? ` ${zoneAbbreviation(s.scheduled_start, s.timezone)}` : ""}` : s.id}
                 </option>
               ))}
             </select>

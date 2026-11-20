@@ -19,6 +19,10 @@ import {
   type OrgEvent, type OrgEventPayload,
 } from "@/services/hubService";
 import { listCoordinatorShifts, type CoordinatorShiftRecord } from "@/services/coordinatorService";
+import { appLocalDateKey, appNow, appTodayKey, displayDate, isOtherBranchZone, zoneAbbreviation, zonedDate } from "@/lib/datetime";
+
+/** A calendar day (built from a yyyy-MM-dd key) is today in the business location. */
+const isAppToday = (day: Date) => format(day, "yyyy-MM-dd") === appTodayKey();
 import { useToast } from "@/hooks/use-toast";
 
 const TEXT = "var(--cc-text)";
@@ -133,10 +137,13 @@ function timeTopPx(hhmm: string): number {
   const mins = hhmmToMinutes(hhmm) - HOUR_START * 60;
   return Math.max(0, Math.min(GRID_HEIGHT, (mins / 60) * HOUR_PX));
 }
+/** On the shift's own clock (its participant's branch), with the zone when
+ * that isn't the director's business location. */
 function shiftTimes(s: CoordinatorShiftRecord): string {
   if (!s.scheduled_start) return "No time set";
-  const start = clock(new Date(s.scheduled_start));
-  return s.scheduled_end ? `${start} to ${clock(new Date(s.scheduled_end))}` : start;
+  const start = clock(zonedDate(s.scheduled_start, s.timezone));
+  const range = s.scheduled_end ? `${start} to ${clock(zonedDate(s.scheduled_end, s.timezone))}` : start;
+  return isOtherBranchZone(s.timezone) ? `${range} ${zoneAbbreviation(s.scheduled_start, s.timezone)}` : range;
 }
 
 /** A row in the day list: a coloured edge for the kind, then what and when. */
@@ -245,8 +252,9 @@ export default function MDCalendarPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const [viewMode, setViewMode] = useState<ViewMode>("month");
-  const [anchor, setAnchor] = useState(() => new Date());
-  const [selectedDay, setSelectedDay] = useState(() => new Date());
+  // Today in the business location, not wherever this computer is.
+  const [anchor, setAnchor] = useState(() => appNow());
+  const [selectedDay, setSelectedDay] = useState(() => appNow());
   const [events, setEvents] = useState<OrgEvent[] | null>(null);
   const [shifts, setShifts] = useState<CoordinatorShiftRecord[] | null>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -280,7 +288,7 @@ export default function MDCalendarPage() {
   // ?book=1 (the search's "Book a meeting") opens the booking panel, once.
   useEffect(() => {
     if (new URLSearchParams(search).get("book") !== "1") return;
-    setBookingDraft({ date: new Date(), start: "09:00", end: "10:00" });
+    setBookingDraft({ date: appNow(), start: "09:00", end: "10:00" });
     setEditingEvent(null);
     setBookingOpen(true);
     navigate("/md/calendar", { replace: true });
@@ -329,7 +337,9 @@ export default function MDCalendarPage() {
     const map = new Map<string, CoordinatorShiftRecord[]>();
     for (const s of shifts ?? []) {
       if (!s.scheduled_start) continue;
-      const key = s.scheduled_start.slice(0, 10);
+      // The shift's own calendar day. (Slicing the UTC timestamp put every
+      // shift before 10:30 am Adelaide time on the day before.)
+      const key = appLocalDateKey(s.scheduled_start, s.timezone);
       map.set(key, [...(map.get(key) ?? []), s]);
     }
     for (const list of map.values()) list.sort((a, b) => (a.scheduled_start ?? "").localeCompare(b.scheduled_start ?? ""));
@@ -356,7 +366,7 @@ export default function MDCalendarPage() {
     else setAnchor((d) => addDays(d, 1));
   }
   function goToday() {
-    const now = new Date();
+    const now = appNow();
     setAnchor(now);
     setSelectedDay(now);
   }
@@ -400,7 +410,7 @@ export default function MDCalendarPage() {
       setEvents((prev) => [...(prev ?? []).filter((e) => e.id !== saved.id), saved]);
       setBookingOpen(false);
       setEditingEvent(null);
-      const when = `${saved.title} on ${format(parseISO(saved.event_date), "d MMM")}${saved.start_time ? ` at ${clockFromHHMM(saved.start_time)}` : ""}.`;
+      const when = `${saved.title} on ${format(displayDate(saved.event_date), "d MMM")}${saved.start_time ? ` at ${clockFromHHMM(saved.start_time)}` : ""}.`;
       toast({
         title: editingEvent ? "Meeting updated" : "Meeting booked",
         description: [when, inviteSummary(invites, !!editingEvent)].filter(Boolean).join(" "),
@@ -505,10 +515,10 @@ export default function MDCalendarPage() {
                   const vacantCount = dayShiftList.filter((s) => isVacantShift(s) && !isCancelledShift(s)).length;
                   const inMonth = isSameMonth(day, anchor);
                   const selected = isSameDay(day, selectedDay);
-                  const today = isToday(day);
+                  const today = isAppToday(day);
                   const items = [
                     ...dayEvs.map((ev) => ({ key: ev.id, tone: eventTone(ev), struck: false, text: `${ev.start_time ? `${clockFromHHMM(ev.start_time)} ` : ""}${ev.title}` })),
-                    ...dayShiftList.map((s) => ({ key: s.id, tone: shiftTone(s), struck: isCancelledShift(s), text: `${s.scheduled_start ? `${clock(new Date(s.scheduled_start))} ` : ""}${s.participant_name || "Participant"}` })),
+                    ...dayShiftList.map((s) => ({ key: s.id, tone: shiftTone(s), struck: isCancelledShift(s), text: `${s.scheduled_start ? `${clock(zonedDate(s.scheduled_start, s.timezone))} ` : ""}${s.participant_name || "Participant"}` })),
                   ];
                   return (
                     <button
@@ -556,10 +566,10 @@ export default function MDCalendarPage() {
               <div className="flex items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: BORDER }}>
                 <div className="min-w-0">
                   <h2 className="text-base font-semibold" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
-                    {isToday(effectiveDay) ? "Today" : format(effectiveDay, "EEEE d MMMM")}
+                    {isAppToday(effectiveDay) ? "Today" : format(effectiveDay, "EEEE d MMMM")}
                   </h2>
                   <p className="text-xs" style={{ color: MUTED }}>
-                    {isToday(effectiveDay) ? `${format(effectiveDay, "EEEE d MMMM")} · ` : ""}
+                    {isAppToday(effectiveDay) ? `${format(effectiveDay, "EEEE d MMMM")} · ` : ""}
                     {dayShifts.length} {dayShifts.length === 1 ? "shift" : "shifts"} · {dayEvents.length} {dayEvents.length === 1 ? "meeting" : "meetings"}
                   </p>
                 </div>
@@ -602,10 +612,10 @@ export default function MDCalendarPage() {
               <div />
               {days.map((day) => (
                 <div key={format(day, "yyyy-MM-dd")} className="flex flex-col items-center gap-1 border-l py-2" style={{ borderColor: BORDER }}>
-                  <span className="text-xs font-medium" style={{ color: isToday(day) ? PURPLE : MUTED }}>{format(day, "EEE")}</span>
+                  <span className="text-xs font-medium" style={{ color: isAppToday(day) ? PURPLE : MUTED }}>{format(day, "EEE")}</span>
                   <span
                     className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold"
-                    style={{ background: isToday(day) ? "#7C3AED" : "transparent", color: isToday(day) ? "#fff" : TEXT }}
+                    style={{ background: isAppToday(day) ? "#7C3AED" : "transparent", color: isAppToday(day) ? "#fff" : TEXT }}
                   >
                     {format(day, "d")}
                   </span>
@@ -669,18 +679,18 @@ export default function MDCalendarPage() {
                         />
                       ))}
 
-                      {isToday(day) && (
+                      {isAppToday(day) && (
                         <div
                           className="pointer-events-none absolute inset-x-0 z-10 border-t-2"
-                          style={{ top: timeTopPx(format(new Date(), "HH:mm")), borderColor: "#7C3AED" }}
+                          style={{ top: timeTopPx(format(appNow(), "HH:mm")), borderColor: "#7C3AED" }}
                         >
                           <span className="absolute -left-1 -top-[5px] h-2 w-2 rounded-full" style={{ background: "#7C3AED" }} />
                         </div>
                       )}
 
                       {timedShifts.map((s) => {
-                        const startHHMM = format(new Date(s.scheduled_start!), "HH:mm");
-                        const endHHMM = s.scheduled_end ? format(new Date(s.scheduled_end), "HH:mm") : minutesToHHMM(hhmmToMinutes(startHHMM) + 60);
+                        const startHHMM = format(zonedDate(s.scheduled_start!, s.timezone), "HH:mm");
+                        const endHHMM = s.scheduled_end ? format(zonedDate(s.scheduled_end, s.timezone), "HH:mm") : minutesToHHMM(hhmmToMinutes(startHHMM) + 60);
                         const top = timeTopPx(startHHMM);
                         const height = Math.max(24, timeTopPx(endHHMM) - top);
                         const tone = shiftTone(s);
@@ -751,7 +761,7 @@ export default function MDCalendarPage() {
         onOpenChange={(open) => { if (!open) setViewingShift(null); }}
         eyebrow={viewingShift ? shiftKind(viewingShift) : "Shift"}
         title={viewingShift?.participant_name || "Participant"}
-        description={viewingShift?.scheduled_start ? format(new Date(viewingShift.scheduled_start), "EEEE d MMMM yyyy") : undefined}
+        description={viewingShift?.scheduled_start ? format(zonedDate(viewingShift.scheduled_start, viewingShift.timezone), "EEEE d MMMM yyyy") : undefined}
         footer={
           viewingShift && (
             <>

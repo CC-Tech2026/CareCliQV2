@@ -5,9 +5,12 @@
  * the way a fixed batch of recurring shifts did. A day the worker can't do
  * becomes an open shift, listed when it's made.
  */
+import { useBranches } from "@/hooks/useBranches";
+import { ShiftZoneNote } from "@/components/branches/ShiftZoneNote";
 import { PARTICIPANT_SEARCH, participantOption, staffOption } from "@/lib/person-options";
 import { useState } from "react";
 import { format, addDays } from "date-fns";
+import { appNow } from "@/lib/datetime";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -69,7 +72,7 @@ const DAYS_OF_WEEK = [
 interface BulkShiftModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  participants: Array<{ id: string; full_name: string }>;
+  participants: Array<{ id: string; full_name: string; branch_id?: string | null }>;
   workers: WorkerStats[];
   /** Opened from a participant: start with them chosen. */
   initialParticipantId?: string;
@@ -86,7 +89,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers, init
   const [workerId,       setWorkerId]       = useState("");
   const sameWorkerNames = sharedNames(workers.map((w) => w.full_name));
   const [shiftType,      setShiftType]      = useState("standard_support");
-  const [startDate,      setStartDate]      = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [startDate,      setStartDate]      = useState(() => format(appNow(), "yyyy-MM-dd"));
   const [startTime,      setStartTime]      = useState("09:00");
   const [endTime,        setEndTime]        = useState("13:00");
   const [intervalWeeks,  setIntervalWeeks]  = useState(1);
@@ -190,6 +193,9 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers, init
   }
 
   const participant = participants.find((p) => p.id === participantId);
+  // The shifts are made on the participant's clock (their branch).
+  const { zoneFor } = useBranches();
+  const participantZone = zoneFor(participant?.branch_id);
   const worker      = workers.find((w) => w.id === workerId);
   const endBeforeStart = !!endDate && endDate < startDate;
   const canSubmit   = !!participantId && selectedDays.length > 0 && !!startTime && !!endTime && startTime !== endTime
@@ -427,6 +433,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers, init
                 </div>
               </div>
               <DurationQuickPicks onSelect={handleSetDuration} activeHours={activeDurationHours} />
+              <ShiftZoneNote tz={participantZone} />
 
               {/* How often, from when, until when */}
               <div className="grid grid-cols-2 gap-3">

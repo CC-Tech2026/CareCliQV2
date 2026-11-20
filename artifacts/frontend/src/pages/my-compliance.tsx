@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 import { ComplianceDetailCard } from "@/components/compliance/ComplianceDetailCard";
 import { SectionInfo } from "@/components/ui/section-info";
@@ -18,7 +19,7 @@ const PAGE_SIZE = 10;
 function safeDate(value: string | undefined, translate: (key: string) => string) {
   if (!value) return translate("compliance.notRecorded");
   try {
-    return format(parseISO(value), "d MMM yyyy");
+    return format(displayDate(value), "d MMM yyyy");
   } catch {
     return value;
   }

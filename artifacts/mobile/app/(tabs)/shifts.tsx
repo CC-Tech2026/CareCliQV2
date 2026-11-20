@@ -32,6 +32,7 @@ import {
 } from "@/hooks/useOfflineCache";
 import type { WorkerShift } from "@/lib/worker-api";
 import {
+  dayKeyInZone,
   getAppTimezone,
   getPrimaryTodayShiftId,
   sortTodayShiftsForList,
@@ -101,7 +102,9 @@ export default function MyShiftsScreen() {
   const dayKeyForShift = (shift: WorkerShift) => {
     const value =
       shift.scheduled_start ?? shift.clocked_in_at ?? shift.clocked_out_at;
-    return value ? localDayKey(new Date(value)) : null;
+    // The shift's own day where the support happens, so a Melbourne shift
+    // just after midnight isn't filed under the day before on an Adelaide phone.
+    return value ? dayKeyInZone(value, shift.timezone) : null;
   };
   const counts: Record<string, number> = {};
   for (const shift of allShifts) {

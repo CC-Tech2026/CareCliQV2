@@ -16,6 +16,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { format } from "date-fns";
+import { appNow, displayDate } from "@/lib/datetime";
 import {
   ArrowLeft,
   Play,
@@ -1053,7 +1054,7 @@ export default function SessionLive() {
     setIsUploadingAttachment(true);
     try {
       await uploadAttachment(file, "image");
-      toast({ title: translate("sessions.live.toast.photoUploaded"), description: format(new Date(), "HH:mm:ss") });
+      toast({ title: translate("sessions.live.toast.photoUploaded"), description: format(appNow(), "HH:mm:ss") });
     } catch (error) {
       toast({
         title: translate("sessions.live.toast.photoFailed"),
@@ -1666,7 +1667,7 @@ export default function SessionLive() {
               {session.duration_minutes}m planned
             </span>
             {session.session_date && (
-              <span>{format(new Date(session.session_date), "MMM d")}</span>
+              <span>{format(displayDate(session.session_date), "MMM d")}</span>
             )}
           </div>
         </div>
