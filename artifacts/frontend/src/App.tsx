@@ -1,6 +1,8 @@
 import { PersonDetailsProvider } from "@/components/coordinator/PersonDetails";
 import CoordinatorVerificationPage from "@/pages/coordinator-verification";
-import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect, useSearch } from "wouter";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { listParticipantIntakes } from "@/services/participantIntakeService";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
 import { Toaster } from "@/components/ui/toaster";
@@ -154,6 +156,37 @@ function RoleAwareShell({ children }: { children: React.ReactNode }) {
     return <HubLayout>{children}</HubLayout>;
   }
   return <AppLayout>{children}</AppLayout>;
+}
+
+// /patients is the coordinator's participant list. A managing director has
+// their own participant view (Participants), so links that land here (a
+// profile from the roster, a meeting, an incident) open the same participant
+// there, by their onboarding record. A participant with no onboarding record
+// (added before onboarding existed) stays on this page, the only place their
+// full record is.
+function ParticipantsForRole() {
+  const { user } = useAuth();
+  const isDirector = user?.role === "managing_director";
+  const id = new URLSearchParams(useSearch()).get("id");
+  const intakes = useOrgQuery(["participant-intakes", "for-profile-links"], {
+    queryFn: listParticipantIntakes,
+    enabled: isDirector && !!id,
+    staleTime: 60_000,
+  });
+
+  if (isDirector && !id) return <Redirect to="/onboard-participant/active" replace />;
+  if (isDirector && id) {
+    if (intakes.isLoading) {
+      return (
+        <RoleAwareShell>
+          <div role="status" className="flex justify-center py-24 text-sm text-cc-muted">Opening the participant…</div>
+        </RoleAwareShell>
+      );
+    }
+    const intake = intakes.data?.find((i) => i.participant_id === id);
+    if (intake) return <Redirect to={`/onboard-participant?profile=${encodeURIComponent(intake.id)}`} replace />;
+  }
+  return <RoleAwareShell><Patients /></RoleAwareShell>;
 }
 
 // Not logged in yet (or role unknown) falls through to /dashboard, same as
@@ -722,7 +755,7 @@ function Router() {
 
       <Route path="/patients">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES, ...MD_ROLES]}>
-          <RoleAwareShell><Patients /></RoleAwareShell>
+          <ParticipantsForRole />
         </ProtectedRoute>
       </Route>
 

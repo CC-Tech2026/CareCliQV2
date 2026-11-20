@@ -1312,7 +1312,7 @@ export function MDHubView() {
             total={data.active_participants}
             bySex={data.participants_by_sex}
             byPlanStatus={data.participants_by_plan_status}
-            onNavigate={() => navigate("/patients")}
+            onNavigate={() => navigate("/onboard-participant/active")}
           />
           <ActiveStaffCard
             total={data.active_staff}
