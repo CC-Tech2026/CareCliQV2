@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { ChevronDown, Fingerprint, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { EvidenceMetadata } from "@/services/complianceService";
@@ -47,7 +48,7 @@ export function EvidenceDetailsPanel({ metadata, defaultOpen = false, showRetent
           {showRetention && metadata.retention_until && (
             <p className="rounded-lg border border-cc-border bg-card px-2.5 py-2 text-xs font-semibold leading-snug" style={{ color: TEXT }}>
               {translateParams("shift.evidence.retention", {
-                date: format(new Date(metadata.retention_until), "d MMM yyyy"),
+                date: format(displayDate(metadata.retention_until), "d MMM yyyy"),
               })}
             </p>
           )}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { addDays, format, parseISO } from "date-fns";
+import { appNow, displayDate } from "@/lib/datetime";
 import { Link } from "wouter";
 import { Check, Loader2, Star, Trash2, X, type LucideIcon } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -212,7 +213,7 @@ export default function WorkerAvailabilityPage() {
 
   const prefs = data?.preferences;
   const overrideDate = prefs?.emergency_override_expires_at ? prefs.emergency_override_date ?? null : null;
-  const today = format(new Date(), "yyyy-MM-dd");
+  const today = format(appNow(), "yyyy-MM-dd");
   const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
   const paintLabel = translate(STATUS_LOOK[paint].key).toLowerCase();
 
@@ -439,7 +440,7 @@ export default function WorkerAvailabilityPage() {
               {overrideDate && (
                 <p className="mb-3 rounded-xl px-3 py-2 text-sm font-medium text-cc-text" style={{ background: "var(--cc-status-warning-bg)" }}>
                   {translateParams("availability.emergencyActiveFor", {
-                    date: overrideDate === today ? "today" : overrideDate === tomorrow ? "tomorrow" : format(parseISO(overrideDate), "EEE d MMM"),
+                    date: overrideDate === today ? "today" : overrideDate === tomorrow ? "tomorrow" : format(displayDate(overrideDate), "EEE d MMM"),
                   })}
                 </p>
               )}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { format } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import {
   AlertTriangle,
   ArrowUp,
@@ -1074,7 +1075,7 @@ export function ShiftTaskEvidencePanel({
             {saveState === "offline" && translate("shift.evidence.offlineLocal")}
           </span>
           {records[0]?.created_at && (
-            <span>{translateParams("shift.evidence.capturedAt", { time: format(new Date(records[records.length - 1].created_at), "h:mm a") })}</span>
+            <span>{translateParams("shift.evidence.capturedAt", { time: format(displayDate(records[records.length - 1].created_at), "h:mm a") })}</span>
           )}
         </div>
 

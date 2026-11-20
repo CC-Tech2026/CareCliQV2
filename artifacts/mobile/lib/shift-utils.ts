@@ -9,9 +9,18 @@ export const MIN_EVIDENCE_NOTE_CHARS = 20;
 export const SESSION_NOTE_MAX = 500;
 
 /**
- * Timezone comes from the worker's branch (office) via /auth/me; shift
- * rows carry their participant's branch zone as `timezone`. This constant
- * is only the fallback before sign-in.
+ * Two clocks matter on a support worker's phone:
+ *
+ * - A shift's own time is the time where the support happens: its
+ *   participant's branch zone, which shift rows carry as `timezone`. A
+ *   9:00 am shift in Melbourne is 9:00 am, whoever looks at it.
+ * - "Now" and "today" are the phone's own zone, wherever the worker is. An
+ *   Adelaide worker who has flown to Melbourne for a shift sees Melbourne's
+ *   today, and any shift in another zone also says what that is on their
+ *   phone ("8:30 am your time").
+ *
+ * The worker's branch zone (from /auth/me) is only the fallback when the
+ * phone doesn't report a zone; this constant is the fallback before sign-in.
  */
 export const APP_TIMEZONE =
   process.env.EXPO_PUBLIC_APP_TIMEZONE || "Australia/Adelaide";
@@ -33,9 +42,26 @@ export function setAppTimezone(zone: string | null | undefined): void {
   userZone = isValidTimezone(zone) ? zone : null;
 }
 
-/** The signed-in worker's branch zone, else the deployment default. */
-export function getAppTimezone(): string {
+/** The zone the phone is set to now (follows the worker when they travel),
+ * or null if the device doesn't say. Read each time, not cached. */
+export function deviceTimezone(): string | null {
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return isValidTimezone(zone) ? zone : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The worker's branch (office) zone, else the deployment default. */
+export function getBranchTimezone(): string {
   return userZone ?? APP_TIMEZONE;
+}
+
+/** The worker's own clock: where the phone is, else their branch. Used for
+ * "now", "today", greetings and calendars. A shift's time uses its own zone. */
+export function getAppTimezone(): string {
+  return deviceTimezone() ?? getBranchTimezone();
 }
 
 function resolveZone(tz?: string | null): string {
@@ -61,9 +87,53 @@ export function zoneAbbreviation(
   }
 }
 
-/** A record from another office — show its zone next to the time. */
-export function isOtherBranchZone(tz?: string | null): boolean {
-  return isValidTimezone(tz) && tz !== getAppTimezone();
+/** A record on another clock than the phone's — show its zone with the time.
+ * Compared by the offset at that moment, so two cities that agree (Sydney
+ * and Melbourne) don't get labelled for nothing. */
+export function isOtherBranchZone(tz?: string | null, at: string | Date = new Date()): boolean {
+  if (!isValidTimezone(tz)) return false;
+  const here = getAppTimezone();
+  if (tz === here) return false;
+  return offsetMinutes(at, tz) !== offsetMinutes(at, here);
+}
+
+/** Minutes ahead of UTC in `zone` at that instant (DST-aware). */
+function offsetMinutes(at: string | Date, zone: string): number {
+  const d = typeof at === "string" ? new Date(at) : at;
+  try {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hour12: false,
+      }).formatToParts(d).filter((p) => p.type !== "literal").map((p) => [p.type, p.value]),
+    );
+    const local = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour) % 24, Number(parts.minute));
+    return Math.round((local - (d.getTime() - d.getUTCSeconds() * 1000 - d.getUTCMilliseconds())) / 60000);
+  } catch {
+    return 0;
+  }
+}
+
+/** yyyy-MM-dd of an instant in `tz` (default: the phone's zone). A shift
+ * is filed under its own day where the support happens. */
+export function dayKeyInZone(iso: string, tz?: string | null): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: resolveZone(tz),
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
+
+/** " (8:30 am your time)" when the shift is on another clock than the
+ * phone's, so a worker who has travelled knows when to leave. Else "". */
+export function yourTimeHint(iso?: string | null, tz?: string | null): string {
+  if (!iso || !isOtherBranchZone(tz, iso)) return "";
+  return ` (${formatTime(iso, getAppTimezone())} your time)`;
 }
 
 /** " AEST" when the shift's branch differs from the worker's, else "". */
@@ -213,9 +283,10 @@ export function formatShiftTimeRange(
     const s = formatTime(start, tz);
     const e = end ? formatTime(end, tz) : null;
     // Always show the zone when the caller has one — an ambiguous time is
-    // exactly what caused the branch-timezone bug in the first place.
+    // exactly what caused the branch-timezone bug in the first place — and,
+    // when the phone is somewhere else, what the start is on the phone.
     const zone = tz ? ` ${zoneAbbreviation(start, tz)}` : "";
-    const time = (e ? `${s} – ${e}` : s) + zone;
+    const time = (e ? `${s} – ${e}` : s) + zone + yourTimeHint(start, tz);
     return date ? `${date} · ${time}` : time;
   } catch {
     return start;

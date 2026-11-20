@@ -14,7 +14,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { detailIfShared, sharedNames } from "@/lib/person-identity";
-import { appLocalDateKey, formatAppTime } from "@/lib/datetime";
+import { appLocalDateKey, displayDate, formatAppTime } from "@/lib/datetime";
 import {
   getLeaveClashes,
   releaseLeaveShifts,
@@ -39,7 +39,7 @@ export function useLeaveClashes(enabled = true) {
   });
 }
 
-const dayText = (isoDate: string) => format(parseISO(isoDate), "EEE d MMM");
+const dayText = (isoDate: string) => format(displayDate(isoDate), "EEE d MMM");
 /** The shift's own day, in its participant's branch (as the roster shows it). */
 const shiftDay = (c: LeaveClash) => dayText(appLocalDateKey(c.scheduled_start, c.timezone));
 

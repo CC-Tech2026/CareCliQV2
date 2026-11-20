@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { format } from "date-fns";
+import { appNow } from "@/lib/datetime";
 import { useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { ShiftListCard } from "@/components/shifts/ShiftListCard";
@@ -122,7 +123,7 @@ export default function MyShifts() {
   const counts = countsQuery.data?.counts;
 
   const firstName = (user?.full_name || translate("hub.header.greetingFallback")).split(" ")[0];
-  const dateLabel = format(new Date(), "EEEE d MMMM");
+  const dateLabel = format(appNow(), "EEEE d MMMM");
   const greetingKey = (() => {
     const hour = new Date().getHours();
     if (hour < 12) return "common.greeting.morning";

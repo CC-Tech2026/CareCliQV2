@@ -1,3 +1,4 @@
+import { appZone } from "@/lib/datetime";
 import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarDays, Clock, User } from "lucide-react";
 import { ParticipantPortalShell } from "@/components/participant-portal/ParticipantPortalShell";
@@ -21,11 +22,11 @@ const STATUS: Record<ParticipantShift["status"], { label: string; color: string;
 };
 
 function formatDay(value: string) {
-  return new Date(value).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
+  return new Date(value).toLocaleDateString("en-AU", { timeZone: appZone(), weekday: "long", day: "numeric", month: "long" });
 }
 
 function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+  return new Date(value).toLocaleTimeString("en-AU", { timeZone: appZone(), hour: "numeric", minute: "2-digit" });
 }
 
 const startOf = (s: ParticipantShift) => new Date(s.scheduled_start).getTime();

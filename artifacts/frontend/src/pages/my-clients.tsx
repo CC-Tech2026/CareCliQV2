@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, Search, ShieldCheck, Users } from "lucide-react";
 import { getMyClients, type WorkerClient } from "@/services/workerService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -20,7 +21,7 @@ function initials(name?: string) {
 
 function safeDate(value?: string | null) {
   if (!value) return null;
-  try { return format(parseISO(value), "d MMM"); } catch { return value; }
+  try { return format(displayDate(value), "d MMM"); } catch { return value; }
 }
 
 function statusMeta(status: string | undefined, translate: (key: string) => string): { label: string; cls: string } {

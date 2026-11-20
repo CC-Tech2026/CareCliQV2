@@ -32,6 +32,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
+import { appLocalDateKey, appNow, appTodayKey, displayDate, zonedDate } from "@/lib/datetime";
 import { HubLayout } from "@/components/layout/HubLayout";
 import {
   EmptyState,
@@ -177,19 +178,21 @@ function bucketOf(shift: CoordinatorShiftRecord): Bucket {
   return "scheduled";
 }
 
-function formatTime(iso?: string | null) {
+// Times are shown on the shift's own clock (its participant's branch), else
+// the business location's, never the zone this computer is in.
+function formatTime(iso?: string | null, tz?: string | null) {
   if (!iso) return "";
   try {
-    return format(new Date(iso), "h:mmaaa").toLowerCase();
+    return format(zonedDate(iso, tz), "h:mmaaa").toLowerCase();
   } catch {
     return "";
   }
 }
 
-function formatDateTime(iso?: string | null) {
+function formatDateTime(iso?: string | null, tz?: string | null) {
   if (!iso) return "";
   try {
-    return format(new Date(iso), "EEE d MMM, h:mmaaa").toLowerCase();
+    return format(zonedDate(iso, tz), "EEE d MMM, h:mmaaa").toLowerCase();
   } catch {
     return "";
   }
@@ -228,10 +231,10 @@ function downloadWeekCsv(shifts: CoordinatorShiftRecord[], rangeLabel: string) {
     )
     .map((s) => [
       s.scheduled_start
-        ? format(new Date(s.scheduled_start), "yyyy-MM-dd")
+        ? appLocalDateKey(s.scheduled_start, s.timezone)
         : "",
-      formatTime(s.scheduled_start),
-      formatTime(s.scheduled_end),
+      formatTime(s.scheduled_start, s.timezone),
+      formatTime(s.scheduled_end, s.timezone),
       s.participant_name || "",
       s.worker_name || "Unassigned",
       STATUS_STYLE[bucketOf(s)].label,
@@ -258,10 +261,10 @@ export default function MDSchedulePage() {
       : "week",
   );
   const [weekStart, setWeekStart] = useState(() =>
-    startOfWeek(new Date(), { weekStartsOn: 1 }),
+    startOfWeek(appNow(), { weekStartsOn: 1 }),
   );
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDay, setSelectedDay] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(() => appNow());
+  const [selectedDay, setSelectedDay] = useState(() => appNow());
   const [filter, setFilter] = useState<Bucket | "all">("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -380,7 +383,7 @@ export default function MDSchedulePage() {
     for (const s of list) {
       counts[bucketOf(s)]++;
       if (s.scheduled_start) {
-        const key = format(new Date(s.scheduled_start), "yyyy-MM-dd");
+        const key = appLocalDateKey(s.scheduled_start, s.timezone);
         if (perDay.has(key)) perDay.set(key, (perDay.get(key) ?? 0) + 1);
       }
     }
@@ -480,12 +483,12 @@ export default function MDSchedulePage() {
     }[] = [];
     for (const s of paginatedShifts) {
       const key = s.scheduled_start
-        ? format(parseISO(s.scheduled_start), "yyyy-MM-dd")
+        ? appLocalDateKey(s.scheduled_start, s.timezone)
         : "none";
       let group = groups.find((g) => g.key === key);
       if (!group) {
         const label = s.scheduled_start
-          ? `${isToday(parseISO(s.scheduled_start)) ? "Today, " : ""}${format(parseISO(s.scheduled_start), "EEEE d MMMM")}`
+          ? `${appLocalDateKey(s.scheduled_start, s.timezone) === appTodayKey() ? "Today, " : ""}${format(zonedDate(s.scheduled_start, s.timezone), "EEEE d MMMM")}`
           : "No start time";
         group = { key, label, shifts: [] };
         groups.push(group);
@@ -564,7 +567,7 @@ export default function MDSchedulePage() {
                   {isFetching ? "Updating..." : "Live"}
                   {dataUpdatedAt > 0
                     ? " / " +
-                      format(new Date(dataUpdatedAt), "h:mm aaa").toLowerCase()
+                      format(displayDate(dataUpdatedAt), "h:mm aaa").toLowerCase()
                     : ""}
                 </span>
               ) : null}
@@ -689,7 +692,7 @@ export default function MDSchedulePage() {
                 </button>
                 <button
                   onClick={() => {
-                    const today = new Date();
+                    const today = appNow();
                     setWeekStart(startOfWeek(today, { weekStartsOn: 1 }));
                     setCurrentMonth(today);
                     setSelectedDay(today);
@@ -974,7 +977,7 @@ export default function MDSchedulePage() {
                                     <p
                                       className="text-xs font-medium"
                                       style={{
-                                        color: isToday(day) ? PLUM : MUTED,
+                                        color: format(day, "yyyy-MM-dd") === appTodayKey() ? PLUM : MUTED,
                                       }}
                                     >
                                       {format(day, "EEE")}
@@ -1101,7 +1104,7 @@ export default function MDSchedulePage() {
                   </p>
                   <p
                     className="text-base font-semibold tracking-tight"
-                    style={{ color: isToday(selectedDay) ? PLUM : TEXT }}
+                    style={{ color: format(selectedDay, "yyyy-MM-dd") === appTodayKey() ? PLUM : TEXT }}
                   >
                     {format(selectedDay, "d MMMM yyyy")}
                   </p>
@@ -1138,7 +1141,7 @@ export default function MDSchedulePage() {
                                 className="text-xs font-semibold"
                                 style={{ color: st.color }}
                               >
-                                {formatTime(s.scheduled_start)}
+                                {formatTime(s.scheduled_start, s.timezone)}
                               </p>
                               <p
                                 className="mt-1 truncate text-sm font-semibold"
@@ -1227,12 +1230,12 @@ export default function MDSchedulePage() {
                                         className="w-28 shrink-0 text-sm tabular-nums"
                                         style={{ color: TEXT }}
                                       >
-                                        {formatTime(s.scheduled_start)}
+                                        {formatTime(s.scheduled_start, s.timezone)}
                                         <span
                                           className="block text-xs"
                                           style={{ color: MUTED }}
                                         >
-                                          to {formatTime(s.scheduled_end)}
+                                          to {formatTime(s.scheduled_end, s.timezone)}
                                         </span>
                                       </span>
                                       <span className="min-w-0 flex-1">
@@ -1364,8 +1367,8 @@ export default function MDSchedulePage() {
                           >
                             {bucket === "active" &&
                             elapsedSince(s.clocked_in_at)
-                              ? `Clocked in ${formatTime(s.clocked_in_at)} · active ${elapsedSince(s.clocked_in_at)}`
-                              : formatDateTime(s.scheduled_start)}
+                              ? `Clocked in ${formatTime(s.clocked_in_at, s.timezone)} · active ${elapsedSince(s.clocked_in_at)}`
+                              : formatDateTime(s.scheduled_start, s.timezone)}
                           </p>
                         </div>
                         <span
@@ -1525,19 +1528,19 @@ function ShiftDetailSheet({
               <DetailRow
                 icon={CalendarClock}
                 label="Scheduled start"
-                value={formatDateTime(detail.scheduled_start)}
+                value={formatDateTime(detail.scheduled_start, detail.timezone)}
               />
               <DetailRow
                 icon={CalendarClock}
                 label="Scheduled end"
-                value={formatDateTime(detail.scheduled_end)}
+                value={formatDateTime(detail.scheduled_end, detail.timezone)}
               />
               <DetailRow
                 icon={Clock}
                 label="Clocked in"
                 value={
                   detail.clocked_in_at
-                    ? formatDateTime(detail.clocked_in_at)
+                    ? formatDateTime(detail.clocked_in_at, detail.timezone)
                     : "Not clocked in"
                 }
               />
@@ -1546,7 +1549,7 @@ function ShiftDetailSheet({
                 label="Clocked out"
                 value={
                   detail.clocked_out_at
-                    ? formatDateTime(detail.clocked_out_at)
+                    ? formatDateTime(detail.clocked_out_at, detail.timezone)
                     : "Not clocked out"
                 }
               />

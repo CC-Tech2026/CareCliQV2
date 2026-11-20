@@ -1,3 +1,4 @@
+import { appZone } from "@/lib/datetime";
 import type { ReactNode } from "react";
 import {
   ArrowRight,
@@ -43,15 +44,18 @@ export function formatDate(value?: string | null, withYear = true) {
   if (!value) return "N/A";
   const d = new Date(value.length === 10 ? `${value}T00:00:00` : value);
   if (Number.isNaN(d.getTime())) return "N/A";
-  return d.toLocaleDateString("en-AU", { day: "numeric", month: "short", ...(withYear ? { year: "numeric" } : {}) });
+  // A plain date is that day; a timestamp is read on the business location's clock.
+  const zone = value.length === 10 ? {} : { timeZone: appZone() };
+  return d.toLocaleDateString("en-AU", { ...zone, day: "numeric", month: "short", ...(withYear ? { year: "numeric" } : {}) });
 }
 
-export function formatDateTime(value?: string | null) {
+export function formatDateTime(value?: string | null, tz?: string | null) {
   if (!value) return "N/A";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "N/A";
-  return `${d.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}, ${d
-    .toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
+  const timeZone = appZone(tz);
+  return `${d.toLocaleDateString("en-AU", { timeZone, weekday: "short", day: "numeric", month: "short" })}, ${d
+    .toLocaleTimeString("en-AU", { timeZone, hour: "numeric", minute: "2-digit" })
     .replace(" ", "")}`;
 }
 

@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
-import { formatAppDate, formatAppTimeWithZone } from "@/lib/datetime";
+import { displayDate, formatAppDate, formatAppTimeWithZone } from "@/lib/datetime";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -827,7 +827,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                     {patternData.matches.map((match) => (
                       <li key={match.incident_id} className="py-3 first:pt-0 last:pb-0">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: MUTED }}>
-                          <span>{match.date ? format(parseISO(match.date), "d MMM yyyy") : "Date not recorded"}</span>
+                          <span>{match.date ? format(displayDate(match.date), "d MMM yyyy") : "Date not recorded"}</span>
                           <span>{match.participant_label}</span>
                           <span className="ml-auto font-semibold" style={{ color: PURPLE }}>
                             {translateParams("incidents.detail.matchPercent", { percent: String(Math.round(match.similarity_score * 100)) })}

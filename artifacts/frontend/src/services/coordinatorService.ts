@@ -1033,6 +1033,8 @@ export type ShiftSeries = {
   /** "Mon, Wed, Fri 09:00 to 12:00, every 2 weeks" */
   summary: string;
   next_start: string | null;
+  /** The participant's zone; the schedule's times are on that clock. */
+  timezone?: string | null;
   upcoming_count: number;
   /** Coming shifts nobody has: days the worker couldn't do, or no worker. */
   upcoming_open: number;

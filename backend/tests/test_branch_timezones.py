@@ -245,3 +245,20 @@ def test_middleware_uses_the_real_lookup_and_survives_a_db_outage():
 
     assert resp.status_code == 200
     assert resp.json()["zone"] == "Australia/Adelaide"
+
+
+def test_every_response_says_which_zone_the_caller_is_on():
+    """The app reads this to switch every open session the moment the
+    business location or the person's branch changes."""
+    token = create_access_token(data={"sub": USER_MEL, "role": "support_coordinator", "organization_id": ORG})
+    resp = _get(_app_with_middleware(lambda user_id, org_id: MELBOURNE), token)
+    assert resp.headers["X-CareCliQ-Timezone"] == "Australia/Melbourne"
+
+
+def test_the_website_is_allowed_to_read_the_zone_header():
+    """The production website calls the API on another domain, where the
+    browser hides custom headers unless the API exposes them."""
+    from backend.app.main import app as real_app
+
+    cors = [m for m in real_app.user_middleware if m.cls.__name__ == "CORSMiddleware"]
+    assert cors and "X-CareCliQ-Timezone" in cors[0].kwargs.get("expose_headers", [])

@@ -1,3 +1,4 @@
+import { appZone } from "@/lib/datetime";
 import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,11 +31,11 @@ const AMBER = "#9A5B0A";
 const AMBER_SOFT = "#FBF2E6";
 
 function formatShiftDay(value: string) {
-  return new Date(value).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
+  return new Date(value).toLocaleDateString("en-AU", { timeZone: appZone(), weekday: "short", day: "numeric", month: "short" });
 }
 
 function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+  return new Date(value).toLocaleTimeString("en-AU", { timeZone: appZone(), hour: "numeric", minute: "2-digit" });
 }
 
 const startOf = (s: ParticipantShift) => new Date(s.scheduled_start).getTime();

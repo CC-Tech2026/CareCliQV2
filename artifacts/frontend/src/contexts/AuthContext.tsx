@@ -22,7 +22,7 @@ import { CCQ_REAUTH_TOKEN_KEY, CCQ_UNAUTHORIZED_EVENT } from "@/lib/storage-keys
 import { clearCachedSettings } from "@/lib/use-settings";
 import { clearSignature } from "@/lib/signature-store";
 import { clearAllSessionNoteStorage } from "@/lib/session-notes-storage";
-import { setAppTimezone } from "@/lib/datetime";
+import { TIMEZONE_CHANGED_EVENT, installTimezoneSync, setAppTimezone } from "@/lib/datetime";
 import { deleteTaskEvidenceDb } from "@/lib/task-evidence-storage";
 import { deleteShiftOfflineDb } from "@/lib/shift-offline-queue";
 
@@ -115,6 +115,8 @@ function readStoredOrgId(): string | null {
 
 setAuthTokenGetter(() => _currentToken ?? readStoredSession().token);
 setOrgIdGetter(() => _currentOrgId ?? readStoredOrgId());
+// Every API response says which zone this person is on now (see datetime.ts).
+installTimezoneSync();
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -360,6 +362,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updateStoredUserJson(JSON.stringify(updated));
       return updated;
     });
+  }, []);
+
+  // The business location or this person's branch changed: keep the new
+  // zone with their profile (so a reload starts on it) and redraw every
+  // screen, so no time is left showing in the old zone.
+  useEffect(() => {
+    const onZoneChanged = (event: Event) => {
+      const zone = (event as CustomEvent<string>).detail;
+      setUser((prev) => {
+        if (!prev || prev.timezone === zone) return prev;
+        const updated = { ...prev, timezone: zone };
+        updateStoredUserJson(JSON.stringify(updated));
+        return updated;
+      });
+      void queryClient.invalidateQueries();
+    };
+    window.addEventListener(TIMEZONE_CHANGED_EVENT, onZoneChanged);
+    return () => window.removeEventListener(TIMEZONE_CHANGED_EVENT, onZoneChanged);
   }, []);
 
   const updateToken = useCallback(async (newToken: string): Promise<void> => {

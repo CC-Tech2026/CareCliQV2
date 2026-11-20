@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { ChevronDown, ChevronUp, MapPin, ExternalLink } from "lucide-react";
 import { Link } from "wouter";
 import { BodyMap, BodyMarker, BodyType, MARKER_COLORS, getZoneLabel, getMarkerColorLabel } from "@/components/BodyMap";
@@ -25,7 +26,7 @@ interface BodyMarkerHistoryProps {
 function safeFormat(dateStr?: string | null, fmt = "d MMM yyyy") {
   if (!dateStr) return "N/A";
   try {
-    return format(parseISO(dateStr), fmt);
+    return format(displayDate(dateStr), fmt);
   } catch {
     return dateStr;
   }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
+import { appNow, displayDate } from "@/lib/datetime";
 import {
   AlertCircle,
   ArrowLeft,
@@ -199,7 +200,7 @@ export default function WorkerTrainingPage() {
     mutationFn: (moduleId: string) =>
       markTrainingComplete({
         module_id: moduleId,
-        completed_at: format(new Date(), "yyyy-MM-dd"),
+        completed_at: format(appNow(), "yyyy-MM-dd"),
         acknowledged: true,
       }),
     onSuccess: () => {
@@ -633,8 +634,7 @@ export default function WorkerTrainingPage() {
                           >
                             {row.recommendation?.due_at
                               ? "Due " +
-                                format(
-                                  parseISO(row.recommendation.due_at),
+                                format(displayDate(row.recommendation.due_at),
                                   "d MMM yyyy",
                                 )
                               : "Self-paced learning"}
@@ -1022,10 +1022,10 @@ function TrainingModuleDetail({
             {overdue ? <ShieldAlert size={14} /> : <Clock size={14} />}
             {overdue
               ? translateParams("training.overdueBanner", {
-                  date: format(parseISO(recommendation.due_at), "d MMM yyyy"),
+                  date: format(displayDate(recommendation.due_at), "d MMM yyyy"),
                 })
               : translateParams("training.dueBanner", {
-                  date: format(parseISO(recommendation.due_at), "d MMM yyyy"),
+                  date: format(displayDate(recommendation.due_at), "d MMM yyyy"),
                 })}
           </div>
         )}

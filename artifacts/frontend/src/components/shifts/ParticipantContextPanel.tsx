@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import {
   AlertTriangle,
   ChevronDown,
@@ -34,7 +35,7 @@ const SEVERITY_STYLES: Record<string, string> = {
 function formatSynced(value?: string | null) {
   if (!value) return null;
   try {
-    return format(parseISO(value), "d MMM yyyy, h:mm a");
+    return format(displayDate(value), "d MMM yyyy, h:mm a");
   } catch {
     return value;
   }

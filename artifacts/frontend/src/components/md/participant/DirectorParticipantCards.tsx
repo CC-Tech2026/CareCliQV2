@@ -1,3 +1,4 @@
+import { appZone } from "@/lib/datetime";
 import { CopyButton } from "@/components/ui/copy-button";
 import type { ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
@@ -211,7 +212,7 @@ const REVIEW: Record<string, { label: string; color: string }> = {
 
 function shiftTimes(start?: string | null, end?: string | null) {
   if (!start) return null;
-  const fmt = (v: string) => new Date(v).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" }).replace(" ", "").toLowerCase();
+  const fmt = (v: string) => new Date(v).toLocaleTimeString("en-AU", { timeZone: appZone(), hour: "numeric", minute: "2-digit" }).replace(" ", "").toLowerCase();
   return end ? `${fmt(start)} to ${fmt(end)}` : fmt(start);
 }
 

@@ -1,3 +1,4 @@
+import { appNow, appZone, zonedDate } from "@/lib/datetime";
 import { Link } from "wouter";
 import { ArrowRight, CalendarDays, Check, FileSignature, NotebookTabs, TriangleAlert } from "lucide-react";
 import { getInitials } from "@/components/participant-portal/ProfileAvatar";
@@ -31,20 +32,20 @@ function daysFromToday(value: string) {
 }
 
 function longDay(value: string | Date) {
-  return new Date(value).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
+  return new Date(value).toLocaleDateString("en-AU", { timeZone: appZone(), weekday: "long", day: "numeric", month: "long" });
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+  return new Date(value).toLocaleDateString("en-AU", { timeZone: appZone(), day: "numeric", month: "long", year: "numeric" });
 }
 
 function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+  return new Date(value).toLocaleTimeString("en-AU", { timeZone: appZone(), hour: "numeric", minute: "2-digit" });
 }
 
 /** Compact time for the week grid: "9am", "1:30pm". */
 function shortTime(value: string) {
-  const d = new Date(value);
+  const d = zonedDate(value);
   const h = d.getHours() % 12 || 12;
   const m = d.getMinutes();
   return `${h}${m ? `:${String(m).padStart(2, "0")}` : ""}${d.getHours() < 12 ? "am" : "pm"}`;
@@ -111,7 +112,7 @@ export function PortalGreeting({
   isSelf: boolean;
   next?: ParticipantShift;
 }) {
-  const hour = new Date().getHours();
+  const hour = appNow().getHours();
   const partOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
   const who = firstName(next?.worker_name) || "Your support worker";
   const forWhom = isSelf ? "" : ` ${firstName(participantName)}`;

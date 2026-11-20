@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { ZoneLabel } from "@/components/branches/ZoneLabel";
 import {
   ChevronDown,
@@ -61,7 +62,7 @@ const BAND_STYLES: Record<ComplianceBand, { bg: string; text: string; labelKey: 
 function formatShiftDate(value?: string) {
   if (!value) return "N/A";
   try {
-    return format(parseISO(value), "EEE d MMM yyyy");
+    return format(displayDate(value), "EEE d MMM yyyy");
   } catch {
     return value.slice(0, 10);
   }

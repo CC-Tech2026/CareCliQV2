@@ -1,4 +1,5 @@
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import type { ParticipantProfile } from "@/services/shiftService";
 import { participantAge } from "@/lib/shift-utils";
 
@@ -7,7 +8,7 @@ export const PREFERENCE_COLLAPSE_CHARS = 180;
 export function formatParticipantDob(dob?: string | null) {
   if (!dob) return null;
   try {
-    return format(parseISO(dob), "d MMM yyyy");
+    return format(displayDate(dob), "d MMM yyyy");
   } catch {
     return dob;
   }

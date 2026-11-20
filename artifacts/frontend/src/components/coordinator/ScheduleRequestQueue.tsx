@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { Check, X, Inbox } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -139,7 +140,7 @@ function RequestRow({
         <p className="text-sm font-semibold" style={{ color: TEXT }}>{detail}</p>
         {request.worker_notes && <p className="text-xs mt-0.5" style={{ color: MUTED }}>{request.worker_notes}</p>}
         <p className="text-[10px] mt-1" style={{ color: MUTED }}>
-          {format(parseISO(request.created_at), "d MMM yyyy h:mm a")}
+          {format(displayDate(request.created_at), "d MMM yyyy h:mm a")}
         </p>
       </div>
       <div className="flex gap-1">

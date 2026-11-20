@@ -1,4 +1,5 @@
-﻿import { staffOption } from "@/lib/person-options";
+﻿import { ShiftZoneNote } from "@/components/branches/ShiftZoneNote";
+import { staffOption } from "@/lib/person-options";
 import { useEffect, useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -774,6 +775,7 @@ export function ShiftAssignmentModal({
             <DurationQuickPicks onSelect={handleSetDuration} activeHours={activeDurationHours} disabled={!scheduledStart} />
             <ZoneLabel tz={participantZone} className="ml-auto" />
           </div>
+          <ShiftZoneNote tz={participantZone} sampleIso={scheduledStart ? datetimeLocalValueToUtcIso(scheduledStart, participantZone) : null} className="-mt-1" />
 
           {/* Type and place */}
           <div className="grid grid-cols-2 gap-2.5">

@@ -23,6 +23,52 @@ export function setAppTimezone(zone: string | null | undefined): void {
   cachedUserZone = isValidTimezone(zone) ? (zone as string) : null;
 }
 
+/** Fired on window when the user's zone changes mid-session; detail is the zone. */
+export const TIMEZONE_CHANGED_EVENT = "ccq:timezone-changed";
+/** Response header carrying the caller's zone (backend org_context). */
+export const TIMEZONE_HEADER = "x-carecliq-timezone";
+
+/**
+ * The API says which zone this person is on with every response. When it
+ * differs from the one in use (the business location or their branch was
+ * just changed, here or by someone else), switch to it and let the app
+ * redraw, so every time on screen follows the new location at once.
+ */
+export function noteServerTimezone(zone: string | null | undefined): void {
+  if (!isValidTimezone(zone) || zone === getAppTimezone()) return;
+  cachedUserZone = zone as string;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(TIMEZONE_CHANGED_EVENT, { detail: zone }));
+  }
+}
+
+/** Read the zone header off any API response. */
+export function noteTimezoneFromResponse(response: Response): void {
+  try {
+    noteServerTimezone(response.headers?.get(TIMEZONE_HEADER));
+  } catch {
+    /* a response without headers (tests, opaque) */
+  }
+}
+
+let timezoneSyncInstalled = false;
+
+/**
+ * Watch every response for the zone header, whichever client made the
+ * request (apiFetch or the generated API client). Only reads a header; the
+ * response itself is passed through untouched. Installed once at start-up.
+ */
+export function installTimezoneSync(): void {
+  if (timezoneSyncInstalled || typeof window === "undefined" || typeof window.fetch !== "function") return;
+  timezoneSyncInstalled = true;
+  const original = window.fetch.bind(window);
+  window.fetch = async (...args: Parameters<typeof fetch>) => {
+    const response = await original(...args);
+    noteTimezoneFromResponse(response);
+    return response;
+  };
+}
+
 export function isValidTimezone(zone: unknown): boolean {
   if (typeof zone !== "string" || !zone) return false;
   try {
@@ -51,6 +97,49 @@ export function getAppTimezone(): string {
 
 function resolveZone(tz?: string | null): string {
   return isValidTimezone(tz) ? (tz as string) : getAppTimezone();
+}
+
+/** The zone a time is shown in: `tz` when it's a real zone, else the
+ * signed-in user's (their business location or branch). */
+export function appZone(tz?: string | null): string {
+  return resolveZone(tz);
+}
+
+/**
+ * A Date whose *local* fields (getHours, date-fns format) read as the wall
+ * clock in `tz`, whatever zone the browser itself is in. For showing a time
+ * with date-fns or reading its hour; never for arithmetic between instants
+ * or for sending back to the API (use the original ISO string for that).
+ */
+export function zonedDate(iso: string | Date, tz?: string | null): Date {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(d.getTime())) return d;
+  const p = tzParts(d, resolveZone(tz));
+  return new Date(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour) % 24, Number(p.minute), d.getUTCSeconds());
+}
+
+/**
+ * What to hand date-fns `format()` for a value from the API:
+ * - a plain date ("2026-11-20") is that calendar day, as before;
+ * - a timestamp (string with a time, or epoch ms) reads on the clock of
+ *   `tz`, else the user's business location — never the browser's zone;
+ * - a Date the app built itself (a calendar cell) is left as it is.
+ */
+export function displayDate(value: string | number | Date, tz?: string | null): Date {
+  if (value instanceof Date) return value;
+  if (typeof value === "number") return zonedDate(new Date(value), tz);
+  if (/T\d{2}:\d{2}/.test(value) || /\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/.test(value)) {
+    return zonedDate(value, tz);
+  }
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (day) return new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]));
+  return new Date(value);
+}
+
+/** "Now" as a zoned Date (see zonedDate): today's date and time in the
+ * user's zone, for calendars and "today" markers built with date-fns. */
+export function appNow(tz?: string | null): Date {
+  return zonedDate(new Date(), tz);
 }
 
 function tzPartsOpts(zone: string): Intl.DateTimeFormatOptions {
@@ -113,6 +202,13 @@ export function formatAppDate(
   opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" },
 ): string {
   return new Intl.DateTimeFormat("en-AU", { ...opts, timeZone: resolveZone(tz) }).format(new Date(iso));
+}
+
+/** "Australia/Melbourne" gives "Melbourne": how people name a zone. */
+export function zoneCityName(tz?: string | null): string {
+  const zone = resolveZone(tz);
+  const city = zone.split("/").pop() ?? zone;
+  return city.replace(/_/g, " ");
 }
 
 /**

@@ -5,7 +5,7 @@ import {
   TrendingUp, TrendingDown, Minus, Flag,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import { formatAppDate } from "@/lib/datetime";
+import { appNow, formatAppDate } from "@/lib/datetime";
 import {
   getCoordinatorComplianceOverview,
   getCoordinatorRpFlags,
@@ -95,7 +95,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `carecliq-audit-pack-${format(new Date(), "yyyy-MM-dd")}.json`;
+    a.download = `carecliq-audit-pack-${format(appNow(), "yyyy-MM-dd")}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }, [compliance.data, workers.data, flags.data, flagged.data, engagement.data]);

@@ -101,7 +101,9 @@ def timezone_for_state(state: Any) -> Optional[ZoneInfo]:
 # participant lookups off the database. Failed lookups are cached briefly
 # too so an outage doesn't turn every request into a slow query.
 
-CACHE_TTL_SECONDS = 300
+# One minute: a branch or business location change is cleared at once on the
+# machine that saved it, and the other API machines pick it up within this.
+CACHE_TTL_SECONDS = 60
 _FAILURE_TTL_SECONDS = 30
 
 _branch_cache: dict[str, tuple[Optional[ZoneInfo], float]] = {}

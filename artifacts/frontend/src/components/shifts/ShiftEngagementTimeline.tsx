@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { Activity, Coffee, MessageCircle, Clock } from "lucide-react";
 import {
   getSessionActivityTimeline,
@@ -95,7 +96,7 @@ export function ShiftEngagementTimeline({ sessionId, title = "Shift activity", c
               <div className="min-w-0 flex-1">
                 <p className="font-bold" style={{ color: PLUM }}>{label}</p>
                 <p style={{ color: MUTED }}>
-                  {format(parseISO(ev.occurred_at), "h:mm a")}
+                  {format(displayDate(ev.occurred_at), "h:mm a")}
                   {gap ? ` · ${gap}` : ""}
                   {ev.is_billable === false ? " · billing paused" : ""}
                 </p>

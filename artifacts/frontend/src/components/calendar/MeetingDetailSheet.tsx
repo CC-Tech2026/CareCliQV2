@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { CalendarPlus, Clock, Download, ExternalLink, Mail, MapPin, Mic, Pencil, Phone, Trash2, UserRound, Video } from "lucide-react";
 import { SidePanel } from "@/components/layout/SidePanel";
 import { ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
@@ -94,7 +95,7 @@ export function MeetingDetailSheet({
       onOpenChange={(open) => { if (!open) setConfirmingDelete(false); onOpenChange(open); }}
       eyebrow={choice?.label}
       title={event?.title ?? "Meeting"}
-      description={event ? format(parseISO(event.event_date), "EEEE d MMMM yyyy") : undefined}
+      description={event ? format(displayDate(event.event_date), "EEEE d MMMM yyyy") : undefined}
       footer={
         event &&
         (confirmingDelete ? (
@@ -210,7 +211,7 @@ export function MeetingDetailSheet({
                 <p className="mt-2 flex items-start gap-1.5 text-xs" style={{ color: MUTED }}>
                   <Mail size={13} className="mt-px shrink-0" />
                   {event.invites_sent_at
-                    ? `Calendar invites emailed ${format(parseISO(event.invites_sent_at), "d MMM 'at' h:mmaaa")}. Changes you make update their calendars.`
+                    ? `Calendar invites emailed ${format(displayDate(event.invites_sent_at), "d MMM 'at' h:mmaaa")}. Changes you make update their calendars.`
                     : "No invites sent yet. Edit the meeting and turn on Email calendar invites to send them."}
                 </p>
               )}

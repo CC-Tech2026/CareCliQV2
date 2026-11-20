@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { format, parseISO } from "date-fns";
+import { displayDate } from "@/lib/datetime";
 import { Loader2, Mail, MessageCircle, Phone, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -286,7 +287,7 @@ export default function WorkerHelp() {
                 {issue.expected_fix_date && (
                   <p className="mt-2 text-xs" style={{ color: MUTED }}>
                     {translateParams("help.issues.expectedFix", {
-                      date: format(parseISO(issue.expected_fix_date), "d MMM yyyy"),
+                      date: format(displayDate(issue.expected_fix_date), "d MMM yyyy"),
                     })}
                   </p>
                 )}
