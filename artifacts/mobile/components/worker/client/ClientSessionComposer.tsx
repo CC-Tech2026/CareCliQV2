@@ -5,7 +5,6 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -14,6 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat } from "@/components/KeyboardAvoidingViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { showAlert } from "@/lib/alert";
@@ -217,9 +217,9 @@ export function ClientSessionComposer({ clientId, client }: Props) {
   }, [client.allergies, client.primary_disability]);
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingViewCompat
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior="padding"
     >
       <View style={[styles.stepBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         {STEPS.map((item, index) => {
@@ -524,7 +524,7 @@ export function ClientSessionComposer({ clientId, client }: Props) {
           </Pressable>
         ) : null}
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingViewCompat>
   );
 }
 

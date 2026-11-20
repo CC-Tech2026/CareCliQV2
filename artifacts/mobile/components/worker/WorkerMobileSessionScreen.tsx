@@ -370,11 +370,19 @@ export function WorkerMobileSessionScreen({
       ? `${doneMandatory}/${mandatoryTasks.length}`
       : `${activeTasks.filter((t) => t.completed).length}/${activeTasks.length}`;
 
+  // Random check-ins are never counted or announced in advance: when one is
+  // due it arrives as a notification and sits at the top of Tasks.
+  const checkinDue =
+    !breakStatus?.active &&
+    Boolean(checkinStatus?.can_submit_checkin || checkinStatus?.checkin_overdue);
+
   const tabs: ShiftTab<SessionTab>[] = [
     {
       id: "tasks",
       label: "Tasks",
       badge: activeTasks.length > 0 ? tasksBadge : undefined,
+      // A check-in that's due is the first task.
+      attention: checkinDue,
       renderIcon: (color) => (
         <Feather name="check-square" size={20} color={color} />
       ),
@@ -404,9 +412,6 @@ export function WorkerMobileSessionScreen({
     {
       id: "progress",
       label: "Progress",
-      attention: Boolean(
-        checkinStatus?.can_submit_checkin || checkinStatus?.checkin_overdue,
-      ),
       renderIcon: (color) => (
         <Feather name="activity" size={20} color={color} />
       ),
@@ -469,6 +474,13 @@ export function WorkerMobileSessionScreen({
               {progressLabel}
             </Text>
           </View>
+          {checkinDue && onCheckin ? (
+            <CheckInDueRow
+              name={participantFirstName || participantName}
+              onPress={onCheckin}
+              disabled={disabled || busy}
+            />
+          ) : null}
           <WorkerMobileTaskList
             tasks={localTasks}
             activeTaskId={activeTaskId}
@@ -969,3 +981,50 @@ const styles = StyleSheet.create({
     marginHorizontal: 14,
   },
 });
+
+/** The check-in that's due now, at the top of the task list. */
+function CheckInDueRow({
+  name,
+  onPress,
+  disabled,
+}: {
+  name: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Check in with ${name} now`}
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          marginHorizontal: 12,
+          marginTop: 12,
+          padding: 14,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: colors.primary,
+          backgroundColor: colors.activeBg ?? colors.card,
+          opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
+        },
+      ]}
+    >
+      <Feather name="message-circle" size={20} color={colors.primary} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: colors.foreground, fontFamily: FontFamily.interSemiBold, fontSize: 15 }}>
+          Check in with {name}
+        </Text>
+        <Text style={{ color: colors.mutedForeground, fontFamily: FontFamily.interRegular, fontSize: 13, marginTop: 2 }}>
+          Due now. A few quick questions about how {name} is going.
+        </Text>
+      </View>
+      <Feather name="chevron-right" size={18} color={colors.primary} />
+    </Pressable>
+  );
+}

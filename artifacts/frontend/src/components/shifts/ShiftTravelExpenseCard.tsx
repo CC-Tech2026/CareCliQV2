@@ -50,6 +50,9 @@ export function ShiftTravelExpenseCard({
   const queryClient = useQueryClient();
   const [claimedKm, setClaimedKm] = useState("");
   const [isOverridden, setIsOverridden] = useState(false);
+  // Where the worker drove and why, when it isn't the route estimate: the
+  // evidence the office needs (checked when claims are submitted).
+  const [tripDetails, setTripDetails] = useState("");
   const autoSavedRef = useRef(false);
   const postClockInSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userEditedRef = useRef(false);
@@ -129,6 +132,7 @@ export function ShiftTravelExpenseCard({
         shiftId,
         parsed,
         calculatedKm != null ? Number(calculatedKm) : undefined,
+        tripDetails,
       )
         .then(() => {
           queryClient.invalidateQueries({ queryKey: ["worker", "mileage-estimate", shiftId] });
@@ -140,7 +144,7 @@ export function ShiftTravelExpenseCard({
     return () => {
       if (postClockInSaveRef.current) clearTimeout(postClockInSaveRef.current);
     };
-  }, [claimedKm, isClockedIn, isOverridden, calculatedKm, shiftId, queryClient, orgId]);
+  }, [claimedKm, tripDetails, isClockedIn, isOverridden, calculatedKm, shiftId, queryClient, orgId]);
 
   const handleKmChange = (value: string) => {
     userEditedRef.current = true;
@@ -236,6 +240,22 @@ export function ShiftTravelExpenseCard({
             )}
             {isClockedIn && isOverridden && (
               <p className="text-xs text-cc-muted">{translate("shift.travel.changesAutoSave")}</p>
+            )}
+            {isOverridden && (
+              <div className="space-y-1 pt-1">
+                <Label htmlFor={`trip-details-${shiftId}`} className="text-xs text-cc-muted">
+                  Where did you drive, and why is it different from the route?
+                </Label>
+                <textarea
+                  id={`trip-details-${shiftId}`}
+                  value={tripDetails}
+                  onChange={(e) => setTripDetails(e.target.value)}
+                  rows={2}
+                  placeholder="For example: took Liam to the library, then home via the pharmacy"
+                  className="w-full rounded-lg border border-cc-border bg-cc-surface px-3 py-2 text-sm text-cc-text"
+                />
+                <p className="text-xs text-cc-muted">Needed before this claim can be sent to the office.</p>
+              </div>
             )}
           </div>
         </>

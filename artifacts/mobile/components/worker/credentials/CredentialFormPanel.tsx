@@ -4,7 +4,6 @@ import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -15,6 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat } from "@/components/KeyboardAvoidingViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SettingsPanelCard, SettingsSaveButton } from "@/components/worker/settings/settings-ui";
@@ -132,9 +132,9 @@ export function CredentialFormPanel({ credential, presetType }: { credential?: C
   });
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingViewCompat
       style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior="padding"
     >
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
@@ -329,7 +329,7 @@ export function CredentialFormPanel({ credential, presetType }: { credential?: C
           </View>
         </Pressable>
       </Modal>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingViewCompat>
   );
 }
 

@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   MOOD_OPTIONS,
@@ -72,7 +73,7 @@ export function LongShiftCheckInForm({ visible, onClose, onSubmit, busy, tasks =
   );
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+    <Modal statusBarTranslucent navigationBarTranslucent visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <View style={styles.overlay}>
         <View
           style={[
@@ -87,7 +88,7 @@ export function LongShiftCheckInForm({ visible, onClose, onSubmit, busy, tasks =
                 Check-in form
               </Text>
               <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                Required for shifts longer than 90 minutes
+                A few quick questions about how the shift is going
               </Text>
             </View>
             <Pressable onPress={handleClose} hitSlop={8} disabled={busy}>
@@ -95,7 +96,11 @@ export function LongShiftCheckInForm({ visible, onClose, onSubmit, busy, tasks =
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <KeyboardAwareScrollViewCompat
+            contentContainerStyle={styles.body}
+            showsVerticalScrollIndicator={false}
+            bottomOffset={24}
+          >
             {taskRows.length > 0 && (
               <View style={styles.section}>
                 <Text style={[styles.sectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
@@ -244,7 +249,7 @@ export function LongShiftCheckInForm({ visible, onClose, onSubmit, busy, tasks =
                 </Text>
               )}
             </Pressable>
-          </ScrollView>
+          </KeyboardAwareScrollViewCompat>
         </View>
       </View>
     </Modal>

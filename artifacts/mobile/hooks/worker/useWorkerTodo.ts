@@ -73,25 +73,22 @@ export function useWorkerTodo() {
           href: `/shift/${ref}/briefing`,
           tone: "danger",
         });
-      } else if (action.kind === "incomplete_session") {
-        list.push({
-          id: action.id,
-          icon: "edit-3",
-          title: t("todo.finishNotes"),
-          detail: readableDetail(action.detail),
-          href: `/session/${ref}`,
-          tone: "warning",
-        });
       } else if (
-        action.kind === "compliance_fix" &&
-        !changeRequested.has(ref)
+        action.kind === "incomplete_session" ||
+        (action.kind === "compliance_fix" && !changeRequested.has(ref))
       ) {
+        // Notes are written in one place: the shift's own screen. A shift
+        // that's still going opens there. A finished shift is closed: the
+        // office reviews it and, if it needs more, asks for changes, which
+        // shows here as "The office asked for changes" and opens that shift's
+        // notes. So a finished shift isn't a to-do the worker can act on.
+        if (!action.shift_id || action.shift_finished) continue;
         list.push({
           id: action.id,
-          icon: "file-text",
-          title: t("todo.improveNotes"),
+          icon: action.kind === "incomplete_session" ? "edit-3" : "file-text",
+          title: t(action.kind === "incomplete_session" ? "todo.finishNotes" : "todo.improveNotes"),
           detail: readableDetail(action.detail),
-          href: `/session/${ref}`,
+          href: `/shift/${action.shift_id}`,
           tone: "warning",
         });
       }

@@ -382,6 +382,61 @@ async def auto_save_mileage_on_clock_in(
         return None
 
 
+# A car trip whose claimed distance is this far from the route estimate needs
+# the worker to say where they went (a detour, a second stop, road closures).
+DISTANCE_EXPLAIN_RATIO = 0.10
+DISTANCE_EXPLAIN_MIN_KM = 1.0
+TRIP_DETAILS_MIN_CHARS = 10
+
+
+def mileage_needs_explanation(claimed_km: float, calculated_km: Optional[float]) -> bool:
+    """True when the claimed distance can't stand on the route estimate alone."""
+    if not calculated_km:
+        return True
+    diff = abs(float(claimed_km) - float(calculated_km))
+    return diff > DISTANCE_EXPLAIN_MIN_KM and diff / float(calculated_km) > DISTANCE_EXPLAIN_RATIO
+
+
+async def _store_evidence(upload: UploadFile | None, organization_id: str, worker_id: str, shift_id: str) -> Optional[str]:
+    """Save a receipt or trip photo; its storage path, or None if nothing was sent."""
+    if not upload:
+        return None
+    data = await upload.read()
+    if not data:
+        return None
+    path = f"{organization_id}/{worker_id}/{shift_id}/{uuid4()}-{upload.filename or 'evidence'}"
+    get_supabase_admin().storage.from_("travel-receipts").upload(
+        path,
+        data,
+        {"content-type": upload.content_type or "application/octet-stream", "upsert": "true"},
+    )
+    return path
+
+
+def _write_expense(row: Optional[dict[str, Any]], payload: dict[str, Any]) -> dict[str, Any]:
+    """Insert or update a draft. If the database doesn't have the trip_details
+    column yet (migration 266 not applied), save without it rather than fail."""
+    def run(body: dict[str, Any]) -> dict[str, Any]:
+        if row:
+            _guard_editable(row)
+            resp = get_supabase_admin().table("shift_travel_expenses").update(body).eq("id", row["id"]).execute()
+            return (resp.data or [body])[0]
+        resp = get_supabase_admin().table("shift_travel_expenses").insert(body).execute()
+        return (resp.data or [body])[0]
+
+    try:
+        return run(payload)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if "trip_details" in str(exc) and "trip_details" in payload:
+            logger.warning("shift_travel_expenses.trip_details missing (apply migration 266); saved without it")
+            return run({k: v for k, v in payload.items() if k != "trip_details"})
+        if _is_missing_schema(exc):
+            raise HTTPException(status_code=503, detail="Travel expense service unavailable.") from exc
+        raise
+
+
 def _guard_editable(expense: dict[str, Any]) -> None:
     if expense.get("status") != "draft":
         raise HTTPException(status_code=409, detail="Submitted expenses cannot be edited.")
@@ -394,9 +449,14 @@ async def upsert_mileage_expense(
     organization_id: str,
     claimed_km: float,
     calculated_km: Optional[float] = None,
+    trip_details: Optional[str] = None,
+    evidence: UploadFile | None = None,
 ) -> dict[str, Any]:
     if claimed_km <= 0 or claimed_km > 2000:
         raise HTTPException(status_code=422, detail="Invalid distance.")
+    # A draft can be saved unfinished (the clock-in auto-draft has no words);
+    # the evidence is checked when the claims are submitted.
+    details = (trip_details or "").strip() or None
 
     rate_cents = get_org_mileage_rate_cents(organization_id)
     amount_cents = _cents_from_km(claimed_km, rate_cents)
@@ -426,27 +486,15 @@ async def upsert_mileage_expense(
         "amount_cents": amount_cents,
         "updated_at": now,
     }
-    try:
-        if row:
-            _guard_editable(row)
-            resp = (
-                get_supabase_admin()
-                .table("shift_travel_expenses")
-                .update(payload)
-                .eq("id", row["id"])
-                .execute()
-            )
-            return (resp.data or [payload])[0]
+    if details is not None:
+        payload["trip_details"] = details
+    photo = await _store_evidence(evidence, organization_id, worker_id, shift_id)
+    if photo:
+        payload["receipt_storage_path"] = photo
+    if not row:
         payload["id"] = str(uuid4())
         payload["created_at"] = now
-        resp = get_supabase_admin().table("shift_travel_expenses").insert(payload).execute()
-        return (resp.data or [payload])[0]
-    except HTTPException:
-        raise
-    except Exception as exc:
-        if _is_missing_schema(exc):
-            raise HTTPException(status_code=503, detail="Travel expense service unavailable.") from exc
-        raise
+    return _write_expense(row, payload)
 
 
 async def upsert_transit_expense(
@@ -457,34 +505,12 @@ async def upsert_transit_expense(
     amount_cents: int,
     transit_type: str,
     receipt: UploadFile | None = None,
+    trip_details: Optional[str] = None,
 ) -> dict[str, Any]:
     if transit_type not in TRANSIT_TYPES:
         raise HTTPException(status_code=422, detail="Invalid transit type.")
     if amount_cents <= 0:
         raise HTTPException(status_code=422, detail="Amount must be positive.")
-
-    receipt_path = None
-    if amount_cents > RECEIPT_REQUIRED_CENTS:
-        if not receipt:
-            raise HTTPException(status_code=422, detail="Receipt required for claims over $10.")
-        data = await receipt.read()
-        if not data:
-            raise HTTPException(status_code=422, detail="Receipt file is empty.")
-        receipt_path = f"{organization_id}/{worker_id}/{shift_id}/{uuid4()}-{receipt.filename or 'receipt'}"
-        get_supabase_admin().storage.from_("travel-receipts").upload(
-            receipt_path,
-            data,
-            {"content-type": receipt.content_type or "application/octet-stream", "upsert": "true"},
-        )
-    elif receipt:
-        data = await receipt.read()
-        if data:
-            receipt_path = f"{organization_id}/{worker_id}/{shift_id}/{uuid4()}-{receipt.filename or 'receipt'}"
-            get_supabase_admin().storage.from_("travel-receipts").upload(
-                receipt_path,
-                data,
-                {"content-type": receipt.content_type or "application/octet-stream", "upsert": "true"},
-            )
 
     now = _now_iso()
     existing = (
@@ -499,6 +525,11 @@ async def upsert_transit_expense(
         .execute()
     )
     row = (existing.data or [None])[0]
+    # A receipt already on the draft stays unless a new one replaces it
+    # (saving again without re-picking the photo used to wipe it).
+    receipt_path = await _store_evidence(receipt, organization_id, worker_id, shift_id) or (row or {}).get("receipt_storage_path")
+    if amount_cents > RECEIPT_REQUIRED_CENTS and not receipt_path:
+        raise HTTPException(status_code=422, detail="Receipt required for claims over $10.")
     payload = {
         "shift_id": shift_id,
         "worker_id": worker_id,
@@ -510,27 +541,13 @@ async def upsert_transit_expense(
         "receipt_storage_path": receipt_path,
         "updated_at": now,
     }
-    try:
-        if row:
-            _guard_editable(row)
-            resp = (
-                get_supabase_admin()
-                .table("shift_travel_expenses")
-                .update(payload)
-                .eq("id", row["id"])
-                .execute()
-            )
-            return (resp.data or [payload])[0]
+    details = (trip_details or "").strip()
+    if details:
+        payload["trip_details"] = details
+    if not row:
         payload["id"] = str(uuid4())
         payload["created_at"] = now
-        resp = get_supabase_admin().table("shift_travel_expenses").insert(payload).execute()
-        return (resp.data or [payload])[0]
-    except HTTPException:
-        raise
-    except Exception as exc:
-        if _is_missing_schema(exc):
-            raise HTTPException(status_code=503, detail="Travel expense service unavailable.") from exc
-        raise
+    return _write_expense(row, payload)
 
 
 def list_draft_expenses(worker_id: str, organization_id: str) -> list[dict[str, Any]]:
@@ -559,10 +576,36 @@ def list_draft_expenses(worker_id: str, organization_id: str) -> list[dict[str, 
     return rows
 
 
+def missing_evidence(draft: dict[str, Any]) -> Optional[str]:
+    """What a draft still needs before it can go to the office, or None.
+    Car trips that differ from the route estimate (or have none) need the
+    worker to say where they went; fares over $10 need a receipt."""
+    if draft.get("expense_type") == "mileage":
+        claimed = draft.get("claimed_km")
+        calculated = draft.get("calculated_km")
+        if claimed is None:
+            return "the distance"
+        has_column = "trip_details" in draft  # migration 266 not applied: don't block
+        if has_column and mileage_needs_explanation(float(claimed), float(calculated) if calculated else None):
+            if len((draft.get("trip_details") or "").strip()) < TRIP_DETAILS_MIN_CHARS:
+                return "where you drove and why (the distance differs from the route estimate)"
+    elif draft.get("expense_type") == "transit":
+        if int(draft.get("amount_cents") or 0) > RECEIPT_REQUIRED_CENTS and not draft.get("receipt_storage_path"):
+            return "a receipt (fares over $10)"
+    return None
+
+
 def submit_expense_batch(worker_id: str, organization_id: str) -> dict[str, Any]:
     drafts = list_draft_expenses(worker_id, organization_id)
     if not drafts:
         raise HTTPException(status_code=422, detail="No draft expenses to submit.")
+    gaps = [(d, missing_evidence(d)) for d in drafts]
+    gaps = [(d, need) for d, need in gaps if need]
+    if gaps:
+        raise HTTPException(
+            status_code=422,
+            detail="Some claims need more before they can be sent: " + "; ".join(need for _, need in gaps) + ".",
+        )
 
     total = sum(int(d.get("amount_cents") or 0) for d in drafts)
     batch_id = str(uuid4())

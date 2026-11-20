@@ -89,10 +89,10 @@ export function getShiftMileageEstimate(shiftId: string) {
   return jsonFetch<MileageEstimate>(`/api/worker/travel/shifts/${shiftId}/mileage-estimate`);
 }
 
-export function saveMileageExpense(shiftId: string, claimed_km: number, calculated_km?: number) {
+export function saveMileageExpense(shiftId: string, claimed_km: number, calculated_km?: number, trip_details?: string) {
   return jsonFetch<TravelExpense>(`/api/worker/travel/shifts/${shiftId}/mileage`, {
     method: "POST",
-    body: JSON.stringify({ claimed_km, calculated_km }),
+    body: JSON.stringify({ claimed_km, calculated_km, ...(trip_details?.trim() ? { trip_details: trip_details.trim() } : {}) }),
   });
 }
 

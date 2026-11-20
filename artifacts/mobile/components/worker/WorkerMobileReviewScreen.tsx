@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ComplianceScoreBar } from "@/components/worker/ComplianceScoreBar";
@@ -146,7 +147,8 @@ export function WorkerMobileReviewScreen({
       <WorkerMobileRiskStrip alerts={healthAlerts} />
       <ComplianceScoreBar score={compliance.score} onPress={onViewComplianceReport} />
 
-      <ScrollView
+      <KeyboardAwareScrollViewCompat
+        bottomOffset={24}
         contentContainerStyle={[styles.scroll, { paddingBottom: 100 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
       >
@@ -278,7 +280,7 @@ export function WorkerMobileReviewScreen({
             );
           })
         )}
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
 
       <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom + 14 }]}>
         <Pressable

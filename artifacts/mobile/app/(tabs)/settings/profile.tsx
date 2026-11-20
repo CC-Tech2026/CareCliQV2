@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat } from "@/components/KeyboardAvoidingViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CopyButton } from "@/components/worker/CopyButton";
@@ -201,9 +201,9 @@ export default function MyProfileScreen() {
       title={t("myProfile.title")}
       guide="profile"
     >
-      <KeyboardAvoidingView
+      <KeyboardAvoidingViewCompat
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior="padding"
       >
         <ScrollView
           contentContainerStyle={[
@@ -647,7 +647,7 @@ export default function MyProfileScreen() {
             </Pressable>
           </View>
         ) : null}
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingViewCompat>
     </SettingsSubScreen>
   );
 }

@@ -4,7 +4,6 @@ import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -14,6 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat } from "@/components/KeyboardAvoidingViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FontFamily } from "@/constants/typography";
@@ -595,9 +595,9 @@ export function IncidentDetailPanel({ incidentId }: Props) {
         animationType="slide"
         onRequestClose={() => setEditing(null)}
       >
-        <KeyboardAvoidingView
+        <KeyboardAvoidingViewCompat
           style={styles.sheetRoot}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior="padding"
         >
           <Pressable
             style={styles.backdrop}
@@ -746,7 +746,7 @@ export function IncidentDetailPanel({ incidentId }: Props) {
               </Pressable>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingViewCompat>
       </Modal>
     </>
   );

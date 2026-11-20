@@ -77,6 +77,9 @@ export type WorkerLandingDashboard = {
     severity: string;
     action_url?: string;
     reference_id?: string;
+    /** The shift these notes belong to, and whether it has finished. */
+    shift_id?: string | null;
+    shift_finished?: boolean;
   }>;
   compliance_alerts: Array<{
     id: string;

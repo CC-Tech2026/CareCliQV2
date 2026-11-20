@@ -5,7 +5,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -15,6 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat } from "@/components/KeyboardAvoidingViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
@@ -118,7 +118,7 @@ export default function ShiftMessageOfficeScreen() {
       showBack
       minimalHeader
     >
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingViewCompat style={styles.flex} behavior="padding">
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View
             style={[
@@ -247,7 +247,7 @@ export default function ShiftMessageOfficeScreen() {
             </View>
           )}
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingViewCompat>
 
       <Modal visible={priorityOpen} transparent animationType="slide" onRequestClose={() => setPriorityOpen(false)}>
         <Pressable style={styles.sheetBackdrop} onPress={() => setPriorityOpen(false)}>
