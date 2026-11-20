@@ -21,6 +21,34 @@ export function formatDobWithAge(dob?: string | null) {
   return age != null ? `${formatted} (${age} yrs)` : formatted;
 }
 
+// A phone number starts with a digit, "+" or "(0" and ends with a digit:
+// "0491 570 159", "+61 491 570 159", "(08) 8123 4567". Starting there keeps
+// a closing bracket before the number ("(Mother) 0491...") out of it.
+const PHONE_IN_TEXT = /(?:\+\d|\(\d|\d)[\d\s()-]{6,}\d/;
+
+/** "Kate Williams (Mother) 0491 570 159" or "Sam Lee — Brother — 0400 999 888"
+ *  as name, relationship and phone. Unrecognised text keeps its words as
+ *  the name, so nothing typed is ever hidden. */
+export function parseContactText(raw: string) {
+  const text = raw.trim();
+  const phone = text.match(PHONE_IN_TEXT)?.[0]?.trim() || undefined;
+  let rest = phone ? text.replace(phone, " ") : text;
+  let relationship: string | null = null;
+  const bracketed = rest.match(/\(([^()\d]{2,40})\)/);
+  if (bracketed) {
+    relationship = bracketed[1].trim();
+    rest = rest.replace(bracketed[0], " ");
+  }
+  const parts = rest
+    .split(/\s[—–-]\s|[,;:·|]/)
+    .map((p) => p.replace(/\s+/g, " ").replace(/^[—–-]\s*|\s*[—–-]$/g, "").trim())
+    .filter(Boolean);
+  const name = parts[0] || null;
+  if (!relationship && parts.length > 1) relationship = parts.slice(1).join(", ");
+  const detail = [relationship, phone].filter(Boolean).join(" · ");
+  return { text, name, relationship, phone, detail };
+}
+
 export function emergencyContactDisplay(contact: ParticipantProfile["emergency_contact"]) {
   if (!contact) return null;
   if (typeof contact === "string") {
@@ -41,7 +69,7 @@ export function emergencyContactDisplay(contact: ParticipantProfile["emergency_c
     }
   }
   if (typeof contact === "string") {
-    return { text: contact, phone: contact.match(/[\d+() -]{8,}/)?.[0]?.trim(), name: null, relationship: null };
+    return parseContactText(contact);
   }
   const name = contact.name?.trim() || null;
   const relationship = contact.relationship?.trim() || null;

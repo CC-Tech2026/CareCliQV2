@@ -8,12 +8,13 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { datetimeLocalValueToUtcIso, utcIsoToDatetimeLocalValue, zonedDate } from "@/lib/datetime";
+import { zonedDate } from "@/lib/datetime";
 import { ShiftZoneNote } from "@/components/branches/ShiftZoneNote";
 import { ZoneLabel } from "@/components/branches/ZoneLabel";
 import { SidePanel } from "@/components/layout/SidePanel";
-import { ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
-import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { ctaClass, outlineClass } from "@/components/layout/PageKit";
+import { ShiftTimeEditor } from "@/components/coordinator/ShiftTimeEditor";
+import { isOpenShift } from "@/components/coordinator/rosterShared";
 import { ConflictModal, type PendingDrop } from "@/components/coordinator/ConflictModal";
 import { WorkerMatchBadge } from "@/components/coordinator/WorkerMatchBadge";
 import { ContactLink } from "@/components/team/WorkerDetail";
@@ -24,6 +25,7 @@ import {
   assignExistingShift,
   sendShiftOffer,
   rescheduleShift,
+  getWorkerConflicts,
   cancelShift,
   type CoordinatorShiftRecord,
   type WorkerStats,
@@ -62,8 +64,8 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
   const orgId = auth?.user?.organizationId ?? "__no_org__";
   const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null);
   const [rescheduling, setRescheduling] = useState(false);
-  const [draftStart, setDraftStart] = useState("");
-  const [draftEnd, setDraftEnd] = useState("");
+  // A clash for the assigned worker at the new time, shown in the editor.
+  const [timeProblem, setTimeProblem] = useState<string | null>(null);
   const sameWorkerNames = sharedNames((workers ?? []).map((w) => w.full_name));
 
   const participantId = shift?.participant_id;
@@ -148,11 +150,34 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
   };
 
   const rescheduleMut = useMutation({
-    mutationFn: (payload: { scheduled_start?: string; scheduled_end?: string }) => rescheduleShift(shift!.id, payload),
-    onSuccess: () => {
+    mutationFn: async (payload: { scheduled_start: string; scheduled_end: string }) => {
+      let warning: string | undefined;
+      if (shift && !isOpenShift(shift) && shift.worker_id) {
+        const check = await getWorkerConflicts(shift.worker_id, payload.scheduled_start, payload.scheduled_end, {
+          participantId: shift.participant_id ?? undefined,
+          excludeShiftId: shift.id,
+        });
+        const hard = check.conflicts.find((c) => c.severity === "error");
+        if (hard) {
+          setTimeProblem(hard.message);
+          return { blocked: true as const };
+        }
+        warning = [...check.conflicts, ...check.skill_warnings][0]?.message;
+      }
+      await rescheduleShift(shift!.id, payload);
+      return { blocked: false as const, warning };
+    },
+    onSuccess: (result) => {
+      if (result.blocked) return;
       qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
-      toast({ title: translate("coordinator.shiftAssign.rescheduled") });
+      toast({
+        title: translate("coordinator.shiftAssign.rescheduled"),
+        description:
+          result.warning ??
+          (shift && !isOpenShift(shift) ? `${shift.worker_name ?? "The worker"} has been told.` : undefined),
+      });
       setRescheduling(false);
+      onAssigned?.();
     },
     onError: (err: Error) => {
       toast({ title: translate("coordinator.shiftAssign.rescheduleFailed"), description: err.message, variant: "destructive" });
@@ -160,18 +185,8 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
   });
 
   const openReschedule = () => {
-    // The shift's own zone (its participant's branch), not the viewer's.
-    setDraftStart(shift?.scheduled_start ? utcIsoToDatetimeLocalValue(shift.scheduled_start, shift.timezone) : "");
-    setDraftEnd(shift?.scheduled_end ? utcIsoToDatetimeLocalValue(shift.scheduled_end, shift.timezone) : "");
+    setTimeProblem(null);
     setRescheduling(true);
-  };
-
-  const handleSaveReschedule = () => {
-    if (!draftStart) return;
-    rescheduleMut.mutate({
-      scheduled_start: datetimeLocalValueToUtcIso(draftStart, shift?.timezone),
-      scheduled_end: draftEnd ? datetimeLocalValueToUtcIso(draftEnd, shift?.timezone) : undefined,
-    });
   };
 
   const cancelMut = useMutation({
@@ -247,8 +262,8 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
           </div>
         )}
 
-        {/* Reschedule / cancel - the only edit actions this shift has, since
-            it's still unassigned (no worker to conflict-check against). */}
+        {/* Change the time or cancel. A new time for an assigned shift is
+            checked against the worker's other shifts and leave first. */}
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={openReschedule} disabled={rescheduling || cancelMut.isPending} className={outlineClass}>
             <CalendarClock size={15} /> {translate("coordinator.shiftAssign.reschedule")}
@@ -264,25 +279,22 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
           </button>
         </div>
 
-        {rescheduling && (
-          <div className="space-y-3 rounded-xl border border-cc-border p-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.start")}</label>
-              <DateTimePicker value={draftStart} onChange={setDraftStart} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.end")}</label>
-              <DateTimePicker value={draftEnd} onChange={setDraftEnd} />
-            </div>
-            <ShiftZoneNote tz={shift?.timezone} sampleIso={draftStart ? datetimeLocalValueToUtcIso(draftStart, shift?.timezone) : null} />
-            <div className="flex items-center justify-end gap-2">
-              <button type="button" onClick={() => setRescheduling(false)} disabled={rescheduleMut.isPending} className={ghostClass}>
-                {translate("coordinator.shiftAssign.rescheduleDiscard")}
-              </button>
-              <button type="button" onClick={handleSaveReschedule} disabled={!draftStart || rescheduleMut.isPending} className={ctaClass}>
-                {translate("coordinator.shiftAssign.rescheduleSave")}
-              </button>
-            </div>
+        {rescheduling && shift?.scheduled_start && shift?.scheduled_end && (
+          <div className="space-y-2">
+            {/* Times are on the shift's own clock (its participant's branch). */}
+            <ShiftTimeEditor
+              startIso={shift.scheduled_start}
+              endIso={shift.scheduled_end}
+              timezone={shift.timezone}
+              saving={rescheduleMut.isPending}
+              problem={timeProblem}
+              onSave={(startIso, endIso) => {
+                setTimeProblem(null);
+                rescheduleMut.mutate({ scheduled_start: startIso, scheduled_end: endIso });
+              }}
+              onCancel={() => setRescheduling(false)}
+            />
+            <ShiftZoneNote tz={shift.timezone} sampleIso={shift.scheduled_start} />
           </div>
         )}
 
