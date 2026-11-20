@@ -58,7 +58,7 @@ export function AuthSelect({ value, onChange, options, placeholder, disabled, au
                     onChange(option.value);
                     setOpen(false);
                   }}
-                  style={[styles.option, value === option.value && { backgroundColor: auth.inputBg }]}
+                  style={[styles.option, value === option.value && { backgroundColor: auth.noticeBg }]}
                 >
                   <Text style={[styles.optionText, { color: auth.text, fontFamily: "Inter_500Medium" }]}>
                     {option.label}

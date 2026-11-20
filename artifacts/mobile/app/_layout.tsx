@@ -86,7 +86,9 @@ function RootLayoutNav() {
   return (
     <>
       <OnboardingCompleteGate />
-      <Stack>
+      {/* Every screen draws its own header; the system one stays off so a
+          screen missing from this list never gets a second bar on top. */}
+      <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen
           name="splash"
           options={{ headerShown: false, animation: "fade" }}
@@ -124,6 +126,26 @@ function RootLayoutNav() {
           options={{ headerShown: false, animation: "slide_from_right" }}
         />
         <Stack.Screen
+          name="birthday"
+          options={{ headerShown: false, animation: "fade", presentation: "fullScreenModal" }}
+        />
+        <Stack.Screen
+          name="worker/calendar"
+          options={{ headerShown: false, animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="worker/contact-office"
+          options={{ headerShown: false, animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="worker/guides"
+          options={{ headerShown: false, animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="worker/todo"
+          options={{ headerShown: false, animation: "slide_from_right" }}
+        />
+        <Stack.Screen
           name="client/[id]"
           options={{ headerShown: false, animation: "slide_from_right" }}
         />
@@ -153,6 +175,14 @@ function RootLayoutNav() {
         />
         <Stack.Screen
           name="worker/help"
+          options={{ headerShown: false, animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="worker/credentials/[id]/update"
+          options={{ headerShown: false, animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="progress-notes/[id]"
           options={{ headerShown: false, animation: "slide_from_right" }}
         />
         <Stack.Screen

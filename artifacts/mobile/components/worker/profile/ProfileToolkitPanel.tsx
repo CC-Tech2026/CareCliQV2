@@ -96,14 +96,23 @@ export function ProfileToolkitPanel({ bottomInset = 24 }: Props) {
       <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
         {t("toolkit.subtitle")}
       </Text>
-      <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-        {t("profile.toolkit.inventoryHint")}
-      </Text>
+      {/* How to use the list only matters once there is a list. */}
+      {items.length > 0 ? (
+        <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          {t("profile.toolkit.inventoryHint")}
+        </Text>
+      ) : null}
 
       {items.length === 0 ? (
         <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+          <View style={[styles.emptyIcon, { backgroundColor: colors.soft }]}>
+            <Feather name="briefcase" size={22} color={colors.primary} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
             {t("toolkit.empty")}
+          </Text>
+          <Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            {t("toolkit.emptyBody")}
           </Text>
         </View>
       ) : (
@@ -197,12 +206,15 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 12, lineHeight: 17 },
   hint: { fontSize: 13, lineHeight: 18 },
   emptyCard: {
-    borderRadius: 14,
+    borderRadius: 20,
     borderWidth: 1,
-    padding: 24,
+    padding: 28,
     alignItems: "center",
+    gap: 8,
   },
-  empty: { fontSize: 14, textAlign: "center" },
+  emptyIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  emptyTitle: { fontSize: 17, textAlign: "center" },
+  empty: { fontSize: 15, lineHeight: 21, textAlign: "center", maxWidth: 280 },
   card: {
     borderRadius: 14,
     borderWidth: 1,

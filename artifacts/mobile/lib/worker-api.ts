@@ -705,7 +705,8 @@ export async function transcribeSessionAudio(sessionId: string, uri: string) {
     );
   }
 
-  return workerFetch<{ transcript: string }>(
+  // language: the code of the language heard ("fr"), or null when unknown.
+  return workerFetch<{ transcript: string; language?: string | null }>(
     `/api/worker/sessions/${sessionId}/transcribe`,
     { method: "POST", body: formData },
   );
@@ -800,7 +801,58 @@ export function clinicalRewriteText(text: string, sourceLanguage = "auto") {
 export type ImproveNoteResult = {
   improved_note: string;
   rule_suggestions: { rule: string; issue: string; suggestion: string }[];
+  /** Questions about what the rules need but the note doesn't say. */
+  missing_information?: string[];
+  /** True when the rewrite added details the worker didn't write (an
+   *  incident, a restrictive practice or a clinical task), so it was dropped. */
+  discarded?: boolean;
+  discarded_reason?: string;
+  /** The rewrite checked against the note rules. */
+  check?: NoteCheckResult;
 };
+
+/** One NDIS note rule's result on a draft (backend note_guidance_service). */
+export type NoteCheckRule = {
+  rule: string;
+  title: string;
+  status: "pass" | "warning" | "fail";
+  severity?: string | null;
+  blocks_approval: boolean;
+  /** Plain English message for the worker. */
+  message: string | null;
+  /** Matches the offline hint ids in @workspace/worker-compliance. */
+  hint_id: string | null;
+  params: Record<string, string | number>;
+};
+
+export type NoteCheckResult = {
+  rules: NoteCheckRule[];
+  issues: NoteCheckRule[];
+  word_count: number;
+  min_words: number;
+  next_question: { id: string; rule: string; question: string; starter: string } | null;
+  ready: boolean;
+  checked_when_finished: string[];
+};
+
+/**
+ * The real NDIS note rules (R3, R5 to R12) run on a draft's English text,
+ * with each provider's own rule settings: what the note will be scored on.
+ * Preferred over the offline copy in @workspace/worker-compliance whenever
+ * the app is online. No AI involved.
+ */
+export function checkNoteDraft(body: {
+  text: string;
+  session_id?: string | null;
+  participant_id?: string | null;
+  task_id?: string | null;
+  skipped?: string[];
+}) {
+  return workerFetch<NoteCheckResult>("/api/worker/notes/check", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
 
 /**
  * Rewrites a draft note to fix specific issues (word count, vagueness,

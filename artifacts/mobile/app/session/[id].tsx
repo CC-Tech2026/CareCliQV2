@@ -14,11 +14,21 @@ import {
   useSaveSessionWithAI,
 } from "@workspace/api-client-react";
 import * as Haptics from "@/lib/haptics";
-import { shiftNoteTimes, shiftNoteTitle, type ShiftNoteLike } from "@/lib/shift-note-title";
+import {
+  shiftNoteTimes,
+  shiftNoteTitle,
+  type ShiftNoteLike,
+} from "@/lib/shift-note-title";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -37,8 +47,12 @@ import { OfflineBanner } from "@/components/OfflineBanner";
 import { ShiftCompliancePanel } from "@/components/ShiftCompliancePanel";
 import { WorkerMobileIncidentSheet } from "@/components/worker/WorkerMobileIncidentSheet";
 import { useOffline } from "@/context/OfflineContext";
+import { GuideButton } from "@/components/worker/guide/GuideSheet";
 import { useColors } from "@/hooks/useColors";
-import { evaluateSessionTextCompliance, scoreColor } from "@workspace/worker-compliance";
+import {
+  evaluateSessionTextCompliance,
+  scoreColor,
+} from "@workspace/worker-compliance";
 
 const ACTIVITIES = [
   { id: "personal_care", label: "Personal Care", icon: "heart" },
@@ -69,9 +83,8 @@ export default function LiveSessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: session, isLoading: sessionLoading } = useGetSession(id);
-  const { data: participant, isLoading: participantLoading } = useGetParticipant(
-    session?.participant_id ?? ""
-  );
+  const { data: participant, isLoading: participantLoading } =
+    useGetParticipant(session?.participant_id ?? "");
 
   const updateSession = useUpdateSession();
   const saveWithAI = useSaveSessionWithAI();
@@ -96,7 +109,12 @@ export default function LiveSessionScreen() {
       setNotes(session.notes);
     }
     if (session?.activities_performed && activities.length === 0) {
-      setActivities(session.activities_performed.split(",").map((a) => a.trim()).filter(Boolean));
+      setActivities(
+        session.activities_performed
+          .split(",")
+          .map((a) => a.trim())
+          .filter(Boolean),
+      );
     }
   }, [session]);
 
@@ -121,7 +139,9 @@ export default function LiveSessionScreen() {
   const handleToggleActivity = useCallback((activityId: string) => {
     Haptics.selectionAsync();
     setActivities((prev) =>
-      prev.includes(activityId) ? prev.filter((a) => a !== activityId) : [...prev, activityId]
+      prev.includes(activityId)
+        ? prev.filter((a) => a !== activityId)
+        : [...prev, activityId],
     );
   }, []);
 
@@ -139,7 +159,10 @@ export default function LiveSessionScreen() {
     }
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission needed", "Camera access is required to take photos.");
+      Alert.alert(
+        "Permission needed",
+        "Camera access is required to take photos.",
+      );
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -169,16 +192,27 @@ export default function LiveSessionScreen() {
         setVoiceNotes((prev) => [...prev, noteText]);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch {
-        setVoiceNotes((prev) => [...prev, `Voice note ${voiceNotes.length + 1}`]);
+        setVoiceNotes((prev) => [
+          ...prev,
+          `Voice note ${voiceNotes.length + 1}`,
+        ]);
       }
     } else {
       try {
-        const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+        const { granted } =
+          await AudioModule.requestRecordingPermissionsAsync();
         if (!granted) {
-          Alert.alert("Permission needed", "Microphone access is required for voice notes.");
+          Alert.alert(
+            "Permission needed",
+            "Microphone access is required for voice notes.",
+          );
           return;
         }
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true });
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
+          allowsBackgroundRecording: true,
+        });
         await audioRecorder.prepareToRecordAsync();
         audioRecorder.record();
         setIsRecording(true);
@@ -193,7 +227,7 @@ export default function LiveSessionScreen() {
     setIsSaving(true);
     const durationMins = Math.max(
       session?.duration_minutes ?? 0,
-      Math.floor(elapsedSeconds / 60)
+      Math.floor(elapsedSeconds / 60),
     );
 
     if (!isOnline) {
@@ -211,7 +245,7 @@ export default function LiveSessionScreen() {
         Alert.alert(
           "Saved Offline",
           "Your notes have been saved locally and will sync automatically when you are back online.",
-          [{ text: "OK", onPress: () => router.replace("/(tabs)/shifts") }]
+          [{ text: "OK", onPress: () => router.replace("/(tabs)/shifts") }],
         );
       } catch {
         Alert.alert("Error", "Failed to save notes offline. Please try again.");
@@ -240,7 +274,18 @@ export default function LiveSessionScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [id, notes, activities, elapsedSeconds, session, isOnline, queueNoteUpdate, updateSession, saveWithAI, router]);
+  }, [
+    id,
+    notes,
+    activities,
+    elapsedSeconds,
+    session,
+    isOnline,
+    queueNoteUpdate,
+    updateSession,
+    saveWithAI,
+    router,
+  ]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -256,7 +301,12 @@ export default function LiveSessionScreen() {
 
   if (sessionLoading || participantLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
         <ActivityIndicator color={colors.primary} size="large" />
       </View>
     );
@@ -264,8 +314,11 @@ export default function LiveSessionScreen() {
 
   // Safe access to API fields that may vary by backend implementation
   const p = participant as Record<string, unknown> | undefined;
-  const goals = (p?.goals as Array<{ goal_text: string; progress: number }>) ?? [];
-  const participantAddress = (p?.address ?? p?.participant_address) as string | undefined;
+  const goals =
+    (p?.goals as Array<{ goal_text: string; progress: number }>) ?? [];
+  const participantAddress = (p?.address ?? p?.participant_address) as
+    | string
+    | undefined;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -275,24 +328,51 @@ export default function LiveSessionScreen() {
       <View
         style={[
           styles.simpleHeader,
-          { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border },
+          {
+            paddingTop: topPad + 8,
+            backgroundColor: colors.card,
+            borderBottomColor: colors.border,
+          },
         ]}
       >
-        <Pressable onPress={() => router.back()} style={styles.backBtn} testID="session-back">
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          testID="session-back"
+        >
           <Feather name="chevron-left" size={24} color={colors.foreground} />
         </Pressable>
         <Text
-          style={[styles.headerName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}
+          style={[
+            styles.headerName,
+            { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+          ]}
           numberOfLines={1}
         >
           {participant?.full_name ?? "Loading..."}
         </Text>
         <View style={styles.liveStatusRow}>
-          <View style={[styles.statusDot, { backgroundColor: isRunning ? "#22C55E" : colors.mutedForeground }]} />
-          <Text style={[styles.liveLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+          <View
+            style={[
+              styles.statusDot,
+              {
+                backgroundColor: isRunning ? "#22C55E" : colors.mutedForeground,
+              },
+            ]}
+          />
+          <Text
+            style={[
+              styles.liveLabel,
+              {
+                color: colors.mutedForeground,
+                fontFamily: "Inter_600SemiBold",
+              },
+            ]}
+          >
             {isRunning ? "LIVE" : "PAUSED"}
           </Text>
         </View>
+        <GuideButton id="notes" onDark={false} />
       </View>
 
       <ScrollView
@@ -302,20 +382,50 @@ export default function LiveSessionScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* PARTICIPANT CONTEXT — hero block */}
-        <View style={[styles.participantBlock, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.participantName, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+        <View
+          style={[
+            styles.participantBlock,
+            { borderBottomColor: colors.border },
+          ]}
+        >
+          <Text
+            style={[
+              styles.participantName,
+              { color: colors.foreground, fontFamily: "Inter_700Bold" },
+            ]}
+          >
             {participant?.full_name ?? "Loading..."}
           </Text>
           {p?.ndis_number ? (
-            <Text style={[styles.ndisNumber, { fontFamily: "Inter_400Regular" }]}>
+            <Text
+              style={[styles.ndisNumber, { fontFamily: "Inter_400Regular" }]}
+            >
               NDIS #{p.ndis_number as string}
             </Text>
           ) : null}
           <View style={styles.chipRow}>
-            <View style={[styles.supportChip, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              <Text style={[styles.supportChipText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+            <View
+              style={[
+                styles.supportChip,
+                { backgroundColor: colors.muted, borderColor: colors.border },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.supportChipText,
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: "Inter_500Medium",
+                  },
+                ]}
+              >
                 {session
-                  ? [shiftNoteTitle(session as ShiftNoteLike, { participant: false }), shiftNoteTimes(session as ShiftNoteLike)]
+                  ? [
+                      shiftNoteTitle(session as ShiftNoteLike, {
+                        participant: false,
+                      }),
+                      shiftNoteTimes(session as ShiftNoteLike),
+                    ]
                       .filter(Boolean)
                       .join(" · ")
                   : "Shift note"}
@@ -324,8 +434,20 @@ export default function LiveSessionScreen() {
           </View>
           {participantAddress ? (
             <View style={styles.locationRow}>
-              <Feather name="map-pin" size={13} color={colors.mutedForeground} />
-              <Text style={[styles.locationText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              <Feather
+                name="map-pin"
+                size={13}
+                color={colors.mutedForeground}
+              />
+              <Text
+                style={[
+                  styles.locationText,
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: "Inter_400Regular",
+                  },
+                ]}
+              >
                 {participantAddress}
               </Text>
             </View>
@@ -333,22 +455,55 @@ export default function LiveSessionScreen() {
         </View>
 
         {/* TIMER BAR — compact, not hero */}
-        <View style={[styles.timerBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View
+          style={[
+            styles.timerBar,
+            { backgroundColor: colors.card, borderBottomColor: colors.border },
+          ]}
+        >
           <View>
-            <Text style={[styles.timerBarLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+            <Text
+              style={[
+                styles.timerBarLabel,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: "Inter_600SemiBold",
+                },
+              ]}
+            >
               ELAPSED
             </Text>
-            <Text style={[styles.timerCompact, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            <Text
+              style={[
+                styles.timerCompact,
+                { color: colors.foreground, fontFamily: "Inter_700Bold" },
+              ]}
+            >
               {formatTimer(elapsedSeconds)}
             </Text>
           </View>
           <Pressable
             onPress={handleStartStop}
-            style={[styles.timerToggleBtn, { backgroundColor: isRunning ? "#FEE2E2" : "#DCFCE7" }]}
+            style={[
+              styles.timerToggleBtn,
+              { backgroundColor: isRunning ? "#FEE2E2" : "#DCFCE7" },
+            ]}
             testID="session-start-stop"
           >
-            <Feather name={isRunning ? "pause" : "play"} size={16} color={isRunning ? "#DC2626" : "#16A34A"} />
-            <Text style={[styles.timerToggleText, { color: isRunning ? "#DC2626" : "#16A34A", fontFamily: "Inter_600SemiBold" }]}>
+            <Feather
+              name={isRunning ? "pause" : "play"}
+              size={16}
+              color={isRunning ? "#DC2626" : "#16A34A"}
+            />
+            <Text
+              style={[
+                styles.timerToggleText,
+                {
+                  color: isRunning ? "#DC2626" : "#16A34A",
+                  fontFamily: "Inter_600SemiBold",
+                },
+              ]}
+            >
               {isRunning ? "Pause" : "Start"}
             </Text>
           </Pressable>
@@ -406,14 +561,26 @@ export default function LiveSessionScreen() {
 
         {/* GOALS */}
         {goals.length > 0 && (
-          <View style={[styles.sectionBlock, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.sectionLabel, { fontFamily: "Inter_600SemiBold" }]}>
+          <View
+            style={[styles.sectionBlock, { borderBottomColor: colors.border }]}
+          >
+            <Text
+              style={[styles.sectionLabel, { fontFamily: "Inter_600SemiBold" }]}
+            >
               GOALS FOR THIS SHIFT
             </Text>
             {goals.slice(0, 5).map((goal, i) => (
               <View key={i} style={styles.goalRow}>
                 <Text style={styles.goalBullet}>•</Text>
-                <Text style={[styles.goalText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                <Text
+                  style={[
+                    styles.goalText,
+                    {
+                      color: colors.foreground,
+                      fontFamily: "Inter_400Regular",
+                    },
+                  ]}
+                >
                   {goal.goal_text}
                 </Text>
               </View>
@@ -422,8 +589,12 @@ export default function LiveSessionScreen() {
         )}
 
         {/* ACTIVITIES */}
-        <View style={[styles.sectionBlock, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionLabel, { fontFamily: "Inter_600SemiBold" }]}>
+        <View
+          style={[styles.sectionBlock, { borderBottomColor: colors.border }]}
+        >
+          <Text
+            style={[styles.sectionLabel, { fontFamily: "Inter_600SemiBold" }]}
+          >
             ACTIVITIES PERFORMED
           </Text>
           <View style={styles.activitiesGrid}>
@@ -436,14 +607,18 @@ export default function LiveSessionScreen() {
                   style={[
                     styles.activityChip,
                     {
-                      backgroundColor: selected ? colors.primary + "20" : colors.card,
+                      backgroundColor: selected
+                        ? colors.primary + "20"
+                        : colors.card,
                       borderColor: selected ? colors.primary : colors.border,
                     },
                   ]}
                   testID={`activity-${activity.id}`}
                 >
                   <Feather
-                    name={activity.icon as ComponentProps<typeof Feather>["name"]}
+                    name={
+                      activity.icon as ComponentProps<typeof Feather>["name"]
+                    }
                     size={13}
                     color={selected ? colors.primary : colors.mutedForeground}
                   />
@@ -452,7 +627,9 @@ export default function LiveSessionScreen() {
                       styles.activityLabel,
                       {
                         color: selected ? colors.primary : colors.foreground,
-                        fontFamily: selected ? "Inter_600SemiBold" : "Inter_400Regular",
+                        fontFamily: selected
+                          ? "Inter_600SemiBold"
+                          : "Inter_400Regular",
                       },
                     ]}
                   >
@@ -465,13 +642,17 @@ export default function LiveSessionScreen() {
         </View>
 
         {/* SHIFT NOTES — always open, no modal */}
-        <View style={[styles.sectionBlock, { borderBottomColor: colors.border }]}>
+        <View
+          style={[styles.sectionBlock, { borderBottomColor: colors.border }]}
+        >
           <ShiftCompliancePanel
             notes={[notes, ...voiceNotes].filter(Boolean).join("\n")}
             participantFirstName={participant?.full_name?.split(" ")[0]}
             activitiesCount={activities.length}
           />
-          <Text style={[styles.sectionLabel, { fontFamily: "Inter_600SemiBold" }]}>
+          <Text
+            style={[styles.sectionLabel, { fontFamily: "Inter_600SemiBold" }]}
+          >
             SHIFT NOTES
           </Text>
           <TextInput
@@ -511,17 +692,40 @@ export default function LiveSessionScreen() {
                 size={15}
                 color={isRecording ? "#DC2626" : colors.mutedForeground}
               />
-              <Text style={[styles.evidenceBtnText, { color: isRecording ? "#DC2626" : colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-                {isRecording ? "Stop" : voiceNotes.length > 0 ? `Voice (${voiceNotes.length})` : "Voice note"}
+              <Text
+                style={[
+                  styles.evidenceBtnText,
+                  {
+                    color: isRecording ? "#DC2626" : colors.mutedForeground,
+                    fontFamily: "Inter_500Medium",
+                  },
+                ]}
+              >
+                {isRecording
+                  ? "Stop"
+                  : voiceNotes.length > 0
+                    ? `Voice (${voiceNotes.length})`
+                    : "Voice note"}
               </Text>
             </Pressable>
             <Pressable
               onPress={handleTakePhoto}
-              style={[styles.evidenceBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
+              style={[
+                styles.evidenceBtn,
+                { backgroundColor: colors.muted, borderColor: colors.border },
+              ]}
               testID="photo-btn"
             >
               <Feather name="camera" size={15} color={colors.mutedForeground} />
-              <Text style={[styles.evidenceBtnText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+              <Text
+                style={[
+                  styles.evidenceBtnText,
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: "Inter_500Medium",
+                  },
+                ]}
+              >
                 {photos.length > 0 ? `Photos (${photos.length})` : "Add photo"}
               </Text>
             </Pressable>
@@ -531,7 +735,12 @@ export default function LiveSessionScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.photosRow}>
                 {photos.map((uri, i) => (
-                  <Image key={i} source={{ uri }} style={styles.photoThumb} contentFit="cover" />
+                  <Image
+                    key={i}
+                    source={{ uri }}
+                    style={styles.photoThumb}
+                    contentFit="cover"
+                  />
                 ))}
               </View>
             </ScrollView>
@@ -540,9 +749,26 @@ export default function LiveSessionScreen() {
           {voiceNotes.length > 0 && (
             <View style={styles.voiceNotesList}>
               {voiceNotes.map((note, i) => (
-                <View key={i} style={[styles.voiceNoteItem, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                <View
+                  key={i}
+                  style={[
+                    styles.voiceNoteItem,
+                    {
+                      backgroundColor: colors.muted,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
                   <Feather name="mic" size={13} color={colors.primary} />
-                  <Text style={[styles.voiceNoteText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                  <Text
+                    style={[
+                      styles.voiceNoteText,
+                      {
+                        color: colors.foreground,
+                        fontFamily: "Inter_400Regular",
+                      },
+                    ]}
+                  >
                     {note}
                   </Text>
                 </View>
@@ -568,7 +794,12 @@ export default function LiveSessionScreen() {
           style={[styles.incidentBtn, { borderColor: "#DC2626" }]}
         >
           <Feather name="alert-triangle" size={15} color="#DC2626" />
-          <Text style={[styles.incidentBtnText, { fontFamily: "Inter_600SemiBold" }]}>
+          <Text
+            style={[
+              styles.incidentBtnText,
+              { fontFamily: "Inter_600SemiBold" },
+            ]}
+          >
             Report Incident
           </Text>
         </Pressable>
@@ -581,7 +812,9 @@ export default function LiveSessionScreen() {
           testID="complete-session-btn"
         >
           <Feather name="check-circle" size={15} color="#FFFFFF" />
-          <Text style={[styles.endShiftBtnText, { fontFamily: "Inter_700Bold" }]}>
+          <Text
+            style={[styles.endShiftBtnText, { fontFamily: "Inter_700Bold" }]}
+          >
             End Shift
           </Text>
         </Pressable>
@@ -613,17 +846,45 @@ export default function LiveSessionScreen() {
         onRequestClose={() => setShowCompleteModal(false)}
       >
         <View style={styles.completeOverlay}>
-          <View style={[styles.completeModal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.completeModal,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Feather name="check-circle" size={40} color={colors.primary} />
-            <Text style={[styles.completeTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            <Text
+              style={[
+                styles.completeTitle,
+                { color: colors.foreground, fontFamily: "Inter_700Bold" },
+              ]}
+            >
               End Shift?
             </Text>
-            <Text style={[styles.completeSummary, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            <Text
+              style={[
+                styles.completeSummary,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
+            >
               {formatTimer(elapsedSeconds)} · {activities.length} activities
-              {voiceNotes.length > 0 ? ` · ${voiceNotes.length} voice notes` : ""}
+              {voiceNotes.length > 0
+                ? ` · ${voiceNotes.length} voice notes`
+                : ""}
               {photos.length > 0 ? ` · ${photos.length} photos` : ""}
             </Text>
-            <Text style={[styles.completeInfo, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            <Text
+              style={[
+                styles.completeInfo,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
+            >
               Compliance score: {endShiftCompliance.score}/100
               {endShiftCompliance.rules.some((r) => r.status === "fail")
                 ? " — unresolved flags will notify your coordinator."
@@ -632,21 +893,37 @@ export default function LiveSessionScreen() {
             <View style={styles.completeActions}>
               <Pressable
                 onPress={() => setShowCompleteModal(false)}
-                style={[styles.cancelCompleteBtn, { borderColor: colors.border }]}
+                style={[
+                  styles.cancelCompleteBtn,
+                  { borderColor: colors.border },
+                ]}
               >
-                <Text style={[styles.cancelCompleteText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+                <Text
+                  style={[
+                    styles.cancelCompleteText,
+                    { color: colors.foreground, fontFamily: "Inter_500Medium" },
+                  ]}
+                >
                   Keep Going
                 </Text>
               </Pressable>
               <Pressable
                 onPress={handleComplete}
                 disabled={isSaving}
-                style={[styles.confirmCompleteBtn, { backgroundColor: colors.primary }]}
+                style={[
+                  styles.confirmCompleteBtn,
+                  { backgroundColor: colors.primary },
+                ]}
               >
                 {isSaving ? (
                   <ActivityIndicator color="#FFF" size="small" />
                 ) : (
-                  <Text style={[styles.confirmCompleteText, { fontFamily: "Inter_700Bold" }]}>
+                  <Text
+                    style={[
+                      styles.confirmCompleteText,
+                      { fontFamily: "Inter_700Bold" },
+                    ]}
+                  >
                     Save & Analyse
                   </Text>
                 )}
@@ -697,7 +974,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   supportChipText: { fontSize: 12 },
-  locationRow: { flexDirection: "row", alignItems: "flex-start", gap: 5, marginTop: 2 },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 5,
+    marginTop: 2,
+  },
   locationText: { flex: 1, fontSize: 13 },
 
   timerBar: {
@@ -708,8 +990,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  timerBarLabel: { fontSize: 10, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 2 },
-  timerCompact: { fontSize: 22, letterSpacing: -0.5, fontVariant: ["tabular-nums"] },
+  timerBarLabel: {
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  timerCompact: {
+    fontSize: 22,
+    letterSpacing: -0.5,
+    fontVariant: ["tabular-nums"],
+  },
   timerToggleBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -852,8 +1143,18 @@ const styles = StyleSheet.create({
   },
   completeTitle: { fontSize: 22 },
   completeSummary: { fontSize: 15, textAlign: "center" },
-  completeInfo: { fontSize: 13, textAlign: "center", lineHeight: 18, marginTop: 4 },
-  completeActions: { flexDirection: "row", gap: 12, marginTop: 8, width: "100%" },
+  completeInfo: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  completeActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+    width: "100%",
+  },
   cancelCompleteBtn: {
     flex: 1,
     paddingVertical: 14,

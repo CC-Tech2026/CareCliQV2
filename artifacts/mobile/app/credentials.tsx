@@ -8,7 +8,7 @@ export default function CredentialsScreen() {
   const t = useT();
 
   return (
-    <WorkerStackScreen headerTitle={t("nav.credentials")} cardsOnBackground showBack>
+    <WorkerStackScreen headerTitle={t("nav.credentials")} cardsOnBackground showBack guide="credentials">
       <ProfileCredentialsPanel bottomInset={24} />
     </WorkerStackScreen>
   );

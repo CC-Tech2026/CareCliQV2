@@ -209,7 +209,7 @@ export default function MyShiftsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <WorkerMobileHeader title={t("nav.shifts")} />
+      <WorkerMobileHeader title={t("nav.shifts")} guide="shifts" />
 
       {activeQuery.isLoading && !cachedShifts ? (
         <ScrollView
@@ -335,7 +335,7 @@ export default function MyShiftsScreen() {
               </Text>
             </View>
           }
-          ListFooterComponent={listFooter}
+          ListFooterComponent={sortedShifts.length > 0 ? listFooter : null}
         />
       )}
     </View>

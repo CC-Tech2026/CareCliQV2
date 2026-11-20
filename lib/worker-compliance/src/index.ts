@@ -291,22 +291,58 @@ export function scoreColor(score: number) {
 
 export type DraftNoteHintSeverity = "info" | "fail";
 
+/** The NDIS note rule a hint comes from (backend compliance_engine.py). */
+export type NoteRuleCode = "R3" | "R5" | "R6" | "R7" | "R8" | "R9" | "R10" | "R11" | "R12";
+
 export type DraftNoteHint = {
   id: string;
+  /** The rule this hint is about, so callers (and the note rewrite) can name
+   *  the real rule rather than a local hint id. */
+  rule: NoteRuleCode;
   severity: DraftNoteHintSeverity;
   message: string;
-  /** Raw detected phrase for "restrictive-practice", "person-first" and
-   * "subjective-language" hints - lets a caller localize the surrounding
-   * message while still interpolating the actual phrase found in the note. */
+  /** Raw detected phrase for "restrictive-practice", "person-first",
+   * "subjective-language", "filler", "scope" and "incident" hints, so a
+   * caller can localize the surrounding message while still interpolating
+   * the actual phrase found in the note. */
   phrase?: string;
   /** Suggested wording, for "person-first" hints. */
   suggestion?: string;
+  /** Values a translated message needs, e.g. { words, min } for word-count. */
+  params?: Record<string, string | number>;
 };
 
-// Mirrors of the server's R6, R7 and R12 checks (backend/app/services/
-// compliance_engine.py), so the worker sees the same issues while typing that
-// the scored check will raise afterwards. English only: callers skip these
-// hints for a note being written in another language.
+// Offline mirror of the server's note rules (backend/app/services/
+// compliance_engine.py defaults), for when the app can't reach the live
+// check (POST /api/worker/notes/check). The live check runs the real rules
+// with each provider's own settings and is used whenever the app is online.
+// Keep these lists identical to the engine's defaults: the shared fixture
+// rule-parity.json is checked against both sides in tests.
+
+/** R3: under MIN_WORDS_WARN words fails; MIN_WORDS_PASS passes. */
+export const MIN_WORDS_WARN = 30;
+export const MIN_WORDS_PASS = 80;
+
+const FILLER_PHRASES: Array<[RegExp, string]> = [
+  [/\bgood session\b/i, "good session"],
+  [/\bdid\s+shopping\b/i, "did shopping"],
+  [/\ball\s+went\s+well\b/i, "all went well"],
+  [/\bwent\s+well\b/i, "went well"],
+  [/\bnothing\s+to\s+report\b/i, "nothing to report"],
+  [/\bno\s+issues\b/i, "no issues"],
+  [/\bsame\s+as\s+usual\b/i, "same as usual"],
+  [/\bas\s+per\s+usual\b/i, "as per usual"],
+  [/\bas\s+usual\b/i, "as usual"],
+  [/\bcompleted\s+tasks\b/i, "completed tasks"],
+  [/\bdone\s+for\s+the\s+day\b/i, "done for the day"],
+  [/\bno\s+concerns\b/i, "no concerns"],
+  [/\bstandard\s+session\b/i, "standard session"],
+  [/\bregular\s+session\b/i, "regular session"],
+  [/\bthe\s+usual\b/i, "the usual"],
+  [/\buneventful\b/i, "uneventful"],
+  [/\bsame\s+as\s+last\s+(?:time|session|week)\b/i, "same as last time"],
+];
+
 const PERSON_FIRST_VIOLATIONS: Array<[RegExp, string]> = [
   [/\bautistic\s+(?:person|child|adult|individual|client|man|woman|boy|girl)\b/i, "person with autism"],
   [/\bwheelchair[- ]?bound\b/i, "person who uses a wheelchair"],
@@ -333,24 +369,63 @@ const SUBJECTIVE_PHRASES: RegExp[] = [
   /\bmight\s+be\s+(?:due|caused|because)\b/i,
 ];
 
+const SCOPE_VIOLATIONS: Array<[RegExp, string]> = [
+  [/\bdiagnos(?:ed|es|ing|is)\b/i, "clinical diagnosis"],
+  [/\bdiagnosis\s+of\b/i, "clinical diagnosis"],
+  [/\badminister(?:ed|ing)?\s+(?:medication|meds|drug|tablet|dose|injection)\b/i, "medication administration"],
+  [/\bgave\s+(?:the\s+)?(?:medication|meds|tablet|pill|injection|dose)\b/i, "medication administration"],
+  [/\binjected\b/i, "injection administration"],
+  [/\bgave\s+(?:a\s+)?PRN\b/i, "PRN medication administration"],
+  [/\bclinical\s+assessment\b/i, "clinical assessment"],
+  [/\bmental\s+health\s+assessment\b/i, "mental health assessment"],
+  [/\bpsychiatric\s+(?:assessment|evaluation|review)\b/i, "psychiatric assessment"],
+  [/\bmedical\s+(?:assessment|evaluation|examination)\b/i, "medical assessment"],
+  [/\bwound\s+(?:care|dressing|management)\b/i, "wound care"],
+  [/\bprescrib(?:ed|es|ing)\b/i, "prescribing medication"],
+  [/\bnursing\s+assessment\b/i, "nursing assessment"],
+];
+
+const INCIDENT_TRIGGERS: Array<[RegExp, string]> = [
+  [/\bfell\b|\bfall(?:ing)?\b|\btripped\b/i, "fall/injury"],
+  [/\baggressive\b|\baggression\b|\bviolent\b|\battack(?:ed|ing)?\b|\bhit\s+(?:a\s+)?(?:staff|worker|carer|support)\b/i, "aggression/violence"],
+  [/\bhospital(?:ised|ized)?\b|\bemergency\s+department\b|\bED\b(?!\w)/i, "hospital/ED"],
+  [/\bambulance\b|\b000\b|\bparamedic\b/i, "ambulance/emergency services"],
+  [/\bself[-\s]harm\b|\bself[-\s]injur\w+\b|\bsuicid\w+\b/i, "self-harm/suicidality"],
+  [/\babuse\b|\bneglect\b|\bmistreat\w+\b|\bexploit\w+\b/i, "abuse/neglect"],
+  [/\boverdose\b/i, "overdose"],
+  [/\bseizure\b|\bconvuls\w+\b|\bepileptic\s+episode\b/i, "seizure/medical emergency"],
+  [/\bunconscious\b|\bpassed\s+out\b|\bfainted\b|\bunresponsive\b/i, "loss of consciousness"],
+  [/\bdeceased\b|\bpassed\s+away\b/i, "death"],
+];
+
+/** R12: the words the server accepts as the participant's response. */
 const PARTICIPANT_RESPONSE =
-  /\b(report(?:ed|s)?|demonstrat(?:ed|es|ing)?|engag(?:ed|es|ing)?|declin(?:ed|es|ing)?|express(?:ed|es|ing)?|stat(?:ed|es|ing)?|indicated|respond(?:ed|s)?|participat(?:ed|es|ing)?|communicat(?:ed|es|ing)?|verbali[sz]ed|appear(?:ed|s)?|observ(?:ed|es|ing)?|comment(?:ed|s)?|said|smiled|laughed|chose|asked|enjoyed|refused)\b/i;
+  /\b(report(?:ed|s)?|demonstrat(?:ed|es|ing)?|engag(?:ed|es|ing)?|declin(?:ed|es|ing)?|express(?:ed|es|ing)?|stat(?:ed|es|ing)?|indicated|respond(?:ed|s)?|participat(?:ed|es|ing)?|communicat(?:ed|es|ing)?|verbalised|verbalized|appear(?:ed|s)?|observ(?:ed|es|ing)?|comment(?:ed|s)?)\b/i;
 
-// The server's R5 goal language, plus everyday ways a worker says it.
+/** R5: the server's goal language. */
 const GOAL_PROGRESS =
-  /\b(goal|objective|aim(?:ed|s)?|target|milestone|worked\s+(?:on|toward)|toward|towards|progress\w*|achiev\w+|independen\w+|skill\w*|develop\w+|improv\w+|practi[sc]\w+|by (?:him|her|them)sel(?:f|ves))\b/i;
+  /\b(goal|objective|aim(?:ed|s)?|target|milestone|worked\s+(?:on|toward)|progress|achiev\w+|independen\w+|skill|develop\w+|improve\w+|ndis\s+plan|plan\s+goal|focus\s+area)\b/i;
 
-const CONCERN_RECORDED =
-  /\b(concern\w*|noticed|worr\w+|incident|unwell|pain|injur\w+|upset|distress\w*|fall|fell|refus\w+|no (?:concerns|issues|incidents)|nothing to report|all (?:good|well))\b/i;
+/** Saying how the participant was, or what was checked, answers the concern
+ *  question. Bare "no concerns" or "nothing to report" doesn't: R3 marks
+ *  those as vague filler. Mirrors note_guidance_service._CONCERN_ANSWERED. */
+const CONCERN_ANSWERED =
+  /\b(noticed|worr\w+|incident|unwell|pain|injur\w+|upset|distress\w*|anxious|agitated|calm|settled|relaxed|comfortable|safe|bruis\w+|mark|rash|tired|sleep\w*|report(?:ed|s)?\s+(?:no|feeling)|appeared\s+(?:well|content|happy|calm))\b/i;
 
-export type NotePromptId = "did" | "response" | "goal" | "concern";
+/** When it happened or how long it took: "at 2:30", "3pm", "for 40 minutes",
+ *  "from 12 to 1", "after lunch". A note that says when is stronger evidence. */
+const WHEN_STATED =
+  /\b(\d{1,2}[:.]\d{2}|\d{1,2}\s*(?:am|pm)|\d+\s*(?:minutes?|mins?|hours?|hrs?)|half\s+an?\s+hour|an?\s+hour|morning|afternoon|evening|midday|noon|before|after|during|until|bedtime|on\s+arrival|when\s+I\s+arrived)\b/i;
+
+export type NotePromptId = "did" | "when" | "response" | "goal" | "concern" | "detail";
 
 /**
  * The next thing a task's notes don't cover yet, for the worker app's note
- * guide: what was supported, how the participant responded (R12), progress
- * toward the task's goal (R5), and anything of concern. Reads the English
- * record, so it works whatever language the worker wrote in. Null once
- * everything is covered or skipped.
+ * guide: what was supported (R3), when and for how long (R1 evidence),
+ * how the participant responded (R12),
+ * progress toward the task's goal (R5), anything of concern (R9, R10), and
+ * then enough detail for R3. Reads the English record, so it works whatever
+ * language the worker wrote in. Null once everything is covered or skipped.
  */
 export function nextNotePrompt(
   notesText: string,
@@ -358,11 +433,14 @@ export function nextNotePrompt(
 ): NotePromptId | null {
   const text = notesText.trim();
   const skipped = new Set(options.skipped ?? []);
+  const incident = INCIDENT_TRIGGERS.some(([p]) => p.test(text)) || !!detectRestrictivePracticeHit(text);
   const order: Array<[NotePromptId, boolean]> = [
     ["did", text.length > 0],
+    ["when", WHEN_STATED.test(text)],
     ["response", PARTICIPANT_RESPONSE.test(text)],
     ["goal", !options.hasGoal || GOAL_PROGRESS.test(text)],
-    ["concern", CONCERN_RECORDED.test(text)],
+    ["concern", incident || CONCERN_ANSWERED.test(text)],
+    ["detail", wordCount(text) >= MIN_WORDS_PASS && !FILLER_PHRASES.some(([p]) => p.test(text))],
   ];
   for (const [id, covered] of order) {
     if (!covered && !skipped.has(id)) return id;
@@ -371,29 +449,48 @@ export function nextNotePrompt(
 }
 
 /**
- * Live, single-note hints for a note still being typed/recorded - a
- * lightweight subset of evaluateWorkerCompliance's rules that only need the
- * draft text itself (not the full shift/notes/tasks context evaluateWorkerCompliance
- * needs). Meant to be run debounced while typing, so a note already reads as
- * compliant by the time it's actually saved rather than surfacing an issue
- * only after the fact. Purely advisory - severity "info" is a soft nudge,
- * never blocks sending; "fail" (restrictive practice only) still doesn't
- * block sending here either, since the existing end-of-shift compliance
- * review is what actually requires the incident report - this is just an
- * earlier heads-up.
+ * Live hints for a note still being typed or recorded: the text rules
+ * (R3, R6 to R10, R12) on the draft alone. The app uses the server check
+ * when online (it also covers R5 goal links and R11 copying, and follows the
+ * provider's own rule settings); this is the offline fallback. Advisory:
+ * "fail" marks what the scored check will fail, but never blocks saving.
  */
 export function checkDraftNoteHints(text: string, participantFirstName?: string): DraftNoteHint[] {
   const trimmed = text.trim();
   if (!trimmed) return [];
   const hints: DraftNoteHint[] = [];
+  const name = participantFirstName?.trim() || "the participant";
 
   const rp = detectRestrictivePracticeHit(trimmed);
   if (rp) {
     hints.push({
       id: "restrictive-practice",
+      rule: "R10",
       severity: "fail",
-      message: `This may describe a restrictive practice ("${rp.phrase}"). An incident report may be required.`,
+      message: `This may describe a restrictive practice ("${rp.phrase}"). It needs an incident report before the note can be approved.`,
       phrase: rp.phrase,
+    });
+  }
+
+  const incident = INCIDENT_TRIGGERS.find(([p]) => p.test(trimmed));
+  if (incident) {
+    hints.push({
+      id: "incident",
+      rule: "R9",
+      severity: "fail",
+      message: `This sounds like an incident (${incident[1]}). Write exactly what happened and complete an incident report.`,
+      phrase: incident[1],
+    });
+  }
+
+  const scope = SCOPE_VIOLATIONS.find(([p]) => p.test(trimmed));
+  if (scope) {
+    hints.push({
+      id: "scope",
+      rule: "R8",
+      severity: "fail",
+      message: `This mentions ${scope[1]}, which is outside a support worker's role. Describe what you saw and who you told, not a diagnosis or treatment.`,
+      phrase: scope[1],
     });
   }
 
@@ -402,8 +499,9 @@ export function checkDraftNoteHints(text: string, participantFirstName?: string)
     if (match) {
       hints.push({
         id: "person-first",
-        severity: "info",
-        message: `Use person-first language: try "${suggestion}" instead of "${match[0]}".`,
+        rule: "R7",
+        severity: "fail",
+        message: `Use person-first words: try "${suggestion}" instead of "${match[0]}".`,
         phrase: match[0],
         suggestion,
       });
@@ -415,47 +513,49 @@ export function checkDraftNoteHints(text: string, participantFirstName?: string)
   if (subjective) {
     hints.push({
       id: "subjective-language",
-      severity: "info",
-      message: `Describe what you saw or heard rather than "${subjective[0]}".`,
+      rule: "R6",
+      severity: "fail",
+      message: `Write what you saw or heard, not "${subjective[0]}". For example "${name} said" or "${name} was".`,
       phrase: subjective[0],
     });
   }
 
-  // Only nudge on length/specificity/participant-reference once there's
-  // enough text to judge - no point flagging "too short" after two words.
+  // Length and the other "add more" nudges once there's something to judge.
   const words = wordCount(trimmed);
   if (words >= 4) {
-    if (words < 10) {
+    const filler = FILLER_PHRASES.find(([p]) => p.test(trimmed));
+    if (words < MIN_WORDS_WARN) {
       hints.push({
         id: "word-count",
-        severity: "info",
-        message: "Add a bit more detail - aim for at least a sentence or two.",
+        rule: "R3",
+        severity: "fail",
+        params: { words, min: MIN_WORDS_PASS },
+        message: `Add more detail: what you did, how ${name} responded and how it went. (${words} of ${MIN_WORDS_PASS} words)`,
       });
-    } else if (!hasSpecificObservation(trimmed)) {
+    } else if (filler) {
       hints.push({
-        id: "specific-observation",
+        id: "filler",
+        rule: "R3",
+        severity: "fail",
+        message: `"${filler[1]}" is too vague for an audit. Write what actually happened instead.`,
+        phrase: filler[1],
+      });
+    } else if (words < MIN_WORDS_PASS) {
+      hints.push({
+        id: "word-count-brief",
+        rule: "R3",
         severity: "info",
-        message: "Try adding a specific detail - a time, duration, or what exactly happened.",
+        params: { words, min: MIN_WORDS_PASS },
+        message: `Good start. Add a little more detail, about ${MIN_WORDS_PASS} words in all. (${words} so far)`,
       });
     }
 
-    const firstName = participantFirstName?.trim();
-    const participantNamed = firstName
-      ? new RegExp(`\\b${firstName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b|\\b(he|she|they)\\b`, "i").test(trimmed)
-      : /\b(he|she|they)\b/i.test(trimmed);
-    if (!participantNamed && words >= 12) {
-      hints.push({
-        id: "participant-reference",
-        severity: "info",
-        message: "Consider referencing the participant by name or pronoun.",
-      });
-    }
-
-    if (words >= 20 && !PARTICIPANT_RESPONSE.test(trimmed)) {
+    if (words >= 10 && !PARTICIPANT_RESPONSE.test(trimmed)) {
       hints.push({
         id: "participant-response",
+        rule: "R12",
         severity: "info",
-        message: "Add how the participant responded: what they said, did or chose.",
+        message: `Add how ${name} responded, for example "${name} engaged well", "reported feeling tired" or "declined the walk".`,
       });
     }
   }

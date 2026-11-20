@@ -15,7 +15,7 @@ export default function NewIncidentScreen() {
   };
 
   return (
-    <WorkerStackScreen headerTitle={t("incidents.log")} cardsOnBackground showBack>
+    <WorkerStackScreen headerTitle={t("incidents.log")} cardsOnBackground showBack guide="incidents">
       <WorkerIncidentReportForm onSubmitted={handleDone} onCancel={handleDone} />
     </WorkerStackScreen>
   );

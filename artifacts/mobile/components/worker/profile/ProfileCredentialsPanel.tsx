@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/context/PreferencesContext";
+import { formatDayKey } from "@/hooks/worker/useWorkerCalendar";
 import { useColors } from "@/hooks/useColors";
 import { CREDENTIAL_TYPES, needsCredentialUpdate } from "@/lib/credential-utils";
 import { listMyCredentials, type Credential } from "@/lib/resource-api";
@@ -42,13 +43,13 @@ function statusMeta(
 
 function formatCredentialDate(credential: Credential, t: ReturnType<typeof useT>): string {
   if (credential.status === "expired" && credential.expiry_date) {
-    return t("profile.credentials.expiredOn", { date: credential.expiry_date });
+    return t("profile.credentials.expiredOn", { date: formatDayKey(credential.expiry_date) });
   }
   if (credential.status === "expiring" && credential.expiry_date) {
-    return t("profile.credentials.expiresOn", { date: credential.expiry_date });
+    return t("profile.credentials.expiresOn", { date: formatDayKey(credential.expiry_date) });
   }
   if (credential.expiry_date) {
-    return t("profile.credentials.validUntil", { date: credential.expiry_date });
+    return t("profile.credentials.validUntil", { date: formatDayKey(credential.expiry_date) });
   }
   if (credential.status === "valid") {
     return t("profile.credentials.completed");
@@ -167,7 +168,7 @@ export function ProfileCredentialsPanel({ bottomInset = 24 }: Props) {
 
       <Pressable
         onPress={() => router.push("/worker/credentials/add" as never)}
-        style={[styles.addBtn, { backgroundColor: colors.accent }]}
+        style={[styles.addBtn, { backgroundColor: colors.primary }]}
       >
         <Feather name="plus" size={16} color="#FFFFFF" />
         <Text style={[styles.addBtnText, { fontFamily: "Inter_700Bold" }]}>{t("credentials.add")}</Text>
@@ -367,6 +368,8 @@ const styles = StyleSheet.create({
   summaryRow: { flexDirection: "row", gap: 10 },
   summaryPill: {
     flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 10,

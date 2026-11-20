@@ -165,10 +165,39 @@ async def improve_note_endpoint(
             participant_id=participant_id,
             organisation_id=org_id,
         )
-        return result
     except Exception as e:
         logger.error(f"Improve-note error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+    # The rewrite must only use what the worker wrote. One that brings in an
+    # incident, a restrictive practice or a clinical task the worker never
+    # mentioned has added facts, so it isn't offered. Otherwise the
+    # suggestion carries its own check against the note rules, so the worker
+    # sees whether it actually fixes them before accepting.
+    from ..services import note_guidance_service
+
+    improved = (result.get("improved_note") or "").strip()
+    if improved:
+        added = note_guidance_service.improvement_adds_facts(notes, improved)
+        if added:
+            logger.warning("Improve-note suggestion discarded: it added %s content", ",".join(added))
+            return {
+                **result,
+                "improved_note": "",
+                "discarded": True,
+                "discarded_reason": "The suggestion added details you didn't write, so it isn't shown.",
+            }
+        dropped = note_guidance_service.improvement_drops_facts(notes, improved)
+        if dropped:
+            logger.warning("Improve-note suggestion discarded: it lost %s", ";".join(dropped))
+            return {
+                **result,
+                "improved_note": "",
+                "discarded": True,
+                "discarded_reason": "The suggestion left out details you wrote, so it isn't shown. Your note is kept as you wrote it.",
+            }
+        result["check"] = note_guidance_service.check_draft(improved)
+    return result
 
 
 @router.post("/translate-preview")

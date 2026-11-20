@@ -7,7 +7,11 @@ import { WorkerMobileComposer } from "@/components/worker/WorkerMobileComposer";
 import { WorkerMobileMedicationChecklist } from "@/components/worker/WorkerMobileMedicationChecklist";
 import { WorkerMobileNoteBubble } from "@/components/worker/WorkerMobileNoteBubble";
 import { WorkerMobilePrnMedications } from "@/components/worker/WorkerMobilePrnMedications";
-import type { SessionNoteRecord, ShiftTask } from "@/lib/worker-api";
+import type {
+  SessionNoteRecord,
+  ShiftHealthAlert,
+  ShiftTask,
+} from "@/lib/worker-api";
 import { isMandatoryTask } from "@/lib/shift-utils";
 import type { ComplianceEvaluation } from "@workspace/worker-compliance";
 
@@ -26,6 +30,8 @@ type Props = {
   compliance: ComplianceEvaluation;
   onNoteSaved: (note: SessionNoteRecord) => void | Promise<void>;
   onOpenIncidentReport?: (noteId?: string, content?: string) => void;
+  /** The participant's allergies and health alerts, for note safety checks. */
+  healthAlerts?: ShiftHealthAlert[];
   /** Participant's branch zone. */
   tz?: string | null;
   /** A finished shift: notes can be read but not added to, and tasks can't
@@ -56,6 +62,7 @@ export function WorkerMobileTaskList({
   compliance,
   onNoteSaved,
   onOpenIncidentReport,
+  healthAlerts,
   tz,
   readOnly = false,
 }: Props) {
@@ -306,6 +313,8 @@ export function WorkerMobileTaskList({
                     participantId={participantId}
                     disabled={disabled || !sessionId}
                     onNoteSaved={onNoteSaved}
+                    healthAlerts={healthAlerts}
+                    onOpenIncidentReport={onOpenIncidentReport}
                   />
                 )}
               </View>

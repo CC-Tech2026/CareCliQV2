@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { GuideButton } from "@/components/worker/guide/GuideSheet";
 import { useColors } from "@/hooks/useColors";
 import type { ShiftVisualState } from "@/lib/worker-api";
 
@@ -128,6 +129,9 @@ export function WorkerMobileTopbar({
           </Text>
         </View>
       ) : null}
+
+      {/* How a shift works, from any stage of it. */}
+      <GuideButton id="doingShift" onDark={false} />
 
       {canCheckin && onCheckin ? (
         <Pressable

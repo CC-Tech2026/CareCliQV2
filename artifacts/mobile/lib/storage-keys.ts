@@ -36,3 +36,8 @@ export async function migrateLegacyCareScribeStorageKeys(
     await removeItem(legacy);
   }
 }
+
+/** Year the birthday celebration last played on this device ("2026"). */
+export const CCQ_BIRTHDAY_SEEN_KEY = "ccq_birthday_seen";
+/** "true" when the worker turned the birthday celebration off. */
+export const CCQ_BIRTHDAY_OFF_KEY = "ccq_birthday_off";

@@ -16,6 +16,7 @@ import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useT } from "@/context/PreferencesContext";
+import { formatDayKey } from "@/hooks/worker/useWorkerCalendar";
 import { useColors } from "@/hooks/useColors";
 import {
   getTrainingHistory,
@@ -123,6 +124,27 @@ export function ProfileTrainingPanel({ bottomInset = 24 }: Props) {
 
   const openModule = openModuleId ? modules.find((m) => m.id === openModuleId) ?? null : null;
 
+  const isDone = (id: string) => {
+    const status = historyByModule.get(id)?.status;
+    return status === "confirmed" || status === "awaiting_confirmation";
+  };
+  const assigned = modules
+    .filter((m) => recommendationByModule.has(m.id) && !isDone(m.id))
+    .sort((a, b) =>
+      String(recommendationByModule.get(a.id)?.due_at ?? "9999").localeCompare(
+        String(recommendationByModule.get(b.id)?.due_at ?? "9999"),
+      ),
+    );
+  const sections = [
+    { key: "assigned", title: t("training.section.assigned"), items: assigned },
+    {
+      key: "other",
+      title: t("training.section.other"),
+      items: modules.filter((m) => !recommendationByModule.has(m.id) && !isDone(m.id)),
+    },
+    { key: "done", title: t("training.section.done"), items: modules.filter((m) => isDone(m.id)) },
+  ];
+
   if (openModule) {
     return (
       <TrainingModuleDetail
@@ -148,25 +170,42 @@ export function ProfileTrainingPanel({ bottomInset = 24 }: Props) {
 
       {modules.length === 0 ? (
         <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-            {t("training.empty")}
+          <View style={[styles.emptyIcon, { backgroundColor: colors.soft }]}>
+            <Feather name="book-open" size={22} color={colors.primary} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+            {t("training.emptyTitle")}
+          </Text>
+          <Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            {t("training.emptyBody")}
           </Text>
         </View>
       ) : (
-        <View style={styles.list}>
-          {modules.map((module) => (
-            <TrainingCard
-              key={module.id}
-              module={module}
-              isDark={isDark}
-              recommended={recommendationByModule.has(module.id)}
-              dueAt={recommendationByModule.get(module.id)?.due_at}
-              status={(historyByModule.get(module.id)?.status as CompletionStatus) ?? "not_started"}
-              completedAt={historyByModule.get(module.id)?.completed_at}
-              onPress={() => setOpenModuleId(module.id)}
-            />
-          ))}
-        </View>
+        <>
+          {sections.map((section) =>
+            section.items.length ? (
+              <View key={section.key} style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                  {section.title}  ·  {section.items.length}
+                </Text>
+                <View style={styles.list}>
+                  {section.items.map((module) => (
+                    <TrainingCard
+                      key={module.id}
+                      module={module}
+                      isDark={isDark}
+                      recommended={recommendationByModule.has(module.id)}
+                      dueAt={recommendationByModule.get(module.id)?.due_at}
+                      status={(historyByModule.get(module.id)?.status as CompletionStatus) ?? "not_started"}
+                      completedAt={historyByModule.get(module.id)?.completed_at}
+                      onPress={() => setOpenModuleId(module.id)}
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : null,
+          )}
+        </>
       )}
     </ScrollView>
   );
@@ -207,7 +246,7 @@ function TrainingCard({
         <View style={[styles.assignedTag, { backgroundColor: overdue ? colors.dangerBg : colors.statusUpcomingBg }]}>
           <Feather name={overdue ? "alert-circle" : "star"} size={11} color={overdue ? colors.destructive : colors.primary} />
           <Text style={[styles.assignedTagText, { color: overdue ? colors.destructive : colors.primary, fontFamily: "Inter_700Bold" }]}>
-            {overdue ? t("training.overdueSince", { date: dueAt!.slice(0, 10) }) : t("training.assignedBanner")}
+            {overdue ? t("training.overdueSince", { date: formatDayKey(dueAt!) }) : dueAt ? t("training.dueBanner", { date: formatDayKey(dueAt) }) : t("training.assignedBanner")}
           </Text>
         </View>
       ) : null}
@@ -224,7 +263,7 @@ function TrainingCard({
       <View style={styles.footer}>
         <View style={[styles.badge, { backgroundColor: meta.bg }]}>
           <Text style={[styles.badgeText, { color: meta.color, fontFamily: "Inter_700Bold" }]}>
-            {status === "confirmed" && completedAt ? t("training.completedOn", { date: completedAt }) : meta.label}
+            {status === "confirmed" && completedAt ? t("training.completedOn", { date: formatDayKey(completedAt) }) : meta.label}
           </Text>
         </View>
 
@@ -303,8 +342,8 @@ function TrainingModuleDetail({
             <Feather name={overdue ? "alert-triangle" : "clock"} size={14} color={overdue ? colors.destructive : colors.warning} />
             <Text style={[styles.deadlineText, { color: overdue ? colors.destructive : colors.warning, fontFamily: "Inter_600SemiBold" }]}>
               {overdue
-                ? t("training.overdueBanner", { date: recommendation.due_at.slice(0, 10) })
-                : t("training.dueBanner", { date: recommendation.due_at.slice(0, 10) })}
+                ? t("training.overdueBanner", { date: formatDayKey(recommendation.due_at) })
+                : t("training.dueBanner", { date: formatDayKey(recommendation.due_at) })}
             </Text>
           </View>
         ) : null}
@@ -387,17 +426,22 @@ function TrainingModuleDetail({
 }
 
 const styles = StyleSheet.create({
+  section: { gap: 10, marginTop: 8 },
+  sectionTitle: { fontSize: 16 },
+  emptyIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  emptyTitle: { fontSize: 17, textAlign: "center" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
   error: { fontSize: 14, textAlign: "center" },
   scroll: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
   subtitle: { fontSize: 12, lineHeight: 17 },
   emptyCard: {
-    borderRadius: 14,
+    borderRadius: 20,
     borderWidth: 1,
-    padding: 24,
+    padding: 28,
     alignItems: "center",
+    gap: 8,
   },
-  empty: { fontSize: 14, textAlign: "center" },
+  empty: { fontSize: 15, lineHeight: 21, textAlign: "center", maxWidth: 280 },
   list: { gap: 12 },
   card: {
     borderRadius: 18,

@@ -1,9 +1,12 @@
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,104 +16,99 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { elevatedCardShadow } from "@/components/worker/profile/profile-ui";
+import { FontFamily } from "@/constants/typography";
 import { useT } from "@/context/PreferencesContext";
 import { useToast } from "@/context/ToastContext";
 import { useColors } from "@/hooks/useColors";
+import type { TranslationKey } from "@/lib/i18n/translations";
 import {
   formatIncidentDate,
   formatIncidentDateTime,
   incidentSeverityLabelKey,
-  incidentStatusLabelKey,
   incidentTypeLabelKey,
+  severityMeta,
 } from "@/lib/incident-utils";
-import { getIncident, updateIncident } from "@/lib/resource-api";
+import {
+  addIncidentCorrection,
+  getIncident,
+  listIncidentCorrections,
+  type CorrectableIncidentField,
+  type IncidentCorrection,
+} from "@/lib/resource-api";
 
 type Props = {
   incidentId: string;
 };
 
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <Text style={[styles.sectionLabel, { fontFamily: "Inter_600SemiBold" }]}>
-      {children}
-    </Text>
-  );
+type Colors = ReturnType<typeof useColors>;
+
+/** Reported, then the office looks into it, then it's closed. */
+const STEPS: { key: TranslationKey; bodyKey: TranslationKey }[] = [
+  {
+    key: "incidents.worker.stepReported",
+    bodyKey: "incidents.worker.stepReportedBody",
+  },
+  {
+    key: "incidents.worker.stepReview",
+    bodyKey: "incidents.worker.stepReviewBody",
+  },
+  {
+    key: "incidents.worker.stepClosed",
+    bodyKey: "incidents.worker.stepClosedBody",
+  },
+];
+
+function stepIndex(status: string): number {
+  if (status === "under_investigation") return 1;
+  if (status === "resolved" || status === "closed") return 2;
+  return 0;
 }
 
-function DetailCard({
+const FIELD_LABELS: Record<CorrectableIncidentField, TranslationKey> = {
+  description: "incidents.worker.whatHappened",
+  participant_impact: "incidents.worker.impact",
+  worker_actions: "incidents.worker.yourActions",
+  location: "incidents.worker.location",
+};
+
+/**
+ * Older reports saved every answer into the description as "Label: text"
+ * blocks ("Title: ...", "Description: ..."). Show just the description part;
+ * impact and actions have their own sections.
+ */
+function reportText(description: string): string {
+  const text = (description || "").trim();
+  const blocks = text.split(/\n\s*\n/).map((block) => {
+    const match = block.match(/^([A-Z][A-Za-z ]{2,30}):\s*([\s\S]*)$/);
+    return match
+      ? { label: match[1].toLowerCase(), body: match[2].trim() }
+      : { label: null as string | null, body: block.trim() };
+  });
+  if (!blocks.some((b) => b.label)) return text;
+  const described = blocks.find((b) => b.label === "description");
+  if (described) return described.body;
+  return blocks
+    .filter((b) => b.label !== "title")
+    .map((b) => b.body)
+    .join("\n\n");
+}
+
+function Card({
   children,
-  isDark,
-  header,
+  colors,
 }: {
   children: React.ReactNode;
-  isDark: boolean;
-  header?: React.ReactNode;
+  colors: Colors;
 }) {
-  const colors = useColors();
-
   return (
     <View
       style={[
         styles.card,
-        elevatedCardShadow(isDark),
         { backgroundColor: colors.card, borderColor: colors.border },
       ]}
     >
-      {header ? (
-        <View style={[styles.cardHeader, { borderBottomColor: colors.border }]}>{header}</View>
-      ) : null}
-      <View style={styles.cardBody}>{children}</View>
+      {children}
     </View>
-  );
-}
-
-function ActionButton({
-  label,
-  icon,
-  onPress,
-  disabled,
-  variant = "primary",
-}: {
-  label: string;
-  icon: keyof typeof Feather.glyphMap;
-  onPress: () => void;
-  disabled?: boolean;
-  variant?: "primary" | "amber" | "emerald" | "outline" | "danger";
-}) {
-  const colors = useColors();
-
-  const variantStyle = {
-    primary: { bg: colors.primary, text: "#FFFFFF", border: colors.primary },
-    amber: { bg: "#D97706", text: "#FFFFFF", border: "#D97706" },
-    emerald: { bg: "#059669", text: "#FFFFFF", border: "#059669" },
-    outline: { bg: colors.card, text: colors.foreground, border: colors.border },
-    danger: { bg: "#DC2626", text: "#FFFFFF", border: "#DC2626" },
-  }[variant];
-
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={[
-        styles.actionBtn,
-        {
-          backgroundColor: disabled ? colors.muted : variantStyle.bg,
-          borderColor: disabled ? colors.border : variantStyle.border,
-          opacity: disabled ? 0.7 : 1,
-        },
-      ]}
-    >
-      <Feather name={icon} size={13} color={disabled ? colors.mutedForeground : variantStyle.text} />
-      <Text
-        style={[
-          styles.actionBtnText,
-          { color: disabled ? colors.mutedForeground : variantStyle.text, fontFamily: "Inter_600SemiBold" },
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -121,37 +119,49 @@ export function IncidentDetailPanel({ incidentId }: Props) {
   const t = useT();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const isDark = colors.scheme === "dark";
-  const emDash = t("common.emDash");
 
-  const [investigationNotes, setInvestigationNotes] = useState("");
-  const [correctiveActions, setCorrectiveActions] = useState("");
+  const [editing, setEditing] = useState<CorrectableIncidentField | null>(null);
+  const [draft, setDraft] = useState("");
+  const [reason, setReason] = useState("");
 
-  const { data: incident, isLoading, error } = useQuery({
+  const {
+    data: incident,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["incident", incidentId],
     queryFn: () => getIncident(incidentId),
     enabled: Boolean(incidentId),
   });
-
-  useEffect(() => {
-    if (incident) {
-      setInvestigationNotes(incident.investigation_notes ?? "");
-      setCorrectiveActions(incident.corrective_actions ?? "");
-    }
-  }, [incident]);
-
-  const updateMutation = useMutation({
-    mutationFn: (updates: Record<string, unknown>) => updateIncident(incidentId, updates),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
-      void queryClient.invalidateQueries({ queryKey: ["incidents"] });
-      void queryClient.invalidateQueries({ queryKey: ["incident-stats"] });
-      showToast(t("incidents.detail.updated"), "success");
-    },
-    onError: () => showToast(t("incidents.detail.updateFailed"), "error"),
+  const { data: corrections = [] } = useQuery({
+    queryKey: ["incident-corrections", incidentId],
+    queryFn: () => listIncidentCorrections(incidentId),
+    enabled: Boolean(incidentId),
   });
 
-  const isUpdating = updateMutation.isPending;
+  const correctionsByField = useMemo(() => {
+    const map = new Map<string, IncidentCorrection[]>();
+    for (const c of corrections) {
+      map.set(c.field_name, [...(map.get(c.field_name) ?? []), c]);
+    }
+    return map;
+  }, [corrections]);
+
+  const addCorrection = useMutation({
+    mutationFn: (body: {
+      field_name: CorrectableIncidentField;
+      new_value: string;
+      note?: string;
+    }) => addIncidentCorrection(incidentId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["incident-corrections", incidentId],
+      });
+      setEditing(null);
+      showToast(t("incidents.worker.correctionSaved"), "success");
+    },
+    onError: () => showToast(t("incidents.worker.correctionFailed"), "error"),
+  });
 
   if (isLoading) {
     return (
@@ -164,11 +174,26 @@ export function IncidentDetailPanel({ incidentId }: Props) {
   if (error || !incident) {
     return (
       <View style={styles.center}>
-        <Text style={[styles.errorTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+        <Text
+          style={[
+            styles.errorTitle,
+            { color: colors.foreground, fontFamily: FontFamily.interBold },
+          ]}
+        >
           {t("incidents.detail.notFound")}
         </Text>
-        <Pressable onPress={() => router.push("/(tabs)/compliance?segment=incidents" as never)}>
-          <Text style={[styles.backLink, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+        <Pressable
+          accessibilityRole="link"
+          onPress={() =>
+            router.replace("/(tabs)/compliance?segment=incidents" as never)
+          }
+        >
+          <Text
+            style={[
+              styles.link,
+              { color: colors.primary, fontFamily: FontFamily.interSemiBold },
+            ]}
+          >
             {t("incidents.detail.backToIncidents")}
           </Text>
         </Pressable>
@@ -176,490 +201,683 @@ export function IncidentDetailPanel({ incidentId }: Props) {
     );
   }
 
-  const canInvestigate = incident.status === "reported";
-  const canResolve = incident.status === "under_investigation";
-  const canClose = incident.status === "resolved";
-  const statusLabel =
-    incident.status === "under_investigation"
-      ? t("incidents.status.underReview")
-      : t(incidentStatusLabelKey(incident.status));
-  const statusTone =
-    incident.status === "closed" || incident.status === "resolved"
-      ? { color: colors.mutedForeground, bg: colors.soft }
-      : incident.status === "under_investigation"
-        ? { color: colors.warning, bg: colors.statusProgressBg }
-        : { color: colors.primary, bg: colors.activeBg };
-  const displayName = incident.participant_name || incident.title;
-  const typeSeverity = `${t(incidentTypeLabelKey(incident.incident_type))} · ${t(incidentSeverityLabelKey(incident.severity))}`;
+  const tz = incident.timezone;
+  const current = stepIndex(incident.status);
+  const severity = severityMeta(incident.severity);
+  const original: Record<CorrectableIncidentField, string> = {
+    description: reportText(incident.description),
+    participant_impact: (incident.participant_impact ?? "").trim(),
+    worker_actions: (incident.worker_actions ?? "").trim(),
+    location: (incident.location ?? "").trim(),
+  };
+  const latestValue = (field: CorrectableIncidentField) => {
+    const list = correctionsByField.get(field);
+    return list && list.length
+      ? list[list.length - 1].new_value
+      : original[field];
+  };
 
-  const handleStatusChange = (status: string) => {
-    updateMutation.mutate({ status });
+  const openCorrection = (field: CorrectableIncidentField) => {
+    setDraft(latestValue(field));
+    setReason("");
+    setEditing(field);
+  };
+
+  const saveCorrection = () => {
+    if (!editing) return;
+    const value = draft.trim();
+    if (!value || value === latestValue(editing).trim()) return;
+    addCorrection.mutate({
+      field_name: editing,
+      new_value: value,
+      note: reason.trim() || undefined,
+    });
+  };
+
+  // Location only shows once there's something in it; the rest always show.
+  const visibleFields = (
+    ["description", "participant_impact", "worker_actions", "location"] as const
+  ).filter(
+    (field) =>
+      field !== "location" ||
+      Boolean(original.location) ||
+      (correctionsByField.get("location")?.length ?? 0) > 0,
+  );
+
+  const renderSection = (field: CorrectableIncidentField, last = false) => {
+    const text = original[field];
+    const fieldCorrections = correctionsByField.get(field) ?? [];
+    return (
+      <View
+        key={field}
+        style={[
+          styles.section,
+          !last && {
+            borderBottomColor: colors.border,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+          },
+        ]}
+      >
+        <View style={styles.sectionHead}>
+          <Text
+            style={[
+              styles.sectionLabel,
+              {
+                color: colors.mutedForeground,
+                fontFamily: FontFamily.interSemiBold,
+              },
+            ]}
+          >
+            {t(FIELD_LABELS[field])}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${t("incidents.worker.addCorrection")}: ${t(FIELD_LABELS[field])}`}
+            hitSlop={10}
+            onPress={() => openCorrection(field)}
+          >
+            <Text
+              style={[
+                styles.correctLink,
+                { color: colors.primary, fontFamily: FontFamily.interSemiBold },
+              ]}
+            >
+              {t("incidents.worker.correct")}
+            </Text>
+          </Pressable>
+        </View>
+        <Text
+          style={[
+            styles.sectionBody,
+            {
+              color: text ? colors.foreground : colors.mutedForeground,
+              fontFamily: FontFamily.interRegular,
+            },
+          ]}
+        >
+          {text || t("incidents.worker.notGiven")}
+        </Text>
+        {fieldCorrections.map((c) => (
+          <View
+            key={c.id}
+            style={[
+              styles.correction,
+              { backgroundColor: colors.soft, borderLeftColor: colors.primary },
+            ]}
+          >
+            <Text
+              style={[
+                styles.correctionMeta,
+                { color: colors.primary, fontFamily: FontFamily.interSemiBold },
+              ]}
+            >
+              {t("incidents.worker.correctedOn", {
+                date: formatIncidentDate(c.created_at, tz),
+              })}
+            </Text>
+            <Text
+              style={[
+                styles.sectionBody,
+                {
+                  color: colors.foreground,
+                  fontFamily: FontFamily.interRegular,
+                },
+              ]}
+            >
+              {c.new_value}
+            </Text>
+            {c.note ? (
+              <Text
+                style={[
+                  styles.correctionNote,
+                  {
+                    color: colors.mutedForeground,
+                    fontFamily: FontFamily.interRegular,
+                  },
+                ]}
+              >
+                {t("incidents.worker.reason", { reason: c.note })}
+              </Text>
+            ) : null}
+          </View>
+        ))}
+      </View>
+    );
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
-      {incident.ndis_pending ? (
-        <View style={[styles.alertBanner, styles.ndisBanner, { backgroundColor: "#FEF2F2", borderColor: "#FECACA" }]}>
-          <View style={styles.ndisBannerTop}>
-            <Feather name="alert-triangle" size={18} color="#DC2626" style={styles.alertIcon} />
-            <View style={styles.alertCopy}>
-              <Text style={[styles.alertTitle, { color: "#991B1B", fontFamily: "Inter_700Bold" }]}>
-                {t("incidents.detail.ndisReportableTitle")}
-              </Text>
-              <Text style={[styles.alertBody, { color: "#B91C1C", fontFamily: "Inter_400Regular" }]}>
-                {t("incidents.detail.ndisReportableBody")}
-                {incident.severity === "critical" ? ` ${t("incidents.detail.ndisCritical24h")}` : ""}
+    <>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingBottom: insets.bottom + 32 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* What this report is */}
+        <Card colors={colors}>
+          <View style={styles.summaryTop}>
+            <Text
+              style={[
+                styles.eyebrow,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: FontFamily.interSemiBold,
+                },
+              ]}
+            >
+              {t(incidentTypeLabelKey(incident.incident_type))}
+            </Text>
+            <View style={[styles.severity, { backgroundColor: severity.bg }]}>
+              <View
+                style={[styles.severityDot, { backgroundColor: severity.dot }]}
+              />
+              <Text
+                style={[
+                  styles.severityText,
+                  {
+                    color: severity.color,
+                    fontFamily: FontFamily.interSemiBold,
+                  },
+                ]}
+              >
+                {t(incidentSeverityLabelKey(incident.severity))}
               </Text>
             </View>
           </View>
-          <Pressable
-            onPress={() => updateMutation.mutate({ ndis_reported_at: new Date().toISOString() })}
-            disabled={isUpdating}
-            style={[styles.ndisMarkBtn, { opacity: isUpdating ? 0.7 : 1 }]}
+          <Text
+            accessibilityRole="header"
+            style={[
+              styles.title,
+              { color: colors.foreground, fontFamily: FontFamily.display },
+            ]}
           >
-            {isUpdating ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <>
-                <Feather name="check-circle" size={12} color="#FFFFFF" />
-                <Text style={[styles.ndisMarkBtnText, { fontFamily: "Inter_600SemiBold" }]}>
-                  {t("incidents.detail.markReported")}
+            {incident.title}
+          </Text>
+          <View style={styles.facts}>
+            {incident.participant_name ? (
+              <View style={styles.fact}>
+                <Feather name="user" size={15} color={colors.mutedForeground} />
+                <Text
+                  style={[
+                    styles.factText,
+                    {
+                      color: colors.foreground,
+                      fontFamily: FontFamily.interMedium,
+                    },
+                  ]}
+                >
+                  {incident.participant_name}
                 </Text>
-              </>
-            )}
-          </Pressable>
-        </View>
-      ) : null}
-
-      {incident.overdue && !incident.ndis_pending ? (
-        <View style={[styles.alertBanner, styles.overdueBanner, { backgroundColor: "#FFF7ED", borderColor: "#FED7AA" }]}>
-          <Feather name="clock" size={16} color="#EA580C" style={styles.alertIcon} />
-          <Text style={[styles.overdueText, { color: "#9A3412", fontFamily: "Inter_600SemiBold" }]}>
-            {t("incidents.detail.overdueWarning")}
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={styles.heroTitleRow}>
-          <Text style={[styles.heroTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]} numberOfLines={2}>
-            {displayName}
-          </Text>
-          <View style={[styles.statusChip, { backgroundColor: statusTone.bg }]}>
-            <Text style={[styles.statusChipText, { color: statusTone.color, fontFamily: "Inter_600SemiBold" }]}>
-              {statusLabel}
-            </Text>
-          </View>
-        </View>
-
-        {incident.participant_ndis ? (
-          <Text style={[styles.ndisLine, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            NDIS {incident.participant_ndis}
-          </Text>
-        ) : null}
-
-        <View style={styles.metaRow}>
-          <View style={styles.metaCol}>
-            <Text style={[styles.metaLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-              {t("incidents.detail.incidentDate")}
-            </Text>
-            <Text style={[styles.metaValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              {incident.incident_date ? formatIncidentDate(incident.incident_date, incident.timezone) : emDash}
-            </Text>
-          </View>
-          <View style={styles.metaCol}>
-            <Text style={[styles.metaLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-              {t("incidents.detail.typeSeverity")}
-            </Text>
-            <Text style={[styles.metaValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              {typeSeverity}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.metaRow}>
-          <View style={styles.metaCol}>
-            <Text style={[styles.metaLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-              {t("incidents.detail.location")}
-            </Text>
-            <Text style={[styles.metaValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              {incident.location || emDash}
-            </Text>
-          </View>
-          <View style={styles.metaCol}>
-            <Text style={[styles.metaLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-              {t("incidents.detail.witnesses")}
-            </Text>
-            <Text style={[styles.metaValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              {incident.witnesses || emDash}
-            </Text>
-          </View>
-        </View>
-
-        {incident.practice_standard ? (
-          <View style={[styles.standardBanner, { backgroundColor: colors.soft }]}>
-            <Text style={[styles.standardText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-              {incident.practice_standard}
-            </Text>
-          </View>
-        ) : null}
-
-        <Text style={[styles.metaLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-          {t("incidents.detail.whatHappened")}
-        </Text>
-        <Text style={[styles.bodyText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-          {incident.description}
-        </Text>
-
-        {incident.participant_impact ? (
-          <View style={styles.section}>
-            <SectionLabel>{t("incidents.detail.participantImpact")}</SectionLabel>
-            <Text style={[styles.bodyText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-              {incident.participant_impact}
-            </Text>
-          </View>
-        ) : null}
-
-        {incident.worker_actions ? (
-          <View style={styles.section}>
-            <SectionLabel>{t("incidents.detail.immediateActions")}</SectionLabel>
-            <Text style={[styles.bodyText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-              {incident.worker_actions}
-            </Text>
-          </View>
-        ) : null}
-
-        {(canInvestigate || canResolve || canClose) ? (
-          <View style={[styles.workflowRow, { borderTopColor: colors.border }]}>
-            {canInvestigate ? (
-              <ActionButton
-                label={t("incidents.detail.startInvestigation")}
-                icon="file-text"
-                variant="amber"
-                disabled={isUpdating}
-                onPress={() => handleStatusChange("under_investigation")}
-              />
+              </View>
             ) : null}
-            {canResolve ? (
-              <ActionButton
-                label={t("incidents.detail.markResolved")}
-                icon="check-circle"
-                variant="emerald"
-                disabled={isUpdating}
-                onPress={() => handleStatusChange("resolved")}
+            <View style={styles.fact}>
+              <Feather
+                name="calendar"
+                size={15}
+                color={colors.mutedForeground}
               />
-            ) : null}
-            {canClose ? (
-              <ActionButton
-                label={t("incidents.detail.closeIncident")}
-                icon="x-circle"
-                variant="outline"
-                disabled={isUpdating}
-                onPress={() => handleStatusChange("closed")}
-              />
-            ) : null}
-            {isUpdating ? <ActivityIndicator color={colors.mutedForeground} size="small" /> : null}
-          </View>
-        ) : null}
-      </View>
-
-      <DetailCard
-        isDark={isDark}
-        header={
-          <View style={styles.cardHeaderRow}>
-            <Feather name="clipboard" size={15} color={colors.mutedForeground} />
-            <Text style={[styles.cardHeaderTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              {t("incidents.detail.investigationCorrective")}
-            </Text>
-          </View>
-        }
-      >
-        <View style={styles.section}>
-          <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
-            {t("incidents.detail.investigationNotes")}
-          </Text>
-          <TextInput
-            style={[
-              styles.textArea,
-              {
-                color: colors.foreground,
-                borderColor: colors.border,
-                backgroundColor: colors.background,
-                fontFamily: "Inter_400Regular",
-              },
-            ]}
-            multiline
-            value={investigationNotes}
-            onChangeText={setInvestigationNotes}
-            placeholder={t("incidents.detail.investigationNotesPlaceholder")}
-            placeholderTextColor={colors.mutedForeground}
-            textAlignVertical="top"
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
-            {t("incidents.detail.correctiveActions")}
-          </Text>
-          <TextInput
-            style={[
-              styles.textArea,
-              {
-                color: colors.foreground,
-                borderColor: colors.border,
-                backgroundColor: colors.background,
-                fontFamily: "Inter_400Regular",
-              },
-            ]}
-            multiline
-            value={correctiveActions}
-            onChangeText={setCorrectiveActions}
-            placeholder={t("incidents.detail.correctiveActionsPlaceholder")}
-            placeholderTextColor={colors.mutedForeground}
-            textAlignVertical="top"
-          />
-        </View>
-
-        <View style={styles.saveRow}>
-          <Pressable
-            onPress={() =>
-              updateMutation.mutate({
-                investigation_notes: investigationNotes,
-                corrective_actions: correctiveActions,
-              })
-            }
-            disabled={isUpdating}
-            style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: isUpdating ? 0.7 : 1 }]}
-          >
-            {isUpdating ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text style={[styles.saveBtnText, { fontFamily: "Inter_600SemiBold" }]}>
-                {t("incidents.detail.saveNotes")}
-              </Text>
-            )}
-          </Pressable>
-        </View>
-      </DetailCard>
-
-      <DetailCard
-        isDark={isDark}
-        header={
-          <View style={styles.cardHeaderRow}>
-            <Feather name="shield" size={14} color={colors.mutedForeground} />
-            <Text style={[styles.cardHeaderTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              {t("incidents.detail.auditTrail")}
-            </Text>
-          </View>
-        }
-      >
-        <View style={styles.auditRow}>
-          <Text style={[styles.auditLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            {t("incidents.detail.incidentReported")}
-          </Text>
-          <Text style={[styles.auditValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-            {incident.reported_date ? formatIncidentDateTime(incident.reported_date, incident.timezone) : emDash}
-          </Text>
-        </View>
-        {incident.ndis_reportable ? (
-          <View style={styles.auditRow}>
-            <Text style={[styles.auditLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {t("incidents.detail.ndisReportableFlagged")}
-            </Text>
-            <View style={[styles.badge, { backgroundColor: "#FEE2E2", borderColor: "#FECACA" }]}>
-              <Text style={[styles.badgeText, { color: "#B91C1C", fontFamily: "Inter_700Bold" }]}>
-                {t("common.yes")}
+              <Text
+                style={[
+                  styles.factText,
+                  {
+                    color: colors.foreground,
+                    fontFamily: FontFamily.interMedium,
+                  },
+                ]}
+              >
+                {formatIncidentDateTime(incident.incident_date, tz)}
               </Text>
             </View>
+            {incident.reference_number ? (
+              <View style={styles.fact}>
+                <Feather name="hash" size={15} color={colors.mutedForeground} />
+                <Text
+                  style={[
+                    styles.factText,
+                    {
+                      color: colors.foreground,
+                      fontFamily: FontFamily.interMedium,
+                    },
+                  ]}
+                >
+                  {incident.reference_number}
+                </Text>
+              </View>
+            ) : null}
           </View>
-        ) : null}
-        {incident.ndis_reported_at ? (
-          <View style={styles.auditRow}>
-            <Text style={[styles.auditLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {t("incidents.detail.reportedToNdisQsc")}
-            </Text>
-            <Text style={[styles.auditValue, { color: "#15803D", fontFamily: "Inter_600SemiBold" }]}>
-              {formatIncidentDate(incident.ndis_reported_at, incident.timezone)}
-            </Text>
+        </Card>
+
+        {/* Where it's at */}
+        <Card colors={colors}>
+          <Text
+            style={[
+              styles.cardTitle,
+              {
+                color: colors.foreground,
+                fontFamily: FontFamily.interSemiBold,
+              },
+            ]}
+          >
+            {t("incidents.worker.progress")}
+          </Text>
+          <View style={styles.steps}>
+            {STEPS.map((step, index) => {
+              const done = index < current;
+              const active = index === current;
+              const reached = done || active;
+              return (
+                <View key={step.key} style={styles.step}>
+                  <View style={styles.stepRail}>
+                    <View
+                      style={[
+                        styles.stepDot,
+                        reached
+                          ? {
+                              backgroundColor: colors.primary,
+                              borderColor: colors.primary,
+                            }
+                          : {
+                              backgroundColor: colors.card,
+                              borderColor: colors.border,
+                            },
+                      ]}
+                    >
+                      {done ? (
+                        <Feather
+                          name="check"
+                          size={12}
+                          color={colors.primaryForeground}
+                        />
+                      ) : null}
+                    </View>
+                    {index < STEPS.length - 1 ? (
+                      <View
+                        style={[
+                          styles.stepLine,
+                          {
+                            backgroundColor: done
+                              ? colors.primary
+                              : colors.border,
+                          },
+                        ]}
+                      />
+                    ) : null}
+                  </View>
+                  <View style={styles.stepCopy}>
+                    <Text
+                      style={[
+                        styles.stepTitle,
+                        {
+                          color: reached
+                            ? colors.foreground
+                            : colors.mutedForeground,
+                          fontFamily: active
+                            ? FontFamily.interSemiBold
+                            : FontFamily.interMedium,
+                        },
+                      ]}
+                    >
+                      {t(step.key)}
+                      {index === 0 && incident.reported_date
+                        ? `  ·  ${formatIncidentDate(incident.reported_date, tz)}`
+                        : ""}
+                    </Text>
+                    {active ? (
+                      <Text
+                        style={[
+                          styles.stepBody,
+                          {
+                            color: colors.mutedForeground,
+                            fontFamily: FontFamily.interRegular,
+                          },
+                        ]}
+                      >
+                        {t(step.bodyKey)}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })}
           </View>
-        ) : null}
-        {incident.resolved_date ? (
-          <View style={styles.auditRow}>
-            <Text style={[styles.auditLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {t("incidents.detail.incidentResolved")}
+          {incident.ndis_reportable ? (
+            <View style={[styles.note, { backgroundColor: colors.soft }]}>
+              <Feather name="info" size={16} color={colors.primary} />
+              <Text
+                style={[
+                  styles.noteText,
+                  {
+                    color: colors.foreground,
+                    fontFamily: FontFamily.interRegular,
+                  },
+                ]}
+              >
+                {t("incidents.worker.ndisNote")}
+              </Text>
+            </View>
+          ) : null}
+        </Card>
+
+        {/* What you reported */}
+        <Card colors={colors}>
+          <Text
+            style={[
+              styles.cardTitle,
+              {
+                color: colors.foreground,
+                fontFamily: FontFamily.interSemiBold,
+              },
+            ]}
+          >
+            {t("incidents.worker.yourReport")}
+          </Text>
+          <Text
+            style={[
+              styles.cardHint,
+              {
+                color: colors.mutedForeground,
+                fontFamily: FontFamily.interRegular,
+              },
+            ]}
+          >
+            {t("incidents.worker.yourReportHint")}
+          </Text>
+          {visibleFields.map((field, index) =>
+            renderSection(field, index === visibleFields.length - 1),
+          )}
+        </Card>
+      </ScrollView>
+
+      <Modal
+        visible={editing !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditing(null)}
+      >
+        <KeyboardAvoidingView
+          style={styles.sheetRoot}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <Pressable
+            style={styles.backdrop}
+            onPress={() => setEditing(null)}
+            accessible={false}
+          />
+          <View
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: colors.card,
+                paddingBottom: insets.bottom + 20,
+              },
+            ]}
+          >
+            <View
+              style={[styles.grabber, { backgroundColor: colors.border }]}
+            />
+            <Text
+              style={[
+                styles.sheetTitle,
+                { color: colors.foreground, fontFamily: FontFamily.display },
+              ]}
+            >
+              {editing
+                ? t("incidents.worker.correctTitle", {
+                    section: t(FIELD_LABELS[editing]),
+                  })
+                : ""}
             </Text>
-            <Text style={[styles.auditValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              {formatIncidentDate(incident.resolved_date, incident.timezone)}
+            <Text
+              style={[
+                styles.cardHint,
+                {
+                  color: colors.mutedForeground,
+                  fontFamily: FontFamily.interRegular,
+                },
+              ]}
+            >
+              {t("incidents.worker.correctHint")}
             </Text>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              multiline
+              autoFocus
+              accessibilityLabel={
+                editing ? t(FIELD_LABELS[editing]) : undefined
+              }
+              style={[
+                styles.sheetInput,
+                styles.sheetInputTall,
+                {
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                  fontFamily: FontFamily.interRegular,
+                },
+              ]}
+            />
+            <Text
+              style={[
+                styles.inputLabel,
+                {
+                  color: colors.foreground,
+                  fontFamily: FontFamily.interSemiBold,
+                },
+              ]}
+            >
+              {t("incidents.worker.reasonLabel")}
+            </Text>
+            <TextInput
+              value={reason}
+              onChangeText={setReason}
+              placeholder={t("incidents.worker.reasonPlaceholder")}
+              placeholderTextColor={colors.mutedForeground}
+              accessibilityLabel={t("incidents.worker.reasonLabel")}
+              style={[
+                styles.sheetInput,
+                {
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                  fontFamily: FontFamily.interRegular,
+                },
+              ]}
+            />
+            <View style={styles.sheetActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setEditing(null)}
+                style={[styles.secondaryBtn, { borderColor: colors.border }]}
+              >
+                <Text
+                  style={[
+                    styles.secondaryText,
+                    {
+                      color: colors.foreground,
+                      fontFamily: FontFamily.interSemiBold,
+                    },
+                  ]}
+                >
+                  {t("common.cancel")}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={
+                  addCorrection.isPending ||
+                  !draft.trim() ||
+                  (editing
+                    ? draft.trim() === latestValue(editing).trim()
+                    : true)
+                }
+                onPress={saveCorrection}
+                style={[
+                  styles.primaryBtn,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity:
+                      addCorrection.isPending ||
+                      !draft.trim() ||
+                      (editing
+                        ? draft.trim() === latestValue(editing).trim()
+                        : true)
+                        ? 0.45
+                        : 1,
+                  },
+                ]}
+              >
+                {addCorrection.isPending ? (
+                  <ActivityIndicator color={colors.primaryForeground} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.primaryText,
+                      {
+                        color: colors.primaryForeground,
+                        fontFamily: FontFamily.interSemiBold,
+                      },
+                    ]}
+                  >
+                    {t("incidents.worker.saveCorrection")}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
           </View>
-        ) : null}
-      </DetailCard>
-    </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: { padding: 16, gap: 14 },
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    padding: 32,
     gap: 12,
   },
-  errorTitle: { fontSize: 16, textAlign: "center" },
-  backLink: { fontSize: 14 },
-  scroll: { padding: 16, gap: 12 },
-  heroCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    gap: 10,
-  },
-  heroTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  heroTitle: { flex: 1, fontSize: 17 },
-  statusChip: {
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  statusChipText: { fontSize: 10 },
-  ndisLine: { fontSize: 11, marginTop: -4 },
-  metaRow: { flexDirection: "row", gap: 12 },
-  metaCol: { flex: 1, gap: 3 },
-  standardBanner: {
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  standardText: { fontSize: 11.5 },
-  alertBanner: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-  },
-  overdueBanner: { alignItems: "center" },
-  ndisBanner: { flexDirection: "column", gap: 12 },
-  ndisBannerTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  alertIcon: { marginTop: 2 },
-  alertCopy: { flex: 1, gap: 4 },
-  alertTitle: { fontSize: 14 },
-  alertBody: { fontSize: 12, lineHeight: 18 },
-  overdueText: { flex: 1, fontSize: 13, lineHeight: 18 },
-  ndisMarkBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: "#DC2626",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    alignSelf: "stretch",
-  },
-  ndisMarkBtnText: { color: "#FFFFFF", fontSize: 11 },
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  cardHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  cardHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  cardHeaderTitle: { fontSize: 15 },
-  cardBody: { padding: 16, gap: 16 },
-  titleRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  titleCopy: { flex: 1, gap: 6 },
-  title: { fontSize: 20, lineHeight: 26 },
-  participantRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  participantText: { flex: 1, fontSize: 13 },
-  badgeCol: { gap: 6, alignItems: "flex-end" },
-  badge: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  badgeText: { fontSize: 11 },
-  metaGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  metaField: { width: "47%", gap: 4 },
-  metaFieldWide: { width: "100%" },
-  metaLabelRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  metaLabel: { fontSize: 10, letterSpacing: 0.5, textTransform: "uppercase" },
-  metaValue: { fontSize: 12.5 },
-  metaSub: { fontSize: 11 },
-  divider: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 14,
-    gap: 8,
-  },
-  section: { gap: 8 },
-  sectionLabel: {
-    fontSize: 11,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    color: "#9CA3AF",
-  },
-  bodyText: { fontSize: 12, lineHeight: 18.5 },
-  workflowRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 14,
-  },
-  actionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  actionBtnText: { fontSize: 12 },
-  fieldLabel: { fontSize: 13 },
-  textArea: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 14,
-    lineHeight: 20,
-    minHeight: 110,
-  },
-  saveRow: { alignItems: "flex-end" },
-  saveBtn: {
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    minWidth: 110,
-    alignItems: "center",
-  },
-  saveBtnText: { color: "#FFFFFF", fontSize: 13 },
-  auditRow: {
+  errorTitle: { fontSize: 18 },
+  link: { fontSize: 15 },
+  card: { borderRadius: 20, borderWidth: 1, padding: 18 },
+  summaryTop: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
   },
-  auditLabel: { flex: 1, fontSize: 12 },
-  auditValue: { fontSize: 12, textAlign: "right" },
+  eyebrow: { fontSize: 14 },
+  severity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  severityDot: { width: 7, height: 7, borderRadius: 4 },
+  severityText: { fontSize: 13 },
+  title: { fontSize: 23, lineHeight: 29, letterSpacing: -0.3, marginTop: 8 },
+  facts: { gap: 8, marginTop: 14 },
+  fact: { flexDirection: "row", alignItems: "center", gap: 10 },
+  factText: { fontSize: 15, flexShrink: 1 },
+  cardTitle: { fontSize: 17 },
+  cardHint: { fontSize: 14, lineHeight: 20, marginTop: 4 },
+  steps: { marginTop: 16 },
+  step: { flexDirection: "row", gap: 14 },
+  stepRail: { alignItems: "center", width: 22 },
+  stepDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepLine: { width: 2, flex: 1, minHeight: 18, marginVertical: 2 },
+  stepCopy: { flex: 1, paddingBottom: 16, gap: 4 },
+  stepTitle: { fontSize: 15, lineHeight: 22 },
+  stepBody: { fontSize: 14, lineHeight: 20 },
+  note: {
+    flexDirection: "row",
+    gap: 10,
+    borderRadius: 14,
+    padding: 12,
+    alignItems: "flex-start",
+  },
+  noteText: { flex: 1, fontSize: 14, lineHeight: 20 },
+  section: { paddingVertical: 14, gap: 6 },
+  sectionHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  sectionLabel: { fontSize: 14 },
+  correctLink: { fontSize: 14 },
+  sectionBody: { fontSize: 15, lineHeight: 22 },
+  correction: {
+    borderLeftWidth: 3,
+    borderRadius: 10,
+    padding: 12,
+    gap: 4,
+    marginTop: 6,
+  },
+  correctionMeta: { fontSize: 13 },
+  correctionNote: { fontSize: 13, lineHeight: 18 },
+  sheetRoot: { flex: 1, justifyContent: "flex-end" },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(26,26,46,0.45)",
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    gap: 8,
+  },
+  grabber: {
+    alignSelf: "center",
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: 10,
+  },
+  sheetTitle: { fontSize: 21, lineHeight: 27 },
+  inputLabel: { fontSize: 14, marginTop: 6 },
+  sheetInput: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  sheetInputTall: {
+    minHeight: 130,
+    maxHeight: 240,
+    textAlignVertical: "top",
+    marginTop: 8,
+  },
+  sheetActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+  secondaryBtn: {
+    height: 52,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryText: { fontSize: 16 },
+  primaryBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryText: { fontSize: 16 },
 });

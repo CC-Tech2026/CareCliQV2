@@ -9,8 +9,9 @@ export default function SettingsTabLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="account" />
       <Stack.Screen name="signature" />
-      <Stack.Screen name="contact" />
       <Stack.Screen name="emergency-contact" />
+      <Stack.Screen name="birthday" />
+      <Stack.Screen name="profile" />
     </Stack>
   );
 }
