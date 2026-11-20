@@ -28,6 +28,27 @@ describe("CARECLIQV2-195 participant profile display", () => {
   it("extracts phone from plain-text emergency contact", () => {
     const display = emergencyContactDisplay("Sam Lee — 0400 999 888");
     expect(display?.phone).toBe("0400 999 888");
+    expect(display?.name).toBe("Sam Lee");
+  });
+
+  it("reads name, relationship and phone from 'Name (Relationship) phone'", () => {
+    const display = emergencyContactDisplay("Kate Williams (Mother) 0491 570 159");
+    expect(display?.name).toBe("Kate Williams");
+    expect(display?.relationship).toBe("Mother");
+    // No stray bracket from "(Mother)" in front of the number.
+    expect(display?.phone).toBe("0491 570 159");
+  });
+
+  it("keeps landline area codes and international numbers whole", () => {
+    expect(emergencyContactDisplay("Dr Patel (08) 5550 2105")?.phone).toBe("(08) 5550 2105");
+    expect(emergencyContactDisplay("Ana, sister, +61 491 570 111")?.phone).toBe("+61 491 570 111");
+    expect(emergencyContactDisplay("Ana, sister, +61 491 570 111")?.relationship).toBe("sister");
+  });
+
+  it("keeps text with no phone as the name", () => {
+    const display = emergencyContactDisplay("Ask the house manager");
+    expect(display?.name).toBe("Ask the house manager");
+    expect(display?.phone).toBeUndefined();
   });
 });
 

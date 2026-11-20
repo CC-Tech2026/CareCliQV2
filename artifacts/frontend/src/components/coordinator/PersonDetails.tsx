@@ -148,23 +148,41 @@ export function PersonDetailsProvider({ children }: { children: ReactNode }) {
         }}
       >
         <SheetContent
-          className="w-full overflow-y-auto sm:max-w-2xl"
+          // A slim bar that stays put, and the profile scrolling under it.
+          // The profile's own header sticks flush to the top of that scroll
+          // area, so nothing shows through above it, and its name isn't
+          // repeated here.
+          className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl"
           onClick={(e) => e.stopPropagation()}
         >
-          <SheetHeader className="mb-4 pr-6">
-            <SheetTitle>{person?.name}</SheetTitle>
-            <SheetDescription>
-              Profile details. Close this panel to return to your unchanged
-              roster.
-            </SheetDescription>
+          <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-cc-border px-5 py-3 pr-14 text-left">
+            <div className="min-w-0">
+              <SheetTitle className="text-sm font-semibold text-cc-text">
+                {person?.kind === "worker" ? "Worker profile" : "Participant profile"}
+                <span className="sr-only">: {person?.name}</span>
+              </SheetTitle>
+              <SheetDescription className="sr-only">
+                Close this panel to return to your unchanged roster.
+              </SheetDescription>
+            </div>
+            {person?.kind === "participant" ? (
+              <a
+                href={`/patients?id=${encodeURIComponent(person.id)}`}
+                className="shrink-0 rounded-full border border-cc-border px-3 py-1.5 text-xs font-semibold text-cc-text hover:bg-cc-soft"
+              >
+                Open full profile
+              </a>
+            ) : null}
           </SheetHeader>
-          {person ? (
-            <PersonDetailsBody
-              key={person.kind + person.id}
-              person={person}
-              onClose={() => setPerson(null)}
-            />
-          ) : null}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {person ? (
+              <PersonDetailsBody
+                key={person.kind + person.id}
+                person={person}
+                onClose={() => setPerson(null)}
+              />
+            ) : null}
+          </div>
         </SheetContent>
       </Sheet>
     </DetailsContext.Provider>

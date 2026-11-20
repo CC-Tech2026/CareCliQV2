@@ -76,6 +76,7 @@ import {
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -327,6 +328,7 @@ function ParticipantForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
+          <h3 className="col-span-2 text-xs font-semibold uppercase tracking-wide text-cc-muted">About</h3>
           <FormField
             control={form.control}
             name="full_name"
@@ -374,45 +376,6 @@ function ParticipantForm({
           />
           <FormField
             control={form.control}
-            name="email"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{translate("patients.field.email")}</FormLabel>
-                <FormControl>
-                  <Input type="email" placeholder={translate("patients.placeholder.email")} data-testid="input-email" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="phone"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{translate("patients.field.phone")}</FormLabel>
-                <FormControl>
-                  <Input placeholder={translate("patients.placeholder.phone")} data-testid="input-phone" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="address"
-            render={({ field }) => (
-              <FormItem className="col-span-2">
-                <FormLabel>{translate("patients.field.address")}</FormLabel>
-                <FormControl>
-                  <Input placeholder={translate("patients.placeholder.address")} autoComplete="street-address" data-testid="input-address" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
             name="primary_disability"
             render={({ field }) => (
               <FormItem className="col-span-2">
@@ -451,6 +414,55 @@ function ParticipantForm({
               </FormItem>
             )}
           />
+          <h3 className="col-span-2 text-xs font-semibold uppercase tracking-wide text-cc-muted pt-2">Contact</h3>
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{translate("patients.field.email")}</FormLabel>
+                <FormControl>
+                  <Input type="email" placeholder={translate("patients.placeholder.email")} data-testid="input-email" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{translate("patients.field.phone")}</FormLabel>
+                <FormControl>
+                  <Input placeholder={translate("patients.placeholder.phone")} data-testid="input-phone" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="address"
+            render={({ field }) => (
+              <FormItem className="col-span-2">
+                <FormLabel>{translate("patients.field.address")}</FormLabel>
+                <FormControl>
+                  <AddressAutocomplete
+                    placeholder={translate("patients.placeholder.address")}
+                    data-testid="input-address"
+                    name={field.name}
+                    ref={field.ref}
+                    onBlur={field.onBlur}
+                    value={field.value ?? ""}
+                    onChange={(v) => field.onChange(v)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <h3 className="col-span-2 text-xs font-semibold uppercase tracking-wide text-cc-muted pt-2">NDIS plan</h3>
           <FormField
             control={form.control}
             name="plan_status"
@@ -1440,8 +1452,8 @@ export function ParticipantDetail({
       {/* ── Sticky header ─────────────────────────────────────────────── */}
       {!bare && (
       <div
-        className="sticky top-0 z-10 px-3 pt-3 sm:px-5 sm:pt-5"
-        style={{ background: "var(--cc-bg)" }}
+        className="sticky top-0 z-10 border-b border-cc-border px-3 pt-3 sm:px-5 sm:pt-5"
+        style={{ background: "var(--cc-surface)" }}
       >
 
         {/* Avatar + name */}
@@ -1509,8 +1521,7 @@ export function ParticipantDetail({
                 type="button"
                 onClick={handleExportProfile}
 
-                className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors hover:bg-cc-active-bg disabled:opacity-60"
-                style={{ borderColor: "var(--cc-border)", color: "var(--cc-plum)" }}
+                className="flex items-center gap-1.5 rounded-xl border border-cc-border px-3 py-2 text-[11px] font-semibold text-cc-text transition-colors hover:bg-cc-soft disabled:opacity-60"
               >
                 <FileDown size={13} />
                 Export records
@@ -1532,29 +1543,42 @@ export function ParticipantDetail({
         {/* Collapsible body — stat cards + mobile action buttons */}
         {!headerCollapsed && (
           <>
-            {/* Stat cards — 2×2 on mobile, 4 across on desktop */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3 mt-3">
-              {metricCards.map((metric) => {
-                const Icon = metric.icon;
-                return (
-                  <div key={metric.label} className={`rounded-xl border px-3 py-2.5 ${metric.tone}`}>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                      <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70 leading-tight">{metric.label}</p>
+            {/* Key facts: one quiet strip. Colour only on values that need
+                attention (over budget, low compliance), not on every box. It
+                sizes to its own width, so it also fits the roster's drawer. */}
+            <div className="@container mt-3 mb-3">
+              <dl className="grid grid-cols-2 overflow-hidden rounded-xl border border-cc-border bg-cc-surface @lg:grid-cols-4">
+                {metricCards.map((metric, index) => {
+                  const Icon = metric.icon;
+                  const valueTone = metric.tone
+                    .split(" ")
+                    .filter((c) => c.startsWith("text-") || c.startsWith("dark:text-"))
+                    .join(" ");
+                  return (
+                    <div
+                      key={metric.label}
+                      className={`min-w-0 px-3 py-2.5 ${index % 2 === 1 ? "border-l border-cc-border" : ""} ${index >= 2 ? "border-t border-cc-border @lg:border-t-0" : ""} ${index === 2 ? "@lg:border-l" : ""}`}
+                    >
+                      <dt className="flex items-center gap-1.5 text-[11px] font-medium text-cc-muted">
+                        <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        <span className="truncate">{metric.label}</span>
+                      </dt>
+                      <dd className={`mt-0.5 text-sm font-semibold capitalize leading-snug break-words ${valueTone || "text-cc-text"}`}>
+                        {metric.value}
+                      </dd>
+                      {metric.linkLabel && (
+                        <button
+                          type="button"
+                          onClick={metric.onLinkClick}
+                          className="mt-1 flex items-center gap-0.5 text-[11px] font-semibold text-cc-plum underline decoration-dotted underline-offset-2"
+                        >
+                          {metric.linkLabel} <ChevronRight className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
-                    <p className="text-[12px] sm:text-[13px] font-semibold capitalize leading-snug break-words">{metric.value}</p>
-                    {metric.linkLabel && (
-                      <button
-                        type="button"
-                        onClick={metric.onLinkClick}
-                        className="mt-1 flex items-center gap-0.5 text-[10px] font-bold underline decoration-dotted underline-offset-2 opacity-80 hover:opacity-100"
-                      >
-                        {metric.linkLabel} <ChevronRight className="h-2.5 w-2.5" />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </dl>
             </div>
 
             {/* Action buttons — mobile: below stat cards */}
@@ -1576,8 +1600,7 @@ export function ParticipantDetail({
                   type="button"
                   onClick={handleExportProfile}
 
-                  className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors hover:bg-cc-active-bg disabled:opacity-60"
-                  style={{ borderColor: "var(--cc-border)", color: "var(--cc-plum)" }}
+                  className="flex items-center gap-1.5 rounded-xl border border-cc-border px-3 py-2 text-[11px] font-semibold text-cc-text transition-colors hover:bg-cc-soft disabled:opacity-60"
                 >
                   <FileDown size={13} />
                   Export records
@@ -1587,39 +1610,27 @@ export function ParticipantDetail({
           </>
         )}
 
-        {/* Tab bar - flush with the content panel below, same language as the
-            roster page's tabs and the onboarding area switcher: rounded top
-            corners only, matching background (var(--cc-surface)) and zero
-            gap so the active tab visually continues straight into the panel
-            beneath it. No box-shadow on the active tab on purpose - a shadow
-            projects downward and draws a visible line right at the seam,
-            which breaks the "one continuous shape" illusion (this bit it
-            twice already; OnboardingAreaSwitcher's shipped code has the same
-            note). The content wrapper right below carries the matching
-            var(--cc-surface) background that completes the illusion. */}
-        <nav aria-label="Participant record sections" className="flex items-end gap-1.5 overflow-x-auto scroll-px-3">
+        {/* Sections: plain text tabs, the active one underlined. Scrolls
+            sideways on narrow screens without showing a scrollbar. */}
+        <nav
+          aria-label="Participant record sections"
+          className="-mb-px flex gap-5 overflow-x-auto [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: "none" }}
+        >
           {TABS.map((tab) => {
-            const Icon = tab.icon;
             const active = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => setActiveTab(tab.id)}
                 aria-current={active ? "page" : undefined}
-                className="relative flex shrink-0 items-center gap-2 whitespace-nowrap px-3 py-3 sm:px-4 text-sm font-semibold transition-opacity min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum"
-                style={{
-                  borderRadius: active ? "14px 14px 0 0" : "0",
-                  background: active ? "var(--cc-surface)" : "transparent",
-                  color: "var(--cc-text)",
-                  opacity: active ? 1 : 0.75,
-                }}
+                className={`min-h-[44px] shrink-0 whitespace-nowrap border-b-2 px-0.5 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum ${
+                  active
+                    ? "border-[var(--cc-coral)] font-semibold text-cc-text"
+                    : "border-transparent font-medium text-cc-muted hover:text-cc-text"
+                }`}
               >
-                <span
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
-                  style={{ background: active ? "var(--cc-coral)" : "#C7C7CE" }}
-                >
-                  <Icon size={11} style={{ color: "#fff" }} />
-                </span>
                 <span className="hidden sm:inline">{tab.label}</span>
                 <span className="sm:hidden">{tab.shortLabel}</span>
               </button>
@@ -1634,12 +1645,8 @@ export function ParticipantDetail({
         className={bare ? "space-y-6" : "flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 pb-6"}
         style={bare ? undefined : { background: "var(--cc-surface)" }}
       >
-        {!bare && (
-          <header className="rounded-xl border border-cc-border bg-cc-soft p-4 sm:p-5">
-            <p className="text-xs font-medium text-cc-muted">Participant record</p>
-            <h2 className="mt-1 text-lg font-semibold text-cc-text">{TABS.find(tab => tab.id === activeTab)?.label ?? "Overview"}</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-cc-muted">{tabDescriptions[activeTab]}</p>
-          </header>
+        {!bare && tabDescriptions[activeTab] && (
+          <p className="text-sm text-cc-muted">{tabDescriptions[activeTab]}</p>
         )}
 
         {/* OVERVIEW TAB */}
