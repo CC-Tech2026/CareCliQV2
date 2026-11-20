@@ -457,6 +457,9 @@ export default function MDStaffPage() {
     [credentialsQuery.data],
   );
   const credentialsLoading = credentialsQuery.isLoading;
+  // The dashboard's count isn't the same measure as assignments, so show a
+  // placeholder rather than a number that changes once assignments arrive.
+  const assignmentsLoading = assignmentsQuery.isLoading;
 
   const participantsByWorker = useMemo(() => {
     if (!assignmentsQuery.data) return null;
@@ -971,9 +974,11 @@ export default function MDStaffPage() {
                                   {trainingOverdue && (
                                     <span className="font-medium" style={{ color: RED }}>Training overdue</span>
                                   )}
-                                  <span>
-                                    {participantsFor(worker)} {participantsFor(worker) === 1 ? "participant" : "participants"}
-                                  </span>
+                                  {!assignmentsLoading && (
+                                    <span>
+                                      {participantsFor(worker)} {participantsFor(worker) === 1 ? "participant" : "participants"}
+                                    </span>
+                                  )}
                                   {notes && notes.tone !== "neutral" && (
                                     <span className="font-medium" style={{ color: toneColor(notes.tone) }}>Notes: {notes.label}</span>
                                   )}
@@ -1000,25 +1005,25 @@ export default function MDStaffPage() {
                             </div>
 
                             {/* Participants */}
-                            <p className="hidden text-sm tabular-nums lg:block" style={{ color: TEXT }}>
-                              {participantsFor(worker)}
-                            </p>
+                            <div className="hidden text-sm tabular-nums lg:block" style={{ color: TEXT }}>
+                              {assignmentsLoading ? <span className="block h-3 w-10 animate-pulse rounded-full" style={{ background: SOFT }} /> : participantsFor(worker)}
+                            </div>
 
                             {/* This week */}
-                            <p className="hidden text-sm tabular-nums xl:block" style={{ color: TEXT }}>
-                              {extra ? extra.sessions_this_week : <span style={{ color: MUTED }}>N/A</span>}
+                            <div className="hidden text-sm tabular-nums xl:block" style={{ color: TEXT }}>
+                              {detailsLoading ? <span className="block h-3 w-10 animate-pulse rounded-full" style={{ background: SOFT }} /> : extra ? extra.sessions_this_week : <span style={{ color: MUTED }}>N/A</span>}
                               {extra && (
                                 <span style={{ color: MUTED }}> {extra.sessions_this_week === 1 ? "session" : "sessions"}</span>
                               )}
-                            </p>
+                            </div>
 
                             {/* Notes */}
-                            <p
+                            <div
                               className="hidden truncate text-sm xl:block"
                               style={{ color: notes ? toneColor(notes.tone) : MUTED, fontWeight: notes && notes.tone !== "neutral" ? 500 : 400 }}
                             >
-                              {notes ? notes.label : "N/A"}
-                            </p>
+                              {detailsLoading ? <span className="block h-3 w-16 animate-pulse rounded-full" style={{ background: SOFT }} /> : notes ? notes.label : "N/A"}
+                            </div>
 
                             {/* Compliance */}
                             <div className="hidden lg:block">
