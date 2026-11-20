@@ -9,9 +9,9 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/logo.png",
+      "image": "./assets/animate/carecliq-logo-final.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FFFEF0"
+      "backgroundColor": "#F9F5EF"
     },
 
     "ios": {
@@ -38,9 +38,9 @@
         "backgroundColor": "#4B3F91"
       },
       "splash": {
-        "image": "./assets/images/logo.png",
+        "image": "./assets/animate/carecliq-logo-final.png",
         "resizeMode": "contain",
-        "backgroundColor": "#FFFEF0"
+        "backgroundColor": "#F9F5EF"
       },
       "permissions": [
         "CAMERA",
@@ -71,14 +71,14 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo.png",
-          "imageWidth": 180,
+          "image": "./assets/animate/carecliq-logo-final.png",
+          "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#FFFEF0",
+          "backgroundColor": "#F9F5EF",
           "android": {
-            "backgroundColor": "#FFFEF0",
-            "image": "./assets/images/logo.png",
-            "imageWidth": 180
+            "backgroundColor": "#F9F5EF",
+            "image": "./assets/animate/carecliq-logo-final.png",
+            "imageWidth": 200
           }
         }
       ],

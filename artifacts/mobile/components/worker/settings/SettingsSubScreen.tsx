@@ -8,6 +8,7 @@ import {
   workerBottomNavHeight,
 } from "@/components/worker/WorkerBottomNav";
 import { WorkerMobileHeader } from "@/components/worker/WorkerMobileHeader";
+import type { GuideId } from "@/lib/guides";
 import { useColors } from "@/hooks/useColors";
 
 type Props = {
@@ -15,6 +16,8 @@ type Props = {
   children: React.ReactNode;
   showBack?: boolean;
   showBottomNav?: boolean;
+  /** Shows a "?" in the header that opens this screen's guide. */
+  guide?: GuideId;
 };
 
 export function SettingsSubScreen({
@@ -22,6 +25,7 @@ export function SettingsSubScreen({
   children,
   showBack = true,
   showBottomNav = true,
+  guide,
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -32,7 +36,7 @@ export function SettingsSubScreen({
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <WorkerMobileHeader title={title} showBack={showBack} />
+      <WorkerMobileHeader title={title} showBack={showBack} guide={guide} />
       <View style={[styles.body, { paddingBottom: bottomInset }]}>
         {children}
       </View>

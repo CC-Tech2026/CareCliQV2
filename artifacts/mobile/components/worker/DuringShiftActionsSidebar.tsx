@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FontFamily } from "@/constants/typography";
 import { usePreferences } from "@/context/PreferencesContext";
+import type { TranslationKey } from "@/lib/i18n/translations";
 import { useColors } from "@/hooks/useColors";
 
 type Props = {
@@ -28,36 +29,28 @@ export function DuringShiftActionsSidebar({
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { reduceMotion } = usePreferences();
+  const { reduceMotion, t } = usePreferences();
   const [expanded, setExpanded] = useState(false);
   const phone = officePhone?.replace(/[^+\d]/g, "");
+  // Report an incident has its own card above these (see below).
   const actions: {
-    label: string;
+    label: TranslationKey;
     icon: React.ComponentProps<typeof Feather>["name"];
     run: () => void;
   }[] = [
     {
-      label: "Message office",
+      label: "shiftActions.message",
       icon: "message-square",
       run: () => router.push(`/shift/${shiftId}/message-office` as never),
     },
     ...(phone
       ? [
           {
-            label: "Call office",
+            label: "shiftActions.call" as const,
             icon: "phone" as const,
             run: () => {
               void Linking.openURL(`tel:${phone}`);
             },
-          },
-        ]
-      : []),
-    ...(onReportIncident
-      ? [
-          {
-            label: "Report incident",
-            icon: "alert-triangle" as const,
-            run: onReportIncident,
           },
         ]
       : []),
@@ -82,7 +75,7 @@ export function DuringShiftActionsSidebar({
         >
           <Feather name="grid" size={18} color={colors.primary} />
           <Text style={[styles.label, { color: colors.primary }]}>
-            Shift actions
+            {t("shiftActions.title")}
           </Text>
           <Feather name="chevron-up" size={18} color={colors.primary} />
         </Pressable>
@@ -114,11 +107,11 @@ export function DuringShiftActionsSidebar({
                 accessibilityRole="header"
                 style={[styles.title, { color: colors.foreground }]}
               >
-                Shift actions
+                {t("shiftActions.title")}
               </Text>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Close shift actions"
+                accessibilityLabel={t("shiftActions.close")}
                 onPress={() => setExpanded(false)}
                 style={styles.close}
               >
@@ -128,6 +121,71 @@ export function DuringShiftActionsSidebar({
             <ScrollView
               contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
             >
+              {onReportIncident ? (
+                <>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setExpanded(false);
+                      onReportIncident();
+                    }}
+                    style={({ pressed }) => [
+                      styles.reportCard,
+                      {
+                        backgroundColor: colors.primary,
+                        opacity: pressed ? 0.9 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={styles.reportIcon}>
+                      <Feather
+                        name="alert-circle"
+                        size={22}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text
+                        style={[
+                          styles.reportTitle,
+                          { color: colors.primaryForeground },
+                        ]}
+                      >
+                        {t("incidents.worker.reportCta")}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.reportHint,
+                          { color: colors.primaryForeground },
+                        ]}
+                      >
+                        {t("incidents.worker.reportCtaHint")}
+                      </Text>
+                    </View>
+                    <Feather
+                      name="chevron-right"
+                      size={20}
+                      color={colors.primaryForeground}
+                    />
+                  </Pressable>
+                  <View
+                    style={[
+                      styles.emergency,
+                      { backgroundColor: colors.dangerBg },
+                    ]}
+                  >
+                    <Feather name="phone" size={15} color={colors.dangerIcon} />
+                    <Text
+                      style={[
+                        styles.emergencyText,
+                        { color: colors.dangerText },
+                      ]}
+                    >
+                      {t("incidents.worker.emergency")}
+                    </Text>
+                  </View>
+                </>
+              ) : null}
               {actions.map((action) => (
                 <Pressable
                   key={action.label}
@@ -141,10 +199,12 @@ export function DuringShiftActionsSidebar({
                   <Feather
                     name={action.icon}
                     size={20}
-                    color={action.icon === "phone" ? colors.success : colors.primary}
+                    color={
+                      action.icon === "phone" ? colors.success : colors.primary
+                    }
                   />
                   <Text style={[styles.label, { color: colors.foreground }]}>
-                    {action.label}
+                    {t(action.label)}
                   </Text>
                   <Feather
                     name="chevron-right"
@@ -155,8 +215,7 @@ export function DuringShiftActionsSidebar({
               ))}
               {!phone ? (
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-                  No office phone recorded. Use Message office to contact your
-                  team.
+                  {t("shiftActions.noPhone")}
                 </Text>
               ) : null}
             </ScrollView>
@@ -218,6 +277,42 @@ const styles = StyleSheet.create({
     minHeight: 56,
     padding: 16,
     borderRadius: 16,
+  },
+  reportCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 18,
+    padding: 16,
+  },
+  reportIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reportTitle: { fontFamily: FontFamily.interSemiBold, fontSize: 17 },
+  reportHint: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    opacity: 0.88,
+  },
+  emergency: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 4,
+  },
+  emergencyText: {
+    flex: 1,
+    fontFamily: FontFamily.interMedium,
+    fontSize: 14,
+    lineHeight: 19,
   },
   hint: {
     fontFamily: FontFamily.body,

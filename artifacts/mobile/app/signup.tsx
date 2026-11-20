@@ -6,20 +6,15 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AuthBrandHeader } from "@/components/auth/AuthBrandHeader";
-import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
+import { AuthShell } from "@/components/auth/AuthShell";
 import { OtpInput } from "@/components/auth/OtpInput";
 import { PasswordStrengthBar } from "@/components/auth/PasswordStrengthBar";
 import { getAuthColors } from "@/constants/auth-colors";
@@ -77,10 +72,10 @@ function AuthLabel({
     <Text
       style={[
         styles.label,
-        { color: auth.plum, fontFamily: FontFamily.interBold },
+        { color: auth.text, fontFamily: FontFamily.interSemiBold },
       ]}
     >
-      {children.toUpperCase()}
+      {children}
       {required ? <Text style={{ color: "#EF4444" }}> *</Text> : null}
     </Text>
   );
@@ -152,7 +147,6 @@ function AuthInput({
 }
 
 export default function SignupScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { updateSession, setActivationInProgress } = useAuth();
   useEffect(
@@ -323,118 +317,617 @@ export default function SignupScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: auth.shellBg }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={[styles.themeToggle, { top: insets.top + 8 }]}>
-        <AuthThemeToggle />
-      </View>
+    <AuthShell>
+      <View style={styles.formPanel}>
+        <View style={styles.card}>
+          {joinStep === 1 ? (
+            <View style={styles.stack}>
+              <View>
+                <Text
+                  style={[
+                    styles.cardTitle,
+                    { color: auth.text, fontFamily: FontFamily.display },
+                  ]}
+                >
+                  {t("auth.signup.join.title")}
+                </Text>
+                <Text
+                  style={[
+                    styles.cardSubtitle,
+                    {
+                      color: auth.muted,
+                      fontFamily: FontFamily.interRegular,
+                    },
+                  ]}
+                >
+                  {t("auth.signup.join.subtitle", { step: joinStep })}
+                </Text>
+              </View>
 
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          paddingTop: insets.top + 36,
-          paddingHorizontal: 16,
-          paddingBottom: insets.bottom + 24,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        <AuthBrandHeader taglineKey="auth.signup.marketing.tagline" />
+              <View style={styles.otpWrap}>
+                <OtpInput
+                  value={inviteCode}
+                  onChange={setInviteCode}
+                  auth={auth}
+                  disabled={busy}
+                  error={Boolean(error)}
+                />
+              </View>
 
-        <View
-          style={[
-            styles.formPanel,
-            {
-              backgroundColor: auth.formBg,
-              borderColor: auth.cardBorder,
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: auth.formBg, borderColor: auth.cardBorder },
-            ]}
-          >
-            {joinStep === 1 ? (
-              <View style={styles.stack}>
-                <View>
+              {invite?.organization_name ? (
+                <View
+                  style={[
+                    styles.orgBanner,
+                    { backgroundColor: `${auth.plum}14` },
+                  ]}
+                >
                   <Text
                     style={[
-                      styles.cardTitle,
-                      { color: auth.plum, fontFamily: FontFamily.interBold },
-                    ]}
-                  >
-                    {t("auth.signup.join.title")}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.cardSubtitle,
+                      styles.orgBannerText,
                       {
-                        color: auth.muted,
-                        fontFamily: FontFamily.interRegular,
+                        color: auth.plum,
+                        fontFamily: FontFamily.interMedium,
                       },
                     ]}
                   >
-                    {t("auth.signup.join.subtitle", { step: joinStep })}
+                    {t("auth.signup.join.joining")}{" "}
+                    <Text style={{ fontFamily: FontFamily.interBold }}>
+                      {invite.organization_name}
+                    </Text>
                   </Text>
                 </View>
+              ) : null}
 
-                <View style={styles.otpWrap}>
-                  <OtpInput
-                    value={inviteCode}
-                    onChange={setInviteCode}
-                    auth={auth}
-                    disabled={busy}
-                    error={Boolean(error)}
-                  />
-                </View>
+              {error ? (
+                <Text
+                  style={[
+                    styles.error,
+                    { color: auth.error, fontFamily: FontFamily.interMedium },
+                  ]}
+                >
+                  {error}
+                </Text>
+              ) : null}
 
-                {invite?.organization_name ? (
-                  <View
-                    style={[
-                      styles.orgBanner,
-                      { backgroundColor: `${auth.plum}14` },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.orgBannerText,
-                        {
-                          color: auth.plum,
-                          fontFamily: FontFamily.interMedium,
-                        },
-                      ]}
-                    >
-                      {t("auth.signup.join.joining")}{" "}
-                      <Text style={{ fontFamily: FontFamily.interBold }}>
-                        {invite.organization_name}
-                      </Text>
-                    </Text>
-                  </View>
-                ) : null}
-
-                {error ? (
+              <Pressable
+                onPress={() => void handleLookupCode()}
+                disabled={inviteCode.length !== 6 || busy}
+                style={[
+                  styles.continueBtn,
+                  {
+                    backgroundColor: auth.plum,
+                    opacity: inviteCode.length !== 6 || busy ? 0.45 : 1,
+                  },
+                ]}
+              >
+                {busy ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
                   <Text
                     style={[
-                      styles.error,
-                      { color: auth.error, fontFamily: FontFamily.interMedium },
+                      styles.primaryBtnText,
+                      { fontFamily: FontFamily.interBold },
                     ]}
                   >
-                    {error}
+                    {t("auth.signup.continue")}
                   </Text>
-                ) : null}
+                )}
+              </Pressable>
 
-                <Pressable
-                  onPress={() => void handleLookupCode()}
-                  disabled={inviteCode.length !== 6 || busy}
+              <Text
+                style={[
+                  styles.askLine,
+                  { color: auth.muted, fontFamily: FontFamily.interMedium },
+                ]}
+              >
+                {t("auth.signup.join.noInvite")}{" "}
+                <Text
+                  onPress={() => setAskOpen(true)}
+                  style={{
+                    color: auth.plum,
+                    fontFamily: FontFamily.interBold,
+                  }}
+                >
+                  {t("auth.signup.join.askCoordinator")}
+                </Text>
+              </Text>
+            </View>
+          ) : null}
+
+          {joinStep === 2 && invite ? (
+            <View style={styles.stack}>
+              <View>
+                <Text
                   style={[
-                    styles.continueBtn,
+                    styles.cardTitle,
+                    { color: auth.text, fontFamily: FontFamily.display },
+                  ]}
+                >
+                  {t("auth.signup.join.createTitle")}
+                </Text>
+                <Text
+                  style={[
+                    styles.cardSubtitle,
+                    {
+                      color: auth.muted,
+                      fontFamily: FontFamily.interRegular,
+                    },
+                  ]}
+                >
+                  {t("auth.signup.join.createSubtitle", { step: joinStep })}
+                </Text>
+              </View>
+
+              <View style={styles.field}>
+                <AuthLabel auth={auth} required>
+                  {t("auth.signup.email")}
+                </AuthLabel>
+                <AuthInput
+                  value={invite.email}
+                  onChangeText={() => undefined}
+                  auth={auth}
+                  editable={false}
+                />
+                <Text
+                  style={{
+                    color: auth.muted,
+                    fontFamily: FontFamily.interRegular,
+                    fontSize: 12,
+                  }}
+                >
+                  {t("auth.signup.org.lockedFromInvite")}
+                </Text>
+              </View>
+
+              <View style={styles.field}>
+                <AuthLabel auth={auth} required>
+                  {t("auth.signup.fullName")}
+                </AuthLabel>
+                <AuthInput
+                  value={fullName}
+                  onChangeText={setFullName}
+                  placeholder={t("auth.signup.namePlaceholder")}
+                  auth={auth}
+                  autoCapitalize="words"
+                />
+              </View>
+
+              <View style={styles.field}>
+                <AuthLabel auth={auth} required>
+                  {t("auth.signup.password")}
+                </AuthLabel>
+                <AuthInput
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder={t("auth.signup.passwordPlaceholder")}
+                  auth={auth}
+                  secureTextEntry={!showPassword}
+                  showToggle
+                  showPassword={showPassword}
+                  onTogglePassword={() => setShowPassword((v) => !v)}
+                  error={short}
+                />
+                <PasswordStrengthBar password={password} auth={auth} />
+              </View>
+
+              <View style={styles.field}>
+                <View style={styles.confirmHeader}>
+                  <AuthLabel auth={auth} required>
+                    {t("auth.signup.confirmPassword")}
+                  </AuthLabel>
+                  {confirmPassword ? (
+                    <Text
+                      style={{
+                        color: mismatch ? auth.error : auth.valid,
+                        fontFamily: FontFamily.interBold,
+                        fontSize: 11,
+                      }}
+                    >
+                      {mismatch
+                        ? t("auth.signup.passwordMismatch")
+                        : t("auth.signup.passwordMatch")}
+                    </Text>
+                  ) : null}
+                </View>
+                <AuthInput
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder={t("auth.signup.confirmPlaceholder")}
+                  auth={auth}
+                  secureTextEntry={!showPassword}
+                  error={mismatch}
+                />
+              </View>
+
+              {error ? (
+                <Text
+                  style={[
+                    styles.error,
+                    { color: auth.error, fontFamily: FontFamily.interMedium },
+                  ]}
+                >
+                  {error}
+                </Text>
+              ) : null}
+
+              <View style={styles.actions}>
+                <Pressable
+                  onPress={() => {
+                    setJoinStep(1);
+                    setError(null);
+                  }}
+                  style={[
+                    styles.secondaryBtn,
+                    { borderColor: auth.inputBorder },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.secondaryBtnText,
+                      { color: auth.plum, fontFamily: FontFamily.interBold },
+                    ]}
+                  >
+                    {t("auth.signup.back")}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    if (!yourDetailsValid) return;
+                    setError(null);
+                    setJoinStep(3);
+                  }}
+                  disabled={!yourDetailsValid}
+                  style={[
+                    styles.primaryBtn,
                     {
                       backgroundColor: auth.plum,
-                      opacity: inviteCode.length !== 6 || busy ? 0.45 : 1,
+                      opacity: !yourDetailsValid ? 0.4 : 1,
                     },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.primaryBtnText,
+                      { fontFamily: FontFamily.interBold },
+                    ]}
+                  >
+                    {t("auth.signup.continue")}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
+          {joinStep === 3 && invite ? (
+            <View style={styles.stack}>
+              <View>
+                <Text
+                  style={[
+                    styles.cardTitle,
+                    { color: auth.text, fontFamily: FontFamily.display },
+                  ]}
+                >
+                  {t("auth.signup.join.profileTitle")}
+                </Text>
+                <Text
+                  style={[
+                    styles.cardSubtitle,
+                    {
+                      color: auth.muted,
+                      fontFamily: FontFamily.interRegular,
+                    },
+                  ]}
+                >
+                  {t("auth.signup.join.profileSubtitle", { step: joinStep })}
+                </Text>
+              </View>
+
+              <View style={styles.field}>
+                <AuthLabel auth={auth}>
+                  {t("auth.signup.join.profilePhoto")}
+                </AuthLabel>
+                <View style={styles.photoRow}>
+                  <View
+                    style={[
+                      styles.photoAvatar,
+                      {
+                        backgroundColor: `${auth.plum}18`,
+                        borderColor: auth.inputBorder,
+                      },
+                    ]}
+                  >
+                    {profilePhotoUri ? (
+                      <Image
+                        source={{ uri: profilePhotoUri }}
+                        style={styles.photoAvatarImg}
+                      />
+                    ) : (
+                      <Feather name="user" size={28} color={auth.plum} />
+                    )}
+                  </View>
+                  <View style={styles.photoActions}>
+                    <Pressable
+                      onPress={() => void pickProfilePhoto(true)}
+                      style={[
+                        styles.photoBtn,
+                        { borderColor: auth.inputBorder },
+                      ]}
+                    >
+                      <Feather name="camera" size={14} color={auth.plum} />
+                      <Text
+                        style={[
+                          styles.photoBtnText,
+                          {
+                            color: auth.plum,
+                            fontFamily: FontFamily.interBold,
+                          },
+                        ]}
+                      >
+                        {t("auth.signup.join.photoCamera")}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void pickProfilePhoto(false)}
+                      style={[
+                        styles.photoBtn,
+                        { borderColor: auth.inputBorder },
+                      ]}
+                    >
+                      <Feather name="image" size={14} color={auth.plum} />
+                      <Text
+                        style={[
+                          styles.photoBtnText,
+                          {
+                            color: auth.plum,
+                            fontFamily: FontFamily.interBold,
+                          },
+                        ]}
+                      >
+                        {t("auth.signup.join.photoUpload")}
+                      </Text>
+                    </Pressable>
+                    {profilePhotoUri ? (
+                      <Pressable onPress={() => setProfilePhotoUri(null)}>
+                        <Text
+                          style={{
+                            color: auth.muted,
+                            fontFamily: FontFamily.interMedium,
+                            fontSize: 12,
+                          }}
+                        >
+                          {t("auth.signup.join.photoRemove")}
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <Text
+                        style={{
+                          color: auth.muted,
+                          fontFamily: FontFamily.interRegular,
+                          fontSize: 12,
+                        }}
+                      >
+                        {t("auth.signup.join.photoOptional")}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.field}>
+                <AuthLabel auth={auth}>
+                  {t("auth.signup.field.contactNumber")}
+                </AuthLabel>
+                <AuthInput
+                  value={contactNumber}
+                  onChangeText={setContactNumber}
+                  placeholder={t("auth.signup.placeholder.contact")}
+                  auth={auth}
+                  keyboardType="phone-pad"
+                />
+                <Text
+                  style={{
+                    color: auth.muted,
+                    fontFamily: FontFamily.interRegular,
+                    fontSize: 12,
+                  }}
+                >
+                  {t("auth.signup.join.optionalHint")}
+                </Text>
+              </View>
+
+              <View style={styles.field}>
+                <AuthLabel auth={auth} required>
+                  {t("auth.signup.field.address")}
+                </AuthLabel>
+                <AuthInput
+                  value={address}
+                  onChangeText={setAddress}
+                  placeholder={t("auth.signup.placeholder.address")}
+                  auth={auth}
+                />
+              </View>
+
+              {error ? (
+                <Text
+                  style={[
+                    styles.error,
+                    { color: auth.error, fontFamily: FontFamily.interMedium },
+                  ]}
+                >
+                  {error}
+                </Text>
+              ) : null}
+
+              <View style={styles.actions}>
+                <Pressable
+                  onPress={() => {
+                    setJoinStep(2);
+                    setError(null);
+                  }}
+                  style={[
+                    styles.secondaryBtn,
+                    { borderColor: auth.inputBorder },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.secondaryBtnText,
+                      { color: auth.plum, fontFamily: FontFamily.interBold },
+                    ]}
+                  >
+                    {t("auth.signup.back")}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    if (!profileValid) return;
+                    setError(null);
+                    setJoinStep(4);
+                  }}
+                  disabled={!profileValid}
+                  style={[
+                    styles.primaryBtn,
+                    {
+                      backgroundColor: auth.plum,
+                      opacity: !profileValid ? 0.4 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.primaryBtnText,
+                      { fontFamily: FontFamily.interBold },
+                    ]}
+                  >
+                    {t("auth.signup.continue")}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
+          {joinStep === 4 && invite ? (
+            <View style={styles.stack}>
+              <View>
+                <Text
+                  style={[
+                    styles.cardTitle,
+                    { color: auth.text, fontFamily: FontFamily.display },
+                  ]}
+                >
+                  {t("auth.signup.join.reviewTitle")}
+                </Text>
+                <Text
+                  style={[
+                    styles.cardSubtitle,
+                    {
+                      color: auth.muted,
+                      fontFamily: FontFamily.interRegular,
+                    },
+                  ]}
+                >
+                  {t("auth.signup.join.reviewSubtitle", { step: joinStep })}
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.reviewCard,
+                  {
+                    backgroundColor: `${auth.plum}10`,
+                    borderColor: auth.cardBorder,
+                  },
+                ]}
+              >
+                <View style={styles.reviewPhotoWrap}>
+                  <View
+                    style={[
+                      styles.photoAvatar,
+                      {
+                        backgroundColor: `${auth.plum}18`,
+                        borderColor: auth.inputBorder,
+                      },
+                    ]}
+                  >
+                    {profilePhotoUri ? (
+                      <Image
+                        source={{ uri: profilePhotoUri }}
+                        style={styles.photoAvatarImg}
+                      />
+                    ) : (
+                      <Feather name="user" size={28} color={auth.plum} />
+                    )}
+                  </View>
+                </View>
+                <ReviewRow
+                  label={t("auth.signup.join.reviewOrg")}
+                  value={
+                    invite.organization_name ||
+                    t("auth.signup.join.yourOrganisation")
+                  }
+                  auth={auth}
+                />
+                <ReviewRow
+                  label={t("auth.signup.fullName")}
+                  value={fullName.trim()}
+                  auth={auth}
+                />
+                <ReviewRow
+                  label={t("auth.signup.email")}
+                  value={invite.email}
+                  auth={auth}
+                />
+                <ReviewRow
+                  label={t("auth.signup.field.contactNumber")}
+                  value={
+                    contactNumber.trim() || t("auth.signup.join.notProvided")
+                  }
+                  auth={auth}
+                />
+                <ReviewRow
+                  label={t("auth.signup.field.address")}
+                  value={address.trim()}
+                  auth={auth}
+                />
+              </View>
+
+              {error ? (
+                <Text
+                  style={[
+                    styles.error,
+                    { color: auth.error, fontFamily: FontFamily.interMedium },
+                  ]}
+                >
+                  {error}
+                </Text>
+              ) : null}
+
+              <View style={styles.actions}>
+                <Pressable
+                  onPress={() => {
+                    setJoinStep(3);
+                    setError(null);
+                  }}
+                  style={[
+                    styles.secondaryBtn,
+                    { borderColor: auth.inputBorder },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.secondaryBtnText,
+                      { color: auth.plum, fontFamily: FontFamily.interBold },
+                    ]}
+                  >
+                    {t("auth.signup.back")}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleCompleteSetup()}
+                  disabled={busy}
+                  style={[
+                    styles.primaryBtn,
+                    { backgroundColor: auth.plum, opacity: busy ? 0.4 : 1 },
                   ]}
                 >
                   {busy ? (
@@ -446,648 +939,111 @@ export default function SignupScreen() {
                         { fontFamily: FontFamily.interBold },
                       ]}
                     >
-                      {t("auth.signup.continue")}
+                      {t("auth.signup.completeSetup")}
                     </Text>
                   )}
                 </Pressable>
+              </View>
+            </View>
+          ) : null}
 
+          {joinStep === 5 ? (
+            <View style={styles.successWrap}>
+              <Feather name="check-circle" size={70} color={auth.valid} />
+              <Text
+                style={[
+                  styles.successTitle,
+                  { color: auth.text, fontFamily: FontFamily.display },
+                ]}
+              >
+                {t("auth.signup.join.welcomeTitle")}
+              </Text>
+              <Text
+                style={[
+                  styles.successBody,
+                  { color: auth.muted, fontFamily: FontFamily.interRegular },
+                ]}
+              >
+                {t("auth.signup.join.welcomeBody", {
+                  org:
+                    invite?.organization_name ||
+                    t("auth.signup.join.yourOrganisation"),
+                })}
+              </Text>
+              {profileSaveWarning ? (
+                <View style={[styles.saveWarning, { borderColor: auth.plum }]}>
+                  <Feather name="alert-triangle" size={14} color={auth.plum} />
+                  <Text
+                    style={[
+                      styles.saveWarningText,
+                      {
+                        color: auth.text,
+                        fontFamily: FontFamily.interMedium,
+                      },
+                    ]}
+                  >
+                    {profileSaveWarning}
+                  </Text>
+                </View>
+              ) : null}
+              <Pressable
+                onPress={() =>
+                  router.replace("/worker/credentials/add" as never)
+                }
+                style={[
+                  styles.primaryBtn,
+                  styles.successBtn,
+                  { backgroundColor: auth.plum },
+                ]}
+              >
                 <Text
                   style={[
-                    styles.askLine,
-                    { color: auth.muted, fontFamily: FontFamily.interMedium },
+                    styles.primaryBtnText,
+                    { fontFamily: FontFamily.interBold },
                   ]}
                 >
-                  {t("auth.signup.join.noInvite")}{" "}
-                  <Text
-                    onPress={() => setAskOpen(true)}
-                    style={{
-                      color: auth.plum,
-                      fontFamily: FontFamily.interBold,
-                    }}
-                  >
-                    {t("auth.signup.join.askCoordinator")}
-                  </Text>
+                  {t("auth.signup.join.uploadCredentials")}
                 </Text>
-              </View>
-            ) : null}
-
-            {joinStep === 2 && invite ? (
-              <View style={styles.stack}>
-                <View>
-                  <Text
-                    style={[
-                      styles.cardTitle,
-                      { color: auth.plum, fontFamily: FontFamily.interBold },
-                    ]}
-                  >
-                    {t("auth.signup.join.createTitle")}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.cardSubtitle,
-                      {
-                        color: auth.muted,
-                        fontFamily: FontFamily.interRegular,
-                      },
-                    ]}
-                  >
-                    {t("auth.signup.join.createSubtitle", { step: joinStep })}
-                  </Text>
-                </View>
-
-                <View style={styles.field}>
-                  <AuthLabel auth={auth} required>
-                    {t("auth.signup.email")}
-                  </AuthLabel>
-                  <AuthInput
-                    value={invite.email}
-                    onChangeText={() => undefined}
-                    auth={auth}
-                    editable={false}
-                  />
-                  <Text
-                    style={{
-                      color: auth.muted,
-                      fontFamily: FontFamily.interRegular,
-                      fontSize: 12,
-                    }}
-                  >
-                    {t("auth.signup.org.lockedFromInvite")}
-                  </Text>
-                </View>
-
-                <View style={styles.field}>
-                  <AuthLabel auth={auth} required>
-                    {t("auth.signup.fullName")}
-                  </AuthLabel>
-                  <AuthInput
-                    value={fullName}
-                    onChangeText={setFullName}
-                    placeholder={t("auth.signup.namePlaceholder")}
-                    auth={auth}
-                    autoCapitalize="words"
-                  />
-                </View>
-
-                <View style={styles.field}>
-                  <AuthLabel auth={auth} required>
-                    {t("auth.signup.password")}
-                  </AuthLabel>
-                  <AuthInput
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder={t("auth.signup.passwordPlaceholder")}
-                    auth={auth}
-                    secureTextEntry={!showPassword}
-                    showToggle
-                    showPassword={showPassword}
-                    onTogglePassword={() => setShowPassword((v) => !v)}
-                    error={short}
-                  />
-                  <PasswordStrengthBar password={password} auth={auth} />
-                </View>
-
-                <View style={styles.field}>
-                  <View style={styles.confirmHeader}>
-                    <AuthLabel auth={auth} required>
-                      {t("auth.signup.confirmPassword")}
-                    </AuthLabel>
-                    {confirmPassword ? (
-                      <Text
-                        style={{
-                          color: mismatch ? auth.error : auth.valid,
-                          fontFamily: FontFamily.interBold,
-                          fontSize: 11,
-                        }}
-                      >
-                        {mismatch
-                          ? t("auth.signup.passwordMismatch")
-                          : t("auth.signup.passwordMatch")}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <AuthInput
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    placeholder={t("auth.signup.confirmPlaceholder")}
-                    auth={auth}
-                    secureTextEntry={!showPassword}
-                    error={mismatch}
-                  />
-                </View>
-
-                {error ? (
-                  <Text
-                    style={[
-                      styles.error,
-                      { color: auth.error, fontFamily: FontFamily.interMedium },
-                    ]}
-                  >
-                    {error}
-                  </Text>
-                ) : null}
-
-                <View style={styles.actions}>
-                  <Pressable
-                    onPress={() => {
-                      setJoinStep(1);
-                      setError(null);
-                    }}
-                    style={[
-                      styles.secondaryBtn,
-                      { borderColor: auth.inputBorder },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.secondaryBtnText,
-                        { color: auth.plum, fontFamily: FontFamily.interBold },
-                      ]}
-                    >
-                      {t("auth.signup.back")}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      if (!yourDetailsValid) return;
-                      setError(null);
-                      setJoinStep(3);
-                    }}
-                    disabled={!yourDetailsValid}
-                    style={[
-                      styles.primaryBtn,
-                      {
-                        backgroundColor: auth.plum,
-                        opacity: !yourDetailsValid ? 0.4 : 1,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.primaryBtnText,
-                        { fontFamily: FontFamily.interBold },
-                      ]}
-                    >
-                      {t("auth.signup.continue")}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            ) : null}
-
-            {joinStep === 3 && invite ? (
-              <View style={styles.stack}>
-                <View>
-                  <Text
-                    style={[
-                      styles.cardTitle,
-                      { color: auth.plum, fontFamily: FontFamily.interBold },
-                    ]}
-                  >
-                    {t("auth.signup.join.profileTitle")}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.cardSubtitle,
-                      {
-                        color: auth.muted,
-                        fontFamily: FontFamily.interRegular,
-                      },
-                    ]}
-                  >
-                    {t("auth.signup.join.profileSubtitle", { step: joinStep })}
-                  </Text>
-                </View>
-
-                <View style={styles.field}>
-                  <AuthLabel auth={auth}>
-                    {t("auth.signup.join.profilePhoto")}
-                  </AuthLabel>
-                  <View style={styles.photoRow}>
-                    <View
-                      style={[
-                        styles.photoAvatar,
-                        {
-                          backgroundColor: `${auth.plum}18`,
-                          borderColor: auth.inputBorder,
-                        },
-                      ]}
-                    >
-                      {profilePhotoUri ? (
-                        <Image
-                          source={{ uri: profilePhotoUri }}
-                          style={styles.photoAvatarImg}
-                        />
-                      ) : (
-                        <Feather name="user" size={28} color={auth.plum} />
-                      )}
-                    </View>
-                    <View style={styles.photoActions}>
-                      <Pressable
-                        onPress={() => void pickProfilePhoto(true)}
-                        style={[
-                          styles.photoBtn,
-                          { borderColor: auth.inputBorder },
-                        ]}
-                      >
-                        <Feather name="camera" size={14} color={auth.plum} />
-                        <Text
-                          style={[
-                            styles.photoBtnText,
-                            {
-                              color: auth.plum,
-                              fontFamily: FontFamily.interBold,
-                            },
-                          ]}
-                        >
-                          {t("auth.signup.join.photoCamera")}
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => void pickProfilePhoto(false)}
-                        style={[
-                          styles.photoBtn,
-                          { borderColor: auth.inputBorder },
-                        ]}
-                      >
-                        <Feather name="image" size={14} color={auth.plum} />
-                        <Text
-                          style={[
-                            styles.photoBtnText,
-                            {
-                              color: auth.plum,
-                              fontFamily: FontFamily.interBold,
-                            },
-                          ]}
-                        >
-                          {t("auth.signup.join.photoUpload")}
-                        </Text>
-                      </Pressable>
-                      {profilePhotoUri ? (
-                        <Pressable onPress={() => setProfilePhotoUri(null)}>
-                          <Text
-                            style={{
-                              color: auth.muted,
-                              fontFamily: FontFamily.interMedium,
-                              fontSize: 12,
-                            }}
-                          >
-                            {t("auth.signup.join.photoRemove")}
-                          </Text>
-                        </Pressable>
-                      ) : (
-                        <Text
-                          style={{
-                            color: auth.muted,
-                            fontFamily: FontFamily.interRegular,
-                            fontSize: 12,
-                          }}
-                        >
-                          {t("auth.signup.join.photoOptional")}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.field}>
-                  <AuthLabel auth={auth}>
-                    {t("auth.signup.field.contactNumber")}
-                  </AuthLabel>
-                  <AuthInput
-                    value={contactNumber}
-                    onChangeText={setContactNumber}
-                    placeholder={t("auth.signup.placeholder.contact")}
-                    auth={auth}
-                    keyboardType="phone-pad"
-                  />
-                  <Text
-                    style={{
-                      color: auth.muted,
-                      fontFamily: FontFamily.interRegular,
-                      fontSize: 12,
-                    }}
-                  >
-                    {t("auth.signup.join.optionalHint")}
-                  </Text>
-                </View>
-
-                <View style={styles.field}>
-                  <AuthLabel auth={auth} required>
-                    {t("auth.signup.field.address")}
-                  </AuthLabel>
-                  <AuthInput
-                    value={address}
-                    onChangeText={setAddress}
-                    placeholder={t("auth.signup.placeholder.address")}
-                    auth={auth}
-                  />
-                </View>
-
-                {error ? (
-                  <Text
-                    style={[
-                      styles.error,
-                      { color: auth.error, fontFamily: FontFamily.interMedium },
-                    ]}
-                  >
-                    {error}
-                  </Text>
-                ) : null}
-
-                <View style={styles.actions}>
-                  <Pressable
-                    onPress={() => {
-                      setJoinStep(2);
-                      setError(null);
-                    }}
-                    style={[
-                      styles.secondaryBtn,
-                      { borderColor: auth.inputBorder },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.secondaryBtnText,
-                        { color: auth.plum, fontFamily: FontFamily.interBold },
-                      ]}
-                    >
-                      {t("auth.signup.back")}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      if (!profileValid) return;
-                      setError(null);
-                      setJoinStep(4);
-                    }}
-                    disabled={!profileValid}
-                    style={[
-                      styles.primaryBtn,
-                      {
-                        backgroundColor: auth.plum,
-                        opacity: !profileValid ? 0.4 : 1,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.primaryBtnText,
-                        { fontFamily: FontFamily.interBold },
-                      ]}
-                    >
-                      {t("auth.signup.continue")}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            ) : null}
-
-            {joinStep === 4 && invite ? (
-              <View style={styles.stack}>
-                <View>
-                  <Text
-                    style={[
-                      styles.cardTitle,
-                      { color: auth.plum, fontFamily: FontFamily.interBold },
-                    ]}
-                  >
-                    {t("auth.signup.join.reviewTitle")}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.cardSubtitle,
-                      {
-                        color: auth.muted,
-                        fontFamily: FontFamily.interRegular,
-                      },
-                    ]}
-                  >
-                    {t("auth.signup.join.reviewSubtitle", { step: joinStep })}
-                  </Text>
-                </View>
-
-                <View
+              </Pressable>
+              <Pressable
+                onPress={() => router.replace("/(tabs)" as never)}
+                style={styles.successSkip}
+              >
+                <Text
                   style={[
-                    styles.reviewCard,
+                    styles.successSkipText,
                     {
-                      backgroundColor: `${auth.plum}10`,
-                      borderColor: auth.cardBorder,
+                      color: auth.muted,
+                      fontFamily: FontFamily.interSemiBold,
                     },
                   ]}
                 >
-                  <View style={styles.reviewPhotoWrap}>
-                    <View
-                      style={[
-                        styles.photoAvatar,
-                        {
-                          backgroundColor: `${auth.plum}18`,
-                          borderColor: auth.inputBorder,
-                        },
-                      ]}
-                    >
-                      {profilePhotoUri ? (
-                        <Image
-                          source={{ uri: profilePhotoUri }}
-                          style={styles.photoAvatarImg}
-                        />
-                      ) : (
-                        <Feather name="user" size={28} color={auth.plum} />
-                      )}
-                    </View>
-                  </View>
-                  <ReviewRow
-                    label={t("auth.signup.join.reviewOrg")}
-                    value={
-                      invite.organization_name ||
-                      t("auth.signup.join.yourOrganisation")
-                    }
-                    auth={auth}
-                  />
-                  <ReviewRow
-                    label={t("auth.signup.fullName")}
-                    value={fullName.trim()}
-                    auth={auth}
-                  />
-                  <ReviewRow
-                    label={t("auth.signup.email")}
-                    value={invite.email}
-                    auth={auth}
-                  />
-                  <ReviewRow
-                    label={t("auth.signup.field.contactNumber")}
-                    value={
-                      contactNumber.trim() || t("auth.signup.join.notProvided")
-                    }
-                    auth={auth}
-                  />
-                  <ReviewRow
-                    label={t("auth.signup.field.address")}
-                    value={address.trim()}
-                    auth={auth}
-                  />
-                </View>
-
-                {error ? (
-                  <Text
-                    style={[
-                      styles.error,
-                      { color: auth.error, fontFamily: FontFamily.interMedium },
-                    ]}
-                  >
-                    {error}
-                  </Text>
-                ) : null}
-
-                <View style={styles.actions}>
-                  <Pressable
-                    onPress={() => {
-                      setJoinStep(3);
-                      setError(null);
-                    }}
-                    style={[
-                      styles.secondaryBtn,
-                      { borderColor: auth.inputBorder },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.secondaryBtnText,
-                        { color: auth.plum, fontFamily: FontFamily.interBold },
-                      ]}
-                    >
-                      {t("auth.signup.back")}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => void handleCompleteSetup()}
-                    disabled={busy}
-                    style={[
-                      styles.primaryBtn,
-                      { backgroundColor: auth.plum, opacity: busy ? 0.4 : 1 },
-                    ]}
-                  >
-                    {busy ? (
-                      <ActivityIndicator color="#FFFFFF" />
-                    ) : (
-                      <Text
-                        style={[
-                          styles.primaryBtnText,
-                          { fontFamily: FontFamily.interBold },
-                        ]}
-                      >
-                        {t("auth.signup.completeSetup")}
-                      </Text>
-                    )}
-                  </Pressable>
-                </View>
-              </View>
-            ) : null}
-
-            {joinStep === 5 ? (
-              <View style={styles.successWrap}>
-                <Feather name="check-circle" size={70} color={auth.valid} />
-                <Text
-                  style={[
-                    styles.successTitle,
-                    { color: auth.plum, fontFamily: FontFamily.interBold },
-                  ]}
-                >
-                  {t("auth.signup.join.welcomeTitle")}
+                  {t("auth.signup.goToDashboard")}
                 </Text>
-                <Text
-                  style={[
-                    styles.successBody,
-                    { color: auth.muted, fontFamily: FontFamily.interRegular },
-                  ]}
-                >
-                  {t("auth.signup.join.welcomeBody", {
-                    org:
-                      invite?.organization_name ||
-                      t("auth.signup.join.yourOrganisation"),
-                  })}
-                </Text>
-                {profileSaveWarning ? (
-                  <View
-                    style={[styles.saveWarning, { borderColor: auth.plum }]}
-                  >
-                    <Feather
-                      name="alert-triangle"
-                      size={14}
-                      color={auth.plum}
-                    />
-                    <Text
-                      style={[
-                        styles.saveWarningText,
-                        {
-                          color: auth.text,
-                          fontFamily: FontFamily.interMedium,
-                        },
-                      ]}
-                    >
-                      {profileSaveWarning}
-                    </Text>
-                  </View>
-                ) : null}
-                <Pressable
-                  onPress={() =>
-                    router.replace("/worker/credentials/add" as never)
-                  }
-                  style={[
-                    styles.primaryBtn,
-                    styles.successBtn,
-                    { backgroundColor: auth.plum },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.primaryBtnText,
-                      { fontFamily: FontFamily.interBold },
-                    ]}
-                  >
-                    {t("auth.signup.join.uploadCredentials")}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => router.replace("/(tabs)" as never)}
-                  style={styles.successSkip}
-                >
-                  <Text
-                    style={[
-                      styles.successSkipText,
-                      {
-                        color: auth.muted,
-                        fontFamily: FontFamily.interSemiBold,
-                      },
-                    ]}
-                  >
-                    {t("auth.signup.goToDashboard")}
-                  </Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-
-          {joinStep < 5 ? (
-            <View style={styles.footerLinks}>
-              <Text
-                style={[
-                  styles.signInLine,
-                  { color: auth.muted, fontFamily: FontFamily.interMedium },
-                ]}
-              >
-                {t("auth.signup.hasAccount")}{" "}
-                <Text
-                  onPress={() => router.replace("/login" as never)}
-                  style={{ color: auth.plum, fontFamily: FontFamily.interBold }}
-                >
-                  {t("auth.signup.signIn")}
-                </Text>
-              </Text>
+              </Pressable>
             </View>
           ) : null}
         </View>
-      </ScrollView>
+
+        {joinStep < 5 ? (
+          <View style={styles.footerLinks}>
+            <Text
+              style={[
+                styles.signInLine,
+                { color: auth.muted, fontFamily: FontFamily.interMedium },
+              ]}
+            >
+              {t("auth.signup.hasAccount")}{" "}
+              <Text
+                onPress={() => router.replace("/login" as never)}
+                style={{ color: auth.plum, fontFamily: FontFamily.interBold }}
+              >
+                {t("auth.signup.signIn")}
+              </Text>
+            </Text>
+          </View>
+        ) : null}
+      </View>
 
       <Modal
         visible={askOpen}
@@ -1109,7 +1065,7 @@ export default function SignupScreen() {
             <Text
               style={[
                 styles.cardTitle,
-                { color: auth.plum, fontFamily: FontFamily.interBold },
+                { color: auth.text, fontFamily: FontFamily.display },
               ]}
             >
               {t("auth.signup.join.askTitle")}
@@ -1189,25 +1145,13 @@ export default function SignupScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </KeyboardAvoidingView>
+    </AuthShell>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  themeToggle: { position: "absolute", right: 16, zIndex: 20 },
-  formPanel: {
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    width: "100%",
-    maxWidth: 520,
-    alignSelf: "center",
-    marginBottom: 16,
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 16,
-    overflow: "hidden",
-  },
+  formPanel: { width: "100%" },
   dragHandleWrap: { alignItems: "center", paddingTop: 12, paddingBottom: 8 },
   dragHandle: { width: 40, height: 4, borderRadius: 2 },
   stepBar: {
@@ -1221,27 +1165,35 @@ const styles = StyleSheet.create({
   },
   stepItem: { flex: 1, gap: 6 },
   stepTrack: { height: 4, borderRadius: 999 },
-  stepLabel: { fontSize: 9, textAlign: "center" },
-  card: {
-    paddingBottom: 20,
-    overflow: "hidden",
-  },
+  stepLabel: { fontSize: 11, textAlign: "center" },
+  card: { paddingBottom: 4 },
   stack: { gap: 16, width: "100%" },
-  cardTitle: { fontSize: 24, lineHeight: 31 },
-  cardSubtitle: { fontSize: 14, marginTop: 4, lineHeight: 20 },
-  joinStepHint: { fontSize: 13, marginBottom: 10 },
+  cardTitle: {
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.4,
+    textAlign: "center",
+  },
+  cardSubtitle: {
+    fontSize: 15,
+    marginTop: 8,
+    lineHeight: 22,
+    textAlign: "center",
+  },
+  joinStepHint: { fontSize: 14, marginBottom: 10 },
   otpWrap: { width: "100%", alignSelf: "stretch" },
   field: { gap: 6 },
-  label: { fontSize: 11, letterSpacing: 0.8 },
+  label: { fontSize: 14 },
   inputRow: {
-    minHeight: 44,
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    minHeight: 54,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingLeft: 16,
+    paddingRight: 4,
     flexDirection: "row",
     alignItems: "center",
   },
-  input: { flex: 1, fontSize: 14, paddingVertical: 10 },
+  input: { flex: 1, fontSize: 16, paddingVertical: 14 },
   eyeBtn: {
     minWidth: 44,
     minHeight: 44,
@@ -1256,37 +1208,37 @@ const styles = StyleSheet.create({
   },
   actions: { flexDirection: "row", gap: 12, marginTop: 8 },
   secondaryBtn: {
-    height: 48,
-    paddingHorizontal: 18,
-    borderRadius: 12,
+    height: 54,
+    paddingHorizontal: 20,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  secondaryBtnText: { fontSize: 14 },
+  secondaryBtnText: { fontSize: 15 },
   primaryBtn: {
     flex: 1,
-    height: 48,
-    borderRadius: 12,
+    height: 54,
+    borderRadius: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
   continueBtn: {
-    height: 48,
-    borderRadius: 12,
+    height: 54,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "stretch",
     width: "100%",
   },
   fullBtn: { flex: 0, alignSelf: "stretch", width: "100%" },
-  primaryBtnText: { color: "#FFFFFF", fontSize: 15 },
-  error: { fontSize: 12 },
+  primaryBtnText: { color: "#FFFFFF", fontSize: 16 },
+  error: { fontSize: 13 },
   successWrap: { alignItems: "center", gap: 12, paddingVertical: 12 },
-  successTitle: { fontSize: 24, textAlign: "center", marginTop: 8 },
-  successBody: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  successTitle: { fontSize: 26, textAlign: "center", marginTop: 8 },
+  successBody: { fontSize: 15, textAlign: "center", lineHeight: 22 },
   successBtn: { width: "100%", marginTop: 12 },
   successSkip: { paddingVertical: 10 },
   successSkipText: { fontSize: 13, textAlign: "center" },
@@ -1295,12 +1247,12 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 8,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 12,
   },
-  saveWarningText: { flex: 1, fontSize: 12, lineHeight: 17 },
-  signInLine: { textAlign: "center", fontSize: 13 },
-  askLine: { textAlign: "center", fontSize: 13 },
+  saveWarningText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  signInLine: { textAlign: "center", fontSize: 14, lineHeight: 20 },
+  askLine: { textAlign: "center", fontSize: 14, lineHeight: 20 },
   askSteps: { gap: 12, marginTop: 4 },
   askStepRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   askStepNum: {
@@ -1328,12 +1280,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    height: 36,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 12,
     borderWidth: 1,
   },
-  photoBtnText: { fontSize: 13 },
+  photoBtnText: { fontSize: 14 },
   reviewCard: {
     borderWidth: 1,
     borderRadius: 16,
@@ -1342,23 +1294,19 @@ const styles = StyleSheet.create({
   },
   reviewPhotoWrap: { alignItems: "center", marginBottom: 4 },
   reviewRow: { gap: 2 },
-  reviewLabel: { fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 },
-  reviewValue: { fontSize: 14 },
+  reviewLabel: { fontSize: 13 },
+  reviewValue: { fontSize: 15 },
   askGotItBtn: {
     alignSelf: "stretch",
     width: "100%",
-    height: 48,
-    borderRadius: 12,
+    height: 54,
+    borderRadius: 14,
     borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
   },
-  askGotItBtnText: { fontSize: 15 },
-  orgBanner: {
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
+  askGotItBtnText: { fontSize: 16 },
+  orgBanner: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
   orgBannerText: { fontSize: 14, textAlign: "center" },
   footerLinks: { gap: 10, marginTop: 16 },
   modalBackdrop: {

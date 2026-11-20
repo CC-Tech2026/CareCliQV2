@@ -8,7 +8,7 @@ import {
 } from "expo-audio";
 import * as Haptics from "@/lib/haptics";
 import * as ImagePicker from "expo-image-picker";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +27,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useOffline } from "@/context/OfflineContext";
 import { usePreferences } from "@/context/PreferencesContext";
+import { AllergyStrip, SafetyFlagCards } from "@/components/worker/SafetyFlags";
+import { findSafetyFlags, participantAllergies } from "@/lib/safety-flags";
+import type { ShiftHealthAlert } from "@/lib/worker-api";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
 import {
@@ -43,8 +46,14 @@ import {
   toEnglishRecord,
   type RecordTranslation,
 } from "@/lib/note-languages";
+
+/** Codes a voice note's detected language can switch the composer to. */
+const NOTE_LANGUAGE_CODES = new Set(
+  NOTE_LANGUAGES.map((l) => l.value).filter((v) => v !== "auto"),
+);
 import type { SessionNoteRecord, SessionNoteType } from "@/lib/worker-api";
 import {
+  checkNoteDraft,
   improveNote,
   syncSessionNotes,
   translateForWorkerPreview,
@@ -60,6 +69,7 @@ import {
   checkDraftNoteHints,
   nextNotePrompt,
   type DraftNoteHint,
+  type NoteRuleCode,
   type NotePromptId,
 } from "@workspace/worker-compliance";
 
@@ -68,10 +78,20 @@ type Translator = (
   params?: Record<string, string | number>,
 ) => string;
 
+// Each NDIS note rule's hint, by the id the live server check and the
+// offline copy (@workspace/worker-compliance) both use.
 const HINT_TRANSLATION_KEYS: Partial<Record<string, TranslationKey>> = {
   "word-count": "composer.hint.wordCount",
-  "specific-observation": "composer.hint.specificObservation",
-  "participant-reference": "composer.hint.participantReference",
+  "word-count-brief": "composer.hint.wordCountBrief",
+  filler: "composer.hint.filler",
+  "goal-link": "composer.hint.goalLink",
+  "subjective-language": "composer.hint.subjective",
+  "person-first": "composer.hint.personFirst",
+  "person-first-short": "composer.hint.personFirstShort",
+  scope: "composer.hint.scope",
+  incident: "composer.hint.incident",
+  "restrictive-practice": "composer.hint.restrictivePractice",
+  copied: "composer.hint.copied",
   "participant-response": "composer.hint.participantResponse",
 };
 
@@ -84,23 +104,49 @@ const HINT_TRANSLATION_KEYS: Partial<Record<string, TranslationKey>> = {
  * language picker below (which covers more languages than the app has
  * translations for, and only describes the note content, not app chrome).
  */
-function localizeHint(hint: DraftNoteHint, t: Translator): string {
-  if (hint.id === "restrictive-practice") {
-    return t("composer.hint.restrictivePractice", {
-      phrase: hint.phrase ?? "",
-    });
-  }
-  if (hint.id === "person-first") {
-    return t("composer.hint.personFirst", {
-      phrase: hint.phrase ?? "",
-      suggestion: hint.suggestion ?? "",
-    });
-  }
-  if (hint.id === "subjective-language") {
-    return t("composer.hint.subjective", { phrase: hint.phrase ?? "" });
-  }
+function localizeHint(
+  hint: DraftNoteHint,
+  t: Translator,
+  name: string,
+): string {
   const key = HINT_TRANSLATION_KEYS[hint.id];
-  return key ? t(key) : hint.message;
+  if (!key) return hint.message;
+  return t(key, {
+    name,
+    phrase: hint.phrase ?? "",
+    suggestion: hint.suggestion ?? "",
+    ...(hint.params ?? {}),
+  });
+}
+
+/** The live server check's results as hints, failing rules first. */
+function hintsFromCheck(
+  rules: {
+    rule: string;
+    status: string;
+    message: string | null;
+    hint_id: string | null;
+    params: Record<string, string | number>;
+  }[],
+): DraftNoteHint[] {
+  return rules
+    .filter((r) => r.status !== "pass" && r.hint_id)
+    .sort(
+      (a, b) => (a.status === "fail" ? 0 : 1) - (b.status === "fail" ? 0 : 1),
+    )
+    .map((r) => ({
+      id: r.hint_id as string,
+      rule: r.rule as NoteRuleCode,
+      severity: r.status === "fail" ? "fail" : "info",
+      message: r.message ?? "",
+      phrase:
+        typeof r.params?.phrase === "string" ? r.params.phrase : undefined,
+      suggestion:
+        typeof r.params?.suggestion === "string"
+          ? r.params.suggestion
+          : undefined,
+      params: r.params,
+    }));
 }
 
 const APP_LANGUAGES: readonly AppLanguage[] = ["en", "vi", "zh", "ar"];
@@ -123,6 +169,10 @@ const GUIDE_QUESTIONS: Record<
     question: "composer.guide.did",
     starter: "composer.prompt.didStarter",
   },
+  when: {
+    question: "composer.guide.when",
+    starter: "composer.prompt.whenStarter",
+  },
   response: {
     question: "composer.guide.response",
     starter: "composer.prompt.responseStarter",
@@ -134,6 +184,10 @@ const GUIDE_QUESTIONS: Record<
   concern: {
     question: "composer.guide.concern",
     starter: "composer.prompt.concernStarter",
+  },
+  detail: {
+    question: "composer.guide.detail",
+    starter: "composer.prompt.detailStarter",
   },
 };
 
@@ -437,6 +491,10 @@ type Props = {
   participantId?: string | null;
   disabled?: boolean;
   onNoteSaved?: (note: SessionNoteRecord) => void;
+  /** The participant's allergies and health alerts, to flag risks in notes. */
+  healthAlerts?: ShiftHealthAlert[];
+  /** Opens the incident report, with the note written so far. */
+  onOpenIncidentReport?: (noteId?: string, content?: string) => void;
 };
 
 export function WorkerMobileComposer({
@@ -451,6 +509,8 @@ export function WorkerMobileComposer({
   participantId,
   disabled,
   onNoteSaved,
+  healthAlerts,
+  onOpenIncidentReport,
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -470,9 +530,31 @@ export function WorkerMobileComposer({
   // they last wrote a note in, so a worker who writes in Nepali isn't asked
   // to pick it again on every task.
   const [language, setLanguageState] = useState<string>(appLanguage);
+  // The language a voice note was heard in applies to that note only; the
+  // worker's own choice is put back once it's sent or cleared.
+  const voiceLanguagePrevRef = useRef<string | null>(null);
   const setLanguage = (code: string) => {
+    voiceLanguagePrevRef.current = null;
     setLanguageState(code);
     void saveNoteLanguage(code);
+  };
+  const useVoiceLanguage = (
+    heard: string | null | undefined,
+    boxWasEmpty: boolean,
+  ) => {
+    if (!heard || !NOTE_LANGUAGE_CODES.has(heard)) return;
+    // Mixed languages in one note: let translation detect them.
+    const next = boxWasEmpty || heard === language ? heard : "auto";
+    if (next === language) return;
+    if (voiceLanguagePrevRef.current === null)
+      voiceLanguagePrevRef.current = language;
+    setLanguageState(next);
+  };
+  const restoreLanguageAfterVoice = () => {
+    if (voiceLanguagePrevRef.current !== null) {
+      setLanguageState(voiceLanguagePrevRef.current);
+      voiceLanguagePrevRef.current = null;
+    }
   };
   useEffect(() => {
     let cancelled = false;
@@ -487,6 +569,10 @@ export function WorkerMobileComposer({
   const [recording, setRecording] = useState(false);
   const voiceControlsRef = useRef<VoiceRecordingControls | null>(null);
   const [draftHints, setDraftHints] = useState<DraftNoteHint[]>([]);
+  // A voice note's transcript waits in the box for the worker to check and
+  // correct before it's saved (speech recognition mishears names, numbers
+  // and medication), and is saved as a voice note when they send it.
+  const [voiceDraft, setVoiceDraft] = useState(false);
   const [suggestion, setSuggestion] = useState<{
     text: string;
     preview?: string;
@@ -515,10 +601,37 @@ export function WorkerMobileComposer({
   useEffect(() => {
     setSkipped([]);
   }, [taskId]);
-  const nextPrompt = nextNotePrompt(taskNotesText ?? "", {
-    hasGoal: !!goalTitle,
-    skipped,
-  });
+  // Saved notes plus what's being written now, so the question moves on as
+  // soon as it's answered. The draft counts only when it's English: the
+  // checks read English, and other languages are checked once translated.
+  // Safety cautions: what's written against the participant's allergies and
+  // health alerts. Dismissed ones stay hidden until the task changes.
+  const [dismissedFlags, setDismissedFlags] = useState<string[]>([]);
+  useEffect(() => {
+    setDismissedFlags([]);
+  }, [taskId]);
+  const allergies = useMemo(
+    () => participantAllergies(healthAlerts ?? []),
+    [healthAlerts],
+  );
+  const safetyFlags = useMemo(
+    () =>
+      findSafetyFlags(
+        `${taskNotesText ?? ""}\n${checksLive ? value : ""}`,
+        healthAlerts ?? [],
+      ).filter(
+        (f) => !dismissedFlags.includes(`${f.kind}:${f.allergen ?? ""}`),
+      ),
+    [taskNotesText, value, checksLive, healthAlerts, dismissedFlags],
+  );
+
+  const nextPrompt = nextNotePrompt(
+    `${taskNotesText ?? ""} ${checksLive ? value : ""}`,
+    {
+      hasGoal: !!goalTitle,
+      skipped,
+    },
+  );
   const promptParams = {
     name: firstName ?? t("composer.prompt.theParticipant"),
     goal: goalTitle ?? "",
@@ -577,11 +690,43 @@ export function WorkerMobileComposer({
       setDraftHints([]);
       return;
     }
+    let cancelled = false;
     const handle = setTimeout(() => {
-      setDraftHints(checkDraftNoteHints(value, firstName));
-    }, 600);
-    return () => clearTimeout(handle);
-  }, [value, hasText, firstName, checksLive]);
+      const offline = () => {
+        if (!cancelled) setDraftHints(checkDraftNoteHints(value, firstName));
+      };
+      if (!isOnline) {
+        offline();
+        return;
+      }
+      // The server runs the real rules with this provider's settings, and
+      // also catches a note copied from an earlier one (R11) and a missing
+      // goal link (R5), which the offline copy can't.
+      checkNoteDraft({
+        text: value,
+        session_id: sessionId ?? undefined,
+        participant_id: participantId ?? undefined,
+        task_id: taskId ?? undefined,
+      })
+        .then((result) => {
+          if (!cancelled) setDraftHints(hintsFromCheck(result.rules));
+        })
+        .catch(offline);
+    }, 800);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [
+    value,
+    hasText,
+    firstName,
+    checksLive,
+    isOnline,
+    sessionId,
+    participantId,
+    taskId,
+  ]);
 
   // Reset any pending suggestion when switching tasks - a suggestion for one
   // task's note has no business appearing against a different task's draft.
@@ -601,7 +746,7 @@ export function WorkerMobileComposer({
     if (source === "manual") setManualPending(true);
     try {
       const failedRules = hints.length
-        ? hints.map((h) => ({ rule: h.id, message: h.message }))
+        ? hints.map((h) => ({ rule: h.rule, message: h.message }))
         : [
             {
               rule: "clarity",
@@ -638,7 +783,9 @@ export function WorkerMobileComposer({
       } else if (source === "manual") {
         showAlert(
           "No changes suggested",
-          "Your note already looks clear and complete.",
+          result?.discarded
+            ? t("composer.suggestion.discarded")
+            : "Your note already looks clear and complete.",
         );
       }
     } catch {
@@ -813,7 +960,11 @@ export function WorkerMobileComposer({
     const rp = checkDraftNoteHints(record.english, firstName).find(
       (h) => h.id === "restrictive-practice",
     );
-    if (rp) showAlert(t("composer.translate.checkTitle"), localizeHint(rp, t));
+    if (rp)
+      showAlert(
+        t("composer.translate.checkTitle"),
+        localizeHint(rp, t, promptParams.name),
+      );
   };
 
   /** Saves what the worker wrote, in English with their words kept beside
@@ -854,8 +1005,19 @@ export function WorkerMobileComposer({
   const handleSend = async () => {
     if (!hasText || disabledInput) return;
     setSubmitting(true);
-    await saveInWorkerLanguage(value.trim(), "text");
+    const noteType: SessionNoteType = voiceDraft ? "voice" : "text";
+    await saveInWorkerLanguage(value.trim(), noteType);
+    setVoiceDraft(false);
+    restoreLanguageAfterVoice();
   };
+
+  useEffect(() => {
+    if (!value.trim()) {
+      setVoiceDraft(false);
+      restoreLanguageAfterVoice();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
 
   const startRecording = async () => {
     if (disabledInput || recording) return;
@@ -902,7 +1064,10 @@ export function WorkerMobileComposer({
 
     setSubmitting(true);
     try {
-      const { transcript } = await transcribeSessionAudio(sessionId, uri);
+      const { transcript, language: heard } = await transcribeSessionAudio(
+        sessionId,
+        uri,
+      );
       const trimmed = String(transcript ?? "").trim();
       if (!trimmed) {
         showAlert(
@@ -911,7 +1076,18 @@ export function WorkerMobileComposer({
         );
         return;
       }
-      await saveInWorkerLanguage(trimmed, "voice");
+      // Into the box, not straight into the record: the worker reads what
+      // was heard, fixes anything misheard, and the rule hints check it
+      // before they send.
+      // Spoken in French? The note is saved in French with an English
+      // version beside it, the same as typing it in French.
+      useVoiceLanguage(heard, !value.trim());
+      setValue((current) => {
+        const before = current.trimEnd();
+        return before ? `${before} ${trimmed}` : trimmed;
+      });
+      setVoiceDraft(true);
+      inputRef.current?.focus();
     } catch (err) {
       showAlert(
         "Transcription failed",
@@ -1122,13 +1298,17 @@ export function WorkerMobileComposer({
         </GuideBubble>
       );
     }
-    if (hasText && topHint) {
-      const fail = topHint.severity === "fail";
+    if (hasText && (topHint || voiceDraft)) {
+      // Safety issues are for the worker (and an incident report), not a
+      // rewrite: no "Improve wording" on those.
+      const safety =
+        !!topHint &&
+        ["restrictive-practice", "incident", "scope"].includes(topHint.id);
       return (
         <GuideBubble
-          tone={fail ? "danger" : "default"}
+          tone={safety ? "danger" : "default"}
           actions={
-            fail
+            safety || !topHint
               ? []
               : [
                   {
@@ -1148,7 +1328,9 @@ export function WorkerMobileComposer({
               { color: colors.foreground, fontFamily: "Inter_500Medium" },
             ]}
           >
-            {localizeHint(topHint, t)}
+            {voiceDraft ? t("composer.voice.review") : null}
+            {voiceDraft && topHint ? "\n\n" : null}
+            {topHint ? localizeHint(topHint, t, promptParams.name) : null}
           </Text>
         </GuideBubble>
       );
@@ -1217,6 +1399,19 @@ export function WorkerMobileComposer({
 
   return (
     <View style={styles.wrap}>
+      <AllergyStrip allergies={allergies} />
+      <SafetyFlagCards
+        flags={safetyFlags}
+        name={firstName ?? t("composer.prompt.theParticipant")}
+        onReportIncident={
+          onOpenIncidentReport
+            ? () => onOpenIncidentReport(undefined, value.trim() || undefined)
+            : undefined
+        }
+        onDismiss={(f) =>
+          setDismissedFlags((d) => [...d, `${f.kind}:${f.allergen ?? ""}`])
+        }
+      />
       {guide}
 
       <View style={styles.bar}>
@@ -1277,7 +1472,6 @@ export function WorkerMobileComposer({
                   : t("composer.hint.selectTask")
               }
               placeholderTextColor={colors.mutedForeground}
-              maxLength={SESSION_NOTE_MAX}
               editable={!disabledInput && !submitting}
               multiline
               // One line until the worker types more; the web textarea

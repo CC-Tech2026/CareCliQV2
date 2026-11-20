@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { useQuery } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -30,6 +31,8 @@ import { resolveWorkerDisplayName } from "@/lib/display-name";
 import { shiftInitials } from "@/lib/shift-utils";
 import { useWorkerLandingDashboard } from "@/hooks/worker/useWorkerLandingDashboard";
 import { showAlert } from "@/lib/alert";
+import { CCQ_ONBOARDING_DONE_KEY } from "@/lib/storage-keys";
+import { IS_TEST_BUILD } from "@/lib/test-build";
 import { getWorkerProfile } from "@/lib/user-api";
 import { LANGUAGES } from "@/lib/i18n/translations";
 
@@ -308,6 +311,31 @@ export default function SettingsTabScreen() {
     void logout().then(() => router.replace("/login" as never));
   };
 
+  // Test apps only: sign out, drop cached data and forget that the welcome
+  // screens were seen, so the next screen is the full splash and onboarding.
+  const queryClient = useQueryClient();
+  const handleReplayWelcome = () => {
+    showAlert(t("settings.replayWelcome.confirmTitle"), t("settings.replayWelcome.confirmBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("settings.replayWelcome.confirm"),
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            await logout();
+            queryClient.clear();
+            try {
+              await AsyncStorage.removeItem(CCQ_ONBOARDING_DONE_KEY);
+            } catch {
+              // Nothing stored is fine: the splash treats it as a first launch.
+            }
+            router.replace("/splash" as never);
+          })();
+        },
+      },
+    ]);
+  };
+
   const themeSegmented = (
     <View
       style={[
@@ -460,7 +488,7 @@ export default function SettingsTabScreen() {
               <SettingsRow
                 icon="sliders"
                 label={t("nav.accessibility")}
-                description={`${themeLabel} / ${textSizeLabel} / ${languageLabel}`}
+                description={`${themeLabel} · ${t("settings.accessibility.textSummary", { size: textSizeLabel })} · ${languageLabel}`}
                 onPress={() => setAccessibilityOpen(true)}
                 showDivider={showDivider}
               />
@@ -752,6 +780,29 @@ export default function SettingsTabScreen() {
             </SettingsGroup>
           ))
         )}
+
+        {!normalizedQuery && IS_TEST_BUILD ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityHint={t("settings.replayWelcome.hint")}
+            onPress={handleReplayWelcome}
+            style={[
+              styles.signOut,
+              styles.replayWelcome,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Feather name="refresh-cw" size={16} color={colors.primary} />
+            <Text
+              style={[
+                styles.signOutText,
+                { color: colors.primary, fontFamily: FontFamily.interSemiBold },
+              ]}
+            >
+              {t("settings.replayWelcome.button")}
+            </Text>
+          </Pressable>
+        ) : null}
 
         {!normalizedQuery && (
           <Pressable
@@ -1054,7 +1105,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     alignItems: "center",
-    gap: 8,
+    gap: 16,
     marginTop: 8,
     marginBottom: 4,
   },
@@ -1063,21 +1114,21 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   profileHeroAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
   profileHeroImage: {
-    width: 72,
-    height: 72,
+    width: 64,
+    height: 64,
   },
   profileHeroEdit: {
     position: "absolute",
-    right: -2,
-    bottom: -2,
+    right: -6,
+    bottom: -6,
     width: 26,
     height: 26,
     borderRadius: 13,
@@ -1086,7 +1137,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   profileHeroInitials: {
-    fontSize: 24,
+    fontSize: 20,
   },
   profileHeroName: { fontSize: 20, lineHeight: 26 },
   profileHeroMeta: { fontSize: 14, lineHeight: 20 },
@@ -1155,6 +1206,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   signOutText: { fontSize: 15 },
+  replayWelcome: { flexDirection: "row", gap: 8, marginBottom: -4 },
   sheetBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",

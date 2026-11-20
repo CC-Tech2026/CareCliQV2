@@ -883,7 +883,7 @@ async def improve_note(
     prompt = f"""You are an expert NDIS clinical documentation specialist. Rewrite the clinical note below to fix all NDIS compliance issues.
 
 ORIGINAL NOTE:
-{notes[:2000]}
+{notes}
 
 FAILED COMPLIANCE RULES:
 {rules_text}{rp_text}{rag_context}
@@ -895,7 +895,11 @@ Requirements for the improved note:
 - Include what was done (activities), how the participant responded, and what was achieved (outcome)
 - Reference NDIS goals or support category where relevant
 - Mention next steps or follow-up actions
-- Keep it professional and concise (3-6 sentences typical)
+- Keep EVERY fact from the original: times, durations, amounts, medication names and doses,
+  names, places, quotes, what was said and done, injuries and anything about safety.
+  Never summarise, shorten or leave anything out. Reword and reorder only.
+- Do not add anything that is not in the original note.
+- The improved note may be the same length or longer, never shorter in substance.
 
 Respond with JSON:
 {{
@@ -915,7 +919,8 @@ Respond with JSON:
             {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        max_tokens=700,
+        # Room for the whole note plus suggestions: a long note must not be cut off.
+        max_tokens=min(4096, 700 + len(notes) // 2),
         temperature=0.3,
         response_format={"type": "json_object"},
     )
@@ -1434,7 +1439,29 @@ def _speech_encoding_for_filename(filename: str) -> str | None:
     return _SPEECH_ENCODING_BY_EXT.get(ext)
 
 
-def _transcribe_openai_whisper_sync(audio_bytes: bytes, filename: str) -> str:
+# Whisper names the language it heard ("french"); the app's note languages use
+# codes ("fr"). Only languages the worker app offers are mapped.
+WHISPER_LANGUAGE_CODES: dict[str, str] = {
+    "english": "en", "arabic": "ar", "amharic": "am", "bengali": "bn", "chinese": "zh",
+    "cantonese": "zh-TW", "persian": "fa", "tagalog": "tl", "filipino": "tl", "french": "fr",
+    "greek": "el", "hindi": "hi", "indonesian": "id", "italian": "it", "korean": "ko",
+    "malayalam": "ml", "nepali": "ne", "punjabi": "pa", "sinhala": "si", "somali": "so",
+    "spanish": "es", "swahili": "sw", "tamil": "ta", "thai": "th", "urdu": "ur", "vietnamese": "vi",
+}
+
+
+def whisper_language_code(name: str | None) -> str | None:
+    """"french" -> "fr". Already a code ("fr") passes through; unknown -> None."""
+    value = (name or "").strip().lower()
+    if not value:
+        return None
+    if value in WHISPER_LANGUAGE_CODES.values():
+        return value
+    return WHISPER_LANGUAGE_CODES.get(value)
+
+
+def _transcribe_openai_whisper_detailed_sync(audio_bytes: bytes, filename: str) -> tuple[str, str | None]:
+    """Whisper transcript plus the language it heard (code, or None)."""
     import tempfile
 
     suffix = os.path.splitext(filename or "audio.webm")[1] or ".webm"
@@ -1443,13 +1470,21 @@ def _transcribe_openai_whisper_sync(audio_bytes: bytes, filename: str) -> str:
         temp_path = f.name
     try:
         with open(temp_path, "rb") as audio_file:
+            # verbose_json carries the detected language; no language is forced,
+            # so the worker can speak whatever language they think in.
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
+                response_format="verbose_json",
             )
-        return (transcript.text or "").strip()
+        text = (getattr(transcript, "text", "") or "").strip()
+        return text, whisper_language_code(getattr(transcript, "language", None))
     finally:
         os.unlink(temp_path)
+
+
+def _transcribe_openai_whisper_sync(audio_bytes: bytes, filename: str) -> str:
+    return _transcribe_openai_whisper_detailed_sync(audio_bytes, filename)[0]
 
 
 def _transcribe_google_speech_sync(audio_bytes: bytes, filename: str) -> str:
@@ -1503,6 +1538,19 @@ def _transcribe_google_speech_sync(audio_bytes: bytes, filename: str) -> str:
     if not transcript:
         raise RuntimeError("Google Speech-to-Text returned empty transcript")
     return transcript
+
+
+async def transcribe_audio_with_language(audio_bytes: bytes, filename: str) -> tuple[str, str | None]:
+    """Transcript and the spoken language's code. Whisper reports the language;
+    the Google fallback doesn't, so then the language is None (unknown)."""
+    try:
+        text, language = await asyncio.to_thread(_transcribe_openai_whisper_detailed_sync, audio_bytes, filename)
+        if text:
+            return text, language
+    except Exception as exc:
+        logger.warning("OpenAI Whisper transcription failed, trying Google Speech-to-Text: %s", exc)
+    text = await transcribe_audio(audio_bytes, filename)
+    return text, None
 
 
 async def transcribe_audio(audio_bytes: bytes, filename: str) -> str:

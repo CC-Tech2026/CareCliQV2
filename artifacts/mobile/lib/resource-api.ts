@@ -89,6 +89,7 @@ export type IncidentDetail = {
   participant_ndis?: string | null;
   participant_impact?: string | null;
   worker_actions?: string | null;
+  reference_number?: string | null;
   investigation_notes?: string | null;
   corrective_actions?: string | null;
   /** Participant's branch zone. */
@@ -294,10 +295,35 @@ export function getIncident(id: string) {
   return workerFetch<IncidentDetail>(`/api/incidents/${id}`);
 }
 
-export function updateIncident(id: string, updates: Record<string, unknown>) {
-  return workerFetch<IncidentDetail>(`/api/incidents/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(updates),
+/** Parts of a worker's report they can add a correction to (the report itself never changes). */
+export const CORRECTABLE_INCIDENT_FIELDS = [
+  "description",
+  "participant_impact",
+  "worker_actions",
+  "location",
+] as const;
+export type CorrectableIncidentField = (typeof CORRECTABLE_INCIDENT_FIELDS)[number];
+
+export type IncidentCorrection = {
+  id: string;
+  field_name: string;
+  old_value?: string | null;
+  new_value: string;
+  note?: string | null;
+  created_at: string;
+};
+
+export function listIncidentCorrections(id: string) {
+  return workerFetch<IncidentCorrection[]>(`/api/incidents/${id}/corrections`);
+}
+
+export function addIncidentCorrection(
+  id: string,
+  body: { field_name: CorrectableIncidentField; new_value: string; note?: string },
+) {
+  return workerFetch<IncidentCorrection>(`/api/incidents/${id}/corrections`, {
+    method: "POST",
+    body: JSON.stringify(body),
   });
 }
 

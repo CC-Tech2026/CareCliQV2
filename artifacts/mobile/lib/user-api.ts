@@ -23,6 +23,12 @@ export type WorkerProfile = {
   profile_photo_url?: string | null;
   employee_id?: string | null;
   membership_role?: string | null;
+  /** Optional, set by the worker; used only to celebrate their birthday. */
+  date_of_birth?: string | null;
+  suburb?: string | null;
+  /** "About me", written by the worker for coordinators and matching. */
+  profile_summary?: string | null;
+  profile_experience_years?: number | null;
 };
 
 export function getWorkerProfile() {
@@ -33,6 +39,10 @@ export function updateWorkerProfile(payload: {
   phone?: string | null;
   address?: string | null;
   emergency_contact?: WorkerEmergencyContact | null;
+  date_of_birth?: string | null;
+  suburb?: string | null;
+  profile_summary?: string | null;
+  profile_experience_years?: number | null;
 }): Promise<WorkerProfile> {
   return workerFetch<WorkerProfile>("/api/users/me", {
     method: "PATCH",
@@ -74,7 +84,10 @@ async function appendImageFile(
     const response = await fetch(file.uri);
     const blob = await response.blob();
     const type = file.type || blob.type || "image/jpeg";
-    formData.append("file", new File([blob], file.name || "avatar.jpg", { type }));
+    formData.append(
+      "file",
+      new File([blob], file.name || "avatar.jpg", { type }),
+    );
     return;
   }
 
@@ -108,7 +121,10 @@ export async function uploadProfilePhoto(file: {
   if (!response.ok) {
     let message = "Could not upload profile photo.";
     try {
-      const body = (await response.json()) as { detail?: unknown; message?: string };
+      const body = (await response.json()) as {
+        detail?: unknown;
+        message?: string;
+      };
       message = formatApiErrorDetail(body.detail, body.message ?? message);
     } catch {
       /* use default */
@@ -121,4 +137,81 @@ export async function uploadProfilePhoto(file: {
 
 export async function deleteProfilePhoto(): Promise<void> {
   await workerFetch<void>("/api/users/me/photo", { method: "DELETE" });
+}
+
+// ── The worker's own skills and interests ─────────────────────────────────
+
+export type WorkerSkill = {
+  skill: string;
+  /** Confirmed by the office. Only confirmed skills count for rostering. */
+  is_certified: boolean;
+  expires_at?: string | null;
+};
+
+export function getMySkills() {
+  return workerFetch<{ skills: WorkerSkill[]; suggestions: string[] }>(
+    "/api/worker/me/skills",
+  );
+}
+
+export function addMySkill(skill: string) {
+  return workerFetch<WorkerSkill>("/api/worker/me/skills", {
+    method: "POST",
+    body: JSON.stringify({ skill }),
+  });
+}
+
+export function removeMySkill(skill: string) {
+  return workerFetch<void>(
+    `/api/worker/me/skills/${encodeURIComponent(skill)}`,
+    { method: "DELETE" },
+  );
+}
+
+export type TagCategory = {
+  id: string;
+  name: string;
+  is_active: boolean;
+  tags: { id: string; label: string }[];
+};
+export type MyTag = {
+  id: string;
+  tag_id: string;
+  label?: string;
+  category_id?: string;
+};
+
+export function getTagCatalog() {
+  return workerFetch<TagCategory[]>("/api/worker/tag-catalog");
+}
+
+export function getMyTags() {
+  return workerFetch<MyTag[]>("/api/worker/tags");
+}
+
+export function addMyTag(tagId: string) {
+  return workerFetch<MyTag>("/api/worker/tags", {
+    method: "POST",
+    body: JSON.stringify({
+      tag_id: tagId,
+      notes: null,
+      visible_to_coordinator_only: false,
+    }),
+  });
+}
+
+export function removeMyTag(tagId: string) {
+  return workerFetch<void>(`/api/worker/tags/${encodeURIComponent(tagId)}`, {
+    method: "DELETE",
+  });
+}
+
+// ── Who to contact at the office ──────────────────────────────────────────
+
+export type OfficeContact = { name?: string | null; phone?: string | null; email?: string | null };
+
+export function getOfficeContacts() {
+  return workerFetch<{ office: OfficeContact | null; coordinator: OfficeContact | null }>(
+    "/api/worker/me/office-contacts",
+  );
 }

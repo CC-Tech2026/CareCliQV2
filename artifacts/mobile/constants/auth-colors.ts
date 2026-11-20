@@ -11,6 +11,8 @@ export type AuthColors = {
   accent: string;
   inputBorder: string;
   inputBg: string;
+  /** Soft tinted box for notices and selected rows (inputs are plain now). */
+  noticeBg: string;
   cardBg: string;
   cardBorder: string;
   statValue: string;
@@ -31,15 +33,16 @@ export type AuthColors = {
  * `plum` / `cta` map to CareCliQ Purple; `coral` is Pink accent only.
  */
 const light: AuthColors = {
-  shellBg: Brand.ivory,
+  shellBg: Brand.canvas,
   formBg: Brand.white,
   marketingBg: Brand.ivory,
   headline: Brand.navy,
   marketingMuted: "#6B6B7A",
   marketingBody: Brand.navy,
   accent: Brand.purple,
-  inputBorder: Brand.purpleTint10,
-  inputBg: Brand.purpleTint10,
+  inputBorder: "#CCC6BD",
+  inputBg: Brand.white,
+  noticeBg: Brand.purpleTint10,
   cardBg: "rgba(255, 255, 255, 0.92)",
   cardBorder: "rgba(45, 45, 61, 0.10)",
   statValue: Brand.navy,
@@ -63,8 +66,9 @@ const dark: AuthColors = {
   marketingMuted: BrandDark.muted,
   marketingBody: BrandDark.navy,
   accent: BrandDark.purple,
-  inputBorder: BrandDark.border,
-  inputBg: BrandDark.purpleTint,
+  inputBorder: "#3A384E",
+  inputBg: BrandDark.white,
+  noticeBg: BrandDark.purpleTint,
   cardBg: "rgba(31, 30, 42, 0.92)",
   cardBorder: "rgba(245, 244, 250, 0.12)",
   statValue: BrandDark.navy,

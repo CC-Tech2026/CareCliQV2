@@ -8,7 +8,7 @@ export default function TrainingScreen() {
   const t = useT();
 
   return (
-    <WorkerStackScreen headerTitle={t("nav.training")} cardsOnBackground showBack>
+    <WorkerStackScreen headerTitle={t("nav.training")} cardsOnBackground showBack guide="training">
       <ProfileTrainingPanel bottomInset={24} />
     </WorkerStackScreen>
   );

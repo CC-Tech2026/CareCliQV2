@@ -5,19 +5,14 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AuthBrandHeader } from "@/components/auth/AuthBrandHeader";
-import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
+import { AuthShell } from "@/components/auth/AuthShell";
 import { OtpInput } from "@/components/auth/OtpInput";
 import { getAuthColors } from "@/constants/auth-colors";
 import { useAuth } from "@/context/AuthContext";
@@ -84,7 +79,7 @@ function AuthField({
             { color: auth.muted, fontFamily: FontFamily.interBold },
           ]}
         >
-          {label.toUpperCase()}
+          {label}
         </Text>
         {right}
       </View>
@@ -152,7 +147,6 @@ function AuthCheckbox({
 }
 
 export default function LoginScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { login, completeMfa } = useAuth();
   const { resolvedScheme, t } = usePreferences();
@@ -357,43 +351,21 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: auth.shellBg }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={[styles.themeToggle, { top: insets.top + 8 }]}>
-        <AuthThemeToggle />
-      </View>
-
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          paddingTop: insets.top + 36,
-          paddingHorizontal: 16,
-          paddingBottom: insets.bottom + 24,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        <AuthBrandHeader taglineKey="auth.login.marketing.tagline" />
-
-        <View
-          style={[
-            styles.formPanel,
-            {
-              backgroundColor: auth.formBg,
-              borderColor: auth.inputBorder,
-            },
-          ]}
-        >
-          <View style={styles.formBody}>
+    <AuthShell>
+      <View style={styles.formPanel}>
+        <View style={styles.formBody}>
+          {/* Sign in needs no heading under the logo; the two-step check
+              keeps one so the code request makes sense. */}
+          {mfaStep ? (
             <View style={styles.formIntro}>
               <Text
+                accessibilityRole="header"
                 style={[
                   styles.formTitle,
-                  { color: auth.text, fontFamily: FontFamily.interBold },
+                  { color: auth.text, fontFamily: FontFamily.display },
                 ]}
               >
-                {mfaStep ? t("auth.login.mfaTitle") : t("auth.login.title")}
+                {t("auth.login.mfaTitle")}
               </Text>
               <Text
                 style={[
@@ -401,392 +373,374 @@ export default function LoginScreen() {
                   { color: auth.muted, fontFamily: FontFamily.interMedium },
                 ]}
               >
-                {mfaStep
-                  ? t("auth.login.mfaSubtitle")
-                  : t("auth.login.subtitle")}
+                {t("auth.login.mfaSubtitle")}
               </Text>
             </View>
+          ) : null}
 
-            {mfaStep ? (
-              <View style={styles.formStack}>
-                <Pressable onPress={resetMfa} style={styles.backLink}>
-                  <Feather name="arrow-left" size={14} color={auth.plum} />
-                  <Text
-                    style={[
-                      styles.backLinkText,
-                      { color: auth.plum, fontFamily: FontFamily.interBold },
-                    ]}
-                  >
-                    {t("auth.login.backToSignIn")}
-                  </Text>
-                </Pressable>
-
-                <View
+          {mfaStep ? (
+            <View style={styles.formStack}>
+              <Pressable onPress={resetMfa} style={styles.backLink}>
+                <Feather name="arrow-left" size={14} color={auth.plum} />
+                <Text
                   style={[
-                    styles.infoCard,
+                    styles.backLinkText,
+                    { color: auth.plum, fontFamily: FontFamily.interBold },
+                  ]}
+                >
+                  {t("auth.login.backToSignIn")}
+                </Text>
+              </Pressable>
+
+              <View
+                style={[
+                  styles.infoCard,
+                  {
+                    backgroundColor: auth.noticeBg,
+                  },
+                ]}
+              >
+                <Feather name="shield" size={18} color={auth.plum} />
+                <Text
+                  style={[
+                    styles.infoText,
+                    { color: auth.muted, fontFamily: FontFamily.interMedium },
+                  ]}
+                >
+                  {t("auth.login.mfaInfo")}
+                </Text>
+              </View>
+
+              <View>
+                <Text
+                  style={[
+                    styles.fieldLabel,
                     {
-                      borderColor: auth.inputBorder,
-                      backgroundColor: auth.inputBg,
+                      color: auth.muted,
+                      fontFamily: FontFamily.interBold,
+                      marginBottom: 12,
                     },
                   ]}
                 >
-                  <Feather name="shield" size={18} color={auth.plum} />
+                  {t("auth.login.verificationCode")}
+                </Text>
+                <OtpInput
+                  value={mfaCode}
+                  onChange={(value) => {
+                    setMfaCode(value);
+                    if (mfaCodeError) setMfaCodeError(null);
+                  }}
+                  disabled={busy}
+                  error={Boolean(mfaCodeError)}
+                  auth={auth}
+                />
+                {mfaCodeError ? (
                   <Text
                     style={[
-                      styles.infoText,
-                      { color: auth.muted, fontFamily: FontFamily.interMedium },
-                    ]}
-                  >
-                    {t("auth.login.mfaInfo")}
-                  </Text>
-                </View>
-
-                <View>
-                  <Text
-                    style={[
-                      styles.fieldLabel,
+                      styles.fieldError,
                       {
-                        color: auth.muted,
-                        fontFamily: FontFamily.interBold,
-                        marginBottom: 12,
+                        color: auth.error,
+                        fontFamily: FontFamily.interMedium,
                       },
                     ]}
                   >
-                    {t("auth.login.verificationCode").toUpperCase()}
+                    {mfaCodeError}
                   </Text>
-                  <OtpInput
-                    value={mfaCode}
-                    onChange={(value) => {
-                      setMfaCode(value);
-                      if (mfaCodeError) setMfaCodeError(null);
-                    }}
-                    disabled={busy}
-                    error={Boolean(mfaCodeError)}
-                    auth={auth}
-                  />
-                  {mfaCodeError ? (
+                ) : null}
+              </View>
+
+              <AuthCheckbox
+                checked={trustDevice}
+                onToggle={() => setTrustDevice((v) => !v)}
+                label={t("auth.login.trustDevice")}
+                disabled={busy}
+              />
+
+              <Pressable
+                onPress={handleMfaSubmit}
+                disabled={busy || !mfaComplete}
+                style={[
+                  styles.submitBtn,
+                  {
+                    backgroundColor: auth.cta,
+                    opacity: busy || !mfaComplete ? 0.4 : 1,
+                  },
+                ]}
+              >
+                {busy ? (
+                  <>
+                    <ActivityIndicator color="#FFFFFF" size="small" />
                     <Text
                       style={[
-                        styles.fieldError,
+                        styles.submitText,
+                        { fontFamily: FontFamily.interBold },
+                      ]}
+                    >
+                      {t("auth.login.verifying")}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text
+                      style={[
+                        styles.submitText,
+                        { fontFamily: FontFamily.interBold },
+                      ]}
+                    >
+                      {t("auth.login.verify")}
+                    </Text>
+                    <Feather name="arrow-right" size={16} color="#FFFFFF" />
+                  </>
+                )}
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.formStack}>
+              <AuthField
+                label={t("auth.login.identifier")}
+                error={identifierError}
+                valid={identifierOk && !identifierError}
+              >
+                <TextInput
+                  accessibilityLabel={t("auth.login.identifier")}
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordInput.current?.focus()}
+                  value={identifier}
+                  onChangeText={(value) => {
+                    setIdentifier(value);
+                    if (identifierError) setIdentifierError(null);
+                  }}
+                  placeholder={t("auth.login.identifierPlaceholder")}
+                  placeholderTextColor={auth.muted}
+                  autoCapitalize="none"
+                  autoComplete="username"
+                  keyboardType="email-address"
+                  editable={!busy}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: auth.inputBg,
+                      borderColor: identifierError
+                        ? auth.error
+                        : identifierOk
+                          ? auth.valid
+                          : auth.inputBorder,
+                      color: auth.text,
+                      fontFamily: FontFamily.interMedium,
+                      paddingRight: identifierOk && !identifierError ? 36 : 16,
+                    },
+                  ]}
+                />
+              </AuthField>
+
+              <AuthField
+                label={t("auth.login.password")}
+                error={passwordError}
+                right={
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => router.push("/forgot-password" as never)}
+                  >
+                    <Text
+                      style={[
+                        styles.forgotLink,
                         {
-                          color: auth.error,
-                          fontFamily: FontFamily.interMedium,
+                          color: auth.plum,
+                          fontFamily: FontFamily.interBold,
                         },
                       ]}
                     >
-                      {mfaCodeError}
+                      {t("auth.login.forgotPassword")}
                     </Text>
-                  ) : null}
-                </View>
-
-                <AuthCheckbox
-                  checked={trustDevice}
-                  onToggle={() => setTrustDevice((v) => !v)}
-                  label={t("auth.login.trustDevice")}
-                  disabled={busy}
-                />
-
-                <Pressable
-                  onPress={handleMfaSubmit}
-                  disabled={busy || !mfaComplete}
+                  </Pressable>
+                }
+              >
+                <View
                   style={[
-                    styles.submitBtn,
+                    styles.passwordRow,
                     {
-                      backgroundColor: auth.cta,
-                      opacity: busy || !mfaComplete ? 0.4 : 1,
+                      backgroundColor: auth.inputBg,
+                      borderColor: passwordError
+                        ? auth.error
+                        : auth.inputBorder,
                     },
                   ]}
                 >
-                  {busy ? (
-                    <>
-                      <ActivityIndicator color="#FFFFFF" size="small" />
-                      <Text
-                        style={[
-                          styles.submitText,
-                          { fontFamily: FontFamily.interBold },
-                        ]}
-                      >
-                        {t("auth.login.verifying")}
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Text
-                        style={[
-                          styles.submitText,
-                          { fontFamily: FontFamily.interBold },
-                        ]}
-                      >
-                        {t("auth.login.verify")}
-                      </Text>
-                      <Feather name="arrow-right" size={16} color="#FFFFFF" />
-                    </>
-                  )}
-                </Pressable>
-              </View>
-            ) : (
-              <View style={styles.formStack}>
-                <AuthField
-                  label={t("auth.login.identifier")}
-                  error={identifierError}
-                  valid={identifierOk && !identifierError}
-                >
                   <TextInput
-                    accessibilityLabel={t("auth.login.identifier")}
-                    autoCorrect={false}
-                    returnKeyType="next"
-                    onSubmitEditing={() => passwordInput.current?.focus()}
-                    value={identifier}
-                    onChangeText={(value) => {
-                      setIdentifier(value);
-                      if (identifierError) setIdentifierError(null);
-                    }}
-                    placeholder={t("auth.login.identifierPlaceholder")}
-                    placeholderTextColor={auth.muted}
+                    ref={passwordInput}
+                    accessibilityLabel={t("auth.login.password")}
                     autoCapitalize="none"
-                    autoComplete="username"
-                    keyboardType="email-address"
+                    autoCorrect={false}
+                    returnKeyType="go"
+                    onSubmitEditing={() => void handleSignIn()}
+                    value={password}
+                    onChangeText={(value) => {
+                      setPassword(value);
+                      if (passwordError) setPasswordError(null);
+                    }}
+                    placeholder="••••••••"
+                    placeholderTextColor={auth.muted}
+                    secureTextEntry={!showPassword}
+                    autoComplete="password"
                     editable={!busy}
                     style={[
-                      styles.input,
+                      styles.passwordInput,
                       {
-                        backgroundColor: auth.inputBg,
-                        borderColor: identifierError
-                          ? auth.error
-                          : identifierOk
-                            ? auth.valid
-                            : auth.inputBorder,
                         color: auth.text,
                         fontFamily: FontFamily.interMedium,
-                        paddingRight:
-                          identifierOk && !identifierError ? 36 : 16,
                       },
                     ]}
                   />
-                </AuthField>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t(
+                      showPassword
+                        ? "auth.password.hide"
+                        : "auth.password.show",
+                    )}
+                    onPress={() => setShowPassword((v) => !v)}
+                    style={styles.eyeBtn}
+                  >
+                    <Feather
+                      name={showPassword ? "eye-off" : "eye"}
+                      size={18}
+                      color={auth.muted}
+                    />
+                  </Pressable>
+                </View>
+              </AuthField>
 
-                <AuthField
-                  label={t("auth.login.password")}
-                  error={passwordError}
-                  right={
-                    <Pressable
-                      hitSlop={8}
-                      onPress={() => router.push("/forgot-password" as never)}
+              <AuthCheckbox
+                checked={rememberDevice}
+                onToggle={() => setRememberDevice((v) => !v)}
+                label={t("auth.login.rememberDevice")}
+                disabled={busy}
+              />
+
+              <Pressable
+                onPress={handleSignIn}
+                disabled={busy}
+                style={[
+                  styles.submitBtn,
+                  { backgroundColor: auth.cta, opacity: busy ? 0.7 : 1 },
+                ]}
+              >
+                {busy ? (
+                  <>
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <Text
+                      style={[
+                        styles.submitText,
+                        { fontFamily: FontFamily.interBold },
+                      ]}
                     >
+                      {t("auth.login.signingIn")}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text
+                      style={[
+                        styles.submitText,
+                        { fontFamily: FontFamily.interBold },
+                      ]}
+                    >
+                      {t("auth.login.submit")}
+                    </Text>
+                    <Feather name="arrow-right" size={16} color="#FFFFFF" />
+                  </>
+                )}
+              </Pressable>
+
+              {biometricReady &&
+              biometricHardware &&
+              biometricKinds.length > 0 ? (
+                <View style={styles.biometricStack}>
+                  {biometricKinds.map((kind) => (
+                    <Pressable
+                      key={kind}
+                      accessibilityRole="button"
+                      onPress={() => void handleBiometricLogin(kind)}
+                      disabled={busy}
+                      style={[
+                        styles.biometricBtn,
+                        {
+                          borderColor: auth.inputBorder,
+                          backgroundColor: auth.inputBg,
+                          opacity: busy ? 0.55 : 1,
+                        },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name={
+                          kind === "face" ? "face-recognition" : "fingerprint"
+                        }
+                        size={22}
+                        color={auth.plum}
+                      />
                       <Text
                         style={[
-                          styles.forgotLink,
+                          styles.biometricText,
                           {
                             color: auth.plum,
                             fontFamily: FontFamily.interBold,
                           },
                         ]}
                       >
-                        {t("auth.login.forgotPassword")}
+                        {t("auth.login.useBiometric", {
+                          method: t(
+                            kind === "face"
+                              ? "settings.biometric.face"
+                              : "settings.biometric.fingerprint",
+                          ),
+                        })}
                       </Text>
                     </Pressable>
-                  }
-                >
-                  <View
-                    style={[
-                      styles.passwordRow,
-                      {
-                        backgroundColor: auth.inputBg,
-                        borderColor: passwordError
-                          ? auth.error
-                          : auth.inputBorder,
-                      },
-                    ]}
-                  >
-                    <TextInput
-                      ref={passwordInput}
-                      accessibilityLabel={t("auth.login.password")}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      returnKeyType="go"
-                      onSubmitEditing={() => void handleSignIn()}
-                      value={password}
-                      onChangeText={(value) => {
-                        setPassword(value);
-                        if (passwordError) setPasswordError(null);
-                      }}
-                      placeholder="••••••••"
-                      placeholderTextColor={auth.muted}
-                      secureTextEntry={!showPassword}
-                      autoComplete="password"
-                      editable={!busy}
-                      style={[
-                        styles.passwordInput,
-                        {
-                          color: auth.text,
-                          fontFamily: FontFamily.interMedium,
-                        },
-                      ]}
-                    />
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={t(
-                        showPassword
-                          ? "auth.password.hide"
-                          : "auth.password.show",
-                      )}
-                      onPress={() => setShowPassword((v) => !v)}
-                      style={styles.eyeBtn}
-                    >
-                      <Feather
-                        name={showPassword ? "eye-off" : "eye"}
-                        size={18}
-                        color={auth.muted}
-                      />
-                    </Pressable>
-                  </View>
-                </AuthField>
+                  ))}
+                </View>
+              ) : null}
 
-                <AuthCheckbox
-                  checked={rememberDevice}
-                  onToggle={() => setRememberDevice((v) => !v)}
-                  label={t("auth.login.rememberDevice")}
-                  disabled={busy}
-                />
-
-                <Pressable
-                  onPress={handleSignIn}
-                  disabled={busy}
+              <Pressable
+                onPress={() => router.push("/activate-account" as never)}
+              >
+                <Text
                   style={[
-                    styles.submitBtn,
-                    { backgroundColor: auth.cta, opacity: busy ? 0.7 : 1 },
+                    styles.signupLine,
+                    { color: auth.muted, fontFamily: FontFamily.interMedium },
                   ]}
                 >
-                  {busy ? (
-                    <>
-                      <ActivityIndicator color="#FFFFFF" size="small" />
-                      <Text
-                        style={[
-                          styles.submitText,
-                          { fontFamily: FontFamily.interBold },
-                        ]}
-                      >
-                        {t("auth.login.signingIn")}
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Text
-                        style={[
-                          styles.submitText,
-                          { fontFamily: FontFamily.interBold },
-                        ]}
-                      >
-                        {t("auth.login.submit")}
-                      </Text>
-                      <Feather name="arrow-right" size={16} color="#FFFFFF" />
-                    </>
-                  )}
-                </Pressable>
-
-                {biometricReady &&
-                biometricHardware &&
-                biometricKinds.length > 0 ? (
-                  <View style={styles.biometricStack}>
-                    {biometricKinds.map((kind) => (
-                      <Pressable
-                        key={kind}
-                        accessibilityRole="button"
-                        onPress={() => void handleBiometricLogin(kind)}
-                        disabled={busy}
-                        style={[
-                          styles.biometricBtn,
-                          {
-                            borderColor: auth.inputBorder,
-                            backgroundColor: auth.inputBg,
-                            opacity: busy ? 0.55 : 1,
-                          },
-                        ]}
-                      >
-                        <MaterialCommunityIcons
-                          name={
-                            kind === "face" ? "face-recognition" : "fingerprint"
-                          }
-                          size={22}
-                          color={auth.plum}
-                        />
-                        <Text
-                          style={[
-                            styles.biometricText,
-                            {
-                              color: auth.plum,
-                              fontFamily: FontFamily.interBold,
-                            },
-                          ]}
-                        >
-                          {t("auth.login.useBiometric", {
-                            method: t(
-                              kind === "face"
-                                ? "settings.biometric.face"
-                                : "settings.biometric.fingerprint",
-                            ),
-                          })}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : null}
-
-                <Pressable
-                  onPress={() => router.push("/activate-account" as never)}
-                >
+                  {t("auth.login.noAccount")}{" "}
                   <Text
-                    style={[
-                      styles.signupLine,
-                      { color: auth.muted, fontFamily: FontFamily.interMedium },
-                    ]}
+                    style={{
+                      color: auth.plum,
+                      fontFamily: FontFamily.interBold,
+                    }}
                   >
-                    {t("auth.login.noAccount")}{" "}
-                    <Text
-                      style={{
-                        color: auth.plum,
-                        fontFamily: FontFamily.interBold,
-                      }}
-                    >
-                      {t("auth.login.createAccount")}
-                    </Text>
+                    {t("auth.login.createAccount")}
                   </Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-
-          <Text
-            style={[
-              styles.footer,
-              { color: auth.footer, fontFamily: FontFamily.interMedium },
-            ]}
-          >
-            {t("auth.login.footer")}
-          </Text>
+                </Text>
+              </Pressable>
+            </View>
+          )}
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        <Text
+          style={[
+            styles.footer,
+            { color: auth.footer, fontFamily: FontFamily.interMedium },
+          ]}
+        >
+          {t("auth.login.footer")}
+        </Text>
+      </View>
+    </AuthShell>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  themeToggle: {
-    position: "absolute",
-    right: 16,
-    zIndex: 20,
-  },
-  formPanel: {
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginHorizontal: 0,
-    marginBottom: 16,
-    width: "100%",
-    maxWidth: 520,
-    alignSelf: "center",
-    overflow: "hidden",
-  },
+  formPanel: { width: "100%", flexGrow: 1 },
   dragHandleWrap: {
     alignItems: "center",
     paddingTop: 12,
@@ -797,22 +751,19 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
   },
-  formBody: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 8,
-  },
-  formIntro: {
-    marginBottom: 28,
-    gap: 6,
-  },
+  formBody: { paddingBottom: 4 },
+  formIntro: { marginBottom: 28, gap: 8, alignItems: "center" },
   formTitle: {
-    fontSize: 24,
-    letterSpacing: -0.3,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.4,
+    textAlign: "center",
   },
   formSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
+    maxWidth: 320,
   },
   formStack: {
     gap: 20,
@@ -831,81 +782,68 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 6,
   },
-  fieldLabel: {
-    fontSize: 11,
-    letterSpacing: 0.8,
-  },
+  fieldLabel: { fontSize: 14 },
   fieldError: {
     marginTop: 6,
     fontSize: 12,
   },
   validMark: {
     position: "absolute",
-    right: 12,
-    top: 14,
-    fontSize: 12,
+    right: 14,
+    top: 17,
+    fontSize: 14,
     fontFamily: FontFamily.interBold,
   },
   input: {
-    minHeight: 48,
+    minHeight: 54,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 16,
-    fontSize: 14,
+    fontSize: 16,
   },
   passwordRow: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderRadius: 12,
-    height: 48,
-    paddingHorizontal: 16,
+    borderRadius: 14,
+    height: 54,
+    paddingLeft: 16,
+    paddingRight: 4,
   },
-  passwordInput: {
-    flex: 1,
-    fontSize: 14,
-  },
+  passwordInput: { flex: 1, fontSize: 16, height: "100%" },
   eyeBtn: {
     minWidth: 44,
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
   },
-  forgotLink: {
-    fontSize: 12,
-  },
+  forgotLink: { fontSize: 14 },
   checkboxRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
   checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 6,
     borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
   },
-  checkboxLabel: {
-    flex: 1,
-    fontSize: 13,
-  },
+  checkboxLabel: { flex: 1, fontSize: 14 },
   submitBtn: {
-    height: 48,
-    borderRadius: 12,
+    height: 54,
+    borderRadius: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
-  submitText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-  },
+  submitText: { color: "#FFFFFF", fontSize: 16 },
   biometricBtn: {
-    height: 48,
-    borderRadius: 999,
+    height: 54,
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -916,12 +854,11 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 4,
   },
-  biometricText: {
-    fontSize: 14,
-  },
+  biometricText: { fontSize: 15 },
   signupLine: {
     textAlign: "center",
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 20,
     marginTop: 4,
   },
   backLink: {
@@ -933,8 +870,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   infoCard: {
-    borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     flexDirection: "row",
     alignItems: "flex-start",
@@ -946,10 +882,10 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   footer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-    fontSize: 11,
+    marginTop: "auto",
+    paddingTop: 32,
+    fontSize: 12,
     lineHeight: 16,
+    textAlign: "center",
   },
 });

@@ -39,7 +39,6 @@ import {
   hasStrongTaskEvidence,
   isMandatoryTask,
   MIN_EVIDENCE_NOTE_CHARS,
-  SESSION_NOTE_MAX,
   parseIsoMs,
 } from "@/lib/shift-utils";
 import type { ComplianceEvaluation } from "@workspace/worker-compliance";
@@ -115,7 +114,8 @@ function attachSessionNotesToTask(
   if ((task.note?.trim().length ?? 0) < MIN_EVIDENCE_NOTE_CHARS) {
     const texts = sessionNoteTextsForTask(sessionNotes, task.task_id);
     if (texts.length) {
-      note = texts.join("\n\n").slice(0, SESSION_NOTE_MAX);
+      // Every word kept: this is the task's evidence, never trimmed.
+      note = texts.join("\n\n");
       hasTextNotes = true;
     }
   }
@@ -487,6 +487,7 @@ export function WorkerMobileSessionScreen({
             compliance={compliance}
             onNoteSaved={handleNoteSaved}
             onOpenIncidentReport={onOpenIncidentReport}
+            healthAlerts={healthAlerts}
             tz={tz}
           />
         </View>,

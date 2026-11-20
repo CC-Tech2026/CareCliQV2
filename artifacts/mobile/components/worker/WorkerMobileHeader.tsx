@@ -10,6 +10,8 @@ import { WorkerProfileDropdown } from "@/components/worker/WorkerProfileDropdown
 import { FontFamily } from "@/constants/typography";
 import { useAuth } from "@/context/AuthContext";
 import { useWorkerNotifications } from "@/hooks/worker/useWorkerNotifications";
+import { GuideButton } from "@/components/worker/guide/GuideSheet";
+import type { GuideId } from "@/lib/guides";
 import { useColors } from "@/hooks/useColors";
 import { resolveWorkerDisplayName } from "@/lib/display-name";
 import { goBackOrHome } from "@/lib/go-back";
@@ -22,6 +24,8 @@ type Props = {
   onBack?: () => void;
   /** Back button only — hides center title and right-side actions. */
   minimal?: boolean;
+  /** Shows a "?" that opens this screen's guide. */
+  guide?: GuideId;
 };
 
 export function WorkerMobileHeader({
@@ -29,6 +33,7 @@ export function WorkerMobileHeader({
   showBack,
   onBack,
   minimal,
+  guide,
 }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -124,6 +129,9 @@ export function WorkerMobileHeader({
           </Pressable>
         )}
 
+        {/* Balances the "?" on the right so the title stays centred. */}
+        {guide && !minimal ? <View style={styles.spacer} /> : null}
+
         {minimal ? null : (
           <>
             <Text
@@ -136,6 +144,7 @@ export function WorkerMobileHeader({
               {title}
             </Text>
 
+            {guide ? <GuideButton id={guide} /> : null}
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push("/worker/notifications" as never)}
@@ -189,6 +198,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 4,
   },
+  spacer: { width: 44 },
   sideBtn: {
     width: 44,
     height: 44,

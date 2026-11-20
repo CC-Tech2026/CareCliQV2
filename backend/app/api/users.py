@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 import asyncio
 import logging
 import mimetypes
@@ -49,7 +51,7 @@ def _select_profile(user_id: str) -> dict:
             "emergency_contact, discipline, ahpra_registration_number, professional_indemnity_confirmed, "
             "business_name, email_verified, profile_completed, onboarding_completed, "
             "role_specific_profile_completed, profile_photo_url, profile_photo_path, onboarding_checklist, "
-            "preferred_contact_method, pending_email, profile_summary, profile_experience_years"
+            "preferred_contact_method, pending_email, profile_summary, profile_experience_years, date_of_birth"
         )
         .eq("id", user_id)
         .maybe_single()
@@ -122,6 +124,21 @@ async def get_my_profile(current_user: dict = Depends(get_current_user)):
     return _build_account_profile(get_user_id(current_user), current_user)
 
 
+def _parse_date_of_birth(value) -> str | None:
+    """A worker's own birth date: YYYY-MM-DD, in the past, age 14 to 100. Empty clears it."""
+    if value in (None, ""):
+        return None
+    try:
+        born = date.fromisoformat(str(value)[:10])
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Enter your birthday as a date (YYYY-MM-DD).")
+    today = date.today()
+    age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+    if born > today or age < 14 or age > 100:
+        raise HTTPException(status_code=422, detail="Enter a real date of birth.")
+    return born.isoformat()
+
+
 @router.patch("/me")
 async def update_my_profile(body: dict, current_user: dict = Depends(get_current_user)):
     user_id = get_user_id(current_user)
@@ -138,8 +155,12 @@ async def update_my_profile(body: dict, current_user: dict = Depends(get_current
         "preferred_contact_method",
         "profile_summary",
         "profile_experience_years",
+        # Optional, set by the worker themselves (the app celebrates it).
+        "date_of_birth",
     }
     payload = {k: v for k, v in (body or {}).items() if k in allowed}
+    if "date_of_birth" in payload:
+        payload["date_of_birth"] = _parse_date_of_birth(payload["date_of_birth"])
     if payload.get("preferred_contact_method") not in (None, *PREFERRED_CONTACT_METHODS):
         raise HTTPException(status_code=422, detail="Invalid preferred contact method.")
     if payload.get("profile_experience_years") is not None:
