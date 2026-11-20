@@ -22,6 +22,7 @@ import {
   type MeetingChoice,
 } from "@/lib/meeting-booking";
 import { getMeetingInvitees, type MeetingAttendee, type MeetingMode, type OrgEvent, type OrgEventPayload } from "@/services/hubService";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -440,12 +441,13 @@ export function MeetingBookingSheet({
 
           {mode === "in_person" && (
             <Field label="Where">
-              <div className={FIELD_BOX}>
-                <MapPin size={15} className="shrink-0" style={{ color: MUTED }} />
-                <input value={location} onChange={(e) => setLocation(e.target.value)}
-                  placeholder={withParticipant ? "Participant's home, office, community venue..." : "Office, meeting room..."}
-                  className="w-full bg-transparent text-sm outline-none" style={{ color: TEXT }} aria-label="Location" />
-              </div>
+              <AddressAutocomplete
+                value={location}
+                onChange={setLocation}
+                placeholder={withParticipant ? "Participant's home, office, community venue..." : "Office, meeting room..."}
+                aria-label="Location"
+                className="h-11 rounded-xl text-sm"
+              />
             </Field>
           )}
 
