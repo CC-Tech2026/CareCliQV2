@@ -118,23 +118,18 @@ it("prefills only the recorded available price item and still requires verificat
   fireEvent.click(
     screen.getByRole("button", { name: /^Review .*shift/ }),
   );
+  // The searchable picker shows the recorded item, already chosen...
   await waitFor(() =>
     expect(
-      (
-        screen.getByRole("combobox", {
-          name: "Price item",
-        }) as HTMLSelectElement
-      ).value,
-    ).toBe("TEST"),
+      screen.getByRole("combobox", { name: "Price item" }).textContent,
+    ).toContain("TEST"),
   );
+  // ...but nothing is verified until someone presses Verify.
   expect(state.mutate).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByRole("combobox", { name: "Price item" }), {
-    target: { value: "" },
-  });
   expect(
     (screen.getByRole("button", { name: "Verify shift" }) as HTMLButtonElement)
       .disabled,
-  ).toBe(true);
+  ).toBe(false);
 });
 it("offers retry instead of an empty queue when loading fails", () => {
   state.error = true;

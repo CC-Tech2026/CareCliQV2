@@ -294,7 +294,8 @@ it("bills the code the times suggest, against the matched agreement line, with a
   expect(screen.getByText(/Moved from the support it was rostered on/)).toBeTruthy();
   expect(screen.getByText("$103.54/hr NDIS price")).toBeTruthy();
   expect(screen.getByText("Suggested from the times worked")).toBeTruthy();
-  expect((screen.getByLabelText("NDIS price item") as HTMLSelectElement).value).toBe("01_013_0107_1_1");
+  // The searchable picker shows the picked code.
+  expect(screen.getByLabelText("NDIS price item").textContent).toContain("01_013_0107_1_1");
 
   const approve = () => screen.getByRole("button", { name: /Approve shift/ }) as HTMLButtonElement;
   expect(screen.getByText("The agreement hasn't been signed yet.")).toBeTruthy();

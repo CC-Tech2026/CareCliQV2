@@ -2011,6 +2011,8 @@ export type ShiftVerificationQueueItem = {
   /** "changes_requested": back with the worker; "sent_back": the worker has
    * made the changes and it's ready to look at again. */
   review_state?: "changes_requested" | "sent_back" | null;
+  /** Incidents from this shift, to see before approving. */
+  incidents?: ShiftIncident[];
 };
 
 export type ShiftPriceItemOption = {
@@ -2029,6 +2031,23 @@ export type ShiftPriceItemOption = {
   time_type?: string | null;
   support_intensity?: string | null;
   price_national?: number | null;
+  /** "organisation": on the organisation's own price list; "catalogue": the national NDIS catalogue. */
+  source?: "organisation" | "catalogue";
+  /** Covered by the participant's service agreement (this code or the same support at another time). */
+  in_agreement?: boolean;
+};
+
+/** An incident that belongs to a shift waiting for verification. */
+export type ShiftIncident = {
+  id: string;
+  reference_number?: string | null;
+  title?: string | null;
+  severity?: string | null;
+  status?: string | null;
+  incident_type?: string | null;
+  incident_date?: string | null;
+  /** "reported_on_shift": filed from the shift; "during_shift": same participant, dated during it. */
+  link: "reported_on_shift" | "during_shift";
 };
 
 export type VerifyShiftResult = {
