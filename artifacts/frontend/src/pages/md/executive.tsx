@@ -20,7 +20,6 @@ import {
   Section,
   SkeletonBlocks,
   StatusText,
-  SummaryStrip,
   Surface,
   ghostClass,
   outlineClass,
@@ -35,6 +34,7 @@ import { COMPLIANCE_TREND_KEY, MD_DASHBOARD_KEY } from "@/lib/query-keys";
 import { useBranches } from "@/hooks/useBranches";
 import { zoneAbbreviation } from "@/lib/datetime";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
+import { getHubComplianceAlerts } from "@/services/hubService";
 import { SectionInfo } from "@/components/ui/section-info";
 
 const TEXT = "var(--cc-text)";
@@ -176,6 +176,10 @@ export default function MDExecutivePage() {
     },
     retry: false,
   });
+  // The same attention items as the Executive Hub (cached under one key),
+  // so an overdue incident shows here whichever month it happened in.
+  const alertsQuery = useOrgQuery(["hub", "compliance-alerts"], { queryFn: getHubComplianceAlerts });
+  const overdueIncidents = (alertsQuery.data ?? []).filter((a) => a.source === "incidents" && a.severity === "critical").length;
   const data = overviewQuery.data ?? null;
   const trend = trendQuery.data?.trend ?? EMPTY_TREND;
   const retry = () => {
@@ -307,15 +311,25 @@ export default function MDExecutivePage() {
       href: "/md/staff",
       action: "Staff directory",
     },
-    {
-      label: "Incidents this month",
-      value: String(data.incidents_this_month),
-      target: "recorded since the 1st",
-      tone: data.incidents_this_month ? "warning" : "good",
-      status: data.incidents_this_month ? "Follow up" : "None recorded",
-      href: "/incidents",
-      action: "Incident register",
-    },
+    overdueIncidents
+      ? {
+          label: "Incidents needing action now",
+          value: String(overdueIncidents),
+          target: `${data.incidents_this_month} recorded this month`,
+          tone: "danger",
+          status: "Notification or follow-up overdue",
+          href: "/incidents",
+          action: "Incident register",
+        }
+      : {
+          label: "Incidents this month",
+          value: String(data.incidents_this_month),
+          target: "recorded since the 1st",
+          tone: data.incidents_this_month ? "warning" : "good",
+          status: data.incidents_this_month ? "Follow up" : "None recorded",
+          href: "/incidents",
+          action: "Incident register",
+        },
   ];
 
   return (
@@ -373,37 +387,93 @@ export default function MDExecutivePage() {
           </label>
         )}
 
-        <SummaryStrip
-          items={[
-            {
-              value: percent(data.compliance_score),
-              label: "documentation compliance",
-              tone: complianceTone,
-              hint: data.compliance_score >= target ? `At or above the ${target}% target` : `${Math.round(gap)} pts below the ${target}% target`,
-              onClick: () => navigate("/sessions"),
-            },
-            {
-              value: supportedPct == null ? "N/A" : `${supportedPct}%`,
-              label: "of active goals supported",
-              tone: supportTone,
-              hint: goalsActive ? `${goalsSupported} of ${goalsActive} goals had shift notes in 30 days` : `${data.active_participants} active participants`,
-              onClick: () => navigate("/onboard-participant/active"),
-            },
-            {
-              value: percent(data.staff_retention_rate),
-              label: "staff retention",
-              hint: `${data.support_workers} support workers`,
-              onClick: () => navigate("/md/staff"),
-            },
-            {
-              value: data.sessions_this_week,
-              label: data.sessions_this_week === 1 ? "shift this week" : "shifts this week",
-              hint: "Recorded since Monday",
-              onClick: () => navigate("/md/schedule"),
-            },
-          ]}
-        />
+        <Section title="Outcomes against targets" description="Where each outcome stands against its target, and where to act on it.">
+          <Surface>
+            <div
+              className="hidden grid-cols-[minmax(0,1fr)_110px_190px_190px] items-center gap-4 border-b px-5 py-2.5 text-xs font-medium md:grid"
+              style={{ borderColor: BORDER, color: MUTED }}
+              aria-hidden="true"
+            >
+              <span>Measure</span>
+              <span className="text-right">Now</span>
+              <span>Status</span>
+              <span className="text-right">Where to act</span>
+            </div>
+            <RowList>
+              {scorecard.map((row) => (
+                <li key={row.label}>
+                  <Link
+                    href={row.href}
+                    aria-label={`${row.label}: ${row.value}. ${row.action}`}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-4 transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum md:grid-cols-[minmax(0,1fr)_110px_190px_190px]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold" style={{ color: TEXT }}>{row.label}</span>
+                      <span className="block text-xs" style={{ color: MUTED }}>{row.target}</span>
+                    </span>
+                    <span className="text-right text-lg font-semibold tabular-nums" style={{ color: toneColor(row.tone) }}>{row.value}</span>
+                    <span className="col-span-2 md:col-span-1"><StatusText tone={row.tone}>{row.status}</StatusText></span>
+                    <span className="hidden items-center justify-end gap-1 text-sm md:flex" style={{ color: MUTED }}>
+                      {row.action}
+                      <ArrowRight size={14} />
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </RowList>
+          </Surface>
+        </Section>
 
+        {workersBelow.length > 0 && (
+          <Section
+            title="Who to follow up"
+            description={`Workers whose shift notes score under ${WORKER_THRESHOLD}%, lowest first. Open one to see their notes and help them.`}
+            action={<Link href="/md/staff" className={ghostClass}>Open staff <ArrowRight size={14} /></Link>}
+          >
+            <Surface>
+              <RowList>
+                {workersBelow.map((worker) => (
+                  <li key={worker.id}>
+                    <Link href={`/md/staff?workerId=${encodeURIComponent(worker.id)}`} className={rowClass}>
+                      <span
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cc-soft text-xs font-semibold"
+                        style={{ color: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}
+                        aria-hidden="true"
+                      >
+                        {worker.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold" style={{ color: TEXT }}>{worker.full_name}</span>
+                        <span className="block text-xs" style={{ color: MUTED }}>
+                          {worker.sessions} scored {worker.sessions === 1 ? "shift" : "shifts"}
+                        </span>
+                      </span>
+                      <span className="relative hidden h-2 w-48 shrink-0 overflow-hidden rounded-full sm:block" style={{ background: SOFT }} aria-hidden="true">
+                        <span
+                          className="absolute inset-y-0 left-0 rounded-full"
+                          style={{ width: `${Math.min(100, Math.max(2, worker.compliance_score))}%`, background: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}
+                        />
+                        <span className="absolute inset-y-0 w-0.5" style={{ left: `${WORKER_THRESHOLD}%`, background: TEXT, opacity: 0.35 }} />
+                      </span>
+                      <span className="w-12 text-right text-sm font-semibold tabular-nums" style={{ color: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}>
+                        {Math.round(worker.compliance_score)}%
+                      </span>
+                      <ArrowRight size={14} style={{ color: MUTED }} />
+                    </Link>
+                  </li>
+                ))}
+              </RowList>
+            </Surface>
+          </Section>
+        )}
+        {/* The trend charts explain the outcomes above; they're here when
+            wanted, not in the way of what to do. */}
+        <details className="group">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl border border-cc-border bg-cc-surface px-5 py-3 text-sm font-semibold text-cc-text hover:bg-cc-soft [&::-webkit-details-marker]:hidden">
+            Trends
+            <span className="text-xs font-normal text-cc-muted">Documentation compliance over time, and where shift notes stand</span>
+          </summary>
+          <div className="pt-6">
         <div className="grid gap-8 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
           <Section
             title="Documentation compliance over time"
@@ -512,85 +582,8 @@ export default function MDExecutivePage() {
           </Section>
         </div>
 
-        <Section title="Scorecard" description="Each measure against its target, with where to act on it.">
-          <Surface>
-            <div
-              className="hidden grid-cols-[minmax(0,1fr)_110px_190px_190px] items-center gap-4 border-b px-5 py-2.5 text-xs font-medium md:grid"
-              style={{ borderColor: BORDER, color: MUTED }}
-              aria-hidden="true"
-            >
-              <span>Measure</span>
-              <span className="text-right">Now</span>
-              <span>Status</span>
-              <span className="text-right">Where to act</span>
-            </div>
-            <RowList>
-              {scorecard.map((row) => (
-                <li key={row.label}>
-                  <Link
-                    href={row.href}
-                    aria-label={`${row.label}: ${row.value}. ${row.action}`}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-4 transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum md:grid-cols-[minmax(0,1fr)_110px_190px_190px]"
-                  >
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold" style={{ color: TEXT }}>{row.label}</span>
-                      <span className="block text-xs" style={{ color: MUTED }}>{row.target}</span>
-                    </span>
-                    <span className="text-right text-lg font-semibold tabular-nums" style={{ color: toneColor(row.tone) }}>{row.value}</span>
-                    <span className="col-span-2 md:col-span-1"><StatusText tone={row.tone}>{row.status}</StatusText></span>
-                    <span className="hidden items-center justify-end gap-1 text-sm md:flex" style={{ color: MUTED }}>
-                      {row.action}
-                      <ArrowRight size={14} />
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </RowList>
-          </Surface>
-        </Section>
-
-        {workersBelow.length > 0 && (
-          <Section
-            title="Workers who need documentation support"
-            description={`Scoring under ${WORKER_THRESHOLD}% on their shift notes, lowest first. The mark on each bar is the ${WORKER_THRESHOLD}% threshold.`}
-            action={<Link href="/md/staff" className={ghostClass}>Open staff <ArrowRight size={14} /></Link>}
-          >
-            <Surface>
-              <RowList>
-                {workersBelow.map((worker) => (
-                  <li key={worker.id}>
-                    <Link href={`/md/staff?workerId=${encodeURIComponent(worker.id)}`} className={rowClass}>
-                      <span
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cc-soft text-xs font-semibold"
-                        style={{ color: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}
-                        aria-hidden="true"
-                      >
-                        {worker.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold" style={{ color: TEXT }}>{worker.full_name}</span>
-                        <span className="block text-xs" style={{ color: MUTED }}>
-                          {worker.sessions} scored {worker.sessions === 1 ? "shift" : "shifts"}
-                        </span>
-                      </span>
-                      <span className="relative hidden h-2 w-48 shrink-0 overflow-hidden rounded-full sm:block" style={{ background: SOFT }} aria-hidden="true">
-                        <span
-                          className="absolute inset-y-0 left-0 rounded-full"
-                          style={{ width: `${Math.min(100, Math.max(2, worker.compliance_score))}%`, background: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}
-                        />
-                        <span className="absolute inset-y-0 w-0.5" style={{ left: `${WORKER_THRESHOLD}%`, background: TEXT, opacity: 0.35 }} />
-                      </span>
-                      <span className="w-12 text-right text-sm font-semibold tabular-nums" style={{ color: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}>
-                        {Math.round(worker.compliance_score)}%
-                      </span>
-                      <ArrowRight size={14} style={{ color: MUTED }} />
-                    </Link>
-                  </li>
-                ))}
-              </RowList>
-            </Surface>
-          </Section>
-        )}
+          </div>
+        </details>
       </div>
     </HubLayout>
   );
