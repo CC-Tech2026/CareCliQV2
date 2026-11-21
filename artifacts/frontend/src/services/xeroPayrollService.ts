@@ -1,7 +1,7 @@
 import { jsonFetch } from "@/services/http";
 
 /** Which Xero pay item each kind of hours goes under. */
-export type XeroPayItemKey = "weekday" | "saturday" | "sunday" | "public_holiday" | "sleepover";
+export type XeroPayItemKey = "weekday" | "saturday" | "sunday" | "public_holiday" | "sleepover" | "travel_km";
 
 export type XeroPayrollStatus = {
   connected: boolean;
@@ -11,6 +11,11 @@ export type XeroPayrollStatus = {
   rates: Record<XeroPayItemKey, string | null>;
   rate_names: Record<XeroPayItemKey, string | null>;
   breaks_unpaid: boolean;
+  /** The reimbursement travel fares go under on the payslip. */
+  fares_reimbursement_id?: string | null;
+  fares_reimbursement_name?: string | null;
+  /** Xero allows pay runs and payslips (needed for fares). */
+  has_payslip_access?: boolean;
   linked: number;
   employment_hero_connected: boolean;
 };
@@ -28,8 +33,9 @@ export type XeroPayrollWorker = {
 
 export type XeroPayrollOptions = {
   earnings_rates: XeroEarningsRate[];
+  reimbursement_types?: { id: string; name: string }[];
   /** Pay items picked by name, for any not chosen yet. */
-  suggested: Partial<Record<XeroPayItemKey, string>>;
+  suggested: Partial<Record<XeroPayItemKey | "fares_reimbursement", string | null>>;
   employees: { id: string; name: string }[];
   workers: XeroPayrollWorker[];
 };
@@ -37,10 +43,15 @@ export type XeroPayrollOptions = {
 export type XeroPayrollResult = {
   worker_id: string;
   worker_name: string;
-  status: "sent" | "updated" | "skipped" | "failed";
+  /** "travel": fares went onto the payslip. */
+  status: "sent" | "updated" | "skipped" | "failed" | "travel";
   period?: string;
   hours?: number;
+  travel_km?: number;
   message?: string;
+  /** Something about this timesheet worth knowing (kilometres left off). */
+  note?: string;
+  travel?: boolean;
 };
 
 export type XeroPayrollSend = { sent: number; failed: number; skipped: number; results: XeroPayrollResult[]; waiting: number };
@@ -65,6 +76,8 @@ export function saveXeroPayroll(settings: {
   rates?: Partial<Record<XeroPayItemKey, string | null>>;
   rate_names?: Partial<Record<XeroPayItemKey, string | null>>;
   breaks_unpaid?: boolean;
+  fares_reimbursement_id?: string;
+  fares_reimbursement_name?: string;
 }) {
   return jsonFetch<XeroPayrollStatus>(`${BASE}/settings`, {
     method: "PUT",

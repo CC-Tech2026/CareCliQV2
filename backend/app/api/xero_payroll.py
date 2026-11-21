@@ -22,6 +22,9 @@ class PayrollSettings(BaseModel):
     rates: Optional[dict[str, Optional[str]]] = None
     rate_names: Optional[dict[str, Optional[str]]] = None
     breaks_unpaid: Optional[bool] = None
+    # Travel fares go under this reimbursement on the payslip ("" clears it).
+    fares_reimbursement_id: Optional[str] = None
+    fares_reimbursement_name: Optional[str] = None
 
 
 class EmployeeLink(BaseModel):

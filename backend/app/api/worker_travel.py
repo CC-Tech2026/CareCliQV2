@@ -176,6 +176,15 @@ async def worker_submit_expenses(
     )
 
 
+@router.get("/claims")
+async def worker_travel_claims(current_user: dict = Depends(get_current_user)):
+    """Sent claims and where each is (approved claims are paid with wages)."""
+    from ..services import travel_pay_service
+
+    _require_worker(current_user)
+    return {"claims": travel_pay_service.worker_claims(str(get_user_id(current_user)), str(get_user_organization_id(current_user)))}
+
+
 @router.get("/summary")
 async def worker_travel_summary(current_user: dict = Depends(get_current_user)):
     _require_worker(current_user)

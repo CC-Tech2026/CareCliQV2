@@ -26,6 +26,11 @@ How it fits together
   told to adjust it there).
 - Every 30 minutes (and on "Send now") anything that couldn't be sent is
   tried again, for example after a missing employee is matched.
+- Approved travel claims are paid with wages too (travel_pay_service): each
+  becomes an Employment Hero expense request under the expense category the
+  director chose (one for kilometres, one for fares), approved there when
+  timesheets go as approved, so the next pay run pays it. A claim that went
+  is marked paid and never sent again.
 
 Only shifts worked on or after the "send from" date go (by default the day
 of connecting), so pay that was already entered by hand isn't sent again.
@@ -78,7 +83,14 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # a paid rest break from an unpaid meal break, so they're marked paid
     # unless the director says the organisation's breaks are unpaid.
     "breaks_unpaid": False,
+    # Employment Hero expense categories for approved travel: kilometres (a
+    # vehicle allowance) and fares (a reimbursement). Unset: claims wait.
+    "travel_km_category_id": None,
+    "travel_km_category_name": None,
+    "travel_fares_category_id": None,
+    "travel_fares_category_name": None,
 }
+TRAVEL_SETTING_KEYS = ("travel_km_category", "travel_fares_category")
 
 
 class EmploymentHeroError(Exception):
@@ -867,6 +879,8 @@ async def sync_organization(org_id: str, *, row: Optional[dict] = None) -> dict:
             result = await push_shift(org_id, shift_id, row=row, cache=cache)
             sent += result["status"] == "sent"
             failed += result["status"] == "failed"
+        travel = await push_travel(org_id, row=row, cache=cache)
+        failed += travel["failed"]
     except EmploymentHeroAuthError:
         return {"sent": sent, "failed": failed + 1}
     _save_connection(org_id, {"last_sync_at": _iso(_now()), **({"last_error": None, "last_error_at": None} if not failed else {})})
@@ -892,6 +906,122 @@ async def send_shift_for_user(user: dict, shift_id: str) -> dict:
         return await push_shift(org_id, shift_id, row=row, force=True)
     except EmploymentHeroError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Travel claims, as expense requests paid in the next pay run
+# ---------------------------------------------------------------------------
+
+async def _expense_categories(row: dict) -> list[dict]:
+    raw = await _api(row, "GET", "/expensecategory")
+    out = [
+        {"id": int(_get(c, "id")), "name": str(_get(c, "name") or "")}
+        for c in (raw if isinstance(raw, list) else [])
+        if _get(c, "id") is not None
+    ]
+    out.sort(key=lambda c: c["name"].lower())
+    return out
+
+
+def _suggest_travel_categories(categories: list[dict]) -> dict:
+    def first(*words: str) -> Optional[int]:
+        for word in words:
+            hit = next((c for c in categories if word in c["name"].lower()), None)
+            if hit:
+                return hit["id"]
+        return None
+
+    return {
+        "travel_km_category": first("kilometre", "km", "vehicle", "car", "mileage", "motor"),
+        "travel_fares_category": first("fare", "public transport", "transport", "travel"),
+    }
+
+
+def _travel_due(org_id: str, conn_settings: dict, ids: Optional[list[str]], limit: int) -> list[dict]:
+    """Approved claims not paid yet. Only those approved on or after the
+    send-from date, so travel already paid by hand isn't paid twice."""
+    query = (get_supabase_admin().table("shift_travel_expenses").select("*")
+             .eq("organization_id", org_id).eq("status", "approved"))
+    if ids:
+        query = query.in_("id", ids)
+    try:
+        rows = query.order("approved_at").limit(limit).execute().data or []
+    except Exception as exc:
+        if _schema_missing(exc):
+            return []
+        raise
+    send_from = str(conn_settings.get("send_from") or "")
+    return [r for r in rows if not send_from or str(r.get("approved_at") or "")[:10] >= send_from]
+
+
+async def push_travel(org_id: str, *, row: Optional[dict] = None, ids: Optional[list[str]] = None,
+                      cache: Optional[dict] = None) -> dict:
+    """Send approved travel claims as expense requests. Safe to call again:
+    a claim that went is marked paid and isn't picked up again."""
+    from . import travel_pay_service as tps
+
+    row = row or _load_connection(org_id)
+    if not row or not row.get("business_id"):
+        return {"sent": 0, "failed": 0}
+    conn_settings = _settings_of(row)
+    cache = cache if cache is not None else {}
+    sent = failed = 0
+    for claim in _travel_due(org_id, conn_settings, ids, RETRY_LIMIT):
+        kind = tps.kind_of(claim)
+        category = conn_settings.get("travel_km_category_id" if kind == tps.KM else "travel_fares_category_id")
+        what = "kilometres" if kind == tps.KM else "fares"
+        if not category:
+            # Waiting on a setting, not a failure: the director is told on the page.
+            tps.note_error(org_id, [claim["id"]], f"Choose Employment Hero's expense category for travel {what} on the Employment Hero page.")
+            continue
+        try:
+            employee_id = await _employee_for(row, org_id, str(claim["worker_id"]), cache)
+            shift = _shift(str(claim.get("shift_id") or "")) or {}
+            tz = participant_timezone(shift, organization_id=org_id) if shift else None
+            day = _shift_date(shift, tz) if shift else None
+            day = day or date.fromisoformat(str(claim.get("approved_at") or _iso(_now()))[:10])
+            amount = round(int(claim.get("amount_cents") or 0) / 100, 2)
+            if kind == tps.KM:
+                rate = int(claim.get("rate_cents_snapshot") or 0)
+                notes = f"{tps.km_of(claim):g} km" + (f" at ${rate / 100:.2f}/km" if rate else "")
+            else:
+                notes = f"{str(claim.get('transit_type') or 'Travel').capitalize()} fare"
+            who = _participant_label(shift.get("participant_name"))
+            request = {
+                "employeeId": employee_id,
+                "description": f"CareCliQ travel {day.strftime('%d/%m/%Y')}{' with ' + who if who else ''}"[:250],
+                "lineItems": [{
+                    "expenseCategoryId": int(category), "amount": amount, "dateIncurred": day.isoformat(),
+                    "notes": f"{notes} (CareCliQ claim {str(claim['id'])[:8]})"[:250],
+                }],
+            }
+            created = await _api(row, "POST", f"/employee/{employee_id}/expenserequest", json=request)
+            request_id = _get(created, "id")
+            if request_id is not None and conn_settings.get("send_approved", True):
+                await _api(row, "POST", f"/employee/{employee_id}/expenserequest/{request_id}/approve")
+            tps.mark_paid(org_id, [claim["id"]], "employment_hero", f"Employment Hero expense request {request_id}")
+            sent += 1
+        except EmploymentHeroAuthError:
+            raise
+        except EmploymentHeroError as exc:
+            tps.note_error(org_id, [claim["id"]], str(exc))
+            failed += 1
+    return {"sent": sent, "failed": failed}
+
+
+async def _after_travel_approved(org_id: str, ids: list[str]) -> None:
+    try:
+        row = _load_connection(org_id)
+        if row and _settings_of(row).get("auto_send", True):
+            await push_travel(org_id, row=row, ids=ids)
+    except Exception as exc:
+        logger.warning("Employment Hero travel send failed for %s: %s", org_id, exc)
+
+
+def travel_approved(org_id: Optional[str], expense_ids: list[str]) -> None:
+    """A coordinator approved travel claims. Never raises."""
+    if org_id and expense_ids:
+        _spawn(_after_travel_approved(str(org_id), [str(i) for i in expense_ids]))
 
 
 async def run_employment_hero_pass() -> int:
@@ -1020,6 +1150,11 @@ def update_settings(user: dict, data: dict) -> dict:
     if "sleepover_work_type_id" in data:
         conn_settings["sleepover_work_type_id"] = data["sleepover_work_type_id"]
         conn_settings["sleepover_work_type_name"] = data.get("sleepover_work_type_name")
+    for key in TRAVEL_SETTING_KEYS:
+        if f"{key}_id" in data:
+            value = data.get(f"{key}_id")
+            conn_settings[f"{key}_id"] = int(value) if value not in (None, "") else None
+            conn_settings[f"{key}_name"] = (str(data.get(f"{key}_name") or "")[:120] or None) if value not in (None, "") else None
     _save_connection(org_id, {"settings": conn_settings})
     return get_status(user)
 
@@ -1035,8 +1170,14 @@ async def list_options(user: dict) -> dict:
         employees = await _employees(row)
     except EmploymentHeroError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    try:
+        categories = await _expense_categories(row)
+    except EmploymentHeroError:
+        categories = []  # expense management not switched on in Employment Hero
     return {
         "work_types": work_types,
+        "expense_categories": categories,
+        "suggested_travel": _suggest_travel_categories(categories),
         "employees": [{"id": e["id"], "name": e["name"]} for e in sorted(employees, key=lambda e: e["name"].lower()) if e["active"]],
     }
 

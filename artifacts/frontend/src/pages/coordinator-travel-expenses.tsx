@@ -10,11 +10,15 @@ import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "wouter";
 import {
   actionTravelSubmission,
   getCoordinatorTravelSettings,
   getCoordinatorTravelSubmissions,
+  getTravelToPay,
+  markTravelClaimsPaid,
   updateCoordinatorTravelRate,
+  type TravelClaimToPay,
   type TravelSubmission,
 } from "@/services/coordinatorTravelService";
 import { formatAppDate } from "@/lib/datetime";
@@ -84,6 +88,7 @@ export default function CoordinatorTravelExpenses() {
       toast({ title: translate("coordinator.travel.toast.submissionUpdated") });
       setRejectId(null);
       setRejectReason("");
+      void queryClient.invalidateQueries({ predicate: (q) => q.queryKey.includes("travel-to-pay") });
       void refetch();
     },
     onError: (e: Error) =>
@@ -225,6 +230,89 @@ export default function CoordinatorTravelExpenses() {
           </ul>
         )}
       </Section>
+
+      <TravelPaidWithWages />
     </div>
+  );
+}
+
+const PAID_VIA: Record<string, string> = {
+  payroll_export: "Paid with wages (Payroll page)",
+  xero_payroll: "Paid with wages (Xero Payroll)",
+  employment_hero: "Paid with wages (Employment Hero)",
+  manual: "Marked paid",
+};
+
+function claimLabel(c: TravelClaimToPay) {
+  if (c.kind === "km") return `${c.km ?? 0} km vehicle allowance`;
+  return `${c.transit_type ? c.transit_type.charAt(0).toUpperCase() + c.transit_type.slice(1) : "Travel"} fare`;
+}
+
+/** Approved claims are paid in the worker's next pay. This shows what's
+ *  still owed (and anything payroll couldn't take), and what was paid. */
+function TravelPaidWithWages() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const query = useOrgQuery(["coordinator", "travel-to-pay"], { queryFn: getTravelToPay, refetchInterval: 60_000 });
+  const toPay = query.data?.to_pay ?? [];
+  const paid = query.data?.paid ?? [];
+  const owed = toPay.reduce((sum, c) => sum + c.amount_cents, 0);
+  const markPaid = useMutation({
+    mutationFn: (ids: string[]) => markTravelClaimsPaid(ids),
+    onSuccess: (res) => {
+      toast({ title: res.marked_paid === 1 ? "1 claim marked paid" : `${res.marked_paid} claims marked paid` });
+      void queryClient.invalidateQueries({ predicate: (q) => q.queryKey.includes("travel-to-pay") });
+    },
+    onError: (e: Error) => toast({ title: "Couldn't mark it paid", description: e.message, variant: "destructive" }),
+  });
+
+  const row = (c: TravelClaimToPay, done: boolean) => (
+    <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 sm:px-5">
+      {c.kind === "km" ? <Car size={14} style={{ color: MUTED }} /> : <Bus size={14} style={{ color: MUTED }} />}
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium" style={{ color: TEXT }}>{c.worker_name}</span>
+        <span className="block text-xs" style={{ color: c.payroll_error && !done ? "var(--cc-danger-text)" : MUTED }}>
+          {claimLabel(c)}
+          {done
+            ? ` · ${PAID_VIA[c.paid_via ?? ""] ?? "Paid"}${c.paid_at ? ` ${formatDate(c.paid_at)}` : ""}`
+            : c.payroll_error ? ` · ${c.payroll_error}` : ` · Approved ${formatDate(c.approved_at)}`}
+        </span>
+      </span>
+      <span className="text-sm font-semibold tabular-nums" style={{ color: TEXT }}>{formatAud(c.amount_cents)}</span>
+      {!done && (
+        <button type="button" className="text-xs font-medium underline" style={{ color: MUTED }}
+          disabled={markPaid.isPending} onClick={() => markPaid.mutate([c.id])}>
+          Paid another way
+        </button>
+      )}
+    </li>
+  );
+
+  return (
+    <Section
+      title={toPay.length ? `To pay with wages · ${formatAud(owed)}` : "To pay with wages"}
+      description="Approved claims are paid in the worker's next pay: kilometres as a vehicle allowance, fares as a reimbursement. They're on the Payroll page with the hours."
+      action={<Link href="/payroll" className={outlineClass}>Open Payroll</Link>}
+    >
+      {query.isLoading ? (
+        <SkeletonBlocks count={1} height="h-16" />
+      ) : toPay.length === 0 && paid.length === 0 ? (
+        <EmptyState icon={Car} title="Nothing to pay yet" />
+      ) : (
+        <div className="space-y-3">
+          {toPay.length > 0 ? (
+            <ul className="divide-y overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">{toPay.map((c) => row(c, false))}</ul>
+          ) : (
+            <p className="text-sm" style={{ color: MUTED }}>Every approved claim has been paid.</p>
+          )}
+          {paid.length > 0 && (
+            <details>
+              <summary className="cursor-pointer text-sm font-medium" style={{ color: TEXT }}>Recently paid ({paid.length})</summary>
+              <ul className="mt-2 divide-y overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">{paid.map((c) => row(c, true))}</ul>
+            </details>
+          )}
+        </div>
+      )}
+    </Section>
   );
 }

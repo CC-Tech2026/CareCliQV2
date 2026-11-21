@@ -37,8 +37,8 @@ function renderSection() {
   // Xero Payroll has its own tests (XeroPayrollSection.test.tsx).
   vi.mocked(xeroPayroll.getXeroPayroll).mockResolvedValue({
     connected: false, has_access: false, enabled: false, breaks_unpaid: false, linked: 0, employment_hero_connected: false,
-    rates: { weekday: null, saturday: null, sunday: null, public_holiday: null, sleepover: null },
-    rate_names: { weekday: null, saturday: null, sunday: null, public_holiday: null, sleepover: null },
+    rates: { weekday: null, saturday: null, sunday: null, public_holiday: null, sleepover: null, travel_km: null },
+    rate_names: { weekday: null, saturday: null, sunday: null, public_holiday: null, sleepover: null, travel_km: null },
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(

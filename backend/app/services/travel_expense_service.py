@@ -815,8 +815,28 @@ def action_submission(
         expense_update["rejected_at"] = now
         expense_update["rejection_reason"] = rejection_reason
 
-    get_supabase_admin().table("shift_travel_expenses").update(expense_update).eq(
-        "submission_batch_id", submission_id
-    ).execute()
+    if mark_paid:
+        expense_update["paid_via"] = "manual"
+    try:
+        updated = get_supabase_admin().table("shift_travel_expenses").update(expense_update).eq(
+            "submission_batch_id", submission_id
+        ).execute().data or []
+    except Exception as exc:
+        if not (mark_paid and _is_missing_schema(exc)):
+            raise
+        expense_update.pop("paid_via", None)  # migration 267 not applied yet
+        updated = get_supabase_admin().table("shift_travel_expenses").update(expense_update).eq(
+            "submission_batch_id", submission_id
+        ).execute().data or []
+
+    if approve and not mark_paid:
+        # Paid with wages: Employment Hero gets them now when it's connected;
+        # otherwise they're on the Payroll page (export or Xero Payroll).
+        try:
+            from . import employment_hero_service
+
+            employment_hero_service.travel_approved(organization_id, [str(r["id"]) for r in updated if r.get("id")])
+        except Exception as exc:
+            logger.warning("travel approval: payroll hand-off skipped: %s", exc)
 
     return {"submission_id": submission_id, "status": new_status}

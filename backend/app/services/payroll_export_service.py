@@ -200,13 +200,12 @@ def period(org_id: str, start: date, end: date) -> dict[str, Any]:
     segments_by: dict[str, list] = defaultdict(list)
     for seg in _by_ids("shift_segments", "shift_id, segment_type, segment_start, segment_end", "shift_id", approved_ids):
         segments_by[str(seg["shift_id"])].append(seg)
-    travel_by: dict[str, dict] = defaultdict(lambda: {"km": 0.0, "cents": 0})
-    for t in _by_ids("shift_travel_expenses", "shift_id, status, claimed_km, calculated_km, amount_cents",
-                     "shift_id", approved_ids, organization_id=org_id):
-        if t.get("status") in ("approved", "paid"):
-            km = t.get("claimed_km") if t.get("claimed_km") is not None else t.get("calculated_km")
-            travel_by[str(t["shift_id"])]["km"] += float(km or 0)
-            travel_by[str(t["shift_id"])]["cents"] += int(t.get("amount_cents") or 0)
+    # Approved travel goes in the pay: kilometres as a vehicle allowance,
+    # fares as a reimbursement (travel_pay_service).
+    from . import travel_pay_service
+
+    travel_by = travel_pay_service.by_shift(_by_ids(
+        "shift_travel_expenses", travel_pay_service.COLUMNS, "shift_id", approved_ids, organization_id=org_id))
 
     people_ids = {str(s.get("worker_id")) for s, _t, _d in in_period if s.get("worker_id")}
     people_ids |= {str(v.get("verified_by")) for v in approvals.values() if v.get("verified_by")}
@@ -277,7 +276,12 @@ def period(org_id: str, start: date, end: date) -> dict[str, Any]:
                 for p in pay.get("periods") or []
             ],
             "travel_km": round(travel["km"], 1) if travel else 0,
-            "travel_cents": travel["cents"] if travel else 0,
+            "travel_km_cents": travel["km_cents"] if travel else 0,
+            "travel_fares_cents": travel["fares_cents"] if travel else 0,
+            "travel_cents": (travel["km_cents"] + travel["fares_cents"]) if travel else 0,
+            # Claim ids by kind, and how many are approved but not paid yet.
+            "travel_claims": {"km": travel["km_ids"], "fares": travel["fares_ids"]} if travel else {"km": [], "fares": []},
+            "travel_unpaid": travel["unpaid"] if travel else 0,
             "approved_at": approval.get("verified_at"),
             # The approval time in the same local time as the shift, for the CSV.
             "approved_at_local": _local_or_none(approval.get("verified_at"), tz),
@@ -297,6 +301,10 @@ def period(org_id: str, start: date, end: date) -> dict[str, Any]:
             "waiting": len(waiting),
             "sent": sum(1 for s in shifts if (s["payroll"] or {}).get("status") in ("sent", "paid")),
             "attention": sum(1 for s in shifts if (s["payroll"] or {}).get("status") == "failed"),
+            "travel_km": round(sum(float(s["travel_km"] or 0) for s in shifts), 1),
+            "travel_km_cents": sum(s["travel_km_cents"] for s in shifts),
+            "travel_fares_cents": sum(s["travel_fares_cents"] for s in shifts),
+            "travel_unpaid": sum(s["travel_unpaid"] for s in shifts),
         },
         "shifts": shifts,
         "waiting": waiting,
@@ -314,7 +322,8 @@ COLUMNS: list[tuple[str, str, float]] = [
     ("Start date", "date", 12), ("Start time", "time", 10), ("End date", "date", 12), ("End time", "time", 10),
     ("Hours", "hours", 8), ("Type", "text", 12), ("Breaks (minutes)", "number", 10),
     ("Rostered hours", "hours", 10), ("Hours over roster", "hours", 10), ("Participant", "text", 14),
-    ("Kilometres", "number", 11), ("Travel reimbursement ($)", "money", 13), ("Times from", "text", 15),
+    ("Kilometres", "number", 11), ("Kilometre allowance ($)", "money", 13),
+    ("Fares and other travel ($)", "money", 13), ("Times from", "text", 15),
     ("Approved by", "text", 20), ("Approved at", "datetime", 17), ("CareCliQ shift ID", "text", 38),
 ]
 CSV_COLUMNS = [c[0] for c in COLUMNS]
@@ -352,7 +361,8 @@ def rows(data: dict[str, Any]) -> list[list[Any]]:
                 float(s["over_roster_minutes"]) / 60 if first and s.get("over_roster_minutes") else None,
                 s["participant"] or None,
                 float(s["travel_km"]) if first and s.get("travel_km") else None,
-                s["travel_cents"] / 100 if first and s.get("travel_cents") else None,
+                s["travel_km_cents"] / 100 if first and s.get("travel_km_cents") else None,
+                s["travel_fares_cents"] / 100 if first and s.get("travel_fares_cents") else None,
                 ("Clock times" if s.get("source") == "clock" else "Rostered times") if first else None,
                 s.get("approved_by") or None,
                 _local(s.get("approved_at_local")),

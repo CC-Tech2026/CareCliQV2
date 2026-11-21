@@ -53,3 +53,33 @@ export function actionTravelSubmission(
     },
   );
 }
+
+/** An approved claim, paid with wages (or still to be). */
+export type TravelClaimToPay = {
+  id: string;
+  shift_id?: string | null;
+  worker_id?: string | null;
+  worker_name: string;
+  /** km: a vehicle allowance. fares: a reimbursement. */
+  kind: "km" | "fares";
+  km?: number | null;
+  transit_type?: string | null;
+  amount_cents: number;
+  approved_at?: string | null;
+  paid_at?: string | null;
+  paid_via?: "payroll_export" | "xero_payroll" | "employment_hero" | "manual" | null;
+  /** Why it couldn't be sent to payroll yet. */
+  payroll_error?: string | null;
+};
+
+export function getTravelToPay() {
+  return jsonFetch<{ to_pay: TravelClaimToPay[]; paid: TravelClaimToPay[] }>("/api/coordinator/travel/to-pay");
+}
+
+/** Paid some other way than the Payroll page. */
+export function markTravelClaimsPaid(expenseIds: string[]) {
+  return jsonFetch<{ marked_paid: number }>("/api/coordinator/travel/mark-paid", {
+    method: "POST",
+    body: JSON.stringify({ expense_ids: expenseIds }),
+  });
+}

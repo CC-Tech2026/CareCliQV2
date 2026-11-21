@@ -119,6 +119,33 @@ export function getTravelDrafts() {
   return workerFetch<{ drafts: TravelExpense[] }>("/api/worker/travel/drafts");
 }
 
+/** A sent claim and where it is. Approved claims are paid with wages. */
+export type SentTravelClaim = {
+  id: string;
+  shift_id?: string | null;
+  status: "submitted" | "approved" | "paid" | "rejected";
+  kind: "km" | "fares";
+  km?: number | null;
+  transit_type?: TransitType | null;
+  amount_cents: number;
+  submitted_at?: string | null;
+  approved_at?: string | null;
+  paid_at?: string | null;
+  rejection_reason?: string | null;
+};
+
+export function getSentTravelClaims() {
+  return workerFetch<{ claims: SentTravelClaim[] }>("/api/worker/travel/claims");
+}
+
+/** Where a sent claim is, in the worker's words. */
+export function claimStatus(c: SentTravelClaim): string {
+  if (c.status === "paid") return "Paid with your wages";
+  if (c.status === "approved") return "Approved: paid in your next pay";
+  if (c.status === "rejected") return c.rejection_reason ? `Not approved: ${c.rejection_reason}` : "Not approved";
+  return "Waiting for the office to approve";
+}
+
 export function sendTravelClaims() {
   return workerFetch<{ submission_id: string; total_amount_cents: number; expense_count: number }>(
     "/api/worker/travel/submit",

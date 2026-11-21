@@ -298,11 +298,12 @@ def _scopes_for(org_id: str, payroll: bool) -> str:
     """The accounting permissions, plus Xero Payroll's when a director asks
     for them, or when this connection already has them (so reconnecting
     never quietly takes payroll away)."""
-    from .xero_payroll_service import PAYROLL_SCOPES, has_payroll_access
+    from .xero_payroll_service import PAYROLL_SCOPES, PAYSLIP_SCOPES, has_payroll_access
 
     scopes = settings.xero_scopes.split()
     if payroll or has_payroll_access(_load_connection(org_id)):
-        scopes += [s for s in PAYROLL_SCOPES if s not in scopes]
+        # Pay runs and payslips too, so travel fares can go on the payslip.
+        scopes += [s for s in PAYROLL_SCOPES + PAYSLIP_SCOPES if s not in scopes]
     return " ".join(scopes)
 
 

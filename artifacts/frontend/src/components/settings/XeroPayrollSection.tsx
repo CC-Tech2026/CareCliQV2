@@ -38,9 +38,10 @@ const PAY_ITEMS: { key: XeroPayItemKey; label: string; hint?: string }[] = [
   { key: "sunday", label: "Sunday hours" },
   { key: "public_holiday", label: "Public holiday hours" },
   { key: "sleepover", label: "Sleepovers", hint: "One for each sleepover, on the night it starts." },
+  { key: "travel_km", label: "Travel kilometres", hint: "A per-km allowance pay item. Approved kilometres go on the timesheet." },
 ];
 
-type Draft = { rates: Record<XeroPayItemKey, string | null>; breaks_unpaid: boolean; enabled: boolean };
+type Draft = { rates: Record<XeroPayItemKey, string | null>; breaks_unpaid: boolean; enabled: boolean; fares: string | null };
 
 export function XeroPayrollSection() {
   const { toast } = useToast();
@@ -62,12 +63,15 @@ export function XeroPayrollSection() {
     for (const item of PAY_ITEMS) {
       if (!rates[item.key] && item.key !== "weekday" && options?.suggested[item.key]) rates[item.key] = options.suggested[item.key] ?? null;
     }
-    setDraft({ rates, breaks_unpaid: status.breaks_unpaid, enabled: status.enabled });
+    const fares = status.fares_reimbursement_id ?? options?.suggested.fares_reimbursement ?? null;
+    setDraft({ rates, breaks_unpaid: status.breaks_unpaid, enabled: status.enabled, fares });
   }, [status, options]);
 
   const rateName = useMemo(() => new Map((options?.earnings_rates ?? []).map((r) => [r.id, r.name])), [options]);
+  const reimbursements = options?.reimbursement_types ?? [];
   const dirty = !!draft && !!status && (
     draft.enabled !== status.enabled || draft.breaks_unpaid !== status.breaks_unpaid ||
+    (draft.fares ?? null) !== (status.fares_reimbursement_id ?? null) ||
     PAY_ITEMS.some((i) => (draft.rates[i.key] ?? null) !== (status.rates[i.key] ?? null))
   );
   const missing = draft ? PAY_ITEMS.filter((i) => ["saturday", "sunday", "public_holiday"].includes(i.key) && !draft.rates[i.key]) : [];
@@ -89,7 +93,12 @@ export function XeroPayrollSection() {
     setBusy("save");
     try {
       const names = Object.fromEntries(PAY_ITEMS.map((i) => [i.key, draft.rates[i.key] ? rateName.get(draft.rates[i.key]!) ?? null : null]));
-      await saveXeroPayroll({ enabled: draft.enabled, rates: draft.rates, rate_names: names, breaks_unpaid: draft.breaks_unpaid });
+      await saveXeroPayroll({
+        enabled: draft.enabled, rates: draft.rates, rate_names: names, breaks_unpaid: draft.breaks_unpaid,
+        // "" clears it on the server.
+        fares_reimbursement_id: draft.fares ?? "",
+        fares_reimbursement_name: draft.fares ? reimbursements.find((r) => r.id === draft.fares)?.name ?? "" : "",
+      });
       await queryClient.invalidateQueries({ predicate: (q) => q.queryKey.includes("xero-payroll") || q.queryKey.includes("payroll-timesheets") });
       toast({ title: draft.enabled ? "Xero Payroll is on" : "Xero Payroll settings saved" });
     } catch (err) {
@@ -164,6 +173,37 @@ export function XeroPayrollSection() {
               <p className="text-xs" style={{ color: DANGER }}>
                 Choose a pay item for {missing.map((m) => m.label.toLowerCase()).join(", ")}, or those hours won't be sent.
               </p>
+            )}
+          </section>
+
+          <section className="space-y-2">
+            <p className="text-[13px] font-medium" style={{ color: TEXT }}>Travel fares</p>
+            <p className="text-xs" style={{ color: MUTED }}>
+              Approved fares (bus, train, parking) are a reimbursement, not hours, so they go onto each person's payslip in the
+              draft pay run. Start the pay run in Xero before you send.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="xero-pay-fares" className="text-[13px]">Reimbursement for fares</Label>
+                <Select value={draft.fares ?? NOT_SET} onValueChange={(v) => setDraft({ ...draft, fares: v === NOT_SET ? null : v })}>
+                  <SelectTrigger id="xero-pay-fares"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NOT_SET}>Not chosen</SelectItem>
+                    {reimbursements.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {reimbursements.length === 0 && (
+                  <p className="text-xs" style={{ color: MUTED }}>No reimbursement types in Xero yet. Add one under Payroll settings in Xero.</p>
+                )}
+              </div>
+            </div>
+            {!status.has_payslip_access && (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-xs" style={{ color: DANGER }}>Xero hasn't allowed CareCliQ to add to pay runs yet, so fares can't go on payslips.</p>
+                <Button variant="outline" size="sm" onClick={() => void allowAccess()} disabled={busy === "connect"}>
+                  Allow pay run access
+                </Button>
+              </div>
             )}
           </section>
 

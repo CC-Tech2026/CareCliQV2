@@ -9,6 +9,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
 from ..core.security import get_current_user
@@ -83,3 +84,29 @@ async def payroll_timesheets_csv(
     current_user: dict = Depends(get_current_user),
 ):
     return await _download(current_user, start, end, "csv")
+
+
+class TravelPaidBody(BaseModel):
+    start: date
+    end: date
+
+
+@router.post("/travel/mark-paid")
+async def payroll_travel_mark_paid(body: TravelPaidBody, current_user: dict = Depends(get_current_user)):
+    """The pay run is done: the approved travel on this period's approved
+    shifts was paid with wages (from the export)."""
+    from ..services import travel_pay_service
+
+    org_id = _org(current_user)
+    data = _period(org_id, body.start, body.end)
+    count = travel_pay_service.mark_paid(org_id, travel_pay_service.claims_in(data["shifts"]), "payroll_export",
+                                         f"Pay period {body.start.isoformat()} to {body.end.isoformat()}")
+    try:
+        await audit_service.log_action(
+            action_type="payroll.travel_marked_paid", entity_type="organization", entity_id=org_id,
+            user_id=str(get_user_id(current_user)), organization_id=org_id,
+            details={"start": body.start.isoformat(), "end": body.end.isoformat(), "claims": count},
+        )
+    except Exception:
+        pass
+    return {"marked_paid": count}

@@ -32,8 +32,15 @@ export type PayrollShift = {
   break_minutes: number;
   sleepover: boolean;
   periods: PayrollPeriod[];
+  /** Approved travel, paid with wages: kilometres as a vehicle allowance
+   *  (travel_km_cents at the organisation's rate) and fares as a reimbursement. */
   travel_km: number;
+  travel_km_cents: number;
+  travel_fares_cents: number;
   travel_cents: number;
+  travel_claims: { km: string[]; fares: string[] };
+  /** Approved claims not marked paid yet. */
+  travel_unpaid: number;
   approved_at?: string | null;
   approved_by?: string | null;
   /** Null when no payroll system is connected. */
@@ -54,7 +61,10 @@ export type PayrollPeriodData = {
   start: string;
   end: string;
   connected: { employment_hero: boolean; xero_payroll?: boolean };
-  totals: { shifts: number; hours: number; workers: number; waiting: number; sent: number; attention: number };
+  totals: {
+    shifts: number; hours: number; workers: number; waiting: number; sent: number; attention: number;
+    travel_km?: number; travel_km_cents?: number; travel_fares_cents?: number; travel_unpaid?: number;
+  };
   shifts: PayrollShift[];
   waiting: PayrollWaiting[];
 };
@@ -65,6 +75,15 @@ function query(start: string, end: string) {
 
 export function getPayrollTimesheets(start: string, end: string) {
   return jsonFetch<PayrollPeriodData>(`/api/payroll/timesheets?${query(start, end)}`);
+}
+
+/** The pay run is done: this period's approved travel was paid with wages. */
+export function markPayrollTravelPaid(start: string, end: string) {
+  return jsonFetch<{ marked_paid: number }>(`/api/payroll/travel/mark-paid`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ start, end }),
+  });
 }
 
 /** The hours as an Excel file (opens straight in Excel or Google Sheets,

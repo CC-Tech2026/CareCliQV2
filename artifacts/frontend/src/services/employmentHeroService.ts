@@ -13,6 +13,11 @@ export type EmploymentHeroSettings = {
   sleepover_work_type_name?: string | null;
   /** Breaks taken in the worker app are unpaid meal breaks (default: marked paid). */
   breaks_unpaid?: boolean;
+  /** Expense categories approved travel is paid under, in the next pay run. */
+  travel_km_category_id?: number | null;
+  travel_km_category_name?: string | null;
+  travel_fares_category_id?: number | null;
+  travel_fares_category_name?: string | null;
 };
 
 export type EmploymentHeroAttention = {
@@ -46,6 +51,9 @@ export type EmploymentHeroStatus = {
 
 export type EmploymentHeroOptions = {
   work_types: Array<{ id: number; name: string }>;
+  /** Empty when expense management isn't switched on in Employment Hero. */
+  expense_categories?: Array<{ id: number; name: string }>;
+  suggested_travel?: { travel_km_category: number | null; travel_fares_category: number | null };
   employees: Array<{ id: number; name: string }>;
 };
 
