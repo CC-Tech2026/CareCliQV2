@@ -24,7 +24,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const NONE = { weekday: null, saturday: null, sunday: null, public_holiday: null, sleepover: null };
+const NONE = { weekday: null, saturday: null, sunday: null, public_holiday: null, sleepover: null, travel_km: null };
 const STATUS: XeroPayrollStatus = {
   connected: true, has_access: true, enabled: false, breaks_unpaid: false, linked: 0, employment_hero_connected: false,
   rates: { ...NONE }, rate_names: { ...NONE },

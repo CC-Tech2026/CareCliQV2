@@ -6547,6 +6547,28 @@ async def action_coordinator_travel_submission(
     )
 
 
+class TravelMarkPaidBody(BaseModel):
+    expense_ids: list[str]
+
+
+@router.get("/travel/to-pay")
+async def list_coordinator_travel_to_pay(current_user: dict = Depends(get_current_user)):
+    """Approved claims still to be paid with wages, and the latest paid."""
+    from ..services import travel_pay_service
+
+    org_id = _require_org_read(current_user)
+    return {"to_pay": travel_pay_service.to_pay(org_id), "paid": travel_pay_service.recently_paid(org_id)}
+
+
+@router.post("/travel/mark-paid")
+async def mark_coordinator_travel_paid(body: TravelMarkPaidBody, current_user: dict = Depends(get_current_user)):
+    """Paid some other way (outside the Payroll page)."""
+    from ..services import travel_pay_service
+
+    org_id = _require_org_read(current_user)
+    return {"marked_paid": travel_pay_service.mark_paid(org_id, body.expense_ids[:500], "manual")}
+
+
 # ── Coordinator evidence / signature review ───────────────────────────────────
 # Org-wide mirrors of the worker-side evidence-metadata and shift-sign
 # endpoints in worker.py — a coordinator reviews every worker's records in

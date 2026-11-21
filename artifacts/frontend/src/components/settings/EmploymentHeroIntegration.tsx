@@ -293,6 +293,14 @@ function EmploymentHeroManagePage({
   const dirty = JSON.stringify(draft) !== JSON.stringify(status.settings);
   const workTypes = optionsQuery.data?.work_types ?? [];
   const employees = optionsQuery.data?.employees ?? [];
+  const categories = optionsQuery.data?.expense_categories ?? [];
+  const suggestedTravel = optionsQuery.data?.suggested_travel;
+  const travelChoices = (key: "travel_km_category" | "travel_fares_category") => {
+    const id = draft[`${key}_id`];
+    return id && !categories.some((c) => c.id === id)
+      ? [{ id, name: draft[`${key}_name`] || "Saved category" }, ...categories]
+      : categories;
+  };
   const workTypeChoices = draft.sleepover_work_type_id && !workTypes.some((w) => w.id === draft.sleepover_work_type_id)
     ? [{ id: draft.sleepover_work_type_id, name: draft.sleepover_work_type_name || "Saved work type" }, ...workTypes]
     : workTypes;
@@ -460,6 +468,56 @@ function EmploymentHeroManagePage({
                       ? `Couldn't load your ${NAME} work types.`
                       : "Picked for you when there is one. Shifts with a sleepover wait until it's chosen, so the sleep time isn't paid as ordinary hours."}
                   </p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[13px] font-medium" style={{ color: TEXT }}>Travel claims</p>
+                  <p className="text-xs" style={{ color: MUTED }}>
+                    Each approved claim goes to {NAME} as an expense request and is paid in the next pay run: kilometres as a
+                    vehicle allowance, fares as a reimbursement.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {([
+                      ["travel_km_category", "Kilometres are paid as"],
+                      ["travel_fares_category", "Fares are paid as"],
+                    ] as const).map(([key, label]) => {
+                      const choices = travelChoices(key);
+                      const current = draft[`${key}_id`] ?? null;
+                      const suggested = suggestedTravel?.[key] ?? null;
+                      return (
+                        <div key={key} className="space-y-1">
+                          <Label htmlFor={`eh-${key}`} className="text-[13px]">{label}</Label>
+                          <Select
+                            value={current ? String(current) : NO_WORK_TYPE}
+                            onValueChange={(v) => {
+                              const id = v === NO_WORK_TYPE ? null : Number(v);
+                              setDraft({ ...draft, [`${key}_id`]: id, [`${key}_name`]: choices.find((c) => c.id === id)?.name ?? null });
+                            }}
+                          >
+                            <SelectTrigger id={`eh-${key}`}><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_WORK_TYPE}>Not chosen yet</SelectItem>
+                              {choices.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          {!current && suggested && (
+                            <button
+                              type="button"
+                              className="text-xs font-medium underline"
+                              style={{ color: TEXT }}
+                              onClick={() => setDraft({ ...draft, [`${key}_id`]: suggested, [`${key}_name`]: categories.find((c) => c.id === suggested)?.name ?? null })}
+                            >
+                              Use {categories.find((c) => c.id === suggested)?.name}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {optionsQuery.isSuccess && categories.length === 0 && (
+                    <p className="text-xs" style={{ color: MUTED }}>
+                      No expense categories in {NAME}. Switch on expense management there and add one for kilometres and one for fares.
+                    </p>
+                  )}
                 </div>
                 <p className="text-xs" style={{ color: MUTED }}>
                   {NAME} works out the pay from the start and finish times, using your award settings there (weekends, evenings,

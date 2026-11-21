@@ -31,6 +31,11 @@ class SettingsBody(BaseModel):
     send_from: Optional[date] = None
     sleepover_work_type_id: Optional[int] = None
     sleepover_work_type_name: Optional[str] = Field(default=None, max_length=200)
+    # Expense categories approved travel is paid under (null clears).
+    travel_km_category_id: Optional[int] = None
+    travel_km_category_name: Optional[str] = Field(default=None, max_length=200)
+    travel_fares_category_id: Optional[int] = None
+    travel_fares_category_name: Optional[str] = Field(default=None, max_length=200)
 
 
 class EmployeeBody(BaseModel):

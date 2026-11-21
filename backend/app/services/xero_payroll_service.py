@@ -21,6 +21,17 @@ How Xero takes hours, and what that means here
   period, so it can't double up. A timesheet already approved or processed
   in Xero is left alone, and the result says so.
 
+Travel claims are paid with wages too (travel_pay_service):
+- Kilometres go on the same timesheet, under a per-km pay item the director
+  chooses (a vehicle allowance), on the day of the shift.
+- Fares are money, which a Xero timesheet can't carry, so they go onto the
+  employee's payslip in the DRAFT pay run for that period, as a
+  reimbursement (two more permissions: payroll.payruns, payroll.payslip).
+  Our lines are described "CareCliQ travel" and replaced on each send, so
+  they never double up. With no draft pay run yet, the result says to start
+  one in Xero and send again.
+- Claims that reached Xero are marked paid.
+
 Workers are matched to Xero employees by email, then by a unique active
 name (never guessed between two people with the same name); the director
 picks the rest. The links live in the Xero connection's settings.
@@ -37,7 +48,7 @@ import httpx
 from fastapi import HTTPException
 
 from ..core.access import get_user_id, get_user_organization_id, has_org_wide_access
-from . import audit_service, payroll_export_service
+from . import audit_service, payroll_export_service, travel_pay_service
 from . import xero_service as xs
 from .supabase_client import get_supabase_admin
 
@@ -45,8 +56,12 @@ logger = logging.getLogger(__name__)
 
 PAYROLL_BASE = "https://api.xero.com/payroll.xro/1.0"
 PAYROLL_SCOPES = ("payroll.employees.read", "payroll.timesheets", "payroll.settings.read")
+# For fares on the payslip; asked for with payroll, but hours go without them.
+PAYSLIP_SCOPES = ("payroll.payruns", "payroll.payslip")
 DAY_TYPES = ("weekday", "saturday", "sunday", "public_holiday")
-RATE_KEYS = DAY_TYPES + ("sleepover",)
+# travel_km: the per-km pay item that travel kilometres go under.
+RATE_KEYS = DAY_TYPES + ("sleepover", "travel_km")
+TRAVEL_LINE = "CareCliQ travel"
 CALENDAR_DAYS = {"WEEKLY": 7, "FORTNIGHTLY": 14, "FOURWEEKLY": 28}
 PAGE = 100
 
@@ -60,6 +75,9 @@ DEFAULTS: dict[str, Any] = {
     # Breaks taken in the worker app are unpaid meal breaks (taken off the
     # hours). Off: they're paid rest breaks and the hours stay as worked.
     "breaks_unpaid": False,
+    # Xero ReimbursementTypeID that travel fares go under on the payslip.
+    "fares_reimbursement_id": None,
+    "fares_reimbursement_name": None,
     # CareCliQ worker id -> Xero EmployeeID, matched or chosen.
     "links": {},
 }
@@ -71,7 +89,9 @@ _AUTO_NAMES = {
     "sunday": ("sunday",),
     "public_holiday": ("public holiday", "public hol"),
     "sleepover": ("sleepover", "sleep over"),
+    "travel_km": ("per km", "kilometre", "km allowance", "vehicle allowance", "car allowance", "motor vehicle", "mileage"),
 }
+_AUTO_REIMBURSEMENT = ("travel", "fares", "transport", "expense")
 
 
 class NotReady(xs.XeroError):
@@ -101,6 +121,11 @@ def _save(org_id: str, row: dict, payroll: dict) -> None:
 def has_payroll_access(row: Optional[dict]) -> bool:
     granted = set(str((row or {}).get("scopes") or "").split())
     return all(scope in granted for scope in PAYROLL_SCOPES)
+
+
+def has_payslip_access(row: Optional[dict]) -> bool:
+    granted = set(str((row or {}).get("scopes") or "").split())
+    return all(scope in granted for scope in PAYSLIP_SCOPES)
 
 
 def is_on(row: Optional[dict]) -> bool:
@@ -220,15 +245,27 @@ async def employees(row: dict) -> list[dict]:
     return [_employee_view(e) for e in await _pages(row, "/Employees", "Employees") if e.get("EmployeeID")]
 
 
-async def earnings_rates(row: dict) -> list[dict]:
+async def pay_items(row: dict) -> tuple[list[dict], list[dict]]:
+    """Earnings rates (hours, sleepovers, kilometres) and reimbursement
+    types (fares), as Xero has them."""
     body = await _papi(row, "GET", "/PayItems")
-    rates = ((body.get("PayItems") or {}).get("EarningsRates")) or []
-    out = [
+    items = body.get("PayItems") or {}
+    rates = [
         {"id": r["EarningsRateID"], "name": r.get("Name") or "Pay item", "type": r.get("EarningsType"),
          "rate_type": r.get("RateType"), "units": r.get("TypeOfUnits")}
-        for r in rates if r.get("EarningsRateID") and r.get("CurrentRecord", True) is not False
+        for r in items.get("EarningsRates") or []
+        if r.get("EarningsRateID") and r.get("CurrentRecord", True) is not False
     ]
-    return sorted(out, key=lambda r: r["name"].lower())
+    reimbursements = [
+        {"id": r["ReimbursementTypeID"], "name": r.get("Name") or "Reimbursement"}
+        for r in items.get("ReimbursementTypes") or []
+        if r.get("ReimbursementTypeID") and r.get("CurrentRecord", True) is not False
+    ]
+    return sorted(rates, key=lambda r: r["name"].lower()), sorted(reimbursements, key=lambda r: r["name"].lower())
+
+
+async def earnings_rates(row: dict) -> list[dict]:
+    return (await pay_items(row))[0]
 
 
 async def calendars(row: dict) -> dict[str, dict]:
@@ -296,13 +333,25 @@ def hours_by_day(shifts: list[dict], breaks_unpaid: bool) -> tuple[dict[date, fl
     return hours, sleepovers
 
 
+def km_by_day(shifts: list[dict]) -> dict[date, float]:
+    """Approved travel kilometres, on the day of each shift."""
+    out: dict[date, float] = defaultdict(float)
+    for s in shifts:
+        if s.get("travel_km") and s.get("date"):
+            out[date.fromisoformat(str(s["date"])[:10])] += float(s["travel_km"])
+    return out
+
+
 def build_lines(shifts: list[dict], period: tuple[date, date], rates: dict, ordinary_rate_id: Optional[str],
                 holidays: set[str], breaks_unpaid: bool) -> list[dict]:
     """Xero timesheet lines for one employee and pay period: a line per pay
-    item, with a number for each day of the period."""
+    item, with a number for each day of the period. Travel kilometres go
+    under the per-km pay item when one is chosen (left off otherwise, and
+    the caller says so)."""
     start, end = period
     days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
     hours, sleepovers = hours_by_day(shifts, breaks_unpaid)
+    km = km_by_day(shifts) if rates.get("travel_km") else {}
     by_rate: dict[str, list[float]] = {}
 
     def add(rate_id: str, index: int, units: float) -> None:
@@ -320,6 +369,8 @@ def build_lines(shifts: list[dict], period: tuple[date, date], rates: dict, ordi
             if not rates.get("sleepover"):
                 raise NotReady("This person had a sleepover. Choose the Xero pay item for sleepovers on the Xero page.")
             add(rates["sleepover"], i, sleepovers[day])
+        if km.get(day):
+            add(rates["travel_km"], i, km[day])
     return [
         {"EarningsRateID": rate_id, "NumberOfUnits": [round(u, 2) for u in units]}
         for rate_id, units in by_rate.items()
@@ -341,6 +392,9 @@ def get_status(user: dict) -> dict:
         "rates": payroll["rates"],
         "rate_names": payroll["rate_names"],
         "breaks_unpaid": payroll["breaks_unpaid"],
+        "fares_reimbursement_id": payroll["fares_reimbursement_id"],
+        "fares_reimbursement_name": payroll["fares_reimbursement_name"],
+        "has_payslip_access": has_payslip_access(row),
         "linked": len(payroll["links"]),
         "employment_hero_connected": _eh_connected(org_id),
     }
@@ -376,7 +430,7 @@ async def get_options(user: dict) -> dict:
     if not has_payroll_access(row):
         raise HTTPException(status_code=409, detail="Allow payroll access first.")
     try:
-        rates = await earnings_rates(row)
+        rates, reimbursements = await pay_items(row)
         people = await employees(row)
     except xs.XeroError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -394,9 +448,12 @@ async def get_options(user: dict) -> dict:
             "employee_id": employee["id"] if employee else None, "employee_name": employee["name"] if employee else None,
             "matched_by": how,
         })
+    fares = next((r for wanted in _AUTO_REIMBURSEMENT for r in reimbursements if wanted in r["name"].lower()), None)
     return {
         "earnings_rates": rates,
-        "suggested": {k: v["id"] for k, v in _auto_rates(rates).items()},
+        "reimbursement_types": reimbursements,
+        "suggested": {**{k: v["id"] for k, v in _auto_rates(rates).items()},
+                      "fares_reimbursement": fares["id"] if fares else None},
         "employees": [{"id": e["id"], "name": e["name"]} for e in sorted(people, key=lambda e: e["name"].lower()) if e["active"]],
         "workers": workers,
     }
@@ -419,6 +476,11 @@ def update_settings(user: dict, data: dict) -> dict:
             payroll["rate_names"][key] = (str((data.get("rate_names") or {}).get(key) or "").strip()[:120] or None) if value else None
     if "breaks_unpaid" in data:
         payroll["breaks_unpaid"] = bool(data["breaks_unpaid"])
+    if "fares_reimbursement_id" in data:
+        value = str(data.get("fares_reimbursement_id") or "").strip()[:64]
+        payroll["fares_reimbursement_id"] = value or None
+        payroll["fares_reimbursement_name"] = (
+            str(data.get("fares_reimbursement_name") or "").strip()[:120] or None) if value else None
     _save(org_id, row, payroll)
     return get_status(user)
 
@@ -536,6 +598,9 @@ async def send_period(user: dict, start: date, end: date) -> dict:
                     grouped[str(s["worker_id"])].append(s)
             full_periods[period] = grouped
 
+    # (worker, name, employee, period, label, shifts with fares): fares go on
+    # the payslip once every timesheet is in.
+    fare_jobs: list[tuple[str, str, dict, tuple[date, date], str, list[dict]]] = []
     for worker_id, employee, period in plans:
         shifts = full_periods[period].get(worker_id) or []
         name = (shifts or by_worker[worker_id])[0].get("worker_name") or employee["name"]
@@ -553,16 +618,31 @@ async def send_period(user: dict, start: date, end: date) -> dict:
                      "Status": "DRAFT", "TimesheetLines": lines}
             if current:
                 sheet["TimesheetID"] = current["TimesheetID"]
-                await _papi(row, "POST", f"/Timesheets/{current['TimesheetID']}", json=[sheet])
+                answer = await _papi(row, "POST", f"/Timesheets/{current['TimesheetID']}", json=[sheet])
             else:
-                await _papi(row, "POST", "/Timesheets", json=[sheet])
-            hours = round(sum(sum(l["NumberOfUnits"]) for l in lines if l["EarningsRateID"] != payroll["rates"].get("sleepover")), 2)
-            results.append({"worker_id": worker_id, "worker_name": name, "status": "updated" if current else "sent",
-                            "period": label, "hours": hours})
+                answer = await _papi(row, "POST", "/Timesheets", json=[sheet])
+            not_hours = {payroll["rates"].get("sleepover"), payroll["rates"].get("travel_km")} - {None}
+            hours = round(sum(sum(l["NumberOfUnits"]) for l in lines if l["EarningsRateID"] not in not_hours), 2)
+            result = {"worker_id": worker_id, "worker_name": name, "status": "updated" if current else "sent",
+                      "period": label, "hours": hours}
+            km_claims = travel_pay_service.claims_in(shifts, travel_pay_service.KM)
+            if km_claims and payroll["rates"].get("travel_km"):
+                sheet_id = ((answer.get("Timesheets") or [{}])[0] or {}).get("TimesheetID") or sheet.get("TimesheetID")
+                travel_pay_service.mark_paid(org_id, km_claims, "xero_payroll", f"Xero timesheet {sheet_id or label}")
+                result["travel_km"] = round(sum(float(s.get("travel_km") or 0) for s in shifts), 1)
+            elif km_claims:
+                result["note"] = f"{name}'s travel kilometres weren't sent: choose the per-km pay item on the Xero page."
+            results.append(result)
+            fares = [s for s in shifts if s.get("travel_fares_cents")]
+            if fares:
+                fare_jobs.append((worker_id, name, employee, period, label, fares))
         except xs.XeroAuthError:
             raise
         except xs.XeroError as exc:
             results.append({"worker_id": worker_id, "worker_name": name, "status": "failed", "period": label, "message": str(exc)})
+
+    if fare_jobs:
+        await _send_fares(org_id, row, payroll, fare_jobs, results)
 
     summary = _summary(results, data)
     try:
@@ -574,6 +654,87 @@ async def send_period(user: dict, start: date, end: date) -> dict:
     except Exception:
         pass
     return summary
+
+
+def _xero_money(cents: int) -> float:
+    return round(cents / 100, 2)
+
+
+async def _draft_pay_runs(row: dict) -> list[dict]:
+    body = await _papi(row, "GET", "/PayRuns", params={"where": 'PayRunStatus=="DRAFT"'})
+    out = []
+    for r in body.get("PayRuns") or []:
+        start = xs.parse_xero_date(r.get("PayRunPeriodStartDate"))
+        if r.get("PayRunID") and start:
+            out.append({"id": str(r["PayRunID"]), "calendar_id": str(r.get("PayrollCalendarID") or ""),
+                        "start": date.fromisoformat(start)})
+    return out
+
+
+async def _payslip_id(row: dict, pay_run_id: str, employee_id: str, cache: dict) -> Optional[str]:
+    if pay_run_id not in cache:
+        body = await _papi(row, "GET", f"/PayRuns/{pay_run_id}")
+        run = (body.get("PayRuns") or [{}])[0] or {}
+        cache[pay_run_id] = {str(p.get("EmployeeID")): str(p.get("PayslipID")) for p in run.get("Payslips") or []
+                             if p.get("EmployeeID") and p.get("PayslipID")}
+    return cache[pay_run_id].get(employee_id)
+
+
+async def _send_fares(org_id: str, row: dict, payroll: dict,
+                      jobs: list[tuple[str, str, dict, tuple[date, date], str, list[dict]]], results: list[dict]) -> None:
+    """Fares onto each employee's payslip in the draft pay run for the
+    period, as one reimbursement line per shift (replaced on every send)."""
+    def note(worker_id: str, name: str, label: str, message: str, ids: list[str]) -> None:
+        results.append({"worker_id": worker_id, "worker_name": name, "status": "skipped", "period": label,
+                        "message": message, "travel": True})
+        travel_pay_service.note_error(org_id, ids, message)
+
+    reimbursement = payroll.get("fares_reimbursement_id")
+    runs: Optional[list[dict]] = None
+    slips: dict[str, dict] = {}
+    for worker_id, name, employee, period, label, shifts in jobs:
+        ids = travel_pay_service.claims_in(shifts, travel_pay_service.FARES)
+        total = sum(int(s.get("travel_fares_cents") or 0) for s in shifts)
+        dollars = f"${total / 100:,.2f}"
+        if not reimbursement:
+            note(worker_id, name, label, f"{name}'s fares ({dollars}) weren't sent: choose the reimbursement for fares on the Xero page.", ids)
+            continue
+        if not has_payslip_access(row):
+            note(worker_id, name, label, f"{name}'s fares ({dollars}) weren't sent: allow pay run access on the Xero page.", ids)
+            continue
+        try:
+            if runs is None:
+                runs = await _draft_pay_runs(row)
+            run = next((r for r in runs if r["calendar_id"] == str(employee.get("calendar_id") or "") and r["start"] == period[0]), None)
+            if not run:
+                note(worker_id, name, label, f"{name}'s fares ({dollars}) for {label} go on the payslip: start the pay run "
+                     "for that period in Xero, then send again.", ids)
+                continue
+            payslip_id = await _payslip_id(row, run["id"], str(employee["id"]), slips)
+            if not payslip_id:
+                note(worker_id, name, label, f"{name} isn't in the draft Xero pay run for {label}, so their fares ({dollars}) weren't added.", ids)
+                continue
+            body = await _papi(row, "GET", f"/Payslip/{payslip_id}")
+            slip = body.get("Payslip") or {}
+            keep = [
+                {k: v for k, v in line.items() if k in ("ReimbursementTypeID", "Description", "ExpenseAccount", "Amount")}
+                for line in slip.get("ReimbursementLines") or []
+                if not str(line.get("Description") or "").startswith(TRAVEL_LINE)
+            ]
+            ours = [
+                {"ReimbursementTypeID": reimbursement, "Amount": _xero_money(int(s["travel_fares_cents"])),
+                 "Description": f"{TRAVEL_LINE} {date.fromisoformat(str(s['date'])[:10]).strftime('%d/%m')}"
+                                f"{' ' + s['participant'] if s.get('participant') else ''}"[:50]}
+                for s in shifts
+            ]
+            await _papi(row, "POST", f"/Payslip/{payslip_id}", json=[{"PayslipID": payslip_id, "ReimbursementLines": keep + ours}])
+            travel_pay_service.mark_paid(org_id, ids, "xero_payroll", f"Xero payslip {payslip_id}")
+            results.append({"worker_id": worker_id, "worker_name": name, "status": "travel", "period": label,
+                            "message": f"{name}'s fares ({dollars}) are on their payslip in the draft pay run.", "travel": True})
+        except xs.XeroAuthError:
+            raise
+        except xs.XeroError as exc:
+            note(worker_id, name, label, f"{name}'s fares ({dollars}) weren't added to the payslip: {exc}", ids)
 
 
 def _summary(results: list[dict], data: dict) -> dict:

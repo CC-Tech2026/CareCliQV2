@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getPayrollTimesheets: vi.fn(),
   downloadPayrollHours: vi.fn(),
   sendHoursToXero: vi.fn(),
+  markPayrollTravelPaid: vi.fn(),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
 vi.mock("@/services/xeroPayrollService", () => ({ sendHoursToXero: mocks.sendHoursToXero }));
@@ -19,6 +20,7 @@ vi.mock("@/lib/datetime", () => ({ appTodayKey: () => "2026-11-19" })); // a Thu
 vi.mock("@/services/payrollService", () => ({
   getPayrollTimesheets: mocks.getPayrollTimesheets,
   downloadPayrollHours: mocks.downloadPayrollHours,
+  markPayrollTravelPaid: mocks.markPayrollTravelPaid,
 }));
 
 // The side panel and the menu measure themselves; jsdom has no ResizeObserver.
@@ -38,11 +40,13 @@ const SHIFT: PayrollShift = {
   shift_id: "s-late", date: "2026-11-12", worker_id: "w-1", worker_name: "Aisha Rahman", worker_email: "aisha@example.com",
   participant: "Liam C.", start: "2026-11-12T09:00", end: "2026-11-12T12:40", source: "clock",
   worked_minutes: 220, scheduled_minutes: 180, over_roster_minutes: 40, break_minutes: 30, sleepover: false,
-  periods: [], travel_km: 12.5, travel_cents: 1100, approved_by: "Olivia Bennett", payroll: null,
+  periods: [], travel_km: 12.5, travel_km_cents: 1100, travel_fares_cents: 0, travel_cents: 1100,
+  travel_claims: { km: ["t-1"], fares: [] }, travel_unpaid: 1, approved_by: "Olivia Bennett", payroll: null,
 };
 const SLEEP: PayrollShift = {
   ...SHIFT, shift_id: "s-sleep", date: "2026-11-13", start: "2026-11-13T20:00", end: "2026-11-14T08:00",
-  worked_minutes: 720, over_roster_minutes: 0, break_minutes: 0, travel_km: 0, sleepover: true,
+  worked_minutes: 720, over_roster_minutes: 0, break_minutes: 0, travel_km: 0, travel_km_cents: 0, travel_cents: 0,
+  travel_claims: { km: [], fares: [] }, travel_unpaid: 0, sleepover: true,
   periods: [
     { kind: "active", start: "2026-11-13T20:00", end: "2026-11-13T22:00", minutes: 120, break_minutes: 0 },
     { kind: "sleepover", start: "2026-11-13T22:00", end: "2026-11-14T06:00", minutes: 480, break_minutes: 0 },
@@ -102,7 +106,7 @@ describe("Payroll", () => {
     expect(screen.getByText(/1 shift in this period isn't approved yet/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Approve timesheets" }).getAttribute("href")).toBe("/coordinator/verification");
     // A sleepover and a real late stay are noted for Aisha; Tom's 3 minutes aren't.
-    expect(screen.getAllByText("1 sleepover · Stayed late on 1 shift").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("1 sleepover · Stayed late on 1 shift · Travel $11.00").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Stayed late/)).toHaveLength(2); // Aisha on wide and narrow screens only
   });
 
@@ -171,6 +175,33 @@ describe("Payroll", () => {
     expect(await screen.findByText(/1 timesheet in Xero as a draft/)).toBeTruthy();
     expect(screen.getByText(/Tom Walsh isn't matched to a Xero employee/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open Xero settings" })).toBeTruthy();
+  });
+
+  it("shows approved travel paid with wages and marks it paid after the pay run", async () => {
+    mocks.getPayrollTimesheets.mockResolvedValue(data({
+      totals: { shifts: 1, hours: 3.67, workers: 1, waiting: 0, sent: 0, attention: 0,
+        travel_km: 12.5, travel_km_cents: 1100, travel_fares_cents: 450, travel_unpaid: 2 },
+      shifts: [SHIFT], waiting: [],
+    }));
+    mocks.markPayrollTravelPaid.mockResolvedValue({ marked_paid: 2 });
+    renderPage();
+    expect(await screen.findByText(/12.5 km, \$11.00 vehicle allowance · \$4.50 fares to reimburse/)).toBeTruthy();
+    expect(screen.getByText(/2 claims not paid yet/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Mark travel paid/ }));
+    await waitFor(() => expect(mocks.markPayrollTravelPaid).toHaveBeenCalledWith("2026-11-09", "2026-11-15"));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith({ title: "2 travel claims marked paid" }));
+  });
+
+  it("with Xero Payroll on, travel goes with Send to Xero instead of a Mark paid button", async () => {
+    mocks.getPayrollTimesheets.mockResolvedValue(data({
+      connected: { employment_hero: false, xero_payroll: true },
+      totals: { shifts: 1, hours: 3.67, workers: 1, waiting: 0, sent: 0, attention: 0,
+        travel_km: 12.5, travel_km_cents: 1100, travel_fares_cents: 0, travel_unpaid: 1 },
+      shifts: [SHIFT], waiting: [],
+    }));
+    renderPage();
+    expect(await screen.findByText(/Send to Xero puts the kilometres on the timesheets/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Mark travel paid/ })).toBeNull();
   });
 
   it("without Xero Payroll, there's no Send to Xero button", async () => {

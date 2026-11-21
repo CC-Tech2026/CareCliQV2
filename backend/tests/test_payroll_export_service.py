@@ -101,7 +101,10 @@ def _db(**more):
         "shift_breaks": [{"shift_id": "s-late", "break_start_at": "2026-11-12T10:30:00+10:30",
                           "break_end_at": "2026-11-12T11:00:00+10:30"}],
         "shift_travel_expenses": [
-            {"shift_id": "s-late", "organization_id": ORG, "status": "approved", "claimed_km": 12.5, "calculated_km": 11, "amount_cents": 1100},
+            {"id": "t-km", "shift_id": "s-late", "organization_id": ORG, "status": "approved", "expense_type": "mileage",
+             "claimed_km": 12.5, "calculated_km": 11, "amount_cents": 1100},
+            {"id": "t-bus", "shift_id": "s-late", "organization_id": ORG, "status": "paid", "expense_type": "transit",
+             "transit_type": "bus", "amount_cents": 450},
             {"shift_id": "s-late", "organization_id": ORG, "status": "draft", "claimed_km": 40, "amount_cents": 3520},
         ],
         "users": [
@@ -133,8 +136,11 @@ def test_the_period_has_the_approved_shifts_with_the_time_worked():
     assert (late["start"], late["end"]) == ("2026-11-12T09:00", "2026-11-12T12:40")
     assert late["break_minutes"] == 30 and late["periods"][0]["break_minutes"] == 30
     assert late["participant"] == "Liam C." and late["approved_by"] == "Olivia Bennett"
-    # Only the approved travel claim counts.
-    assert late["travel_km"] == 12.5 and late["travel_cents"] == 1100
+    # Only approved (or paid) travel counts: kilometres as an allowance,
+    # fares as a reimbursement, each with its claim ids.
+    assert late["travel_km"] == 12.5 and late["travel_km_cents"] == 1100 and late["travel_fares_cents"] == 450
+    assert late["travel_cents"] == 1550 and late["travel_claims"] == {"km": ["t-km"], "fares": ["t-bus"]}
+    assert late["travel_unpaid"] == 1
     assert [(p["kind"], p["minutes"]) for p in by_id["s-sleep"]["periods"]] == [
         ("active", 120), ("sleepover", 480), ("active", 120)]
     # Not connected to payroll: no payroll status at all.
@@ -142,7 +148,8 @@ def test_the_period_has_the_approved_shifts_with_the_time_worked():
     # Finished but not approved: waiting. Not worked yet, next period, reversed: not listed.
     assert [w["shift_id"] for w in data["waiting"]] == ["s-todo"]
     assert data["totals"] == {"shifts": 2, "hours": round((220 + 720) / 60, 2), "workers": 1,
-                              "waiting": 1, "sent": 0, "attention": 0}
+                              "waiting": 1, "sent": 0, "attention": 0, "travel_km": 12.5,
+                              "travel_km_cents": 1100, "travel_fares_cents": 450, "travel_unpaid": 1}
 
 
 def test_the_approved_snapshot_is_used_over_live_times():
@@ -181,7 +188,8 @@ def test_the_csv_has_a_row_per_period_and_shift_figures_once():
     assert len(late) == 1
     assert late[0]["Hours"] == "3.67" and late[0]["Hours over roster"] == "0.67"
     assert late[0]["Breaks (minutes)"] == "30" and late[0]["Kilometres"] == "12.5"
-    assert late[0]["Travel reimbursement ($)"] == "11.00" and late[0]["Times from"] == "Clock times"
+    assert late[0]["Kilometre allowance ($)"] == "11.00" and late[0]["Fares and other travel ($)"] == "4.50"
+    assert late[0]["Times from"] == "Clock times"
     sleep = [r for r in rows if r["CareCliQ shift ID"] == "s-sleep"]
     # Australian dates, and an overnight period shows the day it ends.
     assert [(r["Start date"], r["Start time"], r["End date"], r["End time"], r["Type"]) for r in sleep] == [
@@ -233,15 +241,15 @@ def test_the_excel_file_has_wide_columns_real_dates_and_a_fixed_heading():
     assert sheet.find("x:sheetViews/x:sheetView/x:pane", ns).get("state") == "frozen"
     # Date columns are wide enough to show 19/10/2026 rather than ######.
     widths = {int(c.get("min")): float(c.get("width")) for c in sheet.find("x:cols", ns)}
-    assert widths[4] >= 11 and widths[6] >= 11 and widths[18] >= 16
+    assert widths[4] >= 11 and widths[6] >= 11 and widths[19] >= 16
     # Shown day first, and stored as real dates and times.
     formats = {f.get("numFmtId"): f.get("formatCode") for f in styles.find("x:numFmts", ns)}
     assert formats["164"] == "dd/mm/yyyy" and formats["166"] == "dd/mm/yyyy hh:mm"
-    late_row = next(r for r in range(2, 10) if cells.get(f"S{r}", ("",))[0] == "s-late")
+    late_row = next(r for r in range(2, 10) if cells.get(f"T{r}", ("",))[0] == "s-late")
     assert cells[f"D{late_row}"] == ("46338", "2")  # 12/11/2026 as an Excel date
     assert cells[f"E{late_row}"][1] == "3" and abs(float(cells[f"E{late_row}"][0]) - 9 / 24) < 1e-9  # 09:00
     assert abs(float(cells[f"H{late_row}"][0]) - 220 / 60) < 1e-9  # hours as a number
-    assert cells[f"R{late_row}"][1] == "4"  # approved at: a date and time
+    assert cells[f"S{late_row}"][1] == "4"  # approved at: a date and time
 
 
 def test_the_excel_file_takes_names_as_plain_text():

@@ -9,7 +9,10 @@ import { FontFamily } from "@/constants/typography";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/lib/alert";
 import { formatShiftDate } from "@/lib/shift-utils";
-import { TRANSIT_TYPES, dollars, getTravelDrafts, missingEvidence, sendTravelClaims, type TravelExpense } from "@/lib/travel-api";
+import {
+  TRANSIT_TYPES, claimStatus, dollars, getSentTravelClaims, getTravelDrafts, missingEvidence, sendTravelClaims,
+  type TravelExpense,
+} from "@/lib/travel-api";
 import { getWorkerShifts } from "@/lib/worker-api";
 
 /**
@@ -25,17 +28,20 @@ export default function TravelClaimsScreen() {
 
   const drafts = useQuery({ queryKey: ["worker", "travel", "drafts"], queryFn: getTravelDrafts });
   const recent = useQuery({ queryKey: ["worker", "travel", "recent-shifts"], queryFn: () => getWorkerShifts("completed", { limit: 20 }) });
+  const sent = useQuery({ queryKey: ["worker", "travel", "sent"], queryFn: getSentTravelClaims });
   useFocusEffect(
     useCallback(() => {
       void drafts.refetch();
       void recent.refetch();
+      void sent.refetch();
     }, []), // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const list = drafts.data?.drafts ?? [];
   const shifts = recent.data?.shifts ?? [];
   const byShift = new Map(shifts.map((s) => [s.id, s]));
-  const claimed = new Set(list.map((d) => d.shift_id));
+  const sentClaims = sent.data?.claims ?? [];
+  const claimed = new Set([...list.map((d) => d.shift_id), ...sentClaims.filter((c) => c.status !== "rejected").map((c) => c.shift_id ?? "")]);
   const unclaimed = shifts.filter((s) => !claimed.has(s.id)).slice(0, 10);
   const blocked = list.filter((d) => missingEvidence(d));
   const total = list.reduce((sum, d) => sum + (d.amount_cents || 0), 0);
@@ -77,7 +83,7 @@ export default function TravelClaimsScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={styles.body}
-          refreshControl={<RefreshControl refreshing={drafts.isRefetching} onRefresh={() => { void drafts.refetch(); void recent.refetch(); }} />}
+          refreshControl={<RefreshControl refreshing={drafts.isRefetching} onRefresh={() => { void drafts.refetch(); void recent.refetch(); void sent.refetch(); }} />}
         >
           <Text style={[styles.heading, label]}>Ready to send</Text>
           {list.length === 0 ? (
@@ -145,6 +151,32 @@ export default function TravelClaimsScreen() {
               ))}
             </View>
           )}
+
+          {sentClaims.length > 0 ? (
+            <>
+              <Text style={[styles.heading, label]}>Sent claims</Text>
+              <Text style={muted}>Approved claims are paid with your wages: kilometres as a car allowance, fares paid back.</Text>
+              <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                {sentClaims.map((c, i) => (
+                  <View key={c.id} style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}>
+                    <Feather
+                      name={c.status === "paid" ? "check-circle" : c.status === "rejected" ? "x-circle" : "clock"}
+                      size={18}
+                      color={c.status === "paid" ? colors.primary : c.status === "rejected" ? colors.destructive : colors.mutedForeground}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={label}>
+                        {c.kind === "km" ? `Car, ${Number(c.km ?? 0)} km` : TRANSIT_TYPES.find((t) => t.value === c.transit_type)?.label ?? "Fare"}
+                        {byShift.get(c.shift_id ?? "")?.participant_name ? ` · ${byShift.get(c.shift_id ?? "")?.participant_name}` : ""}
+                      </Text>
+                      <Text style={[muted, c.status === "rejected" && { color: colors.destructive }]}>{claimStatus(c)}</Text>
+                    </View>
+                    <Text style={label}>{dollars(c.amount_cents)}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          ) : null}
         </ScrollView>
       )}
     </WorkerStackScreen>
