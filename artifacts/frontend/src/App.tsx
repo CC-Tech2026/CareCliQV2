@@ -68,6 +68,7 @@ import WorkerOnboarding from "@/pages/worker-onboarding";
 import CoordinatorOnboarding from "@/pages/coordinator-onboarding";
 import HubPage from "@/pages/hub/HubPage";
 import MDExecutivePage from "@/pages/md/executive";
+import PlanningPage from "@/pages/md/planning";
 import MDServiceDeliveryPage from "@/pages/md/service-delivery";
 import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage, { LegacyAuditRedirect } from "@/pages/md/compliance-workspace";
@@ -359,6 +360,12 @@ function Router() {
       </Route>
 
       {/* ── Managing Director Workspaces ──────────────────────────────────── */}
+      <Route path="/md/planning">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="executive_dashboard" capabilityLabel="Executive dashboard">
+          <PlanningPage />
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/md/executive">
         <ProtectedRoute allowedRoles={[...MD_ROLES]} requiredCapability="executive_dashboard" capabilityLabel="Executive dashboard">
           <MDExecutivePage />

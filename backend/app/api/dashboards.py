@@ -27,7 +27,7 @@ from ..core.timezone import (
     shift_local_date,
 )
 from ..models.billing_period import normalize_plan_management_type, plan_management_type_label
-from ..services import billing_service, demand_capacity_service, incident_service, participant_service, session_service
+from ..services import billing_service, demand_capacity_service, incident_service, participant_service, session_service, workforce_planning_service
 from ..services.dashboard_landing_service import build_worker_landing_dashboard
 from ..services.travel_time_service import estimate_travel_time
 from ..services import shift_service
@@ -900,6 +900,34 @@ async def md_demand_capacity(current_user: dict = Depends(get_current_user)):
     if not org_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
     return demand_capacity_service.get_demand_capacity(org_id)
+
+
+@router.get("/workforce-plan")
+async def workforce_plan(
+    target_utilisation: float = Query(0.85, ge=0.5, le=1.0),
+    on_cost_rate: float = Query(0.15, ge=0.0, le=0.6),
+    lead_time_weeks: Optional[int] = Query(None, ge=1, le=26),
+    wage_per_hour: Optional[float] = Query(None, gt=0, le=500),
+    current_user: dict = Depends(get_current_user),
+):
+    """Demand, staff time, hiring, pay and growth for the director's own
+    organisation, with every assumption stated."""
+    if not is_managing_director(current_user) and not has_active_grant(
+        current_user, "executive_dashboard", get_supabase_admin()
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing Director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+    return workforce_planning_service.get_workforce_plan(
+        str(org_id),
+        workforce_planning_service.Assumptions(
+            target_utilisation=target_utilisation,
+            on_cost_rate=on_cost_rate,
+            lead_time_weeks=lead_time_weeks,
+            wage_per_hour=wage_per_hour,
+        ),
+    )
 
 
 @router.get("/compliance-trend")
