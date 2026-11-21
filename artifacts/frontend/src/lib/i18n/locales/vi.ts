@@ -76,6 +76,8 @@ export const vi: Dict = {
   "schedule.checkFirst": "Kiểm tra trước khi duyệt",
   "schedule.incidents": "Sự cố trong ca này",
   "schedule.incidentReportedOnShift": "Được báo cáo trong ca này",
+  "schedule.incidentLabelOne": "Có báo cáo sự cố",
+  "schedule.incidentLabelMany": "{count} sự cố",
   "schedule.incidentDuringShift": "Cùng người tham gia, trong thời gian ca",
   "schedule.incidentOpen": "Mở sự cố",
   "schedule.incidentRead": "Hãy đọc trước khi duyệt: có thể ảnh hưởng đến khoản tính phí hoặc cần theo dõi.",

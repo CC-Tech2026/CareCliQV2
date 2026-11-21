@@ -353,3 +353,19 @@ it("doesn't offer to reverse a shift that's already invoiced", () => {
   expect(screen.getByText(/Already on an invoice/)).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Reverse verification" })).toBeNull();
 });
+
+it("labels a shift with an incident in the list, before it's opened", () => {
+  const original = queue[1].incidents;
+  queue[1].incidents = [
+    { id: "i1", title: "Fall in the kitchen", incident_type: "injury", link: "reported_on_shift" },
+  ] as unknown as ShiftVerificationQueueItem["incidents"];
+  try {
+    render(<CoordinatorVerificationPage />);
+    const row = screen.getByText("Ben Ito · Ava Lee").closest("button")!;
+    expect(row.textContent).toContain("Incident reported");
+    // The other shifts have none.
+    expect(screen.getAllByText("Incident reported")).toHaveLength(1);
+  } finally {
+    queue[1].incidents = original;
+  }
+});

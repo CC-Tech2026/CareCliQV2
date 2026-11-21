@@ -157,3 +157,33 @@ def test_price_list_still_works_without_the_catalogue():
          patch.object(svc.agreement_support_service, "_verification_lines", return_value=[]):
         out = asyncio.run(svc.list_price_item_options_for_participant("p-1", ORG))
     assert [o["item_code"] for o in out] == ["04_104_0125_6_1"]
+
+
+CATALOGUE = [
+    {"item_code": "01_011_0107_1_1", "name": "Self-care weekday", "unit": "H", "price_national": 70.23},
+    {"item_code": "15_037_0117_1_3", "name": "Therapy", "unit": "H", "price_national": 193.99},
+]
+
+
+def _options_for_plan(budgets):
+    async def plan(_pid):
+        return {"plan_budgets": budgets}
+
+    with patch.object(svc, "get_supabase_admin", return_value=_Supabase({"ndis_price_items": []})), \
+         patch.object(svc, "get_plan_for_participant", side_effect=plan), \
+         patch.object(svc.agreement_support_service, "catalogue_cached", return_value=CATALOGUE), \
+         patch.object(svc.agreement_support_service, "_verification_lines", return_value=[]):
+        return asyncio.run(svc.list_price_item_options_for_participant("p-1", ORG))
+
+
+def test_plan_budgets_written_differently_still_match_the_price_guide():
+    out = _options_for_plan([{"category": "Core Supports"}])
+    assert [o["item_code"] for o in out] == ["01_011_0107_1_1"]
+    assert not any(o.get("outside_plan") for o in out)
+    assert svc._budget_key("Capacity-Building") == "capacity_building" and svc._budget_key("CAPITAL") == "capital"
+
+
+def test_a_plan_that_matches_nothing_offers_every_item_instead_of_an_empty_list():
+    out = _options_for_plan([{"category": "assistance_animals"}])
+    assert {o["item_code"] for o in out} == {"01_011_0107_1_1", "15_037_0117_1_3"}
+    assert all(o["outside_plan"] for o in out)

@@ -2035,6 +2035,8 @@ export type ShiftPriceItemOption = {
   source?: "organisation" | "catalogue";
   /** Covered by the participant's service agreement (this code or the same support at another time). */
   in_agreement?: boolean;
+  /** The plan's budgets matched none of the price guide, so every item is offered. */
+  outside_plan?: boolean;
 };
 
 /** An incident that belongs to a shift waiting for verification. */

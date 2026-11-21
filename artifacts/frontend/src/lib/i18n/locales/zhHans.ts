@@ -76,6 +76,8 @@ export const zhHans: Dict = {
   "schedule.checkFirst": "批准前请检查",
   "schedule.incidents": "本班次的事件",
   "schedule.incidentReportedOnShift": "在本班次中报告",
+  "schedule.incidentLabelOne": "已报告事件",
+  "schedule.incidentLabelMany": "{count} 起事件",
   "schedule.incidentDuringShift": "同一参与者，发生在本班次期间",
   "schedule.incidentOpen": "打开事件",
   "schedule.incidentRead": "批准前请先阅读：它可能影响计费或需要跟进。",

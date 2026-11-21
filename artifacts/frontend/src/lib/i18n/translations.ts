@@ -77,6 +77,8 @@ export const en: Dict = {
   "schedule.checkFirst": "Check before approving",
   "schedule.incidents": "Incidents from this shift",
   "schedule.incidentReportedOnShift": "Reported during this shift",
+  "schedule.incidentLabelOne": "Incident reported",
+  "schedule.incidentLabelMany": "{count} incidents",
   "schedule.incidentDuringShift": "Same participant, during this shift",
   "schedule.incidentOpen": "Open incident",
   "schedule.incidentRead": "Read it before approving: it may change what's billed or need follow-up.",

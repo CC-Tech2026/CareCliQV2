@@ -251,6 +251,17 @@ export default function CoordinatorVerificationPage() {
                         <span className="mt-0.5 block text-xs text-cc-muted">
                           {[day, timeRange(start, end, item.timezone)].filter(Boolean).join(" · ")}
                         </span>
+                        {(item.incidents?.length ?? 0) > 0 && (
+                          <span
+                            className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                            style={{ background: "var(--cc-status-danger-bg)", color: "var(--cc-danger-text)" }}
+                          >
+                            <ShieldAlert size={11} aria-hidden />
+                            {item.incidents!.length === 1
+                              ? translate("schedule.incidentLabelOne")
+                              : translateParams("schedule.incidentLabelMany", { count: String(item.incidents!.length) })}
+                          </span>
+                        )}
                         {item.review_state && !approved[item.shift_id] && (
                           <span
                             className={
