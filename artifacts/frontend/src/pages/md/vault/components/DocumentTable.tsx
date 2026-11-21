@@ -206,7 +206,8 @@ export function DocumentTable({
                     </span>
                   ) : null}
                 </p>
-                <p className="truncate text-[11px]" style={{ color: "var(--cc-muted)" }}>
+                {/* Two lines rather than cut off mid-word ("3h 0m · Se..."). */}
+                <p className="line-clamp-2 text-[11px]" style={{ color: "var(--cc-muted)" }}>
                   {doc.person_name}
                   {doc.person_ref ? ` (${doc.person_ref})` : ""}
                   {doc.detail ? ` · ${doc.detail}` : ""}

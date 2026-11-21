@@ -683,7 +683,7 @@ def _render_session(org_id: str, document_id: str, exclude_fields: set[str] | No
     meta = [
         ("Reference", reference),
         ("Participant", patients.get(row.get("patient_id") or "", "Unknown participant")),
-        ("Date", session_dt[:10] or "—"),
+        ("Date", _display_date(session_dt) if session_dt else "—"),
         ("Time", session_dt[11:16] if len(session_dt) >= 16 else "—"),
         ("Duration", f"{duration} minutes" if duration else "—"),
         ("Support worker", worker_display),
@@ -753,7 +753,7 @@ def _render_incident(org_id: str, document_id: str, exclude_fields: set[str] | N
     patients = _patient_name_map(org_id)
     meta = [
         ("Participant", patients.get(row.get("participant_id") or "", "Unknown participant")),
-        ("Date", str(row.get("incident_date") or "")[:10] or "—"),
+        ("Date", _display_date(row.get("incident_date")) if row.get("incident_date") else "—"),
         ("Type", row.get("incident_type") or "—"),
         ("Severity", row.get("severity") or "—"),
         ("Status", row.get("status") or "—"),
@@ -2548,7 +2548,7 @@ VAULT_TREE_SUBFOLDERS: dict[str, list[tuple[str, str]]] = {
         ("incident_reports", "Incident Reports"),
         ("intake_docs", "Intake Docs"),
         ("invoices", "Invoices"),
-        ("service_support", "Service A & Support P"),
+        ("service_support", "Service Agreements & Support Plans"),
         ("sil_docs", "SIL Docs"),
         ("support_coordination", "Support Coordination Docs"),
     ],
