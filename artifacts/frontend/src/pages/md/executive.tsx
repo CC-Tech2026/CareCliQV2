@@ -16,14 +16,12 @@ import { HubLayout } from "@/components/layout/HubLayout";
 import {
   LoadError,
   PageHeader,
-  RowList,
   Section,
   SkeletonBlocks,
   StatusText,
   Surface,
   ghostClass,
   outlineClass,
-  rowClass,
   toneColor,
   type Tone,
 } from "@/components/layout/PageKit";
@@ -145,6 +143,39 @@ function TrendTooltip({ active, payload }: { active?: boolean; payload?: Array<{
         across {point.sessions} scored {point.sessions === 1 ? "shift" : "shifts"}
       </p>
     </div>
+  );
+}
+
+/** A score as a ring, with the target marked as a tick on the circle. */
+function ScoreRing({ pct, target, color, initials }: { pct: number; target?: number; color: string; initials?: string }) {
+  const r = 32;
+  const c = 2 * Math.PI * r;
+  const value = Math.max(0, Math.min(100, pct));
+  const tickAngle = target != null ? (target / 100) * 2 * Math.PI - Math.PI / 2 : null;
+  return (
+    <span className="relative inline-flex h-[76px] w-[76px] shrink-0 items-center justify-center" aria-hidden>
+      <svg width="76" height="76" viewBox="0 0 76 76" className="absolute inset-0">
+        <circle cx="38" cy="38" r={r} fill="none" stroke="var(--cc-soft)" strokeWidth="7" />
+        <circle
+          cx="38" cy="38" r={r} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
+          strokeDasharray={`${(value / 100) * c} ${c}`} transform="rotate(-90 38 38)"
+        />
+        {tickAngle != null ? (
+          <line
+            x1={38 + (r - 6) * Math.cos(tickAngle)} y1={38 + (r - 6) * Math.sin(tickAngle)}
+            x2={38 + (r + 6) * Math.cos(tickAngle)} y2={38 + (r + 6) * Math.sin(tickAngle)}
+            stroke="var(--cc-text)" strokeWidth="2" strokeLinecap="round" opacity="0.55"
+          />
+        ) : null}
+      </svg>
+      <span className="relative text-center leading-none">
+        {initials ? (
+          <span className="text-sm font-semibold" style={{ color: TEXT }}>{initials}</span>
+        ) : (
+          <span className="text-lg font-semibold tabular-nums" style={{ color }}>{Math.round(pct)}%</span>
+        )}
+      </span>
+    </span>
   );
 }
 
@@ -388,40 +419,37 @@ export default function MDExecutivePage() {
         )}
 
         <Section title="Outcomes against targets" description="Where each outcome stands against its target, and where to act on it.">
-          <Surface>
-            <div
-              className="hidden grid-cols-[minmax(0,1fr)_110px_190px_190px] items-center gap-4 border-b px-5 py-2.5 text-xs font-medium md:grid"
-              style={{ borderColor: BORDER, color: MUTED }}
-              aria-hidden="true"
-            >
-              <span>Measure</span>
-              <span className="text-right">Now</span>
-              <span>Status</span>
-              <span className="text-right">Where to act</span>
-            </div>
-            <RowList>
-              {scorecard.map((row) => (
+          <ul className="grid gap-phi-4 sm:grid-cols-2 xl:grid-cols-3">
+            {scorecard.map((row) => {
+              const pct = /%$/.test(row.value) ? Number.parseFloat(row.value) : null;
+              const target = Number.parseFloat((/(\d+)%/.exec(row.target) ?? [])[1] ?? "");
+              return (
                 <li key={row.label}>
                   <Link
                     href={row.href}
-                    aria-label={`${row.label}: ${row.value}. ${row.action}`}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-4 transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum md:grid-cols-[minmax(0,1fr)_110px_190px_190px]"
+                    aria-label={`${row.label}: ${row.value}. ${row.status}. ${row.action}`}
+                    className="flex h-full items-center gap-phi-4 rounded-2xl border border-cc-border bg-cc-surface p-phi-5 transition hover:border-cc-text/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
                   >
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold" style={{ color: TEXT }}>{row.label}</span>
-                      <span className="block text-xs" style={{ color: MUTED }}>{row.target}</span>
-                    </span>
-                    <span className="text-right text-lg font-semibold tabular-nums" style={{ color: toneColor(row.tone) }}>{row.value}</span>
-                    <span className="col-span-2 md:col-span-1"><StatusText tone={row.tone}>{row.status}</StatusText></span>
-                    <span className="hidden items-center justify-end gap-1 text-sm md:flex" style={{ color: MUTED }}>
-                      {row.action}
-                      <ArrowRight size={14} />
+                    {pct != null ? (
+                      <ScoreRing pct={pct} target={Number.isFinite(target) ? target : undefined} color={toneColor(row.tone)} />
+                    ) : (
+                      <span className="flex h-[76px] w-[76px] shrink-0 items-center justify-center rounded-full bg-cc-soft text-2xl font-semibold tabular-nums" style={{ color: toneColor(row.tone) }}>
+                        {row.value}
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold leading-snug" style={{ color: TEXT }}>{row.label}</span>
+                      <span className="mt-0.5 block text-xs" style={{ color: MUTED }}>{row.target}</span>
+                      <span className="mt-phi-2 block"><StatusText tone={row.tone}>{row.status}</StatusText></span>
+                      <span className="mt-phi-2 flex items-center gap-1 text-xs font-semibold" style={{ color: TEXT }}>
+                        {row.action} <ArrowRight size={13} />
+                      </span>
                     </span>
                   </Link>
                 </li>
-              ))}
-            </RowList>
-          </Surface>
+              );
+            })}
+          </ul>
         </Section>
 
         {workersBelow.length > 0 && (
@@ -430,42 +458,31 @@ export default function MDExecutivePage() {
             description={`Workers whose shift notes score under ${WORKER_THRESHOLD}%, lowest first. Open one to see their notes and help them.`}
             action={<Link href="/md/staff" className={ghostClass}>Open staff <ArrowRight size={14} /></Link>}
           >
-            <Surface>
-              <RowList>
-                {workersBelow.map((worker) => (
+            <ul className="grid gap-phi-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {workersBelow.map((worker) => {
+                const tone = worker.compliance_score < 60 ? "danger" : "warning";
+                return (
                   <li key={worker.id}>
-                    <Link href={`/md/staff?workerId=${encodeURIComponent(worker.id)}`} className={rowClass}>
-                      <span
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cc-soft text-xs font-semibold"
-                        style={{ color: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}
-                        aria-hidden="true"
-                      >
-                        {worker.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
+                    <Link
+                      href={`/md/staff?workerId=${encodeURIComponent(worker.id)}`}
+                      className="flex h-full flex-col items-center rounded-2xl border border-cc-border bg-cc-surface p-phi-5 text-center transition hover:border-cc-text/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
+                    >
+                      <ScoreRing pct={worker.compliance_score} target={WORKER_THRESHOLD} color={toneColor(tone)} initials={worker.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()} />
+                      <span className="mt-phi-3 block truncate text-sm font-semibold" style={{ color: TEXT }}>{worker.full_name}</span>
+                      <span className="block text-xs" style={{ color: MUTED }}>
+                        {Math.round(worker.compliance_score)}% across {worker.sessions} scored {worker.sessions === 1 ? "shift" : "shifts"}
                       </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold" style={{ color: TEXT }}>{worker.full_name}</span>
-                        <span className="block text-xs" style={{ color: MUTED }}>
-                          {worker.sessions} scored {worker.sessions === 1 ? "shift" : "shifts"}
-                        </span>
+                      <span className="mt-phi-3 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: TEXT }}>
+                        Review their notes <ArrowRight size={13} />
                       </span>
-                      <span className="relative hidden h-2 w-48 shrink-0 overflow-hidden rounded-full sm:block" style={{ background: SOFT }} aria-hidden="true">
-                        <span
-                          className="absolute inset-y-0 left-0 rounded-full"
-                          style={{ width: `${Math.min(100, Math.max(2, worker.compliance_score))}%`, background: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}
-                        />
-                        <span className="absolute inset-y-0 w-0.5" style={{ left: `${WORKER_THRESHOLD}%`, background: TEXT, opacity: 0.35 }} />
-                      </span>
-                      <span className="w-12 text-right text-sm font-semibold tabular-nums" style={{ color: toneColor(worker.compliance_score < 60 ? "danger" : "warning") }}>
-                        {Math.round(worker.compliance_score)}%
-                      </span>
-                      <ArrowRight size={14} style={{ color: MUTED }} />
                     </Link>
                   </li>
-                ))}
-              </RowList>
-            </Surface>
+                );
+              })}
+            </ul>
           </Section>
         )}
+
         {/* The trend charts explain the outcomes above; they're here when
             wanted, not in the way of what to do. */}
         <details className="group">

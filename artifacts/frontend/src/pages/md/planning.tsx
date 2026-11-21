@@ -58,9 +58,38 @@ function ChartTip({ active, payload, label, format }: { active?: boolean; payloa
   );
 }
 
+/** The team's offered hours as one bar: what's worked now, the target share,
+ *  and the busiest week ahead. Room to grow, or a shortfall, at a glance. */
+function CapacityPicture({ plan }: { plan: WorkforcePlan }) {
+  const total = plan.capacity.staff_hours;
+  const now = plan.demand.current_weekly_hours;
+  const peak = Math.max(0, ...plan.forecast.map((f) => f.demand_hours));
+  const target = plan.capacity.target_utilisation_pct;
+  const scale = Math.max(total, peak, 1);
+  const pct = (h: number) => `${Math.min(100, (h / scale) * 100)}%`;
+  const over = peak > total * (target / 100);
+  return (
+    <div className={`min-w-0 self-center rounded-xl bg-cc-surface p-phi-4 ${VIZ_VARS}`}>
+      <p className="text-sm font-semibold text-cc-text">Your team's week</p>
+      <p className="text-xs text-cc-muted">{hours(total)} offered by {plan.capacity.workers} {plan.capacity.workers === 1 ? "worker" : "workers"}</p>
+      <div className="relative mt-phi-5 h-6" role="img" aria-label={`${hours(now)} worked now of ${hours(total)} offered. Busiest week ahead ${hours(peak)}. Target ${target}%.`}>
+        <div className="absolute inset-0 rounded-full bg-cc-soft" style={{ width: pct(total) }} />
+        <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: pct(now), minWidth: now > 0 ? 6 : 0, background: "var(--s1)" }} />
+        <span className="absolute -top-1 bottom-[-4px] w-0.5 rounded bg-cc-text/50" style={{ left: pct(total * (target / 100)) }} aria-hidden />
+        <span className="absolute -top-1 bottom-[-4px] w-0.5 rounded" style={{ left: pct(peak), background: over ? "#B3261E" : "var(--s2)" }} aria-hidden />
+      </div>
+      <ul className="mt-phi-4 grid grid-cols-1 gap-phi-2 text-xs text-cc-text sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+        <li className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--s1)" }} aria-hidden />Worked now {hours(now)}</li>
+        <li className="flex items-center gap-1.5"><span className="h-3 w-0.5 rounded bg-cc-text/50" aria-hidden />Target {target}%</li>
+        <li className="flex items-center gap-1.5"><span className="h-3 w-0.5 rounded" style={{ background: over ? "#B3261E" : "var(--s2)" }} aria-hidden />Busiest week {hours(peak)}</li>
+      </ul>
+    </div>
+  );
+}
+
 function Figure({ label, value, note, measured }: { label: string; value: string; note?: string; measured?: boolean }) {
   return (
-    <div className="min-w-0 px-4 py-3">
+    <div className="min-w-0 rounded-xl border border-cc-border bg-cc-surface px-phi-4 py-phi-3">
       <dt className="text-xs text-cc-muted">{label}</dt>
       <dd className="mt-0.5 text-base font-semibold tabular-nums text-cc-text">{value}</dd>
       {note || measured === false ? (
@@ -153,16 +182,22 @@ export default function PlanningPage() {
               const t = TONE[summary.tone];
               const Icon = t.icon;
               return (
-                <section aria-label="Recommendation" className={`rounded-2xl border border-cc-border bg-cc-surface p-5 ${t.bg}`}>
-                  <h2 className="flex items-start gap-2 text-lg font-semibold leading-snug" style={{ color: t.color }}>
-                    <Icon size={20} className="mt-0.5 shrink-0" aria-hidden />
-                    <span className="text-cc-text">{summary.headline}</span>
-                  </h2>
-                  <ul className="mt-3 space-y-1.5 pl-7 text-sm leading-6 text-cc-text">
-                    {summary.points.map((p) => (
-                      <li key={p} className="list-disc">{p}</li>
-                    ))}
-                  </ul>
+                <section aria-label="Recommendation" className={`grid gap-phi-5 rounded-2xl border border-cc-border bg-cc-surface p-phi-5 lg:grid-golden ${t.bg}`}>
+                  <div className="min-w-0">
+                    <h2 className="flex items-start gap-2 text-xl font-semibold leading-snug" style={{ color: t.color }}>
+                      <Icon size={22} className="mt-0.5 shrink-0" aria-hidden />
+                      <span className="text-cc-text">{summary.headline}</span>
+                    </h2>
+                    <ul className="mt-phi-4 space-y-phi-3 text-sm leading-6 text-cc-text">
+                      {summary.points.map((p) => (
+                        <li key={p} className="flex gap-phi-3">
+                          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: t.color }} aria-hidden />
+                          <span>{p}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <CapacityPicture plan={plan} />
                 </section>
               );
             })()}
@@ -200,8 +235,8 @@ export default function PlanningPage() {
                   </div>
                 </details>
               </Surface>
-              <Surface className="mt-3">
-                <dl className="grid grid-cols-2 divide-cc-border sm:grid-cols-4 [&>div]:border-cc-border">
+              <div className="mt-phi-3">
+                <dl className="grid gap-phi-3 grid-cols-2 sm:grid-cols-4">
                   <Figure label="Delivered a week now" value={hours(plan.demand.current_weekly_hours)} note="last 4 weeks" />
                   <Figure label="Trend" value={`${plan.demand.trend_hours_per_week >= 0 ? "+" : ""}${hours(plan.demand.trend_hours_per_week)} a week`} note={plan.demand.trend_pct_per_month != null ? `${plan.demand.trend_pct_per_month}% a month` : undefined} measured={measured.trend} />
                   <Figure label="Team's offered hours" value={hours(plan.capacity.staff_hours)} note={`${plan.capacity.workers} workers${plan.capacity.workers_without_hours ? `, ${plan.capacity.workers_without_hours} at the team average` : ""}`} measured={measured.staff_hours} />
@@ -211,7 +246,7 @@ export default function PlanningPage() {
                   <Figure label="Staff turnover" value={`${plan.capacity.annual_attrition_pct}% a year`} measured={measured.attrition} />
                   <Figure label="Time to hire" value={`${plan.hiring.lead_time_weeks} ${plan.hiring.lead_time_weeks === 1 ? "week" : "weeks"}`} note="invite to first shift" measured={measured.lead_time} />
                 </dl>
-              </Surface>
+              </div>
             </Section>
 
             <Section title="What the hours earn and cost" description={`Revenue from verified shifts against staff pay plus ${plan.assumptions.on_cost_pct}% on-costs (super and workers compensation), by week of service.`}>
@@ -230,8 +265,8 @@ export default function PlanningPage() {
                   </ResponsiveContainer>
                 </div>
               </Surface>
-              <Surface className="mt-3">
-                <dl className="grid grid-cols-2 sm:grid-cols-4">
+              <div className="mt-phi-3">
+                <dl className="grid gap-phi-3 grid-cols-2 sm:grid-cols-4">
                   <Figure label="Earned per hour" value={plan.finance.revenue_per_hour != null ? money(plan.finance.revenue_per_hour) : "N/A"} note="verified shifts" measured={measured.revenue_rate} />
                   <Figure label="Pay per hour" value={plan.finance.loaded_wage_per_hour != null ? money(plan.finance.loaded_wage_per_hour) : "N/A"} note={plan.finance.wage_per_hour != null ? `${money(plan.finance.wage_per_hour)} + on-costs${plan.finance.wage_source === "entered" ? ", entered" : ""}` : "no pay calculated yet"} />
                   <Figure label="Margin per hour" value={plan.finance.margin_per_hour != null ? money(plan.finance.margin_per_hour) : "N/A"} note={plan.finance.margin_pct != null ? `${plan.finance.margin_pct}% of revenue` : undefined} />
@@ -241,7 +276,7 @@ export default function PlanningPage() {
                   <Figure label="Revenue at risk" value={plan.finance.revenue_at_risk != null ? money(plan.finance.revenue_at_risk) : "N/A"} note="demand nobody can cover" />
                   <Figure label="Funding left supports" value={plan.funding.weekly_hours != null ? `${hours(plan.funding.weekly_hours)} a week` : "N/A"} note={`${plan.funding.plans_counted} active plans`} />
                 </dl>
-              </Surface>
+              </div>
             </Section>
 
             <Section title="Growth" description="Participants receiving support and staff employed at the end of each month.">
@@ -260,14 +295,14 @@ export default function PlanningPage() {
                   </ResponsiveContainer>
                 </div>
               </Surface>
-              <Surface className="mt-3">
-                <dl className="grid grid-cols-2 sm:grid-cols-4">
+              <div className="mt-phi-3">
+                <dl className="grid gap-phi-3 grid-cols-2 sm:grid-cols-4">
                   <Figure label="Participants, 6 months" value={plan.growth.participants_change_pct != null ? `${plan.growth.participants_change_pct >= 0 ? "+" : ""}${plan.growth.participants_change_pct}%` : "New"} />
                   <Figure label="Staff, 6 months" value={plan.growth.staff_change_pct != null ? `${plan.growth.staff_change_pct >= 0 ? "+" : ""}${plan.growth.staff_change_pct}%` : "New"} />
                   <Figure label="Enquiries that start" value={`${plan.growth.conversion_pct}%`} measured={measured.conversion} />
                   <Figure label="Enquiry to first support" value={`${plan.growth.days_to_activate} days`} measured={measured.days_to_activate} />
                 </dl>
-              </Surface>
+              </div>
             </Section>
 
             <Section title="Planning settings" description="Change these to see how the plan moves. Nothing is saved.">
