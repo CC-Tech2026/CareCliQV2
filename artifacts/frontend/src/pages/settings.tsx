@@ -1,4 +1,5 @@
 import { SettingsNavigation, resolveSettingsSection } from "@/components/settings/SettingsNavigation";
+import { VoiceTranscriptionCard } from "@/components/settings/VoiceTranscriptionCard";
 import { PageHeader } from "@/components/layout/PageKit";
 import { BillingSection } from "@/components/settings/BillingSection";
 import { DelegatedAccessSection } from "@/components/settings/DelegatedAccessSection";
@@ -2575,6 +2576,7 @@ export default function Settings() {
             description={translate("settings.privacy.subtitle")}
             icon={Shield}
           >
+            {(isCoordinator || isMD) && <div className="mb-4"><VoiceTranscriptionCard /></div>}
             <WorkerPrivacy showHeader={false} onManageSubscription={isMD ? () => setActiveSection("billing") : undefined} />
           </Section>
         )}

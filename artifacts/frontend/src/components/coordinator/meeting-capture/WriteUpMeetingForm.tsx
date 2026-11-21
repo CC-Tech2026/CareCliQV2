@@ -63,8 +63,8 @@ export function WriteUpMeetingForm({
       <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
         {voiceOffMessage && (
           <p className={NOTE}>
-            Recording meetings is switched off for your organisation for now, while the agreements for sending audio to be
-            transcribed are put in place. Write the meeting up here instead.
+            Recording meetings is switched off for your organisation. Your managing director can switch voice recording on
+            in Settings, under Privacy. Write the meeting up here instead.
           </p>
         )}
 
