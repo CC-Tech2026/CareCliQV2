@@ -17,9 +17,16 @@ export type Outcome = {
   headline: string;
   detail: string;
   action: { label: string; href: string };
+  /** A small bar on the tile when the outcome is a share: 0-100, with the target marked. */
+  meter?: { pct: number; target?: number; label: string };
 };
 
 export type ActionGroup = "now" | "week" | "watch";
+
+/** What a task is about: picks its icon. */
+export type ActionKind =
+  | "incident" | "credential" | "notes" | "enquiry" | "goal"
+  | "invoice" | "claim" | "money" | "evidence" | "people" | "other";
 
 export type ActionItem = {
   id: string;
@@ -31,7 +38,25 @@ export type ActionItem = {
   due?: string | null;
   actionLabel: string;
   href: string;
+  kind?: ActionKind;
 };
+
+/** The kind of a task from where it leads, when it doesn't say. */
+export function actionKind(item: Pick<ActionItem, "kind" | "href" | "id">): ActionKind {
+  if (item.kind) return item.kind;
+  const h = item.href;
+  if (h.startsWith("/incidents")) return "incident";
+  if (h.includes("tab=credentials") || h.includes("credential")) return "credential";
+  if (h.includes("tab=shifts") || h.startsWith("/sessions")) return "notes";
+  if (h.startsWith("/onboard-participant") && !h.includes("/active")) return "enquiry";
+  if (h.includes("/active") || item.id === "goals") return "goal";
+  if (h.includes("workspace=claims")) return "claim";
+  if (h.includes("workspace=invoices") || h.includes("invoiceId")) return "invoice";
+  if (h.startsWith("#")) return "money";
+  if (h.includes("view=checklist")) return "evidence";
+  if (h.startsWith("/md/staff")) return "people";
+  return "other";
+}
 
 /** What the director dashboard endpoint returns that these need. */
 export type OutcomeInputs = {
@@ -70,6 +95,7 @@ function goalsOutcome(md: OutcomeInputs): Outcome {
       ? `${missing} ${plural(missing, "goal has", "goals have")} no shift notes against ${missing === 1 ? "it" : "them"}.`
       : "Every active goal had support recorded against it.",
     action,
+    meter: { pct, target: 80, label: "Goals worked on" },
   };
 }
 
@@ -97,6 +123,7 @@ function qualityOutcome(md: OutcomeInputs): Outcome {
       behind ? `${behind} ${plural(behind, "worker needs", "workers need")} support` : null,
     ].filter(Boolean).join(". ") + ".",
     action,
+    meter: { pct: score, target, label: "Notes meeting the standard" },
   };
 }
 
