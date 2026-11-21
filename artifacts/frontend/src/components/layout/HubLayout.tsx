@@ -593,7 +593,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             login/signup pages (their background wash) into the MD portal, so
             arriving here after signing in doesn't feel like a different app. */}
         <div className="h-[3px] w-full" style={{ background: "#7C3AED" }} />
-        <div className={`mx-auto flex h-[72px] items-center justify-between px-3 sm:px-4 ${isMD ? "w-full" : "max-w-[1600px]"}`}>
+        <div className={`mx-auto flex h-[72px] items-center justify-between px-phi-4 sm:px-phi-5 ${isMD ? "w-full" : "max-w-[1600px]"}`}>
           {/* Brand & Organization Badge */}
           <div className="flex min-w-0 items-center gap-3">
             <Link
@@ -1084,7 +1084,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       {isMD && sidebarMode ? (
         <div
           className={`mx-auto flex items-start ${dockedSidebar ? "gap-0" : "gap-4"} ${
-            dockedSidebar ? "w-full" : `py-2 ${isMD || location === "/billing" ? "w-full px-3 sm:px-4" : "max-w-[1600px] px-4 sm:px-6"}`
+            dockedSidebar ? "w-full" : `py-phi-3 ${isMD || location === "/billing" ? "w-full px-phi-4 sm:px-phi-5" : "max-w-[1600px] px-phi-4 sm:px-phi-5"}`
           }`}
         >
           {/* Docked: a deep purple rail on the left edge, like the app sidebar,
@@ -1198,7 +1198,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
         </div>
       ) : (
         <main id="management-main" tabIndex={-1}
-          className={`mx-auto ${isMD ? "w-full px-3 py-2 sm:px-4" : location === "/billing" ? "w-full px-3 py-4 sm:px-4" : "max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8"} ${bottombarMode ? "xl:pb-32" : ""}`}
+          className={`mx-auto ${isMD ? "w-full px-phi-4 py-phi-4 sm:px-phi-5" : location === "/billing" ? "w-full px-phi-4 py-phi-4 sm:px-phi-5" : "max-w-[1600px] px-phi-4 py-phi-5 sm:px-phi-5 lg:px-phi-6"} ${bottombarMode ? "xl:pb-32" : ""}`}
         >
           {workspace && <WorkspaceTabs item={workspace} location={location} />}
           <PageErrorBoundary>{children}</PageErrorBoundary>

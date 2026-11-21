@@ -45,7 +45,7 @@ export function PageHeader({
   // behind the info button beside the title (or the title's own one).
   const ownInfo = typeof title !== "string";
   return (
-    <header className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+    <header className="flex flex-wrap items-center justify-between gap-x-phi-5 gap-y-phi-3">
       <div className="min-w-0">
         {back && <div className="mb-1">{back}</div>}
         <p className="sr-only">{eyebrow}</p>
@@ -221,8 +221,8 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section className={`min-w-0 space-y-3 ${className}`} aria-label={title}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <section className={`min-w-0 space-y-phi-4 ${className}`} aria-label={title}>
+      <div className="flex flex-wrap items-end justify-between gap-phi-3">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold" style={{ color: TEXT }}>{title}</h2>
           {description && <p className="mt-0.5 text-sm" style={{ color: MUTED }}>{description}</p>}
@@ -265,7 +265,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl bg-cc-surface px-6 py-12 text-center">
+    <div className="rounded-2xl bg-cc-surface px-phi-5 py-phi-6 text-center">
       <Icon size={26} className="mx-auto mb-3" style={{ color: MUTED }} />
       <p className="text-base font-semibold" style={{ color: TEXT }}>{title}</p>
       {body && <p className="mx-auto mt-1 max-w-md text-sm" style={{ color: MUTED }}>{body}</p>}
@@ -276,7 +276,7 @@ export function EmptyState({
 
 export function LoadError({ children, onRetry }: { children: ReactNode; onRetry?: () => void }) {
   return (
-    <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl bg-cc-surface px-5 py-4 text-sm" style={{ color: TEXT }}>
+    <div role="alert" className="flex flex-wrap items-center gap-phi-3 rounded-2xl bg-cc-surface px-phi-5 py-phi-4 text-sm" style={{ color: TEXT }}>
       {children}
       {onRetry && (
         <button type="button" onClick={onRetry} className="min-h-10 rounded-full border px-4 font-semibold" style={{ borderColor: BORDER }}>
@@ -303,7 +303,7 @@ export function Notice({
 }) {
   const bg = tone === "danger" ? "var(--cc-status-danger-bg)" : tone === "warning" ? "var(--cc-status-warning-bg)" : "var(--cc-status-info-bg)";
   return (
-    <div className="flex flex-wrap items-start gap-3 rounded-2xl px-5 py-4" style={{ background: bg }}>
+    <div className="flex flex-wrap items-start gap-phi-3 rounded-2xl px-phi-5 py-phi-4" style={{ background: bg }}>
       <Icon size={18} className="mt-0.5 shrink-0" style={{ color: toneColor(tone) }} />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold" style={{ color: TEXT }}>{title}</p>

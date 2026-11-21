@@ -118,7 +118,7 @@ export default function PlanningPage() {
 
   return (
     <HubLayout>
-      <div className="min-w-0 space-y-8 pb-12">
+      <div className="min-w-0 space-y-phi-6 pb-phi-7">
         <PageHeader
           eyebrow="Governance & Strategy"
           title={

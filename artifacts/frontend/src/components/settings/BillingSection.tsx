@@ -128,7 +128,7 @@ export function BillingSection() {
           </Button>
         </div>
       ) : (
-        <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <div className="grid min-w-0 items-start gap-4 xl:grid-golden">
           <div className="min-w-0 rounded-xl border border-cc-border bg-cc-card p-5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm font-medium text-cc-muted">Current plan</p>

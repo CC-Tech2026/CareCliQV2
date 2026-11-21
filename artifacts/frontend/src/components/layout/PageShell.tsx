@@ -28,8 +28,8 @@ export function PageShell({
   className,
 }: PageShellProps) {
   return (
-    <div className={cn("flex gap-6 items-start pb-10", className)}>
-      <div className="flex-1 min-w-0 space-y-6">
+    <div className={cn("flex gap-phi-5 items-start pb-phi-6", className)}>
+      <div className="flex-1 min-w-0 space-y-phi-5">
         {children}
       </div>
 
