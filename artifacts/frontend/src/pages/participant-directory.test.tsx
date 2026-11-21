@@ -3,6 +3,11 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ActiveParticipantsPage } from "./onboard-participant";
 
 vi.mock("@/components/ui/section-info", () => ({ SectionInfo: () => null }));
+vi.mock("@/components/labels/labels", () => ({
+  LabelFilter: () => null,
+  PersonLabels: () => null,
+  useLabels: () => ({ labels: [], isLoading: false, labelsOf: () => [], wordsOf: () => [], has: () => true }),
+}));
 afterEach(cleanup);
 const intakes = [
   { id: "active-1", full_name: "Alex Taylor", ndis_number: "123", status: "active", service_category: "disability" },

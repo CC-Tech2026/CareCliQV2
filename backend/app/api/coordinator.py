@@ -4556,6 +4556,102 @@ async def remove_worker_tag(worker_id: str, tag_id: str, current_user: dict = De
     return None
 
 
+# ── Labels: the office's own words for finding people ─────────────────────────
+# Shared by participants and staff, reused rather than duplicated (matched by
+# their words, ignoring case). See tag_service "Labels".
+
+class LabelBody(BaseModel):
+    label: Optional[str] = Field(default=None, max_length=120)
+    tag_id: Optional[str] = None
+
+
+def _participant_in_org(participant_id: str, org_id: str) -> None:
+    rows = (get_supabase_admin().table("participants").select("id").eq("id", participant_id)
+            .eq("organization_id", org_id).limit(1).execute().data) or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Participant not found.")
+
+
+def _worker_in_org(worker_id: str, org_id: str) -> None:
+    rows = (get_supabase_admin().table("organization_members").select("user_id").eq("user_id", worker_id)
+            .eq("organization_id", org_id).limit(1).execute().data) or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Staff member not found.")
+
+
+def _label_for(org_id: str, body: LabelBody) -> dict:
+    from ..services import tag_service
+
+    if body.tag_id:
+        tag = next((t for t in tag_service._org_tags(org_id) if str(t["id"]) == body.tag_id), None)
+        if not tag:
+            raise HTTPException(status_code=404, detail="Label not found.")
+        if not tag.get("is_active"):
+            tag_service.set_tag_active(org_id, tag["id"], True)
+        return tag
+    try:
+        return tag_service.find_or_create_label(org_id, body.label or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/labels")
+async def list_labels(current_user: dict = Depends(get_current_user)):
+    """Every label, how many people have each, and who has which."""
+    from ..services import tag_service
+
+    return tag_service.label_overview(_require_org_read(current_user))
+
+
+@router.post("/labels", status_code=201)
+async def create_label(body: LabelBody, current_user: dict = Depends(get_current_user)):
+    """A label with these words: the existing one if there is one."""
+    return _label_for(_require_org_read(current_user), body)
+
+
+@router.post("/participants/{participant_id}/labels", status_code=201)
+async def add_participant_label(participant_id: str, body: LabelBody, current_user: dict = Depends(get_current_user)):
+    from ..services import tag_service
+
+    org_id = _require_org_read(current_user)
+    _participant_in_org(participant_id, org_id)
+    tag = _label_for(org_id, body)
+    tag_service.add_participant_tag(participant_id, str(tag["id"]), get_user_id(current_user))
+    return {"label": {"id": tag["id"], "label": tag["label"]}, "labels": tag_service.list_participant_tags(participant_id)}
+
+
+@router.delete("/participants/{participant_id}/labels/{tag_id}", status_code=204)
+async def remove_participant_label(participant_id: str, tag_id: str, current_user: dict = Depends(get_current_user)):
+    from ..services import tag_service
+
+    org_id = _require_org_read(current_user)
+    _participant_in_org(participant_id, org_id)
+    tag_service.remove_participant_tag(participant_id, tag_id)
+    return None
+
+
+@router.post("/workers/{worker_id}/labels", status_code=201)
+async def add_worker_label(worker_id: str, body: LabelBody, current_user: dict = Depends(get_current_user)):
+    """Labels on staff are for the office: the worker doesn't see them."""
+    from ..services import tag_service
+
+    org_id = _require_org_read(current_user)
+    _worker_in_org(worker_id, org_id)
+    tag = _label_for(org_id, body)
+    tag_service.add_worker_tag(worker_id, str(tag["id"]), get_user_id(current_user), None, True)
+    return {"label": {"id": tag["id"], "label": tag["label"]}, "labels": tag_service.list_worker_tags(worker_id, include_private=True)}
+
+
+@router.delete("/workers/{worker_id}/labels/{tag_id}", status_code=204)
+async def remove_worker_label(worker_id: str, tag_id: str, current_user: dict = Depends(get_current_user)):
+    from ..services import tag_service
+
+    org_id = _require_org_read(current_user)
+    _worker_in_org(worker_id, org_id)
+    tag_service.remove_worker_tag(worker_id, tag_id)
+    return None
+
+
 # ── Worker-Participant Matching Enhancement, Phase 3 (Feedback loop) ─────────
 # Coordinator side of shift_match_feedback. Recording an outcome is a routine
 # operational action (not org-wide admin config like the tag taxonomy above),

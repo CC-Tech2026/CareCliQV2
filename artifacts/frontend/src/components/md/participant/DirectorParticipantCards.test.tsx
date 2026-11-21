@@ -7,6 +7,7 @@ import { OpenParticipantTabs } from "./OpenParticipantTabs";
 
 vi.mock("@/hooks/useOrgQuery", () => ({ useOrgQuery: () => ({ data: { documents: [] }, isLoading: false }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock("@/components/labels/labels", () => ({ PersonLabels: () => null }));
 
 afterEach(cleanup);
 

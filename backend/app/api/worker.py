@@ -299,7 +299,12 @@ async def worker_own_tags(current_user: dict = Depends(get_current_user)):
     _require_worker(current_user)
     from ..services import tag_service
 
-    return tag_service.list_worker_tags(get_user_id(current_user), include_private=True)
+    worker_id = str(get_user_id(current_user))
+    # Their own tags in full, but not labels the office keeps for itself.
+    return [
+        t for t in tag_service.list_worker_tags(worker_id, include_private=True)
+        if not t.get("visible_to_coordinator_only") or str(t.get("added_by_user_id") or "") in ("", worker_id)
+    ]
 
 
 class WorkerOwnTagBody(BaseModel):

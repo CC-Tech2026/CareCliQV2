@@ -1,4 +1,5 @@
 import { matchesPerson } from "@/lib/person-identity";
+import { LabelFilter, useLabels } from "@/components/labels/labels";
 import { PARTICIPANT_SEARCH, participantOption } from "@/lib/person-options";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useEffect, useMemo, useState } from "react";
@@ -147,6 +148,8 @@ export default function Team() {
   const [, navigate] = useLocation();
 
   const [search, setSearch] = useState("");
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const labelInfo = useLabels();
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
   const [attentionFilters, setAttentionFilters] = useState<Set<AttentionFilter>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -491,8 +494,9 @@ export default function Team() {
   const filteredWorkers = useMemo(() => {
     const matched = workers.filter((w) => {
       // Name, staff ID, email, phone (with or without spaces) or suburb.
-      const matchesSearch = matchesPerson(search, [w.full_name, w.employee_id, w.email, w.phone, w.suburb]);
-      return matchesSearch && matchesActiveFilter(w, activeFilter) && matchesAttentionFilters(w, attentionFilters);
+      const matchesSearch = matchesPerson(search, [w.full_name, w.employee_id, w.email, w.phone, w.suburb, ...labelInfo.wordsOf("workers", w.id)]);
+      return matchesSearch && matchesActiveFilter(w, activeFilter) && matchesAttentionFilters(w, attentionFilters)
+        && labelInfo.has("workers", w.id, labelFilter);
     });
     if (sortKey) {
       const dir = sortDir === "asc" ? 1 : -1;
@@ -506,7 +510,7 @@ export default function Team() {
     }
     return [...matched].sort((a, b) => Number(isWorkerVerified(a.id)) - Number(isWorkerVerified(b.id)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workers, search, activeFilter, attentionFilters, sortKey, sortDir, teamOnboarding.data, teamCredentials.data]);
+  }, [workers, search, activeFilter, attentionFilters, sortKey, sortDir, teamOnboarding.data, teamCredentials.data, labelFilter, labelInfo]);
 
   const totalPages = Math.max(1, Math.ceil(filteredWorkers.length / PAGE_SIZE));
   const pageWorkers = filteredWorkers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -638,6 +642,7 @@ export default function Team() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <LabelFilter target="workers" value={labelFilter} onChange={(v) => { setLabelFilter(v); setPage(1); }} className="w-[170px] [&_button]:h-10 [&_button]:rounded-full [&_button]:text-sm" />
               {/* Status — mutually exclusive, low cardinality: a segmented control reads as one choice, not a scrolling list */}
               <div className="flex gap-0.5 rounded-full border bg-cc-surface p-1" style={{ borderColor: BORDER }}>
                 {([

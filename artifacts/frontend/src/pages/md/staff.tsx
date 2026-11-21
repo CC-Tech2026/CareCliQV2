@@ -63,6 +63,7 @@ import {
 import { SectionInfo } from "@/components/ui/section-info";
 import { PersonPhoto } from "@/components/ui/person-photo";
 import { matchesPerson, sharedNames } from "@/lib/person-identity";
+import { LabelFilter, useLabels } from "@/components/labels/labels";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -251,6 +252,8 @@ export default function MDStaffPage() {
 
   const [filter, setFilter] = useState<Filter>("all");
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const labelInfo = useLabels();
   const [unassignedOnly, setUnassignedOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -540,6 +543,7 @@ export default function MDStaffPage() {
           extra?.phone,
           extra?.suburb,
           ...supportedNamesFor(worker.id),
+          ...labelInfo.wordsOf("workers", worker.id),
         ]);
 
       const matchesFilter =
@@ -555,19 +559,21 @@ export default function MDStaffPage() {
         (worker.role || "support_worker") === roleFilter;
 
       const matchesUnassigned = !unassignedOnly || isUnassigned(worker);
+      const matchesLabel = labelInfo.has("workers", worker.id, labelFilter);
 
-      return matchesSearch && matchesFilter && matchesRole && matchesUnassigned;
+      return matchesSearch && matchesFilter && matchesRole && matchesUnassigned && matchesLabel;
     });
-  }, [allStaff, filter, roleFilter, search, unassignedOnly, workerStats, credentialsByUser, statsById, supportedNames]);
+  }, [allStaff, filter, roleFilter, search, unassignedOnly, workerStats, credentialsByUser, statsById, supportedNames, labelFilter, labelInfo]);
 
   // Counted from the directory itself (not the wider workerStats list, which
   // also holds inactive accounts) so the chip matches what the filter shows.
   const unassignedCount = allStaff.filter(isUnassigned).length;
   const filtersActive =
-    !!search || filter !== "all" || roleFilter !== "all" || unassignedOnly;
+    !!search || filter !== "all" || roleFilter !== "all" || unassignedOnly || !!labelFilter;
 
   function resetFilters() {
     setSearch("");
+    setLabelFilter(null);
     setFilter("all");
     setRoleFilter("all");
     setUnassignedOnly(false);
@@ -766,6 +772,7 @@ export default function MDStaffPage() {
                     </Select>
                   )}
 
+                  <LabelFilter target="workers" value={labelFilter} onChange={setLabelFilter} className="w-full sm:w-[170px] [&_button]:h-11 [&_button]:rounded-full [&_button]:px-4 [&_button]:text-sm" />
                   <label className="sr-only" htmlFor="staff-sort">Sort staff</label>
                   <div className="flex h-11 min-w-0 items-center rounded-full border bg-cc-surface pl-4 focus-within:ring-2 focus-within:ring-cc-plum lg:hidden" style={{ borderColor: BORDER }}>
                     <select
@@ -956,6 +963,13 @@ export default function MDStaffPage() {
                                     extra?.employee_id ? `ID ${extra.employee_id}` : null,
                                   ].filter(Boolean).join(" · ")}
                                 </p>
+                                {labelInfo.labelsOf("workers", worker.id).length > 0 && (
+                                  <p className="mt-1 flex flex-wrap gap-1">
+                                    {labelInfo.labelsOf("workers", worker.id).slice(0, 3).map((l) => (
+                                      <span key={l.id} className="rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: "var(--cc-soft)", color: MUTED }}>{l.label}</span>
+                                    ))}
+                                  </p>
+                                )}
                                 {sameName && worker.email && (
                                   <p className="truncate text-xs" style={{ color: MUTED }}>{worker.email}</p>
                                 )}

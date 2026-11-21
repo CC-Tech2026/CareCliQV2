@@ -1,6 +1,7 @@
 import { STAFF_SEARCH, staffOption } from "@/lib/person-options";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CopyButton } from "@/components/ui/copy-button";
+import { PersonLabels } from "@/components/labels/labels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MD_DASHBOARD_KEY, WORKER_STATS_KEY } from "@/lib/query-keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -606,6 +607,9 @@ export function WorkerDetail({
   onToggleFullScreen?: () => void;
 }) {
   const { translate } = useAccessibility();
+  const { user: viewer } = useAuth();
+  // Labels are the office's, for finding staff.
+  const canLabel = viewer?.role === "support_coordinator" || viewer?.role === "managing_director";
   const [tab, setTab] = useState<WorkerDetailTab>(
     !initialTab || initialTab === "overview" ? "personal" : initialTab,
   );
@@ -964,6 +968,11 @@ export function WorkerDetail({
                   />
                 )}
               </div>
+              {canLabel && (
+                <div className="mt-2">
+                  <PersonLabels target="workers" personId={worker.id} personName={worker.full_name} compact />
+                </div>
+              )}
             </div>
           </div>
           <div className="w-full min-w-0 lg:w-80 lg:shrink-0">
