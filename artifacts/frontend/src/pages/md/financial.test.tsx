@@ -91,11 +91,15 @@ function renderPage(configured = true) {
 it("shows revenue, profit, runway and outstanding for the period", async () => {
   renderPage();
   expect((await screen.findAllByText("$451,300.00"))[0]).toBeTruthy();
-  expect(screen.getByText(/186 invoices · 91% collected/)).toBeTruthy();
+  // Where the money stands, in words, with what to do first.
+  expect(screen.getByText("You billed $451,300 in Jul–Sep 2026 and have collected 91% of it")).toBeTruthy();
+  expect(screen.getByText("You made $347,620 profit in Jul–Sep 2026, a 77% margin")).toBeTruthy();
+  expect(screen.getByText("Some costs are missing, so the real figure may be lower.")).toBeTruthy();
+  expect(screen.getByText("At this rate, cash lasts about 12.5 months")).toBeTruthy();
+  expect(screen.getByText("$986 is overdue")).toBeTruthy();
+  expect(screen.getByText("Chase $986 of overdue invoices")).toBeTruthy();
   expect(screen.getAllByText("$347,620.00").length).toBeGreaterThan(0);
-  expect(screen.getByText(/77% margin · costs incomplete/)).toBeTruthy();
-  expect(screen.getAllByText("12.5 months")).toHaveLength(2); // tile and cash card
-  expect(screen.getByText("$986.00 overdue")).toBeTruthy();
+  expect(screen.getAllByText("12.5 months")).toHaveLength(1); // cash card
   // P&L: shifts not all costed yet.
   expect(screen.getByText("Estimated from 1,200 of 1,284 shifts. Your payroll has the actual figure.")).toBeTruthy();
   expect(screen.getByText("−$73,680.00")).toBeTruthy();
@@ -110,14 +114,16 @@ it("shows revenue, profit, runway and outstanding for the period", async () => {
 
 it("says what's missing instead of guessing profit and runway", async () => {
   renderPage(false);
-  expect(await screen.findByText("Add costs to see profit")).toBeTruthy();
+  expect(await screen.findByText("Profit can't be worked out yet")).toBeTruthy();
+  expect(screen.getByText("Your cash position isn't set up")).toBeTruthy();
   expect(screen.getByText("Add your cash balance")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Add monthly overheads" })).toBeTruthy();
 });
 
 it("saves cash and overheads", async () => {
   renderPage(false);
-  fireEvent.click(await screen.findByRole("button", { name: /Add cash balance/ }));
+  // Offered in the to-do list, the outcome and the cash card; all open the editor.
+  fireEvent.click((await screen.findAllByRole("button", { name: /Add cash balance/ }))[0]);
   const dialog = await screen.findByRole("dialog");
   fireEvent.change(within(dialog).getByPlaceholderText("e.g. 250000"), { target: { value: "250,000" } });
   fireEvent.change(within(dialog).getByPlaceholderText("e.g. 18000"), { target: { value: "18000" } });

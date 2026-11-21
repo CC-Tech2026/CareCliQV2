@@ -1,6 +1,8 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { Section, StatusText, Surface, outlineClass, toneColor, type Tone } from "@/components/layout/PageKit";
+import { ActionList, OutcomeList } from "@/components/hub/GovernanceOutcomes";
+import type { ActionItem, Outcome, OutcomeStatus } from "@/lib/governance-outcomes";
 import type { Area, AuditChecklist, AuditItem } from "@/services/auditReadinessService";
 
 const TEXT = "var(--cc-text)";
@@ -339,7 +341,57 @@ export function buildGaps({
   return { gaps, onTrack, criticalTotal: gaps.reduce((sum, g) => sum + g.critical, 0) };
 }
 
-function GapCard({ gap }: { gap: Gap }) {
+const TONE_STATUS: Record<Tone, OutcomeStatus> = {
+  good: "on_track",
+  warning: "attention",
+  danger: "off_track",
+  neutral: "no_data",
+  info: "attention",
+};
+
+const MORE_REQUIREMENTS = /^\d+ more requirements? with gaps$/i;
+
+/** Every requirement behind the gaps as something to do, most critical
+ *  first: what's missing and for whom, the fix in plain words, and a link
+ *  to exactly where it's done. */
+export function gapFixItems(report: GapReport): ActionItem[] {
+  const items: ActionItem[] = [];
+  for (const gap of report.gaps) {
+    for (const [i, reason] of gap.reasons.entries()) {
+      if (MORE_REQUIREMENTS.test(reason.text)) continue;
+      const fix = gap.fixes.find((f) => f.toLowerCase().startsWith(`${reason.text.toLowerCase()}:`));
+      const how = fix ? fix.slice(reason.text.length + 1).trim() : "";
+      items.push({
+        id: `${gap.key}-${i}`,
+        group: reason.critical ? "now" : gap.tone === "danger" ? "week" : "watch",
+        rank: reason.critical ? 0 : 1,
+        title: reason.text,
+        detail: [
+          gap.title,
+          reason.detail,
+          how ? how.charAt(0).toUpperCase() + how.slice(1).replace(/\.$/, "") : null,
+        ].filter(Boolean).join(" · ") + ".",
+        actionLabel: reason.href ? "Fix it" : gap.action.label,
+        href: reason.href ?? gap.action.href,
+      });
+    }
+  }
+  return items;
+}
+
+/** One line per area: where it stands against its target. */
+export function gapOutcomes(report: GapReport): Outcome[] {
+  return report.gaps.map((gap) => ({
+    id: gap.key,
+    area: gap.title,
+    status: TONE_STATUS[gap.tone],
+    headline: gap.summary,
+    detail: `${gap.value} now, ${gap.target.toLowerCase()}. ${gap.measures}`,
+    action: gap.action,
+  }));
+}
+
+function GapCard({ gap, showSummary = true }: { gap: Gap; showSummary?: boolean }) {
   return (
     <li>
       <Surface className="flex flex-col gap-4 p-5 sm:flex-row sm:gap-6 sm:p-6">
@@ -360,8 +412,12 @@ function GapCard({ gap }: { gap: Gap }) {
                 </span>
               )}
             </div>
-            <p className="mt-1 text-sm leading-6" style={{ color: TEXT }}>{gap.summary}</p>
-            <p className="text-xs leading-5" style={{ color: MUTED }}>{gap.measures}</p>
+            {showSummary && (
+              <>
+                <p className="mt-1 text-sm leading-6" style={{ color: TEXT }}>{gap.summary}</p>
+                <p className="text-xs leading-5" style={{ color: MUTED }}>{gap.measures}</p>
+              </>
+            )}
           </div>
 
           <div className="grid gap-5 lg:grid-cols-2">
@@ -409,10 +465,12 @@ function GapCard({ gap }: { gap: Gap }) {
 
 export function GapAnalysis({ report, checklistState }: { report: GapReport; checklistState: "loading" | "error" | "ready" }) {
   const { gaps, onTrack, criticalTotal } = report;
+  const [, navigate] = useLocation();
+  const fixes = gapFixItems(report);
   return (
     <Section
       title="Gap analysis"
-      description="What stands between you and audit ready: each gap, why it's there and how to close it. Most urgent first."
+      description="What stands between you and audit ready, and how to close it. Most urgent first."
       action={
         <StatusText tone={!gaps.length ? "good" : criticalTotal ? "danger" : "warning"}>
           {!gaps.length ? "Audit ready" : `${plural(gaps.length, "gap")} to close${criticalTotal ? ` · ${criticalTotal} critical` : ""}`}
@@ -427,9 +485,25 @@ export function GapAnalysis({ report, checklistState }: { report: GapReport; che
         </p>
       )}
       {gaps.length ? (
-        <ul className="space-y-3">
-          {gaps.map((gap) => <GapCard key={gap.key} gap={gap} />)}
-        </ul>
+        <div className="space-y-phi-5">
+          <div className="space-y-phi-3">
+            <h3 className="text-base font-semibold" style={{ color: TEXT }}>Fix these first</h3>
+            <ActionList actions={fixes} onNavigate={navigate} />
+          </div>
+          <div className="space-y-phi-3">
+            <h3 className="text-base font-semibold" style={{ color: TEXT }}>Where you stand</h3>
+            <OutcomeList outcomes={gapOutcomes(report)} onNavigate={navigate} />
+          </div>
+          <details className="group rounded-2xl border border-cc-border bg-cc-surface">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-sm font-semibold hover:bg-cc-soft [&::-webkit-details-marker]:hidden" style={{ color: TEXT }}>
+              Every requirement and how to fix it
+              <span className="text-xs font-normal group-open:hidden" style={{ color: MUTED }}>By area, with the reasons and steps</span>
+            </summary>
+            <ul className="space-y-3 border-t border-cc-border p-4">
+              {gaps.map((gap) => <GapCard key={gap.key} gap={gap} showSummary={false} />)}
+            </ul>
+          </details>
+        </div>
       ) : (
         <Surface className="flex items-center gap-3 p-5">
           <CheckCircle2 size={18} style={{ color: "var(--cc-green)" }} />
