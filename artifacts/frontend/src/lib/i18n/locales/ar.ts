@@ -76,6 +76,8 @@ export const ar: Dict = {
   "schedule.checkFirst": "تحقق قبل الاعتماد",
   "schedule.incidents": "حوادث هذه المناوبة",
   "schedule.incidentReportedOnShift": "أُبلغ عنها أثناء هذه المناوبة",
+  "schedule.incidentLabelOne": "تم الإبلاغ عن حادثة",
+  "schedule.incidentLabelMany": "{count} حوادث",
   "schedule.incidentDuringShift": "نفس المشارك، أثناء هذه المناوبة",
   "schedule.incidentOpen": "فتح الحادثة",
   "schedule.incidentRead": "اقرأها قبل الاعتماد: قد تغيّر ما يُحتسب أو تحتاج إلى متابعة.",

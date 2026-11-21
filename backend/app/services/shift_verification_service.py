@@ -61,6 +61,21 @@ def support_purpose_to_budget_category(support_purpose: Optional[str]) -> Option
     return _SUPPORT_PURPOSE_TO_BUDGET_CATEGORY.get(str(support_purpose or "").strip().lower())
 
 
+def _budget_key(category: Any) -> Optional[str]:
+    """A plan budget's category as core / capital / capacity_building, however
+    it was written ("Core Supports", "Capacity Building", "CAPITAL")."""
+    text = str(category or "").strip().lower().replace("-", " ").replace("_", " ")
+    if not text:
+        return None
+    if "capacity" in text:
+        return "capacity_building"
+    if "capital" in text:
+        return "capital"
+    if "core" in text:
+        return "core"
+    return text.replace(" ", "_")
+
+
 def resolve_price_item_budget_category(item: dict[str, Any]) -> Optional[str]:
     """plan_budgets.category for a price item — support_purpose when populated,
     else the item_code's support-category-number prefix."""
@@ -793,10 +808,10 @@ async def list_price_item_options_for_participant(participant_id: str, org_id: s
         if plan:
             budgets = plan.get("plan_budgets") or []
             categories = {
-                str(b.get("category")) for b in budgets if isinstance(b, dict) and b.get("category")
-            }
+                _budget_key(b.get("category")) for b in budgets if isinstance(b, dict) and b.get("category")
+            } - {None}
             if categories:
-                allowed_categories = categories
+                allowed_categories = categories  # type: ignore[assignment]
 
     items_result = (
         supabase.table("ndis_price_items")
@@ -849,7 +864,7 @@ async def list_price_item_options_for_participant(participant_id: str, org_id: s
     for code, item in by_code.items():
         category = resolve_price_item_budget_category(item)
         in_agreement = code in agreement_codes
-        if allowed_categories is not None and category not in allowed_categories and not in_agreement:
+        if allowed_categories is not None and _budget_key(category) not in allowed_categories and not in_agreement:
             continue
         # The code's first two digits are the NDIS support category; a stored
         # category_number can be wrong on hand-loaded price lists.
@@ -874,7 +889,29 @@ async def list_price_item_options_for_participant(participant_id: str, org_id: s
                 "in_agreement": in_agreement,
             }
         )
+    # The plan's budgets narrowed it to nothing (budgets named in a way that
+    # doesn't match the price guide, or a plan that's only part entered):
+    # an empty picker is a dead end, so offer every item instead, marked.
+    if not out and allowed_categories is not None and by_code:
+        return [{**o, "outside_plan": True} for o in await _all_price_item_options(by_code, agreement_codes)]
     # Agreement items first, then the organisation's own, then by code.
+    out.sort(key=lambda o: (not o["in_agreement"], o["source"] != "organisation", o["item_code"]))
+    return out
+
+
+async def _all_price_item_options(by_code: dict[str, dict[str, Any]], agreement_codes: set[str]) -> list[dict[str, Any]]:
+    out = []
+    for code, item in by_code.items():
+        category_number = code[:2] if code[:2].isdigit() else item.get("category_number")
+        out.append({
+            "item_code": code, "name": item.get("name"), "description": item.get("description"),
+            "unit": item.get("unit"), "support_purpose": item.get("support_purpose"),
+            "support_category": resolve_price_item_budget_category(item),
+            "category_number": category_number, "category_label": support_category_number_label(category_number),
+            "day_type": item.get("day_type"), "time_type": item.get("time_type"),
+            "support_intensity": item.get("support_intensity"), "price_national": item.get("price_national"),
+            "source": item["_source"], "in_agreement": code in agreement_codes,
+        })
     out.sort(key=lambda o: (not o["in_agreement"], o["source"] != "organisation", o["item_code"]))
     return out
 

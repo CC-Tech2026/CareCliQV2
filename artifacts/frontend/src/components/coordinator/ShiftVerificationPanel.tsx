@@ -371,6 +371,16 @@ export function ShiftVerificationCard({
               emptyText="No price item matches. Try the code or a word from its name."
               disabled={priceItemsLoading || verifyMutation.isPending}
             />
+            {!priceItemsLoading && priceItems.length === 0 && (
+              <p className="mt-1 text-xs" style={{ color: "var(--cc-danger-text)" }}>
+                No NDIS price items could be found for this shift. Check the participant has a plan, then try again.
+              </p>
+            )}
+            {priceItems.some((p) => p.outside_plan) && (
+              <p className="mt-1 text-xs" style={{ color: T3 }}>
+                Showing every NDIS item: none matched this participant's plan budgets. Check the plan's budget categories.
+              </p>
+            )}
           </div>
           <button
             onClick={() => verifyMutation.mutate()}
