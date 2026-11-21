@@ -11,6 +11,7 @@ import {
   Moon,
   Sun,
   ChevronDown,
+  TrendingUp,
   ChevronUp,
   ChevronRight,
   Settings,
@@ -110,6 +111,7 @@ const MD_NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
     items: [
       { href: "/hub", label: "Executive Hub", icon: LayoutDashboard },
       { href: "/md/executive", label: "Performance review", icon: BarChart3 },
+      { href: "/md/planning", label: "Workforce & growth", icon: TrendingUp },
     ],
   },
   {
