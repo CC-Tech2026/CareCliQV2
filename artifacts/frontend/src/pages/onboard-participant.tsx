@@ -1,4 +1,5 @@
 import { PARTICIPANT_SEARCH, participantOption } from "@/lib/person-options";
+import { LabelFilter, useLabels } from "@/components/labels/labels";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
@@ -582,6 +583,8 @@ export function ActiveParticipantsPage({
   const [focus, setFocus] = useState<ParticipantFocus | null>(null);
   const [sortKey, setSortKey] = useState<ParticipantSort>("name");
   const [sortAsc, setSortAsc] = useState(true);
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const labelInfo = useLabels();
 
   // Exited participants stay findable (their records are kept) under their
   // own filter; "Everyone" means the people currently supported.
@@ -629,10 +632,12 @@ export function ActiveParticipantsPage({
     .filter((r) =>
       matchesPerson(
         q,
-        [r.intake.full_name, r.preferred, r.intake.ndis_number, r.intake.phone, r.intake.email, r.suburb, r.snapshot?.address, ...(r.snapshot?.workers ?? [])],
+        [r.intake.full_name, r.preferred, r.intake.ndis_number, r.intake.phone, r.intake.email, r.suburb, r.snapshot?.address, ...(r.snapshot?.workers ?? []),
+          ...labelInfo.wordsOf("participants", r.intake.participant_id)],
         r.dob,
       ),
     )
+    .filter((r) => labelInfo.has("participants", r.intake.participant_id, labelFilter))
     .filter(({ intake: i }) => categoryFilter === "all" || i.service_category === categoryFilter)
     .filter((r) =>
       workerFilter === "all" ||
@@ -657,10 +662,11 @@ export function ActiveParticipantsPage({
   const inactiveTotal = intakes.filter((i) => i.status === "inactive").length;
   const exitedTotal = intakes.filter((i) => i.status === "exited").length;
   const total = activeTotal + inactiveTotal;
-  const filtersActive = !!q || categoryFilter !== "all" || workerFilter !== "all" || statusFilter !== "all" || focus !== null;
+  const filtersActive = !!q || categoryFilter !== "all" || workerFilter !== "all" || statusFilter !== "all" || focus !== null || !!labelFilter;
 
   function resetFilters() {
     setSearch("");
+    setLabelFilter(null);
     setCategoryFilter("all");
     setWorkerFilter("all");
     setStatusFilter("all");
@@ -740,6 +746,7 @@ export function ActiveParticipantsPage({
               </SelectContent>
             </Select>
           )}
+          <LabelFilter target="participants" value={labelFilter} onChange={setLabelFilter} className="w-full sm:w-[180px] [&_button]:h-11 [&_button]:rounded-full [&_button]:px-4 [&_button]:text-sm" />
           <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
             <SelectTrigger aria-label="Service category" className="h-11 w-full rounded-full border-cc-border bg-cc-surface px-4 text-sm shadow-none sm:w-[170px]" style={{ color: TEXT }}>
               <SelectValue placeholder="All categories" />
@@ -889,6 +896,13 @@ export function ActiveParticipantsPage({
                         <p className={`mt-0.5 text-sm ${sameName ? "" : "truncate"}`} style={{ color: MUTED }}>
                           {identity || (i.service_category === "aged_care" ? "Aged Care" : "Disability")}
                         </p>
+                        {labelInfo.labelsOf("participants", i.participant_id).length > 0 && (
+                          <p className="mt-1 flex flex-wrap gap-1">
+                            {labelInfo.labelsOf("participants", i.participant_id).slice(0, 3).map((l) => (
+                              <span key={l.id} className="rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: SOFT, color: MUTED }}>{l.label}</span>
+                            ))}
+                          </p>
+                        )}
                         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs lg:hidden" style={{ color: MUTED }}>
                           <span className="flex items-center gap-1.5 font-medium" style={{ color: statusColor }}>
                             <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: statusColor }} />

@@ -1,4 +1,5 @@
 import { appZone } from "@/lib/datetime";
+import { PersonLabels } from "@/components/labels/labels";
 import { CopyButton } from "@/components/ui/copy-button";
 import type { ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
@@ -104,6 +105,9 @@ export function ProfileHeader({ overview, actions }: { overview: DirectorOvervie
               · {overview.intake?.activated_at ? `Supported since ${formatDate(overview.intake.activated_at)}` : "Not receiving supports yet"}
             </span>
           </p>
+          <div className="pt-1">
+            <PersonLabels target="participants" personId={p.id} personName={p.full_name} compact />
+          </div>
         </div>
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

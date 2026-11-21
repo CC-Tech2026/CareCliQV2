@@ -232,3 +232,93 @@ def remove_worker_tag(worker_id: str, tag_id: str) -> None:
 def set_matching_opt_in(worker_id: str, opt_in: bool) -> None:
     supabase = get_supabase_admin()
     supabase.table("users").update({"matching_opt_in": opt_in}).eq("id", worker_id).execute()
+
+
+# ---------------------------------------------------------------------------
+# Labels: the office's own words for finding people ("Autism", "Female
+# worker only", "Lives in the hills"). Every active tag in the organisation
+# is a label anyone can reuse, so the same word is never made twice: a new
+# one is matched to an existing tag by its words, ignoring case and spacing,
+# before one is created (in a "Labels" category). Labels on staff are for
+# the office only.
+# ---------------------------------------------------------------------------
+
+LABELS_CATEGORY = "Labels"
+LABEL_MAX = 60
+
+
+def clean_label(label: str) -> str:
+    return " ".join(str(label or "").split())[:LABEL_MAX]
+
+
+def _label_key(label: str) -> str:
+    return clean_label(label).casefold()
+
+
+def _org_tags(organization_id: str) -> list[dict[str, Any]]:
+    supabase = get_supabase_admin()
+    return (
+        supabase.table("tags").select("id, label, category_id, is_active").eq("organization_id", organization_id)
+        .execute().data
+    ) or []
+
+
+def find_or_create_label(organization_id: str, label: str) -> dict[str, Any]:
+    """The organisation's label with these words (reactivated if it was
+    switched off), or a new one. Raises ValueError for an empty label."""
+    clean = clean_label(label)
+    if not clean:
+        raise ValueError("Type a label.")
+    key = _label_key(clean)
+    live = {
+        c["id"] for c in (get_supabase_admin().table("tag_categories").select("id").eq("organization_id", organization_id)
+                          .eq("is_active", True).execute().data or [])
+    }
+    matches = [t for t in _org_tags(organization_id)
+               if t.get("category_id") in live and _label_key(t.get("label") or "") == key]
+    if matches:
+        tag = next((t for t in matches if t.get("is_active")), matches[0])
+        if not tag.get("is_active"):
+            set_tag_active(organization_id, tag["id"], True)
+            tag = {**tag, "is_active": True}
+        return tag
+    category = create_tag_category(organization_id, LABELS_CATEGORY)
+    if not category.get("id"):
+        raise RuntimeError("The labels list couldn't be made.")
+    return create_tag(organization_id, category["id"], clean)
+
+
+def label_overview(organization_id: str) -> dict[str, Any]:
+    """Every active label with who has it, for pickers, list filters and
+    search: {labels: [{id, label, category, participants, workers}],
+    participants: {participant_id: [tag_id]}, workers: {worker_id: [tag_id]}}."""
+    supabase = get_supabase_admin()
+    categories = {
+        c["id"]: c["name"]
+        for c in (supabase.table("tag_categories").select("id, name, is_active").eq("organization_id", organization_id)
+                  .eq("is_active", True).execute().data or [])
+    }
+    tags = [t for t in _org_tags(organization_id) if t.get("is_active") and t.get("category_id") in categories]
+    ids = [t["id"] for t in tags]
+    by_participant: dict[str, list[str]] = {}
+    by_worker: dict[str, list[str]] = {}
+    for i in range(0, len(ids), 150):
+        chunk = ids[i:i + 150]
+        for row in supabase.table("participant_tags").select("participant_id, tag_id").in_("tag_id", chunk).execute().data or []:
+            by_participant.setdefault(str(row["participant_id"]), []).append(str(row["tag_id"]))
+        for row in supabase.table("worker_tags").select("worker_id, tag_id").in_("tag_id", chunk).execute().data or []:
+            by_worker.setdefault(str(row["worker_id"]), []).append(str(row["tag_id"]))
+    counts_p: dict[str, int] = {}
+    counts_w: dict[str, int] = {}
+    for tag_ids in by_participant.values():
+        for t in tag_ids:
+            counts_p[t] = counts_p.get(t, 0) + 1
+    for tag_ids in by_worker.values():
+        for t in tag_ids:
+            counts_w[t] = counts_w.get(t, 0) + 1
+    labels = sorted(
+        ({"id": t["id"], "label": t["label"], "category": categories.get(t["category_id"]),
+          "participants": counts_p.get(str(t["id"]), 0), "workers": counts_w.get(str(t["id"]), 0)} for t in tags),
+        key=lambda t: t["label"].casefold(),
+    )
+    return {"labels": labels, "participants": by_participant, "workers": by_worker}

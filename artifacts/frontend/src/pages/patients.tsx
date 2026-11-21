@@ -1,4 +1,5 @@
 import { matchesPerson } from "@/lib/person-identity";
+import { LabelFilter, PersonLabels, useLabels } from "@/components/labels/labels";
 import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -1489,6 +1490,11 @@ export function ParticipantDetail({
                   <> &middot; Assigned: {participant.assigned_worker_name}</>
                 )}
               </p>
+              {isCoordinator && (
+                <div className="mt-2">
+                  <PersonLabels target="participants" personId={id} personName={participant.full_name} compact />
+                </div>
+              )}
           </div>
 
           {/* Action buttons — desktop: inline right */}
@@ -2737,6 +2743,8 @@ export default function Patients() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortOrder, setSortOrder]     = useState<"asc" | "desc">("asc");
   const [letterFilter, setLetterFilter] = useState<string | null>(null);
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const labelInfo = useLabels();
   const [selectedId, setSelectedId]   = useState<string | null>(null);
   const [showMobileDetail, setShowMobileDetail] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -2763,12 +2771,14 @@ export default function Patients() {
       // email, address or suburb, date of birth, or their support worker.
       const matchesSearch = matchesPerson(
         search,
-        [p.full_name, p.preferred_name, p.ndis_number, p.phone, p.email, p.address, p.assigned_worker_name],
+        [p.full_name, p.preferred_name, p.ndis_number, p.phone, p.email, p.address, p.assigned_worker_name,
+          ...labelInfo.wordsOf("participants", p.id)],
         p.date_of_birth,
       );
       const matchesStatus = statusFilter === "all" || p.plan_status === statusFilter;
       const matchesLetter = !letterFilter || p.full_name.toUpperCase().startsWith(letterFilter);
-      return matchesSearch && matchesStatus && matchesLetter;
+      const matchesLabel = labelInfo.has("participants", p.id, labelFilter);
+      return matchesSearch && matchesStatus && matchesLetter && matchesLabel;
     })
     .sort((a: any, b: any) => {
       const cmp = a.full_name.localeCompare(b.full_name);
@@ -2900,6 +2910,7 @@ export default function Patients() {
               {sortOrder === "asc" ? "A→Z" : "Z→A"}
             </button>
           </div>
+          <LabelFilter target="participants" value={labelFilter} onChange={setLabelFilter} className="mt-2" />
 
           {/* A–Z alphabet strip */}
           <div className="flex items-center gap-0.5 mt-2.5 overflow-x-auto scrollbar-none pb-0.5">
@@ -2961,7 +2972,7 @@ export default function Patients() {
                   ? translateParams("patients.empty.letterFilter", { letter: letterFilter })
                   : translate("patients.empty.adjustFilters")}
               </p>
-              {(search || statusFilter !== "all" || letterFilter) && <button type="button" onClick={() => { setSearch(""); setStatusFilter("all"); setLetterFilter(null); }} className="min-h-11 rounded-lg border border-cc-border px-4 text-sm font-semibold text-cc-text">Clear filters</button>}
+              {(search || statusFilter !== "all" || letterFilter || labelFilter) && <button type="button" onClick={() => { setSearch(""); setStatusFilter("all"); setLetterFilter(null); setLabelFilter(null); }} className="min-h-11 rounded-lg border border-cc-border px-4 text-sm font-semibold text-cc-text">Clear filters</button>}
             </div>
           ) : (
             filteredParticipants.map((p: any) => {
@@ -3013,6 +3024,11 @@ export default function Patients() {
                       >
                         NDIS {p.ndis_number || "N/A"}
                       </span>
+                      {labelInfo.labelsOf("participants", p.id).slice(0, 2).map((l) => (
+                        <span key={l.id} className="truncate rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "var(--cc-soft)", color: "var(--cc-muted)" }}>
+                          {l.label}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 </button>
