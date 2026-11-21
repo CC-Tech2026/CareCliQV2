@@ -324,15 +324,30 @@ async def health_check():
     return {"status": "healthy", "service": "AI Clinical Companion API"}
 
 
+@app.get("/api/health/schema")
+async def schema_health():
+    """Has the database got every migration this build ships, and can the
+    API use what the newest ones added? Counts only (services/schema_status.py);
+    the details are on /api/system/migration-status."""
+    from .services import schema_status
+
+    return schema_status.summary()
+
+
 @app.get("/api/system/migration-status")
 async def migration_status_endpoint(current_user: dict = Depends(get_current_user)):
     """Return current migration state so operators can verify schema readiness."""
-    if current_user.get("role") not in {"support_coordinator", "managing_director"}:
+    if current_user.get("role") not in {"support_coordinator", "managing_director", "super_admin"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only support coordinators and managing directors can view migration status",
         )
+    from .services import schema_status
+
     return {
+        # Every migration file vs public.schema_migrations, and what the
+        # newest ones added, read through the API.
+        "schema": schema_status.check(fresh=True),
         "biological_sex_column_missing":              migration_state.biological_sex_column_missing,
         "users_onboarding_columns_missing":           migration_state.users_onboarding_columns_missing,
         "organizations_table_missing":                migration_state.organizations_table_missing,
