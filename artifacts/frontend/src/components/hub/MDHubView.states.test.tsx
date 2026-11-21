@@ -5,7 +5,7 @@ import { MDHubView } from "./MDHubView";
 const { query, retry } = vi.hoisted(() => ({ query: vi.fn(), retry: vi.fn() }));
 vi.mock("@/hooks/useOrgQuery", () => ({ useOrgQuery: query }));
 vi.mock("@/contexts/AccessibilityContext", () => ({ useAccessibility: () => ({ translate: (key: string) => key }) }));
-vi.mock("@/components/hub/GovernanceTriage", () => ({ GovernanceTriage: () => <div>Action items</div> }));
+vi.mock("@/components/hub/GovernanceTriage", () => ({ GovernanceTriage: () => <div>Action items</div>, attentionRoute: () => "/incidents" }));
 vi.mock("@/components/hub/OrgSetupChecklist", () => ({ OrgSetupChecklist: () => null }));
 
 const overview = {
@@ -43,7 +43,8 @@ it("preserves cached metrics after a failed background refresh", () => {
   mockOverview({ data: overview, isError: true });
   render(<MDHubView />);
   expect(screen.getByText("Refresh failed. Showing the last available overview.")).toBeTruthy();
-  expect(screen.getByText("Support visits")).toBeTruthy();
+  // The outcomes, built from the cached overview, stay on screen.
+  expect(screen.getByText("Quality of support")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Refresh overview" }));
   expect(retry).toHaveBeenCalledOnce();
 });

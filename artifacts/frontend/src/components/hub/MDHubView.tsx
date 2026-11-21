@@ -19,7 +19,10 @@ import { appLocalDateKey } from "@/lib/datetime";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { COMPLIANCE_TREND_KEY, MD_DASHBOARD_KEY } from "@/lib/query-keys";
 import { getMdDemandCapacity, type MdDemandCapacity } from "@/services/dashboardService";
-import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
+import { attentionRoute } from "@/components/hub/GovernanceTriage";
+import { ActionList, OutcomeList } from "@/components/hub/GovernanceOutcomes";
+import { buildActions, buildOutcomes } from "@/lib/governance-outcomes";
+import { getHubComplianceAlerts } from "@/services/hubService";
 import { OrgSetupChecklist } from "@/components/hub/OrgSetupChecklist";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 // Aliased — recharts also exports a "Tooltip" (used for the chart tooltips
@@ -257,89 +260,6 @@ function ActiveStaffCard({
 
 /** Same "single ratio" meter language as CapacityMeter, but inverted severity —
  *  here a higher percentage is the good outcome, so the color bands flip. */
-function AchievementMeter({ pct }: { pct: number }) {
-  const clamped = Math.max(0, Math.min(100, Math.round(pct)));
-  const color = clamped >= 85 ? GREEN : clamped >= 70 ? AMBER : RED;
-  return (
-    <div className="mt-3 h-1.5 w-full rounded-full overflow-hidden" style={{ background: `${color}1F` }}>
-      <div className="h-full rounded-full" style={{ width: `${clamped}%`, background: color }} />
-    </div>
-  );
-}
-
-function ExecutiveMetric({
-  label,
-  value,
-  detail,
-  onClick,
-  meter,
-  breakdown,
-  achievementPct,
-}: {
-  label: string;
-  value: string | number;
-  detail: string;
-  onClick?: () => void;
-  meter?: { used: number; total: number };
-  breakdown?: Array<{ label: string; value: number; color?: string }>;
-  achievementPct?: number;
-}) {
-  const content = (
-    <div className="w-full px-5 py-5">
-      <p
-        className="text-xs font-semibold"
-        style={{ color: MUTED }}
-      >
-        {label}
-      </p>
-
-      <p
-        className="mt-2 text-[30px] font-semibold tracking-tight tabular-nums"
-        style={{ color: TEXT }}
-      >
-        {value}
-      </p>
-
-      <p
-        className="mt-1 text-[11px]"
-        style={{ color: MUTED }}
-      >
-        {detail}
-      </p>
-
-      {meter && <CapacityMeter used={meter.used} total={meter.total} />}
-      {achievementPct !== undefined && <AchievementMeter pct={achievementPct} />}
-      {breakdown && <MetricBreakdown items={breakdown} />}
-    </div>
-  );
-
-  // Each metric is its own rounded, bordered card — not one shared strip —
-  // so the four numbers read as separate facts, not one continuous block.
-  if (!onClick) {
-    return (
-      <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ borderColor: BORDER, background: SURFACE }}>
-        {content}
-      </div>
-    );
-  }
-
-  return (
-    <button
-      onClick={onClick}
-      className="flex flex-col justify-start rounded-2xl bg-cc-surface overflow-hidden text-left transition-colors hover:bg-cc-soft"
-      style={{ borderColor: BORDER, background: SURFACE }}
-    >
-      {content}
-      <span className="flex w-full items-center justify-between gap-2 border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-text">{label === "Support visits" ? "Review the schedule" : "Review participants"}<ArrowRight size={14} /></span>
-    </button>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Participant overview                                                      */
-/* -------------------------------------------------------------------------- */
-
-/** One named sub-count in the participant overview card (Male/Female, Pending/Review/Expired). */
 function ParticipantStat({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
     <div>
@@ -1196,6 +1116,9 @@ export function MDHubView() {
   const demandQuery = useOrgQuery<MdDemandCapacity>(["md", "demand-capacity"], {
     queryFn: getMdDemandCapacity,
   });
+  const alertsQuery = useOrgQuery(["hub", "compliance-alerts"], {
+    queryFn: getHubComplianceAlerts,
+  });
 
 
   /* ------------------------------------------------------------------------ */
@@ -1283,15 +1206,29 @@ export function MDHubView() {
   /* Dashboard                                                                */
   /* ------------------------------------------------------------------------ */
 
+  // Outcomes (where things stand) and actions (what to do about it), from
+  // the data above. The charts and breakdowns stay, behind "Show the detail".
+  const alerts = alertsQuery.data ?? [];
+  const outcomes = buildOutcomes(data, alerts, demandQuery.data);
+  const actions = buildActions(data, alerts, demandQuery.data, (a) => attentionRoute(a));
+
   return (
-    <div className="space-y-5 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-cc-plum">
-      {/* A quiet line, not a bordered bar: the briefing itself should start
-          straight under the page title. */}
+    <div className="space-y-8 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-cc-plum">
       <div className="-mt-2 flex flex-wrap items-center justify-end gap-3">
         <p role="status" className="text-xs" style={{ color: error ? "var(--cc-danger-text)" : "var(--cc-muted)" }}>
           {error ? "Refresh failed. Showing the last available overview." : overviewQuery.isFetching ? "Updating overview…" : ""}
         </p>
-        <button type="button" disabled={overviewQuery.isFetching} onClick={() => void overviewQuery.refetch()} aria-label={overviewQuery.isFetching ? "Refreshing…" : "Refresh overview"} className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-cc-muted hover:bg-cc-soft hover:text-cc-text disabled:opacity-60">
+        <button
+          type="button"
+          disabled={overviewQuery.isFetching}
+          onClick={() => {
+            void overviewQuery.refetch();
+            void alertsQuery.refetch();
+            void demandQuery.refetch();
+          }}
+          aria-label={overviewQuery.isFetching ? "Refreshing…" : "Refresh overview"}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-cc-muted hover:bg-cc-soft hover:text-cc-text disabled:opacity-60"
+        >
           <RefreshCw size={14} aria-hidden="true" className={overviewQuery.isFetching ? "animate-spin motion-reduce:animate-none" : ""} />
           {overviewQuery.isFetching ? "Refreshing…" : "Refresh"}
         </button>
@@ -1303,87 +1240,69 @@ export function MDHubView() {
         onNavigate={navigate}
       />
 
-      {/* Keep operational summaries together beside the action list. */}
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="order-2 flex min-w-0 flex-col gap-4 xl:order-1">
+      <section aria-labelledby="hub-actions" className="space-y-3">
+        <div>
+          <h2 id="hub-actions" className="text-lg font-semibold text-cc-text">What needs doing</h2>
+          <p className="text-sm text-cc-muted">Most urgent first. Each item opens where you deal with it.</p>
+        </div>
+        <ActionList
+          actions={actions}
+          loading={alertsQuery.isLoading}
+          failed={alertsQuery.isError}
+          onRetry={() => void alertsQuery.refetch()}
+          onNavigate={navigate}
+        />
+      </section>
+
+      <section aria-labelledby="hub-outcomes" className="space-y-3">
+        <div>
+          <h2 id="hub-outcomes" className="text-lg font-semibold text-cc-text">How we're doing</h2>
+          <p className="text-sm text-cc-muted">The outcomes that matter for participants and the organisation, in plain words.</p>
+        </div>
+        <OutcomeList outcomes={outcomes} onNavigate={navigate} />
+      </section>
+
+      <details className="group rounded-2xl border border-cc-border bg-cc-surface">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-sm font-semibold text-cc-text hover:bg-cc-soft [&::-webkit-details-marker]:hidden">
+          Show the detail behind these
+          <span className="text-xs font-normal text-cc-muted group-open:hidden">Capacity, people, documentation, trends and money</span>
+        </summary>
+        <div className="space-y-4 border-t border-cc-border p-4">
           <DemandCapacityPanel data={demandQuery.data} loading={demandQuery.isLoading} error={demandQuery.isError} onRetry={() => { void demandQuery.refetch(); }} onNavigate={navigate} />
           <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
-          <ParticipantOverviewCard
-            total={data.active_participants}
-            bySex={data.participants_by_sex}
-            byPlanStatus={data.participants_by_plan_status}
-            onNavigate={() => navigate("/onboard-participant/active")}
-          />
-          <ActiveStaffCard
-            total={data.active_staff}
-            retentionRate={data.staff_retention_rate}
-            supportWorkers={data.support_workers}
-            coordinators={data.coordinators}
-            onClick={() => navigate("/md/staff")}
-          />
+            <ParticipantOverviewCard
+              total={data.active_participants}
+              bySex={data.participants_by_sex}
+              byPlanStatus={data.participants_by_plan_status}
+              onNavigate={() => navigate("/onboard-participant/active")}
+            />
+            <ActiveStaffCard
+              total={data.active_staff}
+              retentionRate={data.staff_retention_rate}
+              supportWorkers={data.support_workers}
+              coordinators={data.coordinators}
+              onClick={() => navigate("/md/staff")}
+            />
           </div>
-
-
-      {/* ------------------------------------------------------------------ */}
-      {/* How we're tracking — demoted below the triage list                 */}
-      {/* ------------------------------------------------------------------ */}
-
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span
-            className="text-xs font-semibold"
-            style={{ color: MUTED }}
-          >
-            How we're tracking
-          </span>
-          <span className="h-px flex-1" style={{ background: BORDER }} />
+          <DocumentationInsights data={data} onNavigate={navigate} />
+          {trendQuery.isError ? (
+            <div role="alert" className="rounded-2xl bg-cc-surface p-4 text-sm">
+              Documentation trend could not be loaded.{" "}
+              <button type="button" className="font-semibold text-cc-plum" onClick={() => void trendQuery.refetch()}>Try again</button>
+            </div>
+          ) : trendQuery.isLoading ? (
+            <p role="status" className="text-sm text-cc-muted">Loading documentation trend...</p>
+          ) : (
+            <ComplianceTrend trend={trendQuery.data?.trend ?? []} target={data.compliance_target} />
+          )}
+          <FinancialSummary onNavigate={() => navigate("/md/financial")} />
+          <button type="button" onClick={() => navigate("/md/executive")} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border border-cc-border px-5 py-3 text-left text-sm font-semibold text-cc-text hover:bg-cc-soft">
+            Review outcomes against targets over time
+            <ArrowRight size={16} />
+          </button>
         </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-
-
-          <ExecutiveMetric
-            label="Support visits"
-            value={formatNumber(data.sessions_this_week)}
-            detail="This week"
-            onClick={() => navigate("/md/schedule")}
-
-          />
-
-          {(() => {
-            // Active goals with at least one shift note against them in the
-            // last 30 days (dashboards.py _goal_outcomes).
-            const active = data.goals_active ?? null;
-            const supported = data.active_goals_supported_30d ?? null;
-            const pct = active && supported != null ? Math.round((supported / active) * 100) : null;
-            return (
-              <ExecutiveMetric
-                label="Goals supported"
-                value={pct == null ? "N/A" : `${pct}%`}
-                detail={active ? `${supported} of ${active} active goals, last 30 days` : "No active goals yet"}
-                onClick={() => navigate("/onboard-participant/active")}
-                achievementPct={pct ?? 0}
-              />
-            );
-          })()}
-        </div>
-
-      </div>
-        </div>
-        <aside className="order-1 min-w-0 xl:relative xl:order-2 xl:self-stretch"><div className="xl:absolute xl:inset-0"><GovernanceTriage variant="sidebar" onNavigate={navigate} workersAtRisk={data.workers_at_risk} /></div></aside>
-      </div>
-      <div className="space-y-4">
-        <DocumentationInsights data={data} onNavigate={navigate} />
-        {trendQuery.isError ? <div role="alert" className="rounded-2xl bg-cc-surface p-4 text-sm">Documentation trend could not be loaded. <button type="button" className="font-semibold text-cc-plum" onClick={() => void trendQuery.refetch()}>Try again</button></div> : trendQuery.isLoading ? <p role="status" className="text-sm text-cc-muted">Loading documentation trend...</p> : <ComplianceTrend trend={trendQuery.data?.trend ?? []} target={data.compliance_target} />}
-
-        <button type="button" onClick={() => navigate("/md/executive")} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl bg-cc-surface px-5 py-3 text-left text-sm font-semibold text-cc-text hover:bg-cc-soft">Review performance and longer-term trends<ArrowRight size={16} /></button>
-      </div>
-
-
-      <FinancialSummary
-        onNavigate={() => navigate("/md/financial")}
-      />
-
+      </details>
     </div>
   );
 }
+
