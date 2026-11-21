@@ -313,7 +313,7 @@ def test_search_matches_name_title_id_or_folder_and_gives_the_path():
     for q in ("liam", "SUNR-AGR-000001", "service a & support", "sa-2026"):
         results = search(q)
         assert [r["document"]["id"] for r in results] == ["a"], q
-    assert results[0]["path"] == ["Participant Folder", "Liam Carter", "Service A & Support P"]
+    assert results[0]["path"] == ["Participant Folder", "Liam Carter", "Service Agreements & Support Plans"]
     assert results[0]["href"] == "/md/vault/tree/participant/person/p1/service_support"
     assert [r["document"]["id"] for r in search("insurances")] == ["i"]
     assert search("insurances")[0]["href"] == "/md/vault/gov_insurances"

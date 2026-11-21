@@ -488,7 +488,9 @@ export default function VaultFolderPage({ category }: { category: string }) {
             )}
           </div>
 
-          <div className="w-full lg:sticky lg:top-[75px] lg:h-full lg:w-[67%]">
+          {/* A real height on every screen size: without one (below lg) the
+              PDF frame falls back to the browser's 150px. */}
+          <div className="h-[75vh] min-h-[28rem] w-full lg:sticky lg:top-[75px] lg:h-[calc(100vh-95px)] lg:w-[67%] lg:self-start">
             <DocumentPreviewPane
               doc={documents.find((d) => d.id === previewId) ?? null}
               showVersionHistory={isGovernance && documents.find((d) => d.id === previewId)?.source_table === "governance_documents"}

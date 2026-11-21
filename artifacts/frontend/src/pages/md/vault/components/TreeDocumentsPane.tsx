@@ -77,7 +77,9 @@ export function TreeDocumentsPane({
             focusedId={previewId}
           />
         </div>
-        <div className="w-full lg:sticky lg:top-[75px] lg:w-[67%] lg:self-start">
+        {/* A real height: without one the PDF frame falls back to the
+            browser's 150px and only the letterhead shows. */}
+        <div className="h-[75vh] min-h-[28rem] w-full lg:sticky lg:top-[75px] lg:h-[calc(100vh-95px)] lg:w-[67%] lg:self-start">
           <DocumentPreviewPane
             doc={documents.find((d) => d.id === previewId) ?? null}
             customizableFields={[]}
