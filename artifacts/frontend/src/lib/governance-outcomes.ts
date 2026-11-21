@@ -10,7 +10,8 @@ import type { MdDemandCapacity } from "@/services/dashboardService";
 export type OutcomeStatus = "on_track" | "attention" | "off_track" | "no_data";
 
 export type Outcome = {
-  id: "goals" | "quality" | "safety" | "workforce" | "demand";
+  /** "goals", "quality", "safety", "workforce", "demand" on the hub; any key elsewhere. */
+  id: string;
   area: string;
   status: OutcomeStatus;
   headline: string;

@@ -463,7 +463,8 @@ async def _participant_quiet_alerts(
 
         if days_since is None or days_since >= threshold_days:
             detail = (
-                f"Last session {last}, {days_since} days ago."
+                # "25 Oct 2026", not "2026-10-25".
+                f"Last session {date.fromisoformat(last).strftime('%d %b %Y').lstrip('0')}, {days_since} days ago."
                 if days_since is not None
                 else "No session found in the recent records reviewed. Check the participant profile for earlier records or other contact."
             )

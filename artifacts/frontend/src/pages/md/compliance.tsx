@@ -28,7 +28,6 @@ import {
   Section,
   SkeletonBlocks,
   StatusText,
-  SummaryStrip,
   Surface,
   ctaClass,
   ghostClass,
@@ -393,27 +392,26 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
           />
         ) : (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <SummaryStrip
-                items={[
-                  { value: `${data.compliance_score}%`, label: `documentation score, target ${data.compliance_target}%`, tone: scoreTone(data.compliance_score) },
-                  { value: `${derived.compliantPercent}%`, label: "of notes compliant", tone: "good" },
-                  { value: `${derived.atRiskPercent}%`, label: "of notes at risk", tone: derived.atRiskPercent ? "warning" : undefined },
-                  {
-                    value: data.team_compliance_breakdown.non_compliant,
-                    label: data.team_compliance_breakdown.non_compliant === 1 ? "non-compliant note" : "non-compliant notes",
-                    tone: data.team_compliance_breakdown.non_compliant ? "danger" : "good",
-                    onClick: () => navigate("/sessions?band=non_compliant"),
-                  },
-                  { value: derived.highAlerts, label: derived.highAlerts === 1 ? "high-priority alert" : "high-priority alerts", tone: derived.highAlerts ? "danger" : "good" },
-                ]}
-              />
+            <div className="flex justify-end">
               <button type="button" onClick={() => setRetryKey((key) => key + 1)} className={ghostClass}>
                 Refresh
               </button>
             </div>
 
-            {/* Posture: where the score sits against target, and how the team splits */}
+            {gapReport && (
+              <GapAnalysis
+                report={gapReport}
+                checklistState={checklist.isLoading ? "loading" : checklist.isError ? "error" : "ready"}
+              />
+            )}
+
+            {/* The shift note figures behind the documentation gap, when wanted. */}
+            <details className="group rounded-2xl border border-cc-border bg-cc-surface">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-sm font-semibold hover:bg-cc-soft [&::-webkit-details-marker]:hidden" style={{ color: TEXT }}>
+                Shift note documentation
+                <span className="text-xs font-normal group-open:hidden" style={{ color: MUTED }}>Score against target, and how notes split</span>
+              </summary>
+              <div className="border-t border-cc-border">
             <Surface className="p-5 sm:p-6">
               <div className="grid gap-6 lg:grid-cols-2">
                 <div>
@@ -486,12 +484,8 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
               </div>
             </Surface>
 
-            {gapReport && (
-              <GapAnalysis
-                report={gapReport}
-                checklistState={checklist.isLoading ? "loading" : checklist.isError ? "error" : "ready"}
-              />
-            )}
+              </div>
+            </details>
 
             {trendError && (
               <p role="status" className="rounded-2xl bg-cc-surface px-5 py-4 text-sm" style={{ color: MUTED }}>

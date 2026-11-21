@@ -28,12 +28,19 @@ export interface IncidentCardData {
   timezone?: string | null;
 }
 
-/** "Due in 6h 12m" / "Overdue by 2h 5m" — same deadline the backend escalation job uses. */
+/** "Due in 6h 12m", "Overdue by 1 day 3h", "Overdue by 24 days" — same
+ *  deadline the backend escalation job uses. Long spans read in days, not
+ *  hundreds of hours. */
 export function formatNotificationCountdown(dueAtIso: string, overdue: boolean): string {
   const diffMs = Math.abs(parseISO(dueAtIso).getTime() - Date.now());
   const hours = Math.floor(diffMs / 3_600_000);
   const minutes = Math.floor((diffMs % 3_600_000) / 60_000);
-  const span = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  const days = Math.floor(hours / 24);
+  const span =
+    days >= 2 ? `${days} days`
+    : days === 1 ? `1 day${hours % 24 ? ` ${hours % 24}h` : ""}`
+    : hours > 0 ? `${hours}h ${minutes}m`
+    : `${minutes}m`;
   return overdue ? `Overdue by ${span}` : `Due in ${span}`;
 }
 

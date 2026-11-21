@@ -20,7 +20,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { formatAppDate, appTodayKey } from "@/lib/datetime";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
-import { LoadError, PageHeader, StatusText, SummaryStrip, ctaClass, outlineClass, type Tone } from "@/components/layout/PageKit";
+import { LoadError, PageHeader, StatusText, ctaClass, outlineClass, type Tone } from "@/components/layout/PageKit";
+import { ActionList, OutcomeList } from "@/components/hub/GovernanceOutcomes";
+import { EDIT_COSTS, financeActions, financeOutcomes } from "@/lib/finance-outcomes";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -704,9 +706,34 @@ export default function MDFinancialPage() {
   const net = pl?.net_profit_cents ?? null;
   const cash = data?.cash;
 
+  const claimsQuery = useOrgQuery<ClaimsCounts>(["billing", "ndia-claims"], {
+    queryFn: async () => {
+      const res = await apiFetch("/api/billing/claims");
+      if (!res.ok) throw await loadErrorFrom(res);
+      return res.json();
+    },
+  });
+  const claimRows = claimsQuery.data?.ready ?? [];
+  const claimsReady = claimRows.filter((r) => r.problems.length === 0);
+  const claimsSummary = claimsQuery.data
+    ? {
+        readyCount: claimsReady.length,
+        readyCents: claimsReady.reduce((sum, r) => sum + r.total_cents, 0),
+        needsFixing: claimRows.length - claimsReady.length,
+      }
+    : null;
+  const financeLinks = { invoices: BILLING_INVOICES, claims: BILLING_CLAIMS };
+  // Buttons either open another page, open the costs editor here, or jump
+  // to a card on this page.
+  const openFinanceLink = (href: string) => {
+    if (href === EDIT_COSTS) setEditing(true);
+    else if (href.startsWith("#")) document.getElementById(href.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" });
+    else navigate(href);
+  };
+
   return (
     <HubLayout>
-      <div className="space-y-5 pb-12">
+      <div className="space-y-phi-5 pb-phi-7">
         <PageHeader
           eyebrow="Finance"
           title="Financial Governance"
@@ -742,56 +769,28 @@ export default function MDFinancialPage() {
             <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" style={{ color: PLUM }} /></div>
           ) : (
             <>
-              <SummaryStrip
-                items={[
-                  {
-                    value: money(data.billed_cents),
-                    label: "revenue",
-                    hint: `${data.invoice_count.toLocaleString("en-AU")} invoices${collectionRate != null ? ` · ${collectionRate}% collected` : ""}`,
-                    onClick: () => navigate(BILLING_INVOICES),
-                  },
-                  {
-                    value: net == null ? "N/A" : money(net),
-                    label: "net profit",
-                    tone: net == null ? undefined : net < 0 ? "danger" : "good",
-                    hint:
-                      net == null
-                        ? "Add costs to see profit"
-                        : `${pl?.margin_pct ?? 0}% margin${pl && (!pl.overheads_set || !pl.wages_complete) ? " · costs incomplete" : ""}`,
-                    onClick: net == null ? () => setEditing(true) : undefined,
-                  },
-                  {
-                    value:
-                      cash?.on_hand_cents == null
-                        ? "Set up"
-                        : cash.runway_months != null
-                          ? months(cash.runway_months)
-                          : cash.cash_positive
-                            ? "Cash-positive"
-                            : money(cash.on_hand_cents),
-                    label: "cash runway",
-                    tone: cash?.runway_months != null && cash.runway_months < 6 ? "danger" : cash?.cash_positive ? "good" : undefined,
-                    hint:
-                      cash?.on_hand_cents == null
-                        ? "Add your cash balance"
-                        : cash.covers_months != null
-                          ? `${money(cash.on_hand_cents)} covers ${months(cash.covers_months)}`
-                          : `Cash as of ${cash.as_of ? formatAppDate(cash.as_of) : "N/A"}`,
-                    onClick: () => setEditing(true),
-                  },
-                  {
-                    value: money(data.outstanding_cents),
-                    label: "outstanding",
-                    tone: data.overdue_cents ? "danger" : data.outstanding_cents ? "warning" : undefined,
-                    hint: data.overdue_cents ? `${money(data.overdue_cents)} overdue` : "Nothing overdue",
-                    onClick: () => navigate(BILLING_INVOICES),
-                  },
-                ]}
-              />
+              <section aria-labelledby="finance-actions" className="space-y-phi-3">
+                <div>
+                  <h2 id="finance-actions" className="text-lg font-semibold" style={{ color: TEXT }}>What needs doing</h2>
+                  <p className="text-sm" style={{ color: MUTED }}>Most urgent first. Each item opens where you deal with it.</p>
+                </div>
+                <ActionList actions={financeActions(data, claimsSummary, financeLinks)} onNavigate={openFinanceLink} />
+              </section>
 
+              <section aria-labelledby="finance-outcomes" className="space-y-phi-3">
+                <div>
+                  <h2 id="finance-outcomes" className="text-lg font-semibold" style={{ color: TEXT }}>How the money is doing</h2>
+                  <p className="text-sm" style={{ color: MUTED }}>{data.period_label}, in plain words.</p>
+                </div>
+                <OutcomeList outcomes={financeOutcomes(data, claimsSummary, financeLinks)} onNavigate={openFinanceLink} />
+              </section>
+
+              <h2 className="pt-phi-3 text-lg font-semibold" style={{ color: TEXT }}>The figures</h2>
               <div className="grid gap-6 xl:grid-golden">
                 <PerformanceChart data={data} selected={selectedMonth} onSelect={(m) => setSelectedMonth((cur) => (cur === m ? null : m))} />
-                <ProfitAndLoss data={data} month={month} onClearMonth={() => setSelectedMonth(null)} onEdit={() => setEditing(true)} />
+                <div id="profit-and-loss" className="min-w-0 scroll-mt-24">
+                  <ProfitAndLoss data={data} month={month} onClearMonth={() => setSelectedMonth(null)} onEdit={() => setEditing(true)} />
+                </div>
               </div>
 
               <div className="grid gap-6 lg:grid-cols-3">
