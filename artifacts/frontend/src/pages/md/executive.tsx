@@ -334,7 +334,7 @@ export default function MDExecutivePage() {
 
   return (
     <HubLayout>
-      <div className="min-w-0 space-y-8 pb-12">
+      <div className="min-w-0 space-y-phi-6 pb-phi-7">
         <PageHeader
           eyebrow={`Governance & Strategy · ${formatDate(data.generated_at)}`}
           title={
@@ -474,7 +474,7 @@ export default function MDExecutivePage() {
             <span className="text-xs font-normal text-cc-muted">Documentation compliance over time, and where shift notes stand</span>
           </summary>
           <div className="pt-6">
-        <div className="grid gap-8 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
+        <div className="grid gap-8 xl:grid-golden">
           <Section
             title="Documentation compliance over time"
             description="Weekly average score of shift notes. Bars show how many shifts each week is based on."

@@ -1213,7 +1213,7 @@ export function MDHubView() {
   const actions = buildActions(data, alerts, demandQuery.data, (a) => attentionRoute(a));
 
   return (
-    <div className="space-y-8 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-cc-plum">
+    <div className="space-y-phi-6 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-cc-plum">
       <div className="-mt-2 flex flex-wrap items-center justify-end gap-3">
         <p role="status" className="text-xs" style={{ color: error ? "var(--cc-danger-text)" : "var(--cc-muted)" }}>
           {error ? "Refresh failed. Showing the last available overview." : overviewQuery.isFetching ? "Updating overview…" : ""}
@@ -1269,7 +1269,7 @@ export function MDHubView() {
         </summary>
         <div className="space-y-4 border-t border-cc-border p-4">
           <DemandCapacityPanel data={demandQuery.data} loading={demandQuery.isLoading} error={demandQuery.isError} onRetry={() => { void demandQuery.refetch(); }} onNavigate={navigate} />
-          <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
+          <div className="grid min-w-0 gap-4 lg:grid-golden">
             <ParticipantOverviewCard
               total={data.active_participants}
               bySex={data.participants_by_sex}

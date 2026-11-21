@@ -789,7 +789,7 @@ export default function MDFinancialPage() {
                 ]}
               />
 
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
+              <div className="grid gap-6 xl:grid-golden">
                 <PerformanceChart data={data} selected={selectedMonth} onSelect={(m) => setSelectedMonth((cur) => (cur === m ? null : m))} />
                 <ProfitAndLoss data={data} month={month} onClearMonth={() => setSelectedMonth(null)} onEdit={() => setEditing(true)} />
               </div>

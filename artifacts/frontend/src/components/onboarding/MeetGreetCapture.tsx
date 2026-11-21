@@ -434,7 +434,7 @@ export function MeetGreetCapture({
         </span>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <div className="grid gap-4 md:grid-golden-reverse">
         {/* Capture */}
         <section className="flex min-h-[340px] flex-col rounded-2xl p-5" style={{ background: "var(--cc-panel)" }}>
           {!editable ? (
