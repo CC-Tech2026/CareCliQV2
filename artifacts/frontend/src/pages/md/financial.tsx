@@ -780,7 +780,7 @@ export default function MDFinancialPage() {
               <section aria-labelledby="finance-outcomes" className="space-y-phi-3">
                 <div>
                   <h2 id="finance-outcomes" className="text-lg font-semibold" style={{ color: TEXT }}>How the money is doing</h2>
-                  <p className="text-sm" style={{ color: MUTED }}>{data.period_label}, in plain words.</p>
+                  <p className="text-sm" style={{ color: MUTED }}>{data.period_label}. Tap a ring for the detail.</p>
                 </div>
                 <OutcomeList outcomes={financeOutcomes(data, claimsSummary, financeLinks)} onNavigate={openFinanceLink} />
               </section>

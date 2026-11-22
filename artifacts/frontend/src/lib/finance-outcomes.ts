@@ -153,7 +153,51 @@ export function financeOutcomes(d: FinanceInputs, claims: ClaimsInputs, links: {
             },
     );
   }
-  return out;
+  return out.map((o) => ({ ...o, ring: financeRing(o.id, d, claims) }));
+}
+
+/** Short money for a ring: $450, $1.2k, $12k, $1.3m. */
+const shortDollars = (cents: number) => {
+  const n = Math.abs(cents) / 100;
+  const sign = cents < 0 ? "-" : "";
+  if (n >= 1_000_000) return `${sign}$${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}m`;
+  if (n >= 1_000) return `${sign}$${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
+  return `${sign}$${Math.round(n)}`;
+};
+
+function financeRing(id: string, d: FinanceInputs, claims: ClaimsInputs): Outcome["ring"] {
+  switch (id) {
+    case "revenue": {
+      if (!d.billed_cents) return { value: "$0", label: "Billed", caption: "nothing yet", pct: 0 };
+      const pct = (d.collected_cents / d.billed_cents) * 100;
+      return { value: shortDollars(d.billed_cents), label: "Billed", caption: `${Math.round(pct)}% collected`, pct };
+    }
+    case "owed":
+      if (d.overdue_cents) return { value: shortDollars(d.overdue_cents), label: "Overdue", caption: `${shortDollars(d.outstanding_cents)} unpaid` };
+      if (d.outstanding_cents) return { value: shortDollars(d.outstanding_cents), label: "Owed", caption: "none overdue" };
+      return { value: "$0", label: "Owed", caption: "all paid" };
+    case "profit": {
+      const pl = d.profit_and_loss;
+      const net = pl?.net_profit_cents ?? null;
+      if (net == null) return { value: "N/A", label: "Profit", caption: "costs missing", pct: 0 };
+      return { value: shortDollars(net), label: "Profit", caption: `${pl?.margin_pct ?? 0}% margin`, pct: Math.max(0, pl?.margin_pct ?? 0) };
+    }
+    case "cash": {
+      const cash = d.cash;
+      if (cash?.on_hand_cents == null) return { value: "N/A", label: "Cash", caption: "not set up", pct: 0 };
+      if (cash.cash_positive) {
+        return { value: shortDollars(cash.on_hand_cents), label: "Cash", caption: cash.covers_months != null ? `${monthsText(cash.covers_months)} cover` : "growing" };
+      }
+      return { value: shortDollars(cash.on_hand_cents), label: "Cash", caption: cash.runway_months != null ? `lasts ${monthsText(cash.runway_months)}` : "shrinking" };
+    }
+    case "claims":
+      if (!claims) return undefined;
+      if (claims.needsFixing) return { value: String(claims.needsFixing), label: "Claims", caption: "to fix" };
+      if (claims.readyCount) return { value: shortDollars(claims.readyCents), label: "To claim", caption: `${claims.readyCount} ready` };
+      return { value: "0", label: "Claims", caption: "none waiting" };
+    default:
+      return undefined;
+  }
 }
 
 export function financeActions(d: FinanceInputs, claims: ClaimsInputs, links: { invoices: string; claims: string }): ActionItem[] {

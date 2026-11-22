@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { planQuery, planSummary, DEFAULT_SETTINGS, type WorkforcePlan } from "./workforce-plan";
+import { planQuery, planRings, planSummary, DEFAULT_SETTINGS, type WorkforcePlan } from "./workforce-plan";
 
 function plan(over: Partial<WorkforcePlan> = {}): WorkforcePlan {
   return {
@@ -63,5 +63,29 @@ describe("workforce plan summary", () => {
   it("sends only the settings that are set", () => {
     expect(planQuery(DEFAULT_SETTINGS)).toBe("target_utilisation=0.85&on_cost_rate=0.15");
     expect(planQuery({ ...DEFAULT_SETTINGS, wagePerHour: 38.5, leadTimeWeeks: 6 })).toContain("wage_per_hour=38.5");
+  });
+});
+
+describe("workforce plan rings", () => {
+  it("gives each area a short figure and a few words", () => {
+    const rings = Object.fromEntries(planRings(plan(), "2026-11-18").map((o) => [o.id, o]));
+    expect(rings.hiring.ring).toMatchObject({ value: "2", label: "To hire", caption: "by 7 Dec" });
+    expect(rings.hiring.status).toBe("attention");
+    expect(rings.busy.ring).toMatchObject({ value: "73%", caption: "on target" });
+    expect(rings.funding.ring).toMatchObject({ value: "40h", caption: "enough" });
+    expect(rings.margin.ring).toMatchObject({ value: "18%", caption: "$12.50 an hour" });
+    expect(rings.turnover.status).toBe("on_track");
+  });
+
+  it("flags hiring now and a team stretched past its target", () => {
+    const p = plan({
+      hiring: { ...plan().hiring, hire_by: "2026-11-16" },
+      capacity: { ...plan().capacity, utilisation_pct: 92 },
+    });
+    const rings = Object.fromEntries(planRings(p, "2026-11-18").map((o) => [o.id, o]));
+    expect(rings.hiring.status).toBe("off_track");
+    expect(rings.hiring.ring?.caption).toBe("hire now");
+    expect(rings.busy.status).toBe("attention");
+    expect(rings.busy.ring?.caption).toBe("over target");
   });
 });

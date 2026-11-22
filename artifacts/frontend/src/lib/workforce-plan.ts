@@ -1,3 +1,5 @@
+import type { Outcome } from "@/lib/governance-outcomes";
+
 /** The workforce plan as the API returns it (/api/dashboard/workforce-plan). */
 export type WorkforcePlan = {
   as_of: string;
@@ -148,4 +150,124 @@ export function planSummary(plan: WorkforcePlan, today: string): { headline: str
     points.push("No pay has been calculated yet, so staff costs aren't known. Enter an average hourly wage below to see them.");
   }
   return { headline, points, tone };
+}
+
+/**
+ * The plan as rings: hiring, how busy the team is, spare time, funding,
+ * margin and turnover. Each opens the sentence behind it.
+ */
+export function planRings(plan: WorkforcePlan, today: string): Outcome[] {
+  const { hiring, capacity, demand, finance, funding } = plan;
+  const summary = planSummary(plan, today);
+  const target = capacity.target_utilisation_pct;
+  const out: Outcome[] = [];
+
+  const hireNow = hiring.needed && !!hiring.hire_by && hiring.hire_by <= today;
+  out.push({
+    id: "hiring",
+    area: "Hiring",
+    status: hiring.needed ? (hireNow ? "off_track" : "attention") : "on_track",
+    headline: summary.headline,
+    detail: hiring.needed && hiring.short_from
+      ? `From the week of ${dayLabel(hiring.short_from)}, up to ${hours(hiring.hours_short)} a week short. Hiring takes about ${hiring.lead_time_weeks} ${plural(hiring.lead_time_weeks, "week")}.`
+      : "Booked and expected support fits within your team's hours.",
+    action: { label: "See demand and staff time", href: "#plan-demand" },
+    ring: {
+      value: String(hiring.needed ? hiring.workers : 0),
+      label: "To hire",
+      caption: hiring.needed && hiring.hire_by ? (hireNow ? "hire now" : `by ${dayLabel(hiring.hire_by)}`) : "none needed",
+    },
+  });
+
+  const u = capacity.utilisation_pct;
+  out.push({
+    id: "busy",
+    area: "Hours worked",
+    status: u == null ? "no_data" : u > target || u < 50 ? "attention" : "on_track",
+    headline: u == null ? "No hours offered yet" : `Your team works ${u}% of the hours they offer`,
+    detail: u == null
+      ? "Ask workers to set their weekly hours."
+      : u < 50
+        ? "Most of their time is free. Grow participants before hiring."
+        : u > target
+          ? `Above the ${target}% target. Expect tiredness, overtime and cancellations.`
+          : `Within the ${target}% target.`,
+    action: { label: "See demand and staff time", href: "#plan-demand" },
+    meter: u == null ? undefined : { pct: u, target, label: "Share of offered hours worked" },
+    ring: {
+      value: u == null ? "N/A" : `${Math.round(u)}%`,
+      label: "Hours used",
+      caption: u == null ? "not known" : u < 50 ? "room to grow" : u > target ? "over target" : "on target",
+      pct: u ?? 0,
+    },
+  });
+
+  const perParticipant = demand.pipeline.open_enquiries ? demand.pipeline.requested_hours / demand.pipeline.open_enquiries : null;
+  const room = perParticipant && perParticipant > 0 ? Math.floor(hiring.spare_hours / perParticipant) : null;
+  out.push({
+    id: "spare",
+    area: "Spare time",
+    status: hiring.spare_hours > 0 ? "on_track" : "attention",
+    headline: `${hours(hiring.spare_hours)} a week to spare`,
+    detail: room ? `Room for about ${room} more ${plural(room, "participant")} at the hours your enquiries ask for.` : "Hours your team can still cover at the target share.",
+    action: { label: "See demand and staff time", href: "#plan-demand" },
+    ring: { value: `${Math.round(hiring.spare_hours)}h`, label: "Spare a week", caption: room ? `${room} more ${plural(room, "participant")}` : "at target" },
+  });
+
+  const fundedPct = funding.weekly_hours != null && demand.current_weekly_hours > 0
+    ? (funding.weekly_hours / demand.current_weekly_hours) * 100
+    : null;
+  out.push({
+    id: "funding",
+    area: "Funding",
+    status: fundedPct == null ? "no_data" : fundedPct >= 100 ? "on_track" : "attention",
+    headline: funding.weekly_hours == null ? "Funding not known" : `Funding pays for ${hours(funding.weekly_hours)} a week`,
+    detail: fundedPct == null
+      ? "No active plans with a remaining budget."
+      : fundedPct >= 100
+        ? `Enough for the ${hours(demand.current_weekly_hours)} being delivered, across ${funding.plans_counted} active plans.`
+        : `Less than the ${hours(demand.current_weekly_hours)} being delivered. Some plans will run out early.`,
+    action: { label: "See earnings and costs", href: "#plan-money" },
+    ring: {
+      value: funding.weekly_hours == null ? "N/A" : `${Math.round(funding.weekly_hours)}h`,
+      label: "Funded a week",
+      caption: fundedPct == null ? "not known" : fundedPct >= 100 ? "enough" : "running short",
+      pct: fundedPct == null ? 0 : Math.min(100, fundedPct),
+    },
+  });
+
+  const m = finance.margin_pct;
+  out.push({
+    id: "margin",
+    area: "Margin",
+    status: m == null ? "no_data" : m < 0 ? "off_track" : m < 15 ? "attention" : "on_track",
+    headline: m == null ? "Staff costs not known yet" : `${m}% of revenue left after pay`,
+    detail: finance.margin_per_hour != null && finance.loaded_wage_per_hour != null && finance.revenue_per_hour != null
+      ? `${money(finance.revenue_per_hour)} earned and ${money(finance.loaded_wage_per_hour)} paid an hour, with on-costs.`
+      : "Enter an average hourly wage in the settings to see it.",
+    action: { label: "See earnings and costs", href: "#plan-money" },
+    ring: {
+      value: m == null ? "N/A" : `${Math.round(m)}%`,
+      label: "Margin",
+      caption: finance.margin_per_hour != null ? `${money(finance.margin_per_hour)} an hour` : "pay not known",
+      pct: m == null ? 0 : Math.max(0, m),
+    },
+  });
+
+  const leavers = Math.round(hiring.expected_leavers);
+  out.push({
+    id: "turnover",
+    area: "Staff turnover",
+    status: capacity.annual_attrition_pct > 30 ? "attention" : "on_track",
+    headline: `${capacity.annual_attrition_pct}% of staff leave a year`,
+    detail: leavers ? `Expect about ${leavers} ${plural(leavers, "worker")} to leave in the next 12 weeks.` : "No leavers expected in the next 12 weeks.",
+    action: { label: "See growth", href: "#plan-growth" },
+    ring: {
+      value: `${Math.round(capacity.annual_attrition_pct)}%`,
+      label: "Turnover",
+      caption: leavers ? `${leavers} may leave` : "a year",
+      pct: Math.min(100, capacity.annual_attrition_pct),
+    },
+  });
+  return out;
 }
