@@ -173,14 +173,13 @@ it("shows goal outcomes from the goals themselves", async () => {
     }),
   );
   render(<MDExecutivePage />);
-  // Each ring is a figure, a name and a few words; the panel has the sentence.
+  // Each tile is a name, a figure, how it stands and why, in one place.
   expect(await screen.findByText("Goals met")).toBeTruthy();
   expect(screen.getByText("25%")).toBeTruthy();
   expect(screen.getByText(/2 of 8$/)).toBeTruthy();
   expect(screen.getByText("Goals supported")).toBeTruthy();
   expect(screen.getByText("67%")).toBeTruthy();
   expect(screen.getByText(/2 not supported$/)).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: /Goals supported/ }));
-  expect(await screen.findByRole("heading", { name: "4 of 6 goals" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Goals supported/ }).textContent).toContain("4 of 6 goals");
   expect(screen.getAllByText(/2 with no shift notes against them/).length).toBeGreaterThan(0);
 });

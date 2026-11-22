@@ -1108,7 +1108,6 @@ export function MDHubView() {
       <section aria-labelledby="hub-outcomes" className="space-y-phi-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="hub-outcomes" className="text-lg font-semibold text-cc-text">How we're doing</h2>
-          <p className="text-sm text-cc-muted">Tap one for the detail</p>
         </div>
         <OutcomeList outcomes={outcomes} onNavigate={navigate} />
       </section>
