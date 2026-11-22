@@ -14,7 +14,7 @@ import {
 } from "recharts";
 import { Link, useLocation } from "wouter";
 import { HubLayout } from "@/components/layout/HubLayout";
-import { AXIS_PROPS, BAR_PROPS, GRID_PROPS, SERIES, TOOLTIP_PROPS, lineProps, referenceProps } from "@/components/charts/figures";
+import { AXIS_PROPS, BAR_PROPS, GRID_PROPS, SERIES, ScoreMeter, TOOLTIP_PROPS, lineProps, referenceProps } from "@/components/charts/figures";
 import {
   LoadError,
   PageHeader,
@@ -151,38 +151,6 @@ function TrendTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   );
 }
 
-/** A score as a ring, with the target marked as a tick on the circle. */
-function ScoreRing({ pct, target, color, initials }: { pct: number; target?: number; color: string; initials?: string }) {
-  const r = 32;
-  const c = 2 * Math.PI * r;
-  const value = Math.max(0, Math.min(100, pct));
-  const tickAngle = target != null ? (target / 100) * 2 * Math.PI - Math.PI / 2 : null;
-  return (
-    <span className="relative inline-flex h-[76px] w-[76px] shrink-0 items-center justify-center" aria-hidden>
-      <svg width="76" height="76" viewBox="0 0 76 76" className="absolute inset-0">
-        <circle cx="38" cy="38" r={r} fill="none" stroke="var(--cc-soft)" strokeWidth="7" />
-        <circle
-          cx="38" cy="38" r={r} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
-          strokeDasharray={`${(value / 100) * c} ${c}`} transform="rotate(-90 38 38)"
-        />
-        {tickAngle != null ? (
-          <line
-            x1={38 + (r - 6) * Math.cos(tickAngle)} y1={38 + (r - 6) * Math.sin(tickAngle)}
-            x2={38 + (r + 6) * Math.cos(tickAngle)} y2={38 + (r + 6) * Math.sin(tickAngle)}
-            stroke="var(--cc-text)" strokeWidth="2" strokeLinecap="round" opacity="0.55"
-          />
-        ) : null}
-      </svg>
-      <span className="relative text-center leading-none">
-        {initials ? (
-          <span className="text-sm font-semibold" style={{ color: TEXT }}>{initials}</span>
-        ) : (
-          <span className="text-lg font-semibold tabular-nums" style={{ color }}>{Math.round(pct)}%</span>
-        )}
-      </span>
-    </span>
-  );
-}
 
 export default function MDExecutivePage() {
   const { translate } = useAccessibility();
@@ -437,7 +405,7 @@ export default function MDExecutivePage() {
           </label>
         )}
 
-        <Section title="Outcomes against targets" description="Tap a ring for the detail.">
+        <Section title="Outcomes against targets" description="Tap one for the detail.">
           <OutcomeList outcomes={scorecard} onNavigate={navigate} />
         </Section>
 
@@ -449,18 +417,22 @@ export default function MDExecutivePage() {
           >
             <ul className="grid gap-phi-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {workersBelow.map((worker) => {
-                const tone = worker.compliance_score < 60 ? "danger" : "warning";
                 return (
                   <li key={worker.id}>
                     <Link
                       href={`/md/staff?workerId=${encodeURIComponent(worker.id)}`}
-                      className="flex h-full flex-col items-center rounded-2xl border border-cc-border bg-cc-surface p-phi-5 text-center transition hover:border-cc-text/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
+                      className="flex h-full flex-col rounded-2xl border border-cc-border bg-cc-surface p-phi-5 text-left transition hover:border-cc-text/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
                     >
-                      <ScoreRing pct={worker.compliance_score} target={WORKER_THRESHOLD} color={toneColor(tone)} initials={worker.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()} />
-                      <span className="mt-phi-3 block truncate text-sm font-semibold" style={{ color: TEXT }}>{worker.full_name}</span>
-                      <span className="block text-xs" style={{ color: MUTED }}>
-                        {Math.round(worker.compliance_score)}% across {worker.sessions} scored {worker.sessions === 1 ? "shift" : "shifts"}
+                      <span className="flex items-center gap-2.5">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cc-soft text-xs font-semibold" style={{ color: TEXT }} aria-hidden>
+                          {worker.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold" style={{ color: TEXT }}>{worker.full_name}</span>
+                          <span className="block text-xs" style={{ color: MUTED }}>{worker.sessions} scored {worker.sessions === 1 ? "shift" : "shifts"}</span>
+                        </span>
                       </span>
+                      <ScoreMeter className="mt-phi-3" size="sm" value={worker.compliance_score} good={WORKER_THRESHOLD} ariaLabel={`${worker.full_name}'s shift note score`} />
                       <span className="mt-phi-3 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: TEXT }}>
                         Review their notes <ArrowRight size={13} />
                       </span>
