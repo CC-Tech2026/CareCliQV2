@@ -34,6 +34,8 @@ import { zoneAbbreviation } from "@/lib/datetime";
 import { GovernanceTriage } from "@/components/hub/GovernanceTriage";
 import { getHubComplianceAlerts } from "@/services/hubService";
 import { SectionInfo } from "@/components/ui/section-info";
+import { OutcomeList } from "@/components/hub/GovernanceOutcomes";
+import type { Outcome, OutcomeStatus } from "@/lib/governance-outcomes";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -42,6 +44,7 @@ const SOFT = "var(--cc-soft)";
 const PLUM = "var(--cc-plum)";
 
 const EMPTY_TREND: TrendPoint[] = [];
+const TONE_STATUS: Record<Tone, OutcomeStatus> = { good: "on_track", warning: "attention", danger: "off_track", neutral: "no_data", info: "no_data" };
 /** Shift notes scoring at or above this count as on target (matches the server). */
 const WORKER_THRESHOLD = 85;
 
@@ -291,75 +294,94 @@ export default function MDExecutivePage() {
   const workersBelow = [...data.workers_at_risk].sort((a, b) => a.compliance_score - b.compliance_score);
   const workersBelowCount = data.workers_at_risk_count ?? workersBelow.length;
 
-  const scorecard: Array<{ label: string; value: string; target: string; tone: Tone; status: string; href: string; action: string }> = [
+  const supportCaption =
+    unsupportedGoals == null ? "not available" : unsupportedGoals === 0 ? "all supported" : `${unsupportedGoals} not supported`;
+  const scorecard: Outcome[] = [
     {
-      label: "Documentation compliance",
-      value: percent(data.compliance_score),
-      target: `${target}% target`,
-      tone: complianceTone,
-      status: data.compliance_score >= target ? "On target" : `${Math.round(gap)} pts below target`,
-      href: "/sessions",
-      action: "Review shift notes",
+      id: "notes",
+      area: "Documentation compliance",
+      status: TONE_STATUS[complianceTone],
+      headline: data.compliance_score >= target ? "Shift notes are on target" : `${Math.round(gap)} pts below target`,
+      detail: `Shift notes average ${percent(data.compliance_score)} against a ${target}% target.`,
+      action: { label: "Review shift notes", href: "/sessions" },
+      meter: { pct: data.compliance_score, target, label: "Average shift note score" },
+      ring: {
+        value: `${Math.round(data.compliance_score)}%`,
+        label: "Shift notes",
+        caption: data.compliance_score >= target ? "on target" : `${Math.round(gap)} pts below`,
+        pct: data.compliance_score,
+      },
     },
     {
-      label: "Workers below the documentation threshold",
-      value: String(workersBelowCount),
-      target: `scoring under ${WORKER_THRESHOLD}%`,
-      tone: workersBelowCount ? "warning" : "good",
-      status: workersBelowCount ? "Support needed" : "Everyone on target",
-      href: "/md/staff",
-      action: "Open staff",
+      id: "coaching",
+      area: "Workers below the documentation threshold",
+      status: workersBelowCount ? "attention" : "on_track",
+      headline: workersBelowCount ? `${workersBelowCount} ${workersBelowCount === 1 ? "worker needs" : "workers need"} support` : "Everyone on target",
+      detail: `Workers whose shift notes score under ${WORKER_THRESHOLD}%.`,
+      action: { label: "Open staff", href: "/md/staff" },
+      ring: { value: String(workersBelowCount), label: "To coach", caption: `under ${WORKER_THRESHOLD}%` },
     },
     {
-      label: "Participant goals achieved",
-      value: data.goal_outcome_rate == null ? "N/A" : percent(data.goal_outcome_rate),
-      target: data.goals_total ? `${data.goals_achieved} of ${data.goals_total} goals` : "no goals recorded",
-      tone: "neutral",
-      status: data.goals_total ? "Marked completed by coordinators" : "Add goals to participant plans",
-      href: "/onboard-participant/active",
-      action: "View participants",
+      id: "goals-met",
+      area: "Participant goals achieved",
+      status: !data.goals_total ? "no_data" : (data.goal_outcome_rate ?? 0) >= 25 ? "on_track" : "attention",
+      headline: data.goals_total ? `${data.goals_achieved} of ${data.goals_total} goals` : "No goals recorded",
+      detail: data.goals_total ? "Goals marked completed by coordinators." : "Add goals to participant plans.",
+      action: { label: "View participants", href: "/onboard-participant/active" },
+      ring: {
+        value: data.goal_outcome_rate == null ? "N/A" : `${Math.round(data.goal_outcome_rate)}%`,
+        label: "Goals met",
+        caption: data.goals_total ? `${data.goals_achieved} of ${data.goals_total}` : "none yet",
+        pct: data.goal_outcome_rate ?? 0,
+      },
     },
     {
-      label: "Active goals supported in the last 30 days",
-      value: supportedPct == null ? "N/A" : `${supportedPct}%`,
-      target: goalsActive ? `${goalsSupported} of ${goalsActive} goals` : "no active goals",
-      tone: supportTone,
-      status:
+      id: "goals-supported",
+      area: "Active goals supported in the last 30 days",
+      status: TONE_STATUS[supportTone],
+      headline: goalsActive ? `${goalsSupported} of ${goalsActive} goals` : "No active goals",
+      detail:
         unsupportedGoals == null
-          ? "Not available"
+          ? "Not available."
           : unsupportedGoals === 0
-            ? "Every goal has support recorded"
+            ? "Every goal has support recorded."
             : `${unsupportedGoals} with no shift notes against them`,
-      href: "/onboard-participant/active",
-      action: "View participants",
+      action: { label: "View participants", href: "/onboard-participant/active" },
+      meter: supportedPct == null ? undefined : { pct: supportedPct, target: 80, label: "Goals with a shift note in 30 days" },
+      ring: { value: supportedPct == null ? "N/A" : `${supportedPct}%`, label: "Goals supported", caption: supportCaption, pct: supportedPct ?? 0 },
     },
     {
-      label: "Staff retention",
-      value: percent(data.staff_retention_rate),
-      target: `${data.active_staff} active staff`,
-      tone: data.staff_retention_rate >= 85 ? "good" : data.staff_retention_rate >= 70 ? "warning" : "danger",
-      status: data.staff_retention_rate >= 85 ? "Stable" : "Watch turnover",
-      href: "/md/staff",
-      action: "Staff directory",
+      id: "retention",
+      area: "Staff retention",
+      status: data.staff_retention_rate >= 85 ? "on_track" : data.staff_retention_rate >= 70 ? "attention" : "off_track",
+      headline: data.staff_retention_rate >= 85 ? "Staffing is stable" : "Watch turnover",
+      detail: `${percent(data.staff_retention_rate)} retention across ${data.active_staff} active staff.`,
+      action: { label: "Staff directory", href: "/md/staff" },
+      ring: {
+        value: `${Math.round(data.staff_retention_rate)}%`,
+        label: "Retention",
+        caption: data.staff_retention_rate >= 85 ? "stable" : "watch turnover",
+        pct: data.staff_retention_rate,
+      },
     },
     overdueIncidents
       ? {
-          label: "Incidents needing action now",
-          value: String(overdueIncidents),
-          target: `${data.incidents_this_month} recorded this month`,
-          tone: "danger",
-          status: "Notification or follow-up overdue",
-          href: "/incidents",
-          action: "Incident register",
+          id: "incidents",
+          area: "Incidents needing action now",
+          status: "off_track",
+          headline: "Notification or follow-up overdue",
+          detail: `${overdueIncidents} overdue. ${data.incidents_this_month} recorded this month.`,
+          action: { label: "Incident register", href: "/incidents" },
+          ring: { value: String(overdueIncidents), label: "Incidents", caption: "overdue" },
         }
       : {
-          label: "Incidents this month",
-          value: String(data.incidents_this_month),
-          target: "recorded since the 1st",
-          tone: data.incidents_this_month ? "warning" : "good",
-          status: data.incidents_this_month ? "Follow up" : "None recorded",
-          href: "/incidents",
-          action: "Incident register",
+          id: "incidents",
+          area: "Incidents this month",
+          status: data.incidents_this_month ? "attention" : "on_track",
+          headline: data.incidents_this_month ? "Follow up" : "None recorded",
+          detail: `${data.incidents_this_month} recorded since the 1st.`,
+          action: { label: "Incident register", href: "/incidents" },
+          ring: { value: String(data.incidents_this_month), label: "Incidents", caption: "this month" },
         },
   ];
 
@@ -374,12 +396,7 @@ export default function MDExecutivePage() {
               <SectionInfo text="How the organisation is tracking against its targets over time. Today's to-do list lives on the Executive Hub." />
             </span>
           }
-          description={
-            <>
-              How the organisation is tracking against its targets, and which way it's heading.
-              <span className="mt-1 block text-xs">Updated {formatTime(data.generated_at)}</span>
-            </>
-          }
+          description={<span className="text-xs">Updated {formatTime(data.generated_at)}</span>}
           actions={
             <>
               <GovernanceTriage
@@ -418,38 +435,8 @@ export default function MDExecutivePage() {
           </label>
         )}
 
-        <Section title="Outcomes against targets" description="Where each outcome stands against its target, and where to act on it.">
-          <ul className="grid gap-phi-4 sm:grid-cols-2 xl:grid-cols-3">
-            {scorecard.map((row) => {
-              const pct = /%$/.test(row.value) ? Number.parseFloat(row.value) : null;
-              const target = Number.parseFloat((/(\d+)%/.exec(row.target) ?? [])[1] ?? "");
-              return (
-                <li key={row.label}>
-                  <Link
-                    href={row.href}
-                    aria-label={`${row.label}: ${row.value}. ${row.status}. ${row.action}`}
-                    className="flex h-full items-center gap-phi-4 rounded-2xl border border-cc-border bg-cc-surface p-phi-5 transition hover:border-cc-text/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
-                  >
-                    {pct != null ? (
-                      <ScoreRing pct={pct} target={Number.isFinite(target) ? target : undefined} color={toneColor(row.tone)} />
-                    ) : (
-                      <span className="flex h-[76px] w-[76px] shrink-0 items-center justify-center rounded-full bg-cc-soft text-2xl font-semibold tabular-nums" style={{ color: toneColor(row.tone) }}>
-                        {row.value}
-                      </span>
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold leading-snug" style={{ color: TEXT }}>{row.label}</span>
-                      <span className="mt-0.5 block text-xs" style={{ color: MUTED }}>{row.target}</span>
-                      <span className="mt-phi-2 block"><StatusText tone={row.tone}>{row.status}</StatusText></span>
-                      <span className="mt-phi-2 flex items-center gap-1 text-xs font-semibold" style={{ color: TEXT }}>
-                        {row.action} <ArrowRight size={13} />
-                      </span>
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+        <Section title="Outcomes against targets" description="Tap a ring for the detail.">
+          <OutcomeList outcomes={scorecard} onNavigate={navigate} />
         </Section>
 
         {workersBelow.length > 0 && (

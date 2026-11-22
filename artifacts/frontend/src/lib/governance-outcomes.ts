@@ -19,6 +19,9 @@ export type Outcome = {
   action: { label: string; href: string };
   /** A small bar on the tile when the outcome is a share: 0-100, with the target marked. */
   meter?: { pct: number; target?: number; label: string };
+  /** The ring: a short figure, a one or two word name, a few words of status,
+   *  and how full to draw it (0-100; a full ring when there's no share). */
+  ring?: { value: string; label: string; caption: string; pct?: number };
 };
 
 export type ActionGroup = "now" | "week" | "watch";
@@ -213,13 +216,56 @@ function demandOutcome(demand: MdDemandCapacity | null | undefined): Outcome | n
 }
 
 export function buildOutcomes(md: OutcomeInputs, alerts: HubComplianceAlert[], demand?: MdDemandCapacity | null): Outcome[] {
+  const rings = hubRings(md, alerts, demand);
   return [
     goalsOutcome(md),
     qualityOutcome(md),
     safetyOutcome(md, alerts),
     workforceOutcome(md, alerts),
     demandOutcome(demand),
-  ].filter((o): o is Outcome => !!o);
+  ]
+    .filter((o): o is Outcome => !!o)
+    .map((o) => ({ ...o, ring: rings[o.id] }));
+}
+
+/** The hub's rings: a figure, a name and a few words each, from the same
+ *  inputs as the outcomes. */
+export function hubRings(md: OutcomeInputs, alerts: HubComplianceAlert[], demand?: MdDemandCapacity | null): Record<string, Outcome["ring"]> {
+  const active = md.goals_active ?? 0;
+  const supported = Math.min(md.active_goals_supported_30d ?? 0, active);
+  const scored = md.documentation_summary?.scored ?? 0;
+  const score = md.compliance_score;
+  const target = md.compliance_target ?? 90;
+  const urgent = alerts.filter((a) => a.source === "incidents" && a.severity === "critical").length;
+  const thisMonth = md.incidents_this_month ?? 0;
+  const creds = alerts.filter((a) => a.source === "credentials");
+  const expired = creds.filter((a) => a.severity === "critical").length;
+  const soon = creds.length - expired;
+  const retention = md.staff_retention_rate;
+  const out: Record<string, Outcome["ring"]> = {
+    goals: active
+      ? { value: `${supported}/${active}`, label: "Goals", caption: "worked on, 30 days", pct: (supported / active) * 100 }
+      : { value: "None", label: "Goals", caption: "none set yet", pct: 0 },
+    quality: scored && score != null
+      ? { value: `${Math.round(score)}%`, label: "Shift notes", caption: score >= target ? "on target" : `${Math.round(target - score)} pts below`, pct: score }
+      : { value: "N/A", label: "Shift notes", caption: "none scored yet", pct: 0 },
+    safety: urgent
+      ? { value: String(urgent), label: "Safety", caption: urgent === 1 ? "incident overdue" : "incidents overdue" }
+      : thisMonth
+        ? { value: String(thisMonth), label: "Safety", caption: "incidents this month" }
+        : { value: "0", label: "Safety", caption: "no incidents" },
+    workforce: expired
+      ? { value: String(expired), label: "Staff", caption: "credentials expired" }
+      : soon
+        ? { value: String(soon), label: "Staff", caption: "expiring soon" }
+        : { value: retention != null ? `${Math.round(retention)}%` : "OK", label: "Staff", caption: "retention", pct: retention ?? undefined },
+  };
+  if (demand) {
+    const free = Math.round(demand.capacity.reliable_hours + demand.capacity.casual_hours);
+    const waiting = demand.waitlist.count;
+    out.demand = { value: `${free}h`, label: "Spare time", caption: waiting ? `${waiting} ${waiting === 1 ? "enquiry" : "enquiries"} waiting` : "free this week" };
+  }
+  return out;
 }
 
 const GROUP_BY_SEVERITY: Record<string, ActionGroup | null> = {

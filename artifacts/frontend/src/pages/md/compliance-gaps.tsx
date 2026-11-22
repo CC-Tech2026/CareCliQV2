@@ -388,8 +388,24 @@ export function gapOutcomes(report: GapReport): Outcome[] {
     headline: gap.summary,
     detail: `${gap.value} now, ${gap.target.toLowerCase()}. ${gap.measures}`,
     action: gap.action,
+    ring: {
+      value: gap.value,
+      label: RING_LABEL[gap.key] ?? gap.title,
+      caption: gap.tone === "good" ? "on target" : gap.key === "workers" ? "under 85%" : gap.target.toLowerCase(),
+      pct: gap.value.endsWith("%") ? Number.parseFloat(gap.value) : undefined,
+    },
   }));
 }
+
+const RING_LABEL: Record<string, string> = {
+  staff: "Staff files",
+  participant: "Participant files",
+  organisation: "Org evidence",
+  documentation: "Shift notes",
+  alerts: "Alerts",
+  workers: "To coach",
+  goals: "Goals",
+};
 
 function GapCard({ gap, showSummary = true }: { gap: Gap; showSummary?: boolean }) {
   return (

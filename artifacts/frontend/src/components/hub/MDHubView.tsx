@@ -20,7 +20,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { COMPLIANCE_TREND_KEY, MD_DASHBOARD_KEY } from "@/lib/query-keys";
 import { getMdDemandCapacity, type MdDemandCapacity } from "@/services/dashboardService";
 import { attentionRoute } from "@/components/hub/GovernanceTriage";
-import { ActionList, OutcomeList } from "@/components/hub/GovernanceOutcomes";
+import { ActionList, OutcomeList, actionCountLine } from "@/components/hub/GovernanceOutcomes";
 import { buildActions, buildOutcomes } from "@/lib/governance-outcomes";
 import { getHubComplianceAlerts } from "@/services/hubService";
 import { OrgSetupChecklist } from "@/components/hub/OrgSetupChecklist";
@@ -1240,10 +1240,18 @@ export function MDHubView() {
         onNavigate={navigate}
       />
 
-      <section aria-labelledby="hub-actions" className="space-y-3">
-        <div>
+      <section aria-labelledby="hub-outcomes" className="space-y-phi-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="hub-outcomes" className="text-lg font-semibold text-cc-text">How we're doing</h2>
+          <p className="text-sm text-cc-muted">Tap a ring for the detail</p>
+        </div>
+        <OutcomeList outcomes={outcomes} onNavigate={navigate} />
+      </section>
+
+      <section aria-labelledby="hub-actions" className="space-y-phi-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="hub-actions" className="text-lg font-semibold text-cc-text">What needs doing</h2>
-          <p className="text-sm text-cc-muted">Most urgent first. Each item opens where you deal with it.</p>
+          {!alertsQuery.isLoading ? <p className="text-sm font-medium text-cc-muted">{actionCountLine(actions)}</p> : null}
         </div>
         <ActionList
           actions={actions}
@@ -1252,14 +1260,6 @@ export function MDHubView() {
           onRetry={() => void alertsQuery.refetch()}
           onNavigate={navigate}
         />
-      </section>
-
-      <section aria-labelledby="hub-outcomes" className="space-y-3">
-        <div>
-          <h2 id="hub-outcomes" className="text-lg font-semibold text-cc-text">How we're doing</h2>
-          <p className="text-sm text-cc-muted">The outcomes that matter for participants and the organisation, in plain words.</p>
-        </div>
-        <OutcomeList outcomes={outcomes} onNavigate={navigate} />
       </section>
 
       <details className="group rounded-2xl border border-cc-border bg-cc-surface">
