@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import {
-  ArrowRight,
   ArrowUp,
   ArrowDown,
   AlertTriangle,
@@ -61,6 +60,8 @@ import {
   type Tone,
 } from "@/lib/directory-insights";
 import { SectionInfo } from "@/components/ui/section-info";
+import { OutcomeList } from "@/components/hub/GovernanceOutcomes";
+import type { Outcome } from "@/lib/governance-outcomes";
 import { PersonPhoto } from "@/components/ui/person-photo";
 import { matchesPerson, sharedNames } from "@/lib/person-identity";
 import { LabelFilter, useLabels } from "@/components/labels/labels";
@@ -636,6 +637,99 @@ export default function MDStaffPage() {
       pipeline.kpis.credentials_overdue > 0 ||
       pipeline.kpis.starting_this_week > 0);
 
+  const scoredCount = distribution.onTarget + distribution.review + distribution.priority;
+  const onTargetPct = scoredCount ? Math.round((distribution.onTarget / scoredCount) * 100) : null;
+  const needReview = distribution.review + distribution.priority;
+  const anyExpired = allStaff.some((w) => (credentialsByUser.get(w.id)?.expired ?? 0) > 0);
+  const teamRings: Outcome[] = [
+    {
+      id: "notes",
+      area: "Shift note scores",
+      status: onTargetPct == null ? "no_data" : distribution.priority > 0 ? "off_track" : needReview > 0 ? "attention" : "on_track",
+      headline: onTargetPct == null ? "No scored notes yet" : `${distribution.onTarget} of ${scoredCount} on target`,
+      detail: needReview
+        ? `${distribution.review} need review, ${distribution.priority} need priority review.`
+        : "Everyone with scored notes is at 85% or above.",
+      action: { label: "See who needs a hand", href: "filter:at_risk" },
+      meter: onTargetPct == null ? undefined : { pct: onTargetPct, target: 80, label: "Staff with notes on target" },
+      ring: {
+        value: onTargetPct == null ? "N/A" : `${onTargetPct}%`,
+        label: "Notes on target",
+        caption: onTargetPct == null ? "none scored" : needReview ? `${needReview} need review` : "all on target",
+        pct: onTargetPct ?? 0,
+      },
+    },
+    {
+      id: "credentials",
+      area: "Credentials and training",
+      status: credentialIssueCount === 0 ? "on_track" : anyExpired ? "off_track" : "attention",
+      headline: credentialIssueCount
+        ? `${credentialIssueCount} ${credentialIssueCount === 1 ? "person has" : "people have"} something to sort out`
+        : "Everyone's credentials are current",
+      detail: "Expired or soon-expiring credentials, or overdue training or induction.",
+      action: { label: "Show credential issues", href: "filter:credentials" },
+      ring: { value: String(credentialIssueCount), label: "Credentials", caption: credentialIssueCount ? (anyExpired ? "expired" : "due soon") : "all current" },
+    },
+    ...(workerStats
+      ? [{
+          id: "coordinator",
+          area: "Coordinator assigned",
+          status: (unassignedCount ? "attention" : "on_track") as Outcome["status"],
+          headline: unassignedCount
+            ? `${unassignedCount} support ${unassignedCount === 1 ? "worker has" : "workers have"} no coordinator`
+            : "Every support worker has a coordinator",
+          detail: "A coordinator looks after a worker's roster and check-ins.",
+          action: { label: "Show who has none", href: "filter:unassigned" },
+          ring: { value: String(unassignedCount), label: "No coordinator", caption: unassignedCount ? "to assign" : "all assigned" },
+        }]
+      : []),
+    {
+      id: "retention",
+      area: "Staff retention",
+      status: data ? (data.staff_retention_rate >= 85 ? "on_track" : data.staff_retention_rate >= 70 ? "attention" : "off_track") : "no_data",
+      headline: data ? `${data.staff_retention_rate}% of staff stayed` : "Retention not known",
+      detail: `${allStaff.length} ${allStaff.length === 1 ? "person" : "people"} on the team now.`,
+      action: { label: "Open hiring", href: "/md/staff-onboarding" },
+      ring: {
+        value: data ? `${Math.round(data.staff_retention_rate)}%` : "N/A",
+        label: "Retention",
+        caption: data && data.staff_retention_rate >= 85 ? "stable" : "watch turnover",
+        pct: data?.staff_retention_rate ?? 0,
+      },
+    },
+    {
+      id: "hiring",
+      area: "Hiring",
+      status: pipeline && pipeline.kpis.credentials_overdue > 0 ? "attention" : "on_track",
+      headline: pipelineActive && pipeline
+        ? `${pipeline.kpis.in_pipeline} ${pipeline.kpis.in_pipeline === 1 ? "candidate" : "candidates"} in hiring`
+        : "No one in recruitment right now",
+      detail: pipelineActive && pipeline
+        ? `${pipeline.kpis.starting_this_week} starting this week, ${pipeline.kpis.credentials_overdue} ${pipeline.kpis.credentials_overdue === 1 ? "credential" : "credentials"} overdue.`
+        : "Candidates and onboarding tasks show here as your team grows.",
+      action: { label: "Open hiring pipeline", href: "/md/staff-onboarding" },
+      ring: {
+        value: String(pipeline?.kpis.in_pipeline ?? 0),
+        label: "In hiring",
+        caption: pipeline?.kpis.starting_this_week ? `${pipeline.kpis.starting_this_week} start this week` : pipeline?.kpis.credentials_overdue ? "credentials overdue" : "none starting",
+      },
+    },
+  ];
+
+  function openRingAction(href: string) {
+    if (href === "filter:unassigned") {
+      setFilter("all");
+      setSearch("");
+      setRoleFilter("all");
+      setUnassignedOnly(true);
+      document.getElementById("staff-directory")?.scrollIntoView({ behavior: "smooth" });
+    } else if (href.startsWith("filter:")) {
+      showDirectory(href.slice(7) as Filter);
+    } else {
+      navigate(href);
+    }
+  }
+
   return (
     <HubLayout>
       <div className="space-y-5 pb-12">
@@ -1083,98 +1177,18 @@ export default function MDStaffPage() {
               )}
             </section>
 
-            {/* =====================================================
-                HOW THE TEAM IS TRACKING + HIRING: open sections on the
-                page, split by a rule rather than boxed in cards.
-            ===================================================== */}
-
-            <div className="grid gap-10 border-t pt-8 lg:grid-cols-2" style={{ borderColor: BORDER }}>
-              <section>
+            {/* How the team is doing, as rings under the list. A ring's
+                button filters the list above instead of leaving the page. */}
+            <section aria-label="Team health" className="space-y-phi-4 border-t pt-phi-6" style={{ borderColor: BORDER }}>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="flex items-center gap-1.5 text-lg font-semibold" style={{ color: TEXT }}>
-                  How the team's shift notes score
-                  <SectionInfo text="Each person's score is the average documentation score of their own shift notes, in the same bands as a single note: 85% and above on target, 60% to 84% needs review, under 60% priority review. Staff with no scored notes yet aren't counted. Credentials and screening are shown separately." />
+                  Team health
+                  <SectionInfo text="Each person's note score is the average documentation score of their own shift notes: 85% and above on target, 60% to 84% needs review, under 60% priority review. Staff with no scored notes yet aren't counted." />
                 </h2>
-
-                <div className="mt-4 flex h-2.5 overflow-hidden rounded-full" style={{ background: SOFT }}>
-                  {distribution.onTarget > 0 && <div style={{ flex: distribution.onTarget, background: GREEN }} />}
-                  {distribution.review > 0 && <div style={{ flex: distribution.review, background: AMBER }} />}
-                  {distribution.priority > 0 && <div style={{ flex: distribution.priority, background: RED }} />}
-                </div>
-
-                <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm" style={{ color: TEXT }}>
-                  {[
-                    { label: "on target", count: distribution.onTarget, color: GREEN },
-                    { label: "need review", count: distribution.review, color: AMBER },
-                    { label: "need priority review", count: distribution.priority, color: RED },
-                  ].map((item) => (
-                    <li key={item.label} className="flex items-center gap-2">
-                      <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: item.color }} />
-                      <span className="font-semibold tabular-nums">{item.count}</span>
-                      <span style={{ color: MUTED }}>{item.label}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {stats.atRisk.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => showDirectory("at_risk")}
-                    className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold underline-offset-4 hover:underline"
-                    style={{ color: PLUM }}
-                  >
-                    See who needs a hand
-                    <ArrowRight size={14} />
-                  </button>
-                )}
-              </section>
-
-              <section>
-                <h2 className="text-lg font-semibold" style={{ color: TEXT }}>
-                  Hiring
-                </h2>
-
-                {pipelineActive && pipeline ? (
-                  <ul className="mt-4 space-y-2 text-sm" style={{ color: TEXT }}>
-                    <li>
-                      <span className="font-semibold tabular-nums">{pipeline.kpis.in_pipeline}</span>{" "}
-                      <span style={{ color: MUTED }}>
-                        {pipeline.kpis.in_pipeline === 1 ? "candidate" : "candidates"} in the pipeline
-                      </span>
-                    </li>
-                    <li>
-                      <span
-                        className="font-semibold tabular-nums"
-                        style={{ color: pipeline.kpis.credentials_overdue > 0 ? AMBER : TEXT }}
-                      >
-                        {pipeline.kpis.credentials_overdue}
-                      </span>{" "}
-                      <span style={{ color: MUTED }}>
-                        {pipeline.kpis.credentials_overdue === 1 ? "credential" : "credentials"} overdue
-                      </span>
-                    </li>
-                    <li>
-                      <span className="font-semibold tabular-nums">{pipeline.kpis.starting_this_week}</span>{" "}
-                      <span style={{ color: MUTED }}>starting this week</span>
-                    </li>
-                  </ul>
-                ) : (
-                  <p className="mt-4 max-w-md text-sm" style={{ color: MUTED }}>
-                    No one is in recruitment right now. Candidates and onboarding
-                    tasks will show here as your team grows.
-                  </p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => navigate("/md/staff-onboarding")}
-                  className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold underline-offset-4 hover:underline"
-                  style={{ color: PLUM }}
-                >
-                  Open hiring pipeline
-                  <ArrowRight size={14} />
-                </button>
-              </section>
-            </div>
+                <span className="text-sm" style={{ color: MUTED }}>Tap a ring for the detail</span>
+              </div>
+              <OutcomeList outcomes={teamRings} onNavigate={openRingAction} />
+            </section>
           </>
         )}
 
