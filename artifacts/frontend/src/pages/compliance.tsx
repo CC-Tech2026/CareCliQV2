@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SegmentedBar, ScoreMeter, bandParts } from "@/components/charts/figures";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
 import { useLocation, useSearch, Link } from "wouter";
@@ -323,8 +324,11 @@ export default function Compliance() {
   };
 
   const overallScore = headerOverview?.kpis.overall_score;
-  const scoreArcColor = overallScore != null ? scoreColor(overallScore) : PLUM;
-  const scoreCirc = 2 * Math.PI * 20;
+  const bandNames = {
+    good: translate("compliance.status.compliant"),
+    warning: translate("reports.status.atRisk"),
+    critical: translate("compliance.status.nonCompliant"),
+  };
 
   const urgentCount = headerOverview?.urgent_actions.length ?? 0;
 
@@ -354,24 +358,13 @@ export default function Compliance() {
               </div>
             )}
             {overallScore != null && (
-              <div className="flex items-center gap-2.5">
-                <div className="relative w-10 h-10 shrink-0">
-                  <svg width="40" height="40" viewBox="0 0 48 48" className="-rotate-90">
-                    <circle cx="24" cy="24" r="20" fill="none" stroke={SOFT} strokeWidth="5" />
-                    <circle
-                      cx="24" cy="24" r="20" fill="none" stroke={scoreArcColor} strokeWidth="5"
-                      strokeDasharray={scoreCirc} strokeDashoffset={scoreCirc * (1 - overallScore / 100)} strokeLinecap="round"
-                      className="transition-all duration-700"
-                    />
-                  </svg>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold uppercase tracking-wider leading-none" style={{ color: MUTED }}>
-                    {translate("compliance.centre.overview.statOverallScore")}
-                  </span>
-                  <span className="text-lg font-black leading-tight mt-0.5" style={{ color: scoreArcColor }}>{Math.round(overallScore)}</span>
-                </div>
-              </div>
+              <ScoreMeter
+                className="w-44"
+                size="sm"
+                value={overallScore}
+                label={translate("compliance.centre.overview.statOverallScore")}
+                bandLabels={bandNames}
+              />
             )}
           </Card>
         )}
@@ -530,11 +523,14 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
   const { data, isLoading } = useQuery({ queryKey: ["compliance-centre", "overview"], queryFn: getComplianceCentreOverview });
 
   const bands = data?.bands ?? { compliant: 0, at_risk: 0, non_compliant: 0 };
+  const bandNames = {
+    good: translate("compliance.status.compliant"),
+    warning: translate("reports.status.atRisk"),
+    critical: translate("compliance.status.nonCompliant"),
+  };
   // The overview counts sessions from the last 30 days; links carry the same window.
   const overviewWindowStart = format(subDays(new Date(), 30), "yyyy-MM-dd");
   const avg = data?.kpis.overall_score ?? 0;
-  const arcColor = scoreColor(avg);
-  const circ = 2 * Math.PI * 42;
 
   if (isLoading) return <LoadingBlock label={translate("common.loading")} />;
 
@@ -586,34 +582,13 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
         <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
           <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("compliance.centre.overview.bandsTitle")}</p>
           <p className="text-[11px] mb-4" style={{ color: MUTED }}>{translate("compliance.centre.overview.bandsSubtitle")}</p>
-          <div className="flex items-center gap-5">
-            <div className="relative w-24 h-24 shrink-0">
-              <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
-                <circle cx="48" cy="48" r="42" fill="none" stroke={SOFT} strokeWidth="9" />
-                <circle
-                  cx="48" cy="48" r="42" fill="none" stroke={arcColor} strokeWidth="9"
-                  strokeDasharray={circ} strokeDashoffset={circ * (1 - avg / 100)} strokeLinecap="round"
-                  className="transition-all duration-700"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-stat)" }}>{Math.round(avg)}</span>
-              </div>
-            </div>
-            <div className="flex-1 space-y-2.5">
-              {[
-                { label: translate("compliance.centre.overview.bandCompliant"), count: bands.compliant, color: SUCCESS },
-                { label: translate("compliance.centre.overview.bandAtRisk"), count: bands.at_risk, color: WARNING },
-                { label: translate("compliance.centre.overview.bandNonCompliant"), count: bands.non_compliant, color: CRITICAL },
-              ].map((row) => (
-                <div key={row.label} className="flex items-center justify-between text-[12px] rounded-xl px-3 py-2" style={{ background: SOFT }}>
-                  <span className="flex items-center gap-2" style={{ color: TEXT }}>
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: row.color }} /> {row.label}
-                  </span>
-                  <span className="font-black" style={{ color: row.color }}>{row.count}</span>
-                </div>
-              ))}
-            </div>
+          <div className="space-y-5">
+            <ScoreMeter value={avg} label={translate("compliance.centre.overview.statOverallScore")} bandLabels={bandNames} />
+            <SegmentedBar
+              label={translate("compliance.centre.overview.bandsTitle")}
+              unit="shifts"
+              parts={bandParts(bands, bandNames)}
+            />
           </div>
         </Card>
 
@@ -635,12 +610,12 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
                 <div key={issue.rule_code} className="space-y-1">
                   <div className="flex justify-between text-[12px]">
                     <span className="font-semibold truncate max-w-[70%]" style={{ color: TEXT }}>{issue.label}</span>
-                    <span className="font-bold" style={{ color: issue.pct >= 50 ? CRITICAL : WARNING }}>
+                    <span className="font-semibold tabular-nums" style={{ color: TEXT }}>
                       {translateParams(issue.count !== 1 ? "compliance.centre.overview.issueSessionCountPlural" : "compliance.centre.overview.issueSessionCount", { count: String(issue.count) })}
                     </span>
                   </div>
-                  <div className="h-2 rounded-full overflow-hidden" style={{ background: SOFT }}>
-                    <div className="h-full rounded-full" style={{ width: `${issue.pct}%`, background: issue.pct >= 50 ? CRITICAL : WARNING }} />
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: "color-mix(in oklab, var(--viz-1) 16%, var(--cc-surface))" }}>
+                    <div className="h-full rounded-full" style={{ width: `${issue.pct}%`, background: "var(--viz-1)" }} />
                   </div>
                 </div>
               ))}

@@ -1,4 +1,5 @@
 import { Link, Redirect } from "wouter";
+import { SegmentedBar, ScoreMeter, bandParts } from "@/components/charts/figures";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { format, parseISO } from "date-fns";
@@ -262,77 +263,18 @@ function TabEmptyState({
 function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
   const breakdown = data.team_compliance_breakdown ?? { compliant: 0, at_risk: 0, non_compliant: 0 };
   const score     = Math.max(0, Math.min(100, data.team_compliance_score || 0));
-  const status    = score >= 85 ? "Compliant" : score >= 60 ? "At Risk" : "Non-Compliant";
-  const total     = breakdown.compliant + breakdown.at_risk + breakdown.non_compliant;
-
-  const bands = [
-    { label: "Compliant",      value: breakdown.compliant,     color: "#059669", bg: "rgba(5,150,105,0.08)"  },
-    { label: "At Risk",        value: breakdown.at_risk,       color: "#D97706", bg: "rgba(217,119,6,0.08)"  },
-    { label: "Non-Compliant",  value: breakdown.non_compliant, color: "#DC2626", bg: "rgba(220,38,38,0.08)"  },
-  ];
 
   return (
     <div className="grid md:grid-cols-2 gap-5 items-start">
 
-      {/* LEFT — score ring + breakdown bars */}
+      {/* LEFT — the team score and how its shifts split */}
       <div className="space-y-4">
-        {/* Ring + numbers */}
-        <div className="flex items-center gap-5">
-          <div
-            className="relative shrink-0 grid h-20 w-20 place-items-center rounded-full"
-            style={{ background: `conic-gradient(${PLUM} ${score * 3.6}deg, #F2EBFD 0deg)` }}
-          >
-            <div className="grid h-13 w-13 place-items-center rounded-full bg-white" style={{ width: 52, height: 52 }}>
-              <div className="text-center">
-                <span className="block text-lg font-black leading-none" style={{ color: PLUM }}>{score}</span>
-                <span className="block text-[8px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>score</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 space-y-1.5">
-            {bands.map(({ label, value, color }) => (
-              <div key={label} className="flex items-center justify-between text-[13px]">
-                <span className="font-medium" style={{ color: MUTED }}>{label}</span>
-                <span className="font-black tabular-nums" style={{ color }}>{value}</span>
-              </div>
-            ))}
-            <div className="pt-1">
-              <span
-                className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-black"
-                style={{
-                  background: DS.STATUS_BG[score >= 85 ? "success" : score >= 60 ? "warning" : "critical"],
-                  color: getStatusColor(status),
-                }}
-              >
-                {status} · {score}/100
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Progress bars */}
-        {total > 0 && (
-          <div className="space-y-2">
-            {bands.map(({ label, value, color, bg }) => {
-              const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-              return (
-                <div key={label}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] font-medium" style={{ color: MUTED }}>{label}</span>
-                    <span className="text-[11px] font-black tabular-nums" style={{ color }}>{pct}%</span>
-                  </div>
-                  <div className="h-2 rounded-full overflow-hidden" style={{ background: bg }}>
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${pct}%`, background: color }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <ScoreMeter value={score} label="Team compliance score" bandLabels={{ good: "Compliant", warning: "At Risk", critical: "Non-Compliant" }} />
+        <SegmentedBar
+          label="Shifts by compliance"
+          unit="shifts"
+          parts={bandParts(breakdown, { good: "Compliant", warning: "At Risk", critical: "Non-Compliant" })}
+        />
 
         {/* Link to full compliance page */}
         <Link href="/compliance">

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AXIS_PROPS, BAR_PROPS, GRID_PROPS, SERIES, TOOLTIP_PROPS } from "@/components/charts/figures";
 import { X, Send, GripHorizontal, Plus, MessageSquare, Trash2, Settings, Download } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import {
@@ -81,12 +82,10 @@ function BarChartBlockView({ block }: { block: Extract<ChatBlock, { type: "bar_c
       <div style={{ width: "100%", height: 120 }}>
         <ResponsiveContainer>
           <BarChart data={block.data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
-            <XAxis dataKey={block.x_key} tick={{ fontSize: 10, fill: MUTED }} axisLine={{ stroke: BORDER }} tickLine={false} />
-            <Tooltip
-              contentStyle={{ fontSize: 11, background: "var(--cc-bg)", border: `1px solid ${BORDER}`, borderRadius: 8 }}
-            />
-            {seriesKey && <Bar dataKey={seriesKey} fill={PLUM} radius={[4, 4, 0, 0]} />}
+            <CartesianGrid {...GRID_PROPS} />
+            <XAxis dataKey={block.x_key} {...AXIS_PROPS} tick={{ fontSize: 10, fill: MUTED }} />
+            <Tooltip {...TOOLTIP_PROPS} cursor={{ fill: "var(--cc-soft)" }} />
+            {seriesKey && <Bar dataKey={seriesKey} name={block.series[0]?.label ?? seriesKey} fill={SERIES[0]} {...BAR_PROPS} />}
           </BarChart>
         </ResponsiveContainer>
       </div>

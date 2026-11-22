@@ -1,4 +1,5 @@
 import { displayDate } from "@/lib/datetime";
+import { AXIS_PROPS, GRID_PROPS, SERIES, TOOLTIP_PROPS, lineProps, referenceProps } from "@/components/charts/figures";
 ﻿import { format, parseISO } from "date-fns";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -82,42 +83,21 @@ export function ComplianceTrendChart({
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--cc-ring-track)" />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 11, fill: MUTED }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                domain={[0, 100]}
-                tick={{ fontSize: 11, fill: MUTED }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <ReferenceLine y={85} stroke="#10B981" strokeDasharray="4 4" />
+            <LineChart data={chartData} margin={{ top: 16, right: 8, left: -12, bottom: 0 }}>
+              <CartesianGrid {...GRID_PROPS} />
+              <XAxis dataKey="label" {...AXIS_PROPS} />
+              <YAxis domain={[0, 100]} {...AXIS_PROPS} tickFormatter={(v) => `${v}%`} />
+              <ReferenceLine y={85} {...referenceProps("Compliant from 85")} />
               <Tooltip
+                {...TOOLTIP_PROPS}
                 formatter={(value: number) => [`${value}%`, translate("compliance.trendChart.avgScore")]}
                 labelFormatter={(_, payload) => {
                   const row = payload?.[0]?.payload as ComplianceTrendPoint & { label: string } | undefined;
                   if (!row) return "";
                   return `${row.label} · ${translateParams("compliance.trendChart.sessions", { count: String(row.session_count) })}`;
                 }}
-                contentStyle={{
-                  borderRadius: 12,
-                  border: `1px solid ${BORDER}`,
-                  fontSize: 12,
-                }}
               />
-              <Line
-                type="monotone"
-                dataKey="score"
-                stroke={PLUM}
-                strokeWidth={2.5}
-                dot={{ r: 3, fill: PLUM }}
-                connectNulls
-              />
+              <Line type="monotone" dataKey="score" connectNulls {...lineProps(SERIES[0])} />
             </LineChart>
           </ResponsiveContainer>
         )}

@@ -1,4 +1,5 @@
 import { PARTICIPANT_SEARCH, participantOption } from "@/lib/person-options";
+import { SegmentedBar, ScoreMeter, bandParts } from "@/components/charts/figures";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useMemo, useEffect } from "react";
@@ -684,8 +685,6 @@ function ComplianceReportsSection() {
   const sessions: any[] = ov?.sessions ?? [];
 
   const score = ov?.average_score ?? 0;
-  const circumference = 2 * Math.PI * 52;
-  const offset = circumference - (score / 100) * circumference;
 
   const commonIssues = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -714,30 +713,17 @@ function ComplianceReportsSection() {
           <div className="grid lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader title={translate("reports.compliance.orgScore")} />
-              <div className="flex flex-col items-center py-8 gap-4">
-                <svg width="140" height="140" className="-rotate-90">
-                  <circle cx="70" cy="70" r="52" fill="none" stroke={`${PLUM}14`} strokeWidth="12" />
-                  <circle cx="70" cy="70" r="52" fill="none"
-                    stroke={scoreColor(score)} strokeWidth="12"
-                    strokeDasharray={circumference} strokeDashoffset={offset}
-                    strokeLinecap="round" style={{ transition: "stroke-dashoffset 1s ease" }} />
-                </svg>
-                <div className="text-center -mt-20 pb-8">
-                  <p className="text-[36px] font-black leading-none" style={{ color: scoreColor(score) }}>{Math.round(score)}</p>
-                  <p className="text-[12px] font-bold uppercase tracking-wide mt-0.5" style={{ color: T3 }}>{translate("reports.compliance.outOf100")}</p>
-                </div>
-                <div className="grid grid-cols-3 gap-4 w-full px-6">
-                  {[
-                    { label: "Compliant", val: ov?.compliant ?? 0, col: "#16A34A" },
-                    { label: "At Risk",   val: ov?.at_risk   ?? 0, col: "#D97706" },
-                    { label: "Non-comp.", val: ov?.non_compliant ?? 0, col: "#DC2626" },
-                  ].map(b => (
-                    <div key={b.label} className="text-center">
-                      <p className="text-[18px] font-black" style={{ color: b.col }}>{b.val}</p>
-                      <p className="text-[11px]" style={{ color: T3 }}>{b.label}</p>
-                    </div>
-                  ))}
-                </div>
+              <div className="space-y-6 p-5">
+                <ScoreMeter value={score} size="lg" ariaLabel={translate("reports.compliance.orgScore")} bandLabels={{ good: translate("reports.status.compliant"), warning: translate("reports.status.atRisk"), critical: translate("reports.status.nonCompliant") }} />
+                <SegmentedBar
+                  label="Sessions by compliance"
+                  unit="sessions"
+                  parts={bandParts({ compliant: ov?.compliant ?? 0, at_risk: ov?.at_risk ?? 0, non_compliant: ov?.non_compliant ?? 0 }, {
+                    good: translate("reports.status.compliant"),
+                    warning: translate("reports.status.atRisk"),
+                    critical: translate("reports.status.nonCompliant"),
+                  })}
+                />
               </div>
             </Card>
 

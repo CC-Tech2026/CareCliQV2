@@ -1,4 +1,5 @@
 ﻿import { AlertTriangle, CheckCircle2, HelpCircle, Info, XCircle } from "lucide-react";
+import { ScoreMeter } from "@/components/charts/figures";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   Tooltip,
@@ -12,7 +13,6 @@ const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT = "var(--cc-soft)";
-const RING_TRACK = "var(--cc-ring-track)";
 const ACTIVE_BG = "var(--cc-active-bg)";
 
 export type ComplianceRuleResult = {
@@ -41,12 +41,6 @@ function statusIcon(status: string) {
   return <XCircle className="h-4 w-4 shrink-0 text-red-500" />;
 }
 
-function scoreRingColor(score: number) {
-  if (score >= 85) return PLUM;
-  if (score >= 60) return "#D97706";
-  return "#7C3AED";
-}
-
 export function ComplianceDetailCard({
   score,
   status,
@@ -64,7 +58,6 @@ export function ComplianceDetailCard({
 }) {
   const { translate, translateParams } = useAccessibility();
   const pct = Math.max(0, Math.min(100, score || 0));
-  const ringColor = scoreRingColor(pct);
   const evaluatedRules = rules.filter((rule) => rule.status !== "pending");
   const passedCount = evaluatedRules.filter((rule) => rule.status === "pass").length;
   const displayTitle = title ?? translate("compliance.detail.score");
@@ -87,20 +80,10 @@ export function ComplianceDetailCard({
     <TooltipProvider delayDuration={200}>
       <section className="rounded-lg border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className={`flex gap-5 ${compact ? "flex-col sm:flex-row" : "flex-col lg:flex-row lg:items-start"}`}>
-          <div className="flex items-center gap-4">
-            <div
-              className="relative grid h-28 w-28 shrink-0 place-items-center rounded-full"
-              style={{ background: `conic-gradient(${ringColor} ${pct * 3.6}deg, ${RING_TRACK} 0deg)` }}
-            >
-              <div className="grid h-20 w-20 place-items-center rounded-full bg-cc-surface">
-                <span className="text-2xl font-black" style={{ color: ringColor }}>{Math.round(pct)}%</span>
-              </div>
-            </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:max-w-sm">
             <div>
-              <h2 className="text-lg font-black" style={{ color: TEXT }}>{displayTitle}</h2>
-              <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
-                {rulesSummary}
-              </p>
+              <h2 className="text-lg font-semibold" style={{ color: TEXT }}>{displayTitle}</h2>
+              <ScoreMeter className="mt-2" value={pct} caption={rulesSummary} />
               <span
                 className="mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-bold capitalize"
                 style={{ borderColor: BORDER, background: ACTIVE_BG, color: PLUM }}
