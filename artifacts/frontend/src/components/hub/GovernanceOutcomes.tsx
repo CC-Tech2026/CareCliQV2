@@ -71,25 +71,24 @@ function dueText(due?: string | null) {
   return { text: d.toLocaleDateString("en-AU", { day: "numeric", month: "short" }), overdue: d < today };
 }
 
-/** A ring: how full against 100, or a full ring in the status colour for counts. */
-function Ring({ pct, color, size = 104, stroke = 9, children }: { pct?: number; color: string; size?: number; stroke?: number; children: React.ReactNode }) {
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const value = pct == null ? 100 : Math.max(0, Math.min(100, pct));
+/** A figure's meter: how full against 100, in the status colour, on a lighter
+ *  step of the same colour. Only drawn when the figure is a percentage; a
+ *  count has nothing to be full of, so it gets no bar. (These were rings; a
+ *  straight bar is easier to read and a full ring for a count said nothing.) */
+function TileMeter({ pct, color, label }: { pct: number; color: string; label: string }) {
+  const value = Math.max(0, Math.min(100, pct));
   return (
-    <span className="relative inline-flex shrink-0 items-center justify-center" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="absolute inset-0" aria-hidden>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--cc-soft)" strokeWidth={stroke} />
-        {value > 0 ? (
-          <circle
-            cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
-            strokeDasharray={`${(value / 100) * c} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`}
-            opacity={pct == null ? 0.85 : 1}
-          />
-        ) : null}
-      </svg>
-      <span className="relative">{children}</span>
-    </span>
+    <div
+      role="meter"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(value)}
+      className="h-1.5 w-full overflow-hidden rounded-full"
+      style={{ background: `color-mix(in oklab, ${color} 18%, var(--cc-surface))` }}
+    >
+      {value > 0 ? <div className="h-full rounded-full" style={{ width: `${value}%`, background: color }} /> : null}
+    </div>
   );
 }
 
@@ -109,8 +108,8 @@ function Meter({ pct, target, label, color }: { pct: number; target?: number; la
   );
 }
 
-/** Where things stand: a row of rings, one per area. A ring opens the full
- *  story in a side panel. */
+/** Where things stand: a row of tiles, one per area, each its figure, status
+ *  and (for a percentage) a meter. A tile opens the full story in a side panel. */
 export function OutcomeList({ outcomes, onNavigate }: { outcomes: Outcome[]; onNavigate: (href: string) => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const open = outcomes.find((o) => o.id === openId) ?? null;
@@ -128,18 +127,19 @@ export function OutcomeList({ outcomes, onNavigate }: { outcomes: Outcome[]; onN
               <button
                 type="button"
                 onClick={() => setOpenId(o.id)}
-                className="flex h-full w-full flex-col items-center rounded-2xl border border-cc-border bg-cc-surface px-phi-3 py-phi-5 text-center transition hover:-translate-y-0.5 hover:border-cc-text/25 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
+                className="flex h-full w-full flex-col items-start rounded-2xl border border-cc-border bg-cc-surface px-phi-4 py-phi-4 text-left transition hover:-translate-y-0.5 hover:border-cc-text/25 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
               >
-                <Ring pct={ring.pct} color={s.color}>
-                  {ring.value ? (
-                    <span className={`${ring.value.length >= 4 ? "text-xl" : "text-2xl"} font-semibold tabular-nums tracking-tight text-cc-text`}>{ring.value}</span>
-                  ) : (
-                    <StatusIcon size={28} style={{ color: s.color }} aria-hidden />
-                  )}
-                </Ring>
-                <span className="mt-phi-3 text-sm font-semibold text-cc-text">{ring.label}</span>
+                <span className="text-sm font-semibold text-cc-text">{ring.label}</span>
+                {ring.value ? (
+                  <span className={`mt-1 ${ring.value.length >= 5 ? "text-2xl" : "text-3xl"} font-semibold leading-tight tracking-tight text-cc-text`}>{ring.value}</span>
+                ) : (
+                  <StatusIcon size={26} className="mt-1.5" style={{ color: s.color }} aria-hidden />
+                )}
                 <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium" style={{ color: s.color }}>
                   <StatusIcon size={12} aria-hidden /> {ring.caption}
+                </span>
+                <span className="mt-auto w-full pt-phi-3">
+                  {ring.pct != null ? <TileMeter pct={ring.pct} color={s.color} label={ring.label} /> : null}
                 </span>
                 {/* The full story, for screen readers (and the panel on click). */}
                 <span className="sr-only">
@@ -166,14 +166,15 @@ export function OutcomeList({ outcomes, onNavigate }: { outcomes: Outcome[]; onN
                   <SheetDescription className="text-sm leading-6">{open.detail}</SheetDescription>
                 </SheetHeader>
                 {open.ring ? (
-                  <div className="flex items-center gap-phi-4 rounded-2xl bg-cc-soft/60 p-phi-4">
-                    <Ring pct={open.ring.pct} color={s.color} size={84} stroke={8}>
-                      <span className="text-lg font-semibold tabular-nums text-cc-text">{open.ring.value}</span>
-                    </Ring>
-                    <div>
-                      <p className="text-sm font-semibold text-cc-text">{open.area}</p>
-                      <p className="text-xs text-cc-muted">{open.ring.caption}</p>
-                    </div>
+                  <div className="rounded-2xl bg-cc-soft/60 p-phi-4">
+                    <p className="text-sm font-semibold text-cc-text">{open.area}</p>
+                    <p className="mt-0.5 flex items-baseline gap-2">
+                      <span className="text-3xl font-semibold leading-tight text-cc-text">{open.ring.value}</span>
+                      <span className="text-xs text-cc-muted">{open.ring.caption}</span>
+                    </p>
+                    {open.ring.pct != null && !open.meter ? (
+                      <div className="mt-phi-3"><TileMeter pct={open.ring.pct} color={s.color} label={open.area} /></div>
+                    ) : null}
                   </div>
                 ) : null}
                 {open.meter ? <Meter pct={open.meter.pct} target={open.meter.target} label={open.meter.label} color={s.color} /> : null}

@@ -51,9 +51,6 @@ const AMBER = "#9A5B0A";
 const RED = "#B3261E";
 const GREEN = "#0F7B57";
 const BLUE = "#2A5C8A";
-// Categorical pair for the Active staff ring (support workers vs coordinators) —
-// validated against the dataviz palette checks: BLUE reads too gray as a
-// categorical mark at this saturation, so the ring uses this sky blue instead.
 
 interface MDData {
   documentation_summary?: { sample_size: number; scored: number; unscored: number; on_target: number; needs_review: number; priority_review: number };
@@ -1111,7 +1108,7 @@ export function MDHubView() {
       <section aria-labelledby="hub-outcomes" className="space-y-phi-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="hub-outcomes" className="text-lg font-semibold text-cc-text">How we're doing</h2>
-          <p className="text-sm text-cc-muted">Tap a ring for the detail</p>
+          <p className="text-sm text-cc-muted">Tap one for the detail</p>
         </div>
         <OutcomeList outcomes={outcomes} onNavigate={navigate} />
       </section>
