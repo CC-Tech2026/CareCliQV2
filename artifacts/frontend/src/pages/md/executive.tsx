@@ -405,7 +405,7 @@ export default function MDExecutivePage() {
           </label>
         )}
 
-        <Section title="Outcomes against targets" description="Tap one for the detail.">
+        <Section title="Outcomes against targets" description="Where each area stands against its target, and where to deal with it.">
           <OutcomeList outcomes={scorecard} onNavigate={navigate} />
         </Section>
 

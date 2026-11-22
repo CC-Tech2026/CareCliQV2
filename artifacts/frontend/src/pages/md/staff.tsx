@@ -1185,7 +1185,6 @@ export default function MDStaffPage() {
                   Team health
                   <SectionInfo text="Each person's note score is the average documentation score of their own shift notes: 85% and above on target, 60% to 84% needs review, under 60% priority review. Staff with no scored notes yet aren't counted." />
                 </h2>
-                <span className="text-sm" style={{ color: MUTED }}>Tap one for the detail</span>
               </div>
               <OutcomeList outcomes={teamRings} onNavigate={openRingAction} />
             </section>

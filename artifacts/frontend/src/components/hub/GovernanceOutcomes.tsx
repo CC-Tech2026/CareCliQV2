@@ -20,7 +20,6 @@ import {
   Wallet,
 } from "lucide-react";
 
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   actionKind,
   type ActionGroup,
@@ -71,11 +70,18 @@ function dueText(due?: string | null) {
   return { text: d.toLocaleDateString("en-AU", { day: "numeric", month: "short" }), overdue: d < today };
 }
 
-/** A figure's meter: how full against 100, in the status colour, on a lighter
- *  step of the same colour. Only drawn when the figure is a percentage; a
- *  count has nothing to be full of, so it gets no bar. (These were rings; a
- *  straight bar is easier to read and a full ring for a count said nothing.) */
-function TileMeter({ pct, color, label }: { pct: number; color: string; label: string }) {
+// The status as text and as a bar, from the shared chart colours so they hold
+// up in dark mode. The word and icon always come with the colour.
+const STATUS_INK: Record<OutcomeStatus, { text: string; bar: string }> = {
+  on_track: { text: "var(--viz-good-text)", bar: "var(--viz-good)" },
+  attention: { text: "var(--viz-warning-text)", bar: "var(--viz-warning)" },
+  off_track: { text: "var(--viz-critical-text)", bar: "var(--viz-critical)" },
+  no_data: { text: "var(--cc-muted)", bar: "var(--cc-muted)" },
+};
+
+/** How full against 100, on a lighter step of the same colour, with the
+ *  target marked. Only for a figure that is a share; a count gets no bar. */
+function TileMeter({ pct, target, color, label }: { pct: number; target?: number; color: string; label: string }) {
   const value = Math.max(0, Math.min(100, pct));
   return (
     <div
@@ -84,113 +90,65 @@ function TileMeter({ pct, color, label }: { pct: number; color: string; label: s
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(value)}
-      className="h-1.5 w-full overflow-hidden rounded-full"
+      aria-valuetext={target != null ? `${Math.round(value)}%, target ${target}%` : `${Math.round(value)}%`}
+      className="relative h-1.5 w-full rounded-full"
       style={{ background: `color-mix(in oklab, ${color} 18%, var(--cc-surface))` }}
     >
       {value > 0 ? <div className="h-full rounded-full" style={{ width: `${value}%`, background: color }} /> : null}
+      {target != null ? (
+        <span aria-hidden className="absolute -top-1 h-3.5 w-0.5 rounded-full bg-cc-text/60" style={{ left: `calc(${Math.min(99, target)}% - 1px)` }} />
+      ) : null}
     </div>
   );
 }
 
-function Meter({ pct, target, label, color }: { pct: number; target?: number; label: string; color: string }) {
-  const value = Math.max(0, Math.min(100, pct));
-  return (
-    <div>
-      <div role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(value)} className="relative h-2.5 overflow-hidden rounded-full bg-cc-soft">
-        <div className="h-full rounded-full" style={{ width: `${Math.max(value, 2)}%`, background: color }} />
-        {target != null ? <span className="absolute inset-y-[-2px] w-0.5 rounded bg-cc-text/60" style={{ left: `${Math.min(99.5, target)}%` }} aria-hidden /> : null}
-      </div>
-      <p className="mt-phi-2 flex justify-between text-xs text-cc-muted">
-        <span>{label}</span>
-        {target != null ? <span className="tabular-nums">target {target}%</span> : null}
-      </p>
-    </div>
-  );
-}
-
-/** Where things stand: a row of tiles, one per area, each its figure, status
- *  and (for a percentage) a meter. A tile opens the full story in a side panel. */
+/** Where things stand: one tile per area. Each tile says everything about
+ *  its area (the figure, how it stands, why, and against what target) and
+ *  takes you to where you deal with it; there's nothing more to open. */
 export function OutcomeList({ outcomes, onNavigate }: { outcomes: Outcome[]; onNavigate: (href: string) => void }) {
-  const [openId, setOpenId] = useState<string | null>(null);
-  const open = outcomes.find((o) => o.id === openId) ?? null;
   const n = outcomes.length;
   const cols = n >= 7 ? "lg:grid-cols-4 xl:grid-cols-7" : n === 6 ? "lg:grid-cols-3 xl:grid-cols-6" : n === 5 ? "lg:grid-cols-5" : n === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3";
   return (
-    <>
-      <ul className={`grid grid-cols-2 gap-phi-4 sm:grid-cols-3 ${cols}`}>
-        {outcomes.map((o) => {
-          const s = STATUS[o.status];
-          const StatusIcon = s.icon;
-          const ring = o.ring ?? { value: "", label: o.area, caption: s.label.toLowerCase(), pct: o.meter?.pct };
-          return (
-            <li key={o.id}>
-              <button
-                type="button"
-                onClick={() => setOpenId(o.id)}
-                className="flex h-full w-full flex-col items-start rounded-2xl border border-cc-border bg-cc-surface px-phi-4 py-phi-4 text-left transition hover:-translate-y-0.5 hover:border-cc-text/25 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
-              >
-                <span className="text-sm font-semibold text-cc-text">{ring.label}</span>
-                {ring.value ? (
-                  <span className={`mt-1 ${ring.value.length >= 5 ? "text-2xl" : "text-3xl"} font-semibold leading-tight tracking-tight text-cc-text`}>{ring.value}</span>
-                ) : (
-                  <StatusIcon size={26} className="mt-1.5" style={{ color: s.color }} aria-hidden />
-                )}
-                <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium" style={{ color: s.color }}>
-                  <StatusIcon size={12} aria-hidden /> {ring.caption}
+    <ul className={`grid grid-cols-1 gap-phi-4 min-[420px]:grid-cols-2 sm:grid-cols-3 ${cols}`}>
+      {outcomes.map((o) => {
+        const s = STATUS[o.status];
+        const ink = STATUS_INK[o.status];
+        const StatusIcon = s.icon;
+        const tile = o.ring ?? { value: "", label: o.area, caption: s.label, pct: o.meter?.pct };
+        const pct = o.meter?.pct ?? tile.pct;
+        return (
+          <li key={o.id}>
+            <button
+              type="button"
+              onClick={() => onNavigate(o.action.href)}
+              className="group flex h-full w-full flex-col items-start rounded-2xl border border-cc-border bg-cc-surface p-phi-4 text-left transition-colors hover:border-cc-text/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
+            >
+              <span className="text-sm font-medium text-cc-muted">{tile.label}</span>
+              {/* The area in full, for screen readers: the tile shows it in short. */}
+              <span className="sr-only"><span>{o.area}</span> <span>{s.label}.</span> <span>{o.headline}</span></span>
+              {tile.value ? (
+                <span className={`mt-1 ${tile.value.length >= 5 ? "text-2xl" : "text-3xl"} font-semibold leading-tight tracking-tight text-cc-text`}>{tile.value}</span>
+              ) : (
+                <span className="mt-1 text-lg font-semibold leading-tight text-cc-text">{s.label}</span>
+              )}
+              <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium" style={{ color: ink.text }}>
+                <StatusIcon size={12} aria-hidden /> {tile.value ? tile.caption : s.label === tile.caption ? null : tile.caption}
+              </span>
+              {pct != null ? (
+                <span className="mt-phi-3 block w-full">
+                  <TileMeter pct={pct} target={o.meter?.target} color={ink.bar} label={o.meter?.label ?? tile.label} />
+                  {o.meter?.target != null ? <span className="mt-1 block text-[11px] text-cc-muted">Target {o.meter.target}%</span> : null}
                 </span>
-                <span className="mt-auto w-full pt-phi-3">
-                  {ring.pct != null ? <TileMeter pct={ring.pct} color={s.color} label={ring.label} /> : null}
-                </span>
-                {/* The full story, for screen readers (and the panel on click). */}
-                <span className="sr-only">
-                  <span>{o.area}</span> <span>{s.label}.</span> <span>{o.headline}</span> <span>{o.detail}</span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-
-      <Sheet open={!!open} onOpenChange={(v) => { if (!v) setOpenId(null); }}>
-        <SheetContent className="flex w-full flex-col gap-phi-5 sm:max-w-md">
-          {open ? (() => {
-            const s = STATUS[open.status];
-            const StatusIcon = s.icon;
-            return (
-              <>
-                <SheetHeader className="space-y-phi-3 text-left">
-                  <span className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold" style={{ background: s.soft, color: s.color }}>
-                    <StatusIcon size={13} aria-hidden /> {s.label}
-                  </span>
-                  <SheetTitle className="text-xl leading-snug">{open.headline}</SheetTitle>
-                  <SheetDescription className="text-sm leading-6">{open.detail}</SheetDescription>
-                </SheetHeader>
-                {open.ring ? (
-                  <div className="rounded-2xl bg-cc-soft/60 p-phi-4">
-                    <p className="text-sm font-semibold text-cc-text">{open.area}</p>
-                    <p className="mt-0.5 flex items-baseline gap-2">
-                      <span className="text-3xl font-semibold leading-tight text-cc-text">{open.ring.value}</span>
-                      <span className="text-xs text-cc-muted">{open.ring.caption}</span>
-                    </p>
-                    {open.ring.pct != null && !open.meter ? (
-                      <div className="mt-phi-3"><TileMeter pct={open.ring.pct} color={s.color} label={open.area} /></div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {open.meter ? <Meter pct={open.meter.pct} target={open.meter.target} label={open.meter.label} color={s.color} /> : null}
-                <button
-                  type="button"
-                  onClick={() => { setOpenId(null); onNavigate(open.action.href); }}
-                  className="mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[var(--cc-cta)] px-5 text-sm font-semibold text-white hover:opacity-90"
-                >
-                  {open.action.label} <ArrowRight size={15} aria-hidden />
-                </button>
-              </>
-            );
-          })() : null}
-        </SheetContent>
-      </Sheet>
-    </>
+              ) : null}
+              <span className="mt-phi-3 line-clamp-3 text-xs leading-5 text-cc-muted">{o.detail}</span>
+              <span className="mt-auto inline-flex items-center gap-1 pt-phi-3 text-xs font-semibold text-cc-text group-hover:underline">
+                {o.action.label} <ArrowRight size={13} aria-hidden />
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
