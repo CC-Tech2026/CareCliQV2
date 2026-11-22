@@ -2,9 +2,10 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
 import {
   Bar,
+  BarChart,
   CartesianGrid,
-  ComposedChart,
   Line,
+  LineChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -13,6 +14,7 @@ import {
 } from "recharts";
 import { Link, useLocation } from "wouter";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { AXIS_PROPS, BAR_PROPS, GRID_PROPS, SERIES, TOOLTIP_PROPS, lineProps, referenceProps } from "@/components/charts/figures";
 import {
   LoadError,
   PageHeader,
@@ -139,7 +141,7 @@ function TrendTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
   return (
-    <div className="rounded-xl border bg-cc-surface px-3 py-2 text-xs" style={{ borderColor: BORDER }}>
+    <div className="rounded-lg border bg-cc-surface px-3 py-2 text-xs shadow-md" style={{ borderColor: BORDER }}>
       <p className="font-semibold" style={{ color: TEXT }}>Week {point.label}</p>
       <p style={{ color: MUTED }}>
         <span className="font-semibold tabular-nums" style={{ color: TEXT }}>{percent(point.score)}</span> average
@@ -516,33 +518,30 @@ export default function MDExecutivePage() {
                       )}
                     </p>
                   )}
-                  <div className="mt-4 h-[260px]">
+                  {/* Two charts on the same weeks rather than one chart with two
+                      scales: the score, then how many shifts each week's score
+                      rests on. */}
+                  <div className="mt-4 h-[220px]" role="img" aria-label="Weekly average note score">
                     <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
-                        <XAxis dataKey="label" tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} tickFormatter={(v) => `W${v}`} />
-                        <YAxis yAxisId="score" domain={[0, 100]} tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
-                        <YAxis yAxisId="shifts" orientation="right" hide domain={[0, (max: number) => Math.max(4, max * 3)]} />
+                      <LineChart data={chartData} syncId="exec-quality" margin={{ top: 16, right: 8, bottom: 0, left: -12 }}>
+                        <CartesianGrid {...GRID_PROPS} />
+                        <XAxis dataKey="label" {...AXIS_PROPS} tickFormatter={(v) => `W${v}`} hide />
+                        <YAxis domain={[0, 100]} {...AXIS_PROPS} tickFormatter={(v) => `${v}%`} />
+                        <Tooltip content={<TrendTooltip />} cursor={TOOLTIP_PROPS.cursor} />
+                        <ReferenceLine y={target} {...referenceProps(`Target ${target}%`)} />
+                        <Line type="linear" dataKey="score" isAnimationActive={false} {...lineProps(SERIES[0])} dot={{ r: 3, fill: SERIES[0], strokeWidth: 0 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p className="mt-2 text-xs" style={{ color: MUTED }}>Scored shifts each week</p>
+                  <div className="h-[72px]" role="img" aria-label="Scored shifts each week">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData} syncId="exec-quality" margin={{ top: 4, right: 8, bottom: 0, left: -12 }}>
+                        <XAxis dataKey="label" {...AXIS_PROPS} tickFormatter={(v) => `W${v}`} />
+                        <YAxis {...AXIS_PROPS} allowDecimals={false} tickCount={2} />
                         <Tooltip content={<TrendTooltip />} cursor={{ fill: "var(--cc-soft)" }} />
-                        <Bar yAxisId="shifts" dataKey="sessions" fill="var(--cc-border)" radius={[4, 4, 0, 0]} barSize={18} isAnimationActive={false} />
-                        <ReferenceLine
-                          yAxisId="score"
-                          y={target}
-                          stroke={toneColor("warning")}
-                          strokeDasharray="4 3"
-                          label={{ value: `Target ${target}%`, position: "insideBottomLeft", fontSize: 11, fill: toneColor("warning") }}
-                        />
-                        <Line
-                          yAxisId="score"
-                          type="linear"
-                          dataKey="score"
-                          isAnimationActive={false}
-                          stroke={PLUM}
-                          strokeWidth={2.5}
-                          dot={{ r: 3.5, fill: PLUM, strokeWidth: 0 }}
-                          activeDot={{ r: 5 }}
-                        />
-                      </ComposedChart>
+                        <Bar dataKey="sessions" fill="var(--cc-muted)" fillOpacity={0.45} {...BAR_PROPS} isAnimationActive={false} />
+                      </BarChart>
                     </ResponsiveContainer>
                   </div>
                   {thinWeeks > 0 && (

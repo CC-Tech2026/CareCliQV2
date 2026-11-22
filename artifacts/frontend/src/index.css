@@ -297,6 +297,20 @@
   --cc-status-danger-bg:    #FEF2F2;
   /* Danger as small text: --cc-status-danger is too light to read at body size on white. */
   --cc-danger-text:         #B42318;
+  /* Charts (components/charts): series colours in a fixed order, checked for
+     colour-blind readers, and the status colours a score or band uses. Status
+     colours always come with a word and an icon, never on their own. */
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-critical: #d03b3b;
+  --viz-good-text: #006300;
+  --viz-warning-text: #8a5a00;
+  --viz-critical-text: #b42318;
+  --viz-grid: #e1e0d9;
   /* Official CareCliQ Purple, for vault folders and their panels. */
   --cc-brand-purple:        #7C3AED;
   --cc-brand-purple-soft:   rgba(124, 58, 237, 0.08);
@@ -413,6 +427,17 @@
   --cc-status-danger:       #F87171;
   --cc-status-danger-bg:    rgba(248, 113, 113, 0.12);
   --cc-danger-text:         #F87171;
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-critical: #d03b3b;
+  --viz-good-text: #4ade80;
+  --viz-warning-text: #fcd34d;
+  --viz-critical-text: #f87171;
+  --viz-grid: #2c2c2a;
   --cc-brand-purple:        #A78BFA;
   --cc-brand-purple-soft:   rgba(167, 139, 250, 0.14);
   --cc-brand-purple-ring:   rgba(167, 139, 250, 0.4);

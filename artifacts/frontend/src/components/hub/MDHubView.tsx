@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AXIS_PROPS, ChartLegend, GRID_PROPS, SERIES, SegmentedBar, TOOLTIP_PROPS, lineProps, referenceProps } from "@/components/charts/figures";
 import { useLocation } from "wouter";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -53,7 +54,6 @@ const BLUE = "#2A5C8A";
 // Categorical pair for the Active staff ring (support workers vs coordinators) —
 // validated against the dataviz palette checks: BLUE reads too gray as a
 // categorical mark at this saturation, so the ring uses this sky blue instead.
-const SKY = "#0EA5E9";
 
 interface MDData {
   documentation_summary?: { sample_size: number; scored: number; unscored: number; on_target: number; needs_review: number; priority_review: number };
@@ -156,68 +156,6 @@ function MetricBreakdown({ items }: { items: Array<{ label: string; value: numbe
   );
 }
 
-/** Ring composition chart — the team's total in the center, made up of two
- *  named categorical parts (support workers / coordinators). Unlike
- *  CapacityMeter, this total has no ceiling to read as a fill level against,
- *  so a ring split — not a linear meter — is the right form here. */
-function StaffCompositionRing({ supportWorkers, coordinators, size = 136, stroke = 16 }: { supportWorkers: number; coordinators: number; size?: number; stroke?: number }) {
-  const total = supportWorkers + coordinators;
-  const center = size / 2;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const gap = total > 0 ? 3 : 0;
-  const workerLen = total > 0 ? (supportWorkers / total) * circumference : 0;
-  const coordLen = total > 0 ? (coordinators / total) * circumference : 0;
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      className="shrink-0"
-      role="img"
-      aria-label={`${supportWorkers} support workers, ${coordinators} coordinators`}
-    >
-      <circle cx={center} cy={center} r={radius} fill="none" stroke={SOFT} strokeWidth={stroke} />
-      {supportWorkers > 0 && (
-        <circle
-          cx={center} cy={center} r={radius} fill="none"
-          stroke={PLUM} strokeWidth={stroke}
-          strokeDasharray={`${Math.max(0, workerLen - gap)} ${circumference}`}
-          transform={`rotate(-90 ${center} ${center})`}
-        />
-      )}
-      {coordinators > 0 && (
-        <circle
-          cx={center} cy={center} r={radius} fill="none"
-          stroke={SKY} strokeWidth={stroke}
-          strokeDasharray={`${Math.max(0, coordLen - gap)} ${circumference}`}
-          strokeDashoffset={-workerLen}
-          transform={`rotate(-90 ${center} ${center})`}
-        />
-      )}
-      <text x="50%" y="46%" textAnchor="middle" style={{ fill: TEXT, fontSize: 28, fontWeight: 900 }}>
-        {formatNumber(total)}
-      </text>
-      <text x="50%" y="62%" textAnchor="middle" style={{ fill: MUTED, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em" }}>
-        TOTAL STAFF
-      </text>
-    </svg>
-  );
-}
-
-/** A colored identity dot beside its own value + label — the ring's legend,
- *  since color alone (a WARN-contrast blue included) is never the only cue. */
-function RingLegendItem({ color, value, label }: { color: string; value: number; label: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
-      <p className="text-[12px] font-bold" style={{ color: TEXT }}>
-        {formatNumber(value)} <span className="font-semibold" style={{ color: MUTED }}>{label}</span>
-      </p>
-    </div>
-  );
-}
-
 function ActiveStaffCard({
   total,
   retentionRate,
@@ -237,21 +175,21 @@ function ActiveStaffCard({
       className="flex flex-col justify-start rounded-2xl bg-cc-surface overflow-hidden text-left transition-colors hover:bg-cc-soft"
       style={{ borderColor: BORDER, background: SURFACE }}
     >
-      <div className="flex w-full flex-1 flex-wrap items-center gap-4 px-5 py-5">
-        <div className="shrink-0">
-          <StaffCompositionRing supportWorkers={supportWorkers} coordinators={coordinators} size={112} stroke={12} />
+      <div className="w-full flex-1 px-5 py-5">
+        <p className="text-xs font-semibold" style={{ color: MUTED }}>Active staff</p>
+        <p className="mt-0.5 text-3xl font-semibold leading-tight" style={{ color: TEXT }}>{formatNumber(total)}</p>
+        <div className="mt-3">
+          <SegmentedBar
+            label="Active staff by role"
+            unit="staff"
+            parts={[
+              { key: "workers", label: "Support workers", value: supportWorkers, color: "var(--viz-1)" },
+              { key: "coordinators", label: "Coordinators", value: coordinators, color: "var(--viz-2)" },
+            ]}
+            empty="No active staff yet"
+          />
         </div>
-
-        <div className="min-w-0 flex-1 basis-32">
-          <p className="text-xs font-semibold" style={{ color: MUTED }}>Active staff</p>
-
-          <div className="mt-3 flex flex-col gap-1.5">
-            <RingLegendItem color={PLUM} value={supportWorkers} label="Support workers" />
-            <RingLegendItem color={SKY} value={coordinators} label="Coordinators" />
-          </div>
-
-          <p className="mt-3 text-[11px]" style={{ color: MUTED }}>{retentionRate}% retention · {formatNumber(total)} active in total</p>
-        </div>
+        <p className="mt-3 text-[11px]" style={{ color: MUTED }}>{retentionRate}% retention</p>
       </div>
       <span className="flex w-full items-center justify-between border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-text">Open staff directory<ArrowRight size={14} /></span>
     </button>
@@ -616,97 +554,22 @@ function ComplianceTrend({
           </p>
         </div>
 
-        <div
-          className="hidden items-center gap-1.5 text-[11px] font-bold sm:flex"
-          style={{ color: MUTED }}
-        >
-          <span
-            className="h-2 w-2 rounded-full"
-            style={{ background: PLUM }}
-          />
 
-          Compliance
-        </div>
       </div>
 
       <details className="mx-5 mt-4 text-xs text-cc-muted"><summary className="cursor-pointer font-semibold">View weekly figures</summary><div className="mt-2 overflow-x-auto"><table className="w-full text-left"><thead><tr><th className="py-2">Week</th><th>Average score</th><th>Sessions</th></tr></thead><tbody>{chartData.map(point => <tr key={point.week}><td className="py-1">{point.week}</td><td>{point.score === null ? "Not scored" : point.score + "%"}</td><td>{point.sessions}</td></tr>)}</tbody></table></div></details>
       <div className="px-2 pb-4 pt-4 sm:px-5">
         <ResponsiveContainer width="100%" height={220}>
-          <LineChart
-            data={chartData}
-            margin={{
-              top: 8,
-              right: 12,
-              bottom: 0,
-              left: -18,
-            }}
-          >
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke={BORDER}
-              vertical={false}
-            />
-
-            <XAxis
-              dataKey="week"
-              tick={{
-                fontSize: 9,
-                fill: MUTED,
-              }}
-              axisLine={false}
-              tickLine={false}
-            />
-
-            <YAxis
-              domain={[0, 100]}
-              tick={{
-                fontSize: 9,
-                fill: MUTED,
-              }}
-              axisLine={false}
-              tickLine={false}
-            />
-
+          <LineChart data={chartData} margin={{ top: 16, right: 12, bottom: 0, left: -12 }}>
+            <CartesianGrid {...GRID_PROPS} />
+            <XAxis dataKey="week" {...AXIS_PROPS} />
+            <YAxis domain={[0, 100]} {...AXIS_PROPS} tickFormatter={(v) => `${v}%`} />
             <Tooltip
-              contentStyle={{
-                borderRadius: 8,
-                border: `1px solid ${BORDER}`,
-                background: SURFACE,
-                fontSize: 11,
-                boxShadow: "0 6px 20px rgba(0,0,0,0.06)",
-              }}
-              formatter={(value: number) => [
-                `${value}%`,
-                translate("hub.mdHub.avgScore"),
-              ]}
+              {...TOOLTIP_PROPS}
+              formatter={(value: number) => [`${value}%`, translate("hub.mdHub.avgScore")]}
             />
-
-            <ReferenceLine
-              y={target}
-              stroke={AMBER}
-              strokeDasharray="4 4"
-              strokeWidth={1.5}
-              label={{
-                value: translateParams("hub.mdHub.target", {
-                  target: String(target),
-                }),
-                fontSize: 9,
-                fill: AMBER,
-                position: "insideTopRight",
-              }}
-            />
-
-            <Line
-              type="monotone"
-              dataKey="score"
-              stroke={PLUM}
-              strokeWidth={2.5}
-              dot={false}
-              activeDot={{
-                r: 4,
-                fill: PLUM,
-              }}
-            />
+            <ReferenceLine y={target} {...referenceProps(translateParams("hub.mdHub.target", { target: String(target) }))} />
+            <Line type="monotone" dataKey="score" connectNulls {...lineProps(SERIES[0])} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -891,19 +754,24 @@ function RevenueChart() {
         ) : !hasHistory ? (
           <div className="flex h-[220px] items-center justify-center text-[11px]" style={{ color: MUTED }}>Not enough billing history yet.</div>
         ) : (
+          <>
+          <div className="px-3 pb-2 sm:px-1">
+            <ChartLegend items={[{ label: "Billed", color: SERIES[0] }, { label: "Paid", color: SERIES[1] }]} />
+          </div>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
-              <XAxis dataKey="key" tick={{ fontSize: 9, fill: MUTED }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 9, fill: MUTED }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${formatNumber(v)}`} />
+            <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 0, left: -6 }}>
+              <CartesianGrid {...GRID_PROPS} />
+              <XAxis dataKey="key" {...AXIS_PROPS} />
+              <YAxis {...AXIS_PROPS} tickFormatter={(v) => `$${formatNumber(v)}`} />
               <Tooltip
-                contentStyle={{ borderRadius: 8, border: `1px solid ${BORDER}`, background: SURFACE, fontSize: 11, boxShadow: "0 6px 20px rgba(0,0,0,0.06)" }}
+                {...TOOLTIP_PROPS}
                 formatter={(value: number, name: string) => [`$${formatNumber(value)}`, name === "billed" ? "Billed" : "Paid"]}
               />
-              <Line type="monotone" dataKey="billed" stroke={BLUE} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: BLUE }} />
-              <Line type="monotone" dataKey="paid" stroke={GREEN} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: GREEN }} />
+              <Line type="monotone" dataKey="billed" {...lineProps(SERIES[0])} />
+              <Line type="monotone" dataKey="paid" {...lineProps(SERIES[1])} />
             </LineChart>
           </ResponsiveContainer>
+          </>
         )}
       </div>
       </>

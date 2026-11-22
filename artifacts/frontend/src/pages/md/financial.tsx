@@ -95,9 +95,10 @@ const PERIODS: Array<{ key: Period; label: string }> = [
 
 // Chart series — checked for colour-blind separation in light and dark.
 const SERIES = {
-  revenue: { label: "Revenue", color: "#E8457A" },
-  costs: { label: "Costs", color: "#5B6CD9" },
-  net: { label: "Net profit", color: "#1A9E77" },
+  // The shared chart colours, in their fixed order (components/charts).
+  revenue: { label: "Revenue", color: "var(--viz-1)" },
+  costs: { label: "Costs", color: "var(--viz-2)" },
+  net: { label: "Net profit", color: "var(--viz-3)" },
 } as const;
 type SeriesKey = keyof typeof SERIES;
 
@@ -275,7 +276,7 @@ function PerformanceChart({
                 if (p && !p.future) onSelect(p.key);
               }}
             >
-              <CartesianGrid vertical={false} stroke={BORDER} strokeDasharray="3 3" />
+              <CartesianGrid vertical={false} stroke="var(--viz-grid)" />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} />
               <YAxis
                 width={48}
@@ -287,7 +288,7 @@ function PerformanceChart({
               <ReferenceLine y={0} stroke={MUTED} strokeOpacity={0.5} />
               <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--cc-soft)", opacity: 0.6 }} />
               {!hidden.has("revenue") && (
-                <Bar dataKey="revenue" name="Revenue" radius={[4, 4, 0, 0]} maxBarSize={28} cursor="pointer">
+                <Bar dataKey="revenue" name="Revenue" radius={[4, 4, 0, 0]} maxBarSize={24} cursor="pointer">
                   {points.map((p) => (
                     <Cell
                       key={p.key}
@@ -298,7 +299,7 @@ function PerformanceChart({
                 </Bar>
               )}
               {!hidden.has("costs") && (
-                <Bar dataKey="costs" name="Costs" radius={[4, 4, 0, 0]} maxBarSize={28} cursor="pointer">
+                <Bar dataKey="costs" name="Costs" radius={[4, 4, 0, 0]} maxBarSize={24} cursor="pointer">
                   {points.map((p) => (
                     <Cell key={p.key} fill={SERIES.costs.color} fillOpacity={selected && selected !== p.key ? 0.35 : 1} />
                   ))}

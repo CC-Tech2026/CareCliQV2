@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { AXIS_PROPS, GRID_PROPS, SERIES, TOOLTIP_PROPS, lineProps, referenceProps } from "@/components/charts/figures";
 import { Fragment } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -502,16 +503,13 @@ export default function MDCompliancePage({ embedded = false }: { embedded?: bool
                   <Surface className="p-5">
                     <div className="h-[260px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={chartData} margin={{ top: 5, right: 15, bottom: 0, left: -20 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
-                          <XAxis dataKey="week" tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} />
-                          <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} />
-                          <ReferenceLine y={data.compliance_target} stroke={AMBER} strokeDasharray="4 3" />
-                          <Tooltip
-                            contentStyle={{ borderRadius: 12, border: `1px solid ${BORDER}`, fontSize: 12 }}
-                            formatter={(value: number) => [`${value}%`, "Weekly score"]}
-                          />
-                          <Line type="monotone" dataKey="score" stroke={PLUM} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: PLUM }} />
+                        <LineChart data={chartData} margin={{ top: 16, right: 15, bottom: 0, left: -12 }}>
+                          <CartesianGrid {...GRID_PROPS} />
+                          <XAxis dataKey="week" {...AXIS_PROPS} />
+                          <YAxis domain={[0, 100]} {...AXIS_PROPS} tickFormatter={(v) => `${v}%`} />
+                          <ReferenceLine y={data.compliance_target} {...referenceProps(`Target ${data.compliance_target}%`)} />
+                          <Tooltip {...TOOLTIP_PROPS} formatter={(value: number) => [`${value}%`, "Weekly score"]} />
+                          <Line type="monotone" dataKey="score" connectNulls {...lineProps(SERIES[0])} />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>

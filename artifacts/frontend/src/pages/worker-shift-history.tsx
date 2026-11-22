@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { AXIS_PROPS, GRID_PROPS, SERIES, TOOLTIP_PROPS, referenceProps } from "@/components/charts/figures";
 import { format, parseISO } from "date-fns";
 import { displayDate } from "@/lib/datetime";
 import { ZoneLabel } from "@/components/branches/ZoneLabel";
@@ -222,21 +223,18 @@ function ShiftTrendChart({
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#EDE3FC" />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: MUTED }} axisLine={false} tickLine={false} />
-              <ReferenceLine y={90} stroke="#10B981" strokeDasharray="4 4" />
-              <ReferenceLine y={70} stroke="#F59E0B" strokeDasharray="4 4" />
-              <Tooltip
-                formatter={(v: number) => [`${v}%`, "Score"]}
-                contentStyle={{ borderRadius: 12, border: '1px solid var(--cc-border)', fontSize: 12 }}
-              />
+            <LineChart data={data} margin={{ top: 16, right: 8, left: -12, bottom: 0 }}>
+              <CartesianGrid {...GRID_PROPS} />
+              <XAxis dataKey="label" {...AXIS_PROPS} />
+              <YAxis domain={[0, 100]} {...AXIS_PROPS} tickFormatter={(v) => `${v}%`} />
+              <ReferenceLine y={90} {...referenceProps("Green from 90")} />
+              <ReferenceLine y={70} {...referenceProps("Amber from 70")} />
+              <Tooltip {...TOOLTIP_PROPS} formatter={(v: number) => [`${v}%`, "Score"]} />
               <Line
                 type="monotone"
                 dataKey="score"
-                stroke={PLUM}
-                strokeWidth={2.5}
+                stroke={SERIES[0]}
+                strokeWidth={2}
                 dot={(props) => {
                   const { cx, cy, payload } = props;
                   const row = payload as { shift_id?: string };
@@ -245,8 +243,9 @@ function ShiftTrendChart({
                       cx={cx}
                       cy={cy}
                       r={4}
-                      fill={PLUM}
-                      strokeWidth={0}
+                      fill={SERIES[0]}
+                      stroke="var(--cc-surface)"
+                      strokeWidth={2}
                       style={{ cursor: "pointer" }}
                       onClick={() => {
                         if (row?.shift_id) onPointClick?.(row.shift_id);
