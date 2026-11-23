@@ -7,7 +7,7 @@ are made by code, not the LLM" principle applied to numbers shown in a table:
 the model narrates, the block data comes straight from the tool's dict.
 
 Block shapes (kept intentionally small — 4 types cover every tool today):
-  {"type": "stat", "label": str, "value": number|str, "target": number|None}
+  {"type": "stat", "label": str, "value": number|str, "target": number|str|None}
   {"type": "table", "title": str, "columns": [str, ...], "rows": [[cell, ...], ...]}
   {"type": "bar_chart", "title": str, "x_key": str, "series": [{"key": str, "label": str}], "data": [dict, ...]}
   {"type": "download", "title": str, "url": str, "count": int|None}
@@ -249,7 +249,120 @@ def _blocks_for_session_activity(a: dict) -> list[dict]:
     ]
 
 
+def _money(value: Any) -> Any:
+    """2450.5 -> '$2,450.50'; None stays None (shown as a dash)."""
+    if not isinstance(value, (int, float)):
+        return value
+    sign = "-" if value < 0 else ""
+    return f"{sign}${abs(value):,.2f}"
+
+
+def _blocks_for_financial_overview(a: dict) -> list[dict]:
+    period = a.get("period") or "This period"
+    margin = a.get("margin_pct")
+    blocks = [
+        {"type": "stat", "label": f"Billed ({period})", "value": _money(a.get("billed_aud"))},
+        {"type": "stat", "label": "Collected", "value": _money(a.get("collected_aud"))},
+        {
+            "type": "stat",
+            "label": "Net profit" + (f" ({margin}% margin)" if margin is not None else ""),
+            "value": _money(a.get("net_profit_aud")),
+        },
+        {"type": "stat", "label": "Overdue invoices", "value": _money(a.get("overdue_aud"))},
+    ]
+    monthly = [m for m in a.get("monthly") or [] if m.get("month")]
+    if len(monthly) > 1:
+        series = [{"key": "billed_aud", "label": "Billed"}]
+        if any(m.get("wages_aud") is not None for m in monthly):
+            series.append({"key": "wages_aud", "label": "Wages"})
+        blocks.append({
+            "type": "bar_chart",
+            "title": "Billed and wages by month (AUD)",
+            "x_key": "month",
+            "series": series,
+            "data": [{"month": m["month"], **{s["key"]: m.get(s["key"]) or 0 for s in series}} for m in monthly],
+        })
+    return blocks
+
+
+def _blocks_for_expiring_credentials(a: dict) -> list[dict]:
+    blocks = [
+        {"type": "stat", "label": f"Expired credentials ({a.get('scope', 'organisation-wide')})", "value": a.get("expired_count")},
+        {"type": "stat", "label": f"Expiring in the next {a.get('days_ahead', 30)} days", "value": a.get("expiring_count")},
+    ]
+    creds = a.get("credentials") or []
+    if creds:
+        rows = []
+        for c in creds:
+            days = c.get("days_left")
+            when = (
+                f"{-days} days ago" if isinstance(days, int) and days < 0
+                else "today" if days == 0
+                else f"in {days} days" if isinstance(days, int) else "—"
+            )
+            rows.append([c.get("worker_name"), c.get("credential"), _format_iso_date(c.get("expiry_date")), when])
+        blocks.append({
+            "type": "table",
+            "title": "Credentials to renew",
+            "columns": ["Worker", "Credential", "Expiry", "When"],
+            "rows": rows,
+        })
+    return blocks
+
+
+def _format_iso_date(value: Any) -> Any:
+    """'2026-12-05' -> '05 Dec 2026'."""
+    try:
+        return datetime.fromisoformat(str(value)[:10]).strftime("%d %b %Y")
+    except ValueError:
+        return value
+
+
+def _blocks_for_participant_overview(a: dict) -> list[dict]:
+    name = (a.get("participant") or {}).get("full_name") or "Participant"
+    funding = a.get("funding") or {}
+    delivery = a.get("delivery") or {}
+    used, elapsed = funding.get("percent_used"), funding.get("percent_time_elapsed")
+    blocks: list[dict] = []
+    if funding.get("total"):
+        blocks.append({
+            "type": "stat",
+            "label": f"{name}: funding used",
+            "value": f"{used}%" if used is not None else None,
+            "target": f"{elapsed}% of plan time" if elapsed is not None else None,
+        })
+        blocks.append({"type": "stat", "label": "Funding remaining", "value": _money(funding.get("remaining"))})
+    blocks.append({"type": "stat", "label": "Hours delivered (30 days)", "value": delivery.get("hours_30d")})
+    blocks.append({"type": "stat", "label": "Unfilled shifts (next 14 days)", "value": delivery.get("unfilled_shifts_14d")})
+    categories = funding.get("categories") or []
+    if categories:
+        blocks.append({
+            "type": "table",
+            "title": "Funding by support category",
+            "columns": ["Category", "Budget", "Spent", "Left", "Used"],
+            "rows": [
+                [
+                    c.get("label"), _money(c.get("allocated")), _money(c.get("used")), _money(c.get("remaining")),
+                    (f"{c.get('percent_used')}%" if c.get("percent_used") is not None else "—") + (" (overspent)" if c.get("overspent") else ""),
+                ]
+                for c in categories
+            ],
+        })
+    decisions = a.get("needs_decision") or []
+    if decisions:
+        blocks.append({
+            "type": "table",
+            "title": "Needs a decision",
+            "columns": ["", "Item", "Detail"],
+            "rows": [["Urgent" if d.get("urgency") == "urgent" else "Soon", d.get("title"), d.get("detail")] for d in decisions],
+        })
+    return blocks
+
+
 _BUILDERS = {
+    "get_financial_overview": _blocks_for_financial_overview,
+    "get_expiring_credentials": _blocks_for_expiring_credentials,
+    "get_participant_overview": _blocks_for_participant_overview,
     "get_compliance_snapshot": _blocks_for_compliance_snapshot,
     "get_incident_summary": _blocks_for_incident_summary,
     "get_rp_flag_count": _blocks_for_rp_flag_count,

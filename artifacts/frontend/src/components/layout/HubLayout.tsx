@@ -1,4 +1,5 @@
 import { ManagementNavigationDrawer } from "./ManagementNavigationDrawer";
+import { FloatingAiAssistant } from "./FloatingAiAssistant";
 import { NotificationBell, NotificationInbox } from "@/components/notifications/NotificationInbox";
 import { NotificationRealtimeBridge } from "@/components/worker/NotificationRealtimeBridge";
 import { PageErrorBoundary } from "@/components/ErrorBoundary";
@@ -1204,6 +1205,9 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
           <PageErrorBoundary>{children}</PageErrorBoundary>
         </main>
       )}
+
+      {/* Quill, the assistant: the same one coordinators have in AppLayout. */}
+      {(isMD || user?.role === "support_coordinator") && <FloatingAiAssistant />}
     </div>
   );
 }

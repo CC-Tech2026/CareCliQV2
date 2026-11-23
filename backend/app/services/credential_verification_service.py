@@ -168,3 +168,29 @@ async def required_credentials_for_shift(
             seen.add(key)
             required.append(value)
     return required
+
+
+_CREDENTIAL_PAGE = 1000
+
+
+def list_credential_expiries(org_id: str) -> list[dict]:
+    """Every credential in the organisation, with only what's needed to see
+    what is expiring: no credential numbers, issuers or files. Used by Quill
+    (chatbox/tools.py), which never queries the service-role client itself.
+    Read a page at a time, because Supabase stops at 1,000 rows a request
+    without saying so."""
+    rows: list[dict] = []
+    start = 0
+    while True:
+        page = (
+            get_supabase_admin().table("credentials")
+            .select("id, user_id, title, credential_type, expiry_date, status")
+            .eq("organization_id", org_id)
+            .order("id")
+            .range(start, start + _CREDENTIAL_PAGE - 1)
+            .execute()
+        ).data or []
+        rows.extend(page)
+        if len(page) < _CREDENTIAL_PAGE:
+            return rows
+        start += _CREDENTIAL_PAGE

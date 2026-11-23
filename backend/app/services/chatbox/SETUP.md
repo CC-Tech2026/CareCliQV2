@@ -18,7 +18,7 @@ covered in the Appendix at the end of this document.
 | Supabase project (existing) | Same project as the rest of CareCliQ — no separate database. |
 | Supabase **legacy JWT secret** | Project Settings → API → *JWT Settings* (newer UI: *JWT Keys* → *Legacy JWT Secret*). Quill's tools do **not** run on the service-role key — `db.py` mints a per-request token for the read-only `quill_agent` Postgres role and signs it with this secret. Without it, every tool call fails closed (`QuillDbNotConfigured`); there is deliberately no fallback to the service role. If your project only shows asymmetric *JWT Signing Keys* and no legacy secret, stop and escalate — the role approach needs HS256. |
 | LangSmith account | Optional — only for tracing agent runs. |
-| A test user with role `support_coordinator` or `managing_director` | Required to see/use Quill at all — it's role-gated in both the UI and the API (`AppLayout.tsx:651`, `chatbox.py`'s `_require_quill_access`). |
+| A test user with role `support_coordinator` or `managing_director` | Required to see/use Quill at all — it's role-gated in both the UI and the API (`AppLayout.tsx` `showQuillAssistant` for coordinators, `HubLayout.tsx` for managing directors and the coordinator hub, `chatbox.py`'s `_require_quill_access`). |
 
 ## 3. Setup steps
 
@@ -127,7 +127,9 @@ There's no dedicated feature flag today. Options, cleanest first:
 
 ## 6. Known gaps to flag before wider rollout
 
-- `CHATBOX_MODEL` in `llm.py:23` is a literal placeholder — the comment at line 21 says pending confirmation from Monich. Every request today runs on a value nobody has formally signed off.
+- Claude runs as `claude-opus-5-5` (`llm.py`) at effort `low` (raise with `CHATBOX_EFFORT=medium|high`). It takes no `temperature`: the model rejects sampling settings with a 400, and until 2026-11-23 that failed every Claude call, so every question quietly ran on the GPT-4o-mini fallback after one wasted request.
+- `SUPABASE_JWT_SECRET` was not set on `carecliq-api` or `carecliq-api-dev` as of 2026-11-23, so every tool that queries through `quill_client` (shifts, roster, retention, progress notes, and every coordinator team lookup) fails closed there. Set it, and confirm migration 197 is applied, before relying on those answers.
+- Director-only tools added 2026-11-23: `get_financial_overview`, `get_participant_overview`; `get_expiring_credentials` is for both roles. They read through `financial_summary_service`, `director_participant_service.build_overview` and `credential_verification_service.list_credential_expiries` (service role, org-filtered), like the other borrowed helpers below.
 - No rate limiting on `/chatbox/chat` — every message is a live, uncapped LLM API cost.
 - Tool-scoping test coverage now exists for the RAG tools plus a representative sample across the other three scoping shapes (`test_chatbox_rag_scoping.py`, `test_chatbox_tool_scoping.py`), and `test_chatbox_db_role.py` pins the `quill_agent` token contract — but not yet all 16 non-RAG tools individually, and nothing exercises the Postgres grants/RLS themselves (that's the manual verification block in migration 197).
 - The `quill_agent` role covers only the seven queries `tools.py` issues directly (`shifts`, `users`, `organization_members`). Helpers Quill borrows — `incident_service.get_incident_stats`, `rag_service.retrieve_similar_*`, `dashboards._team_members`, `participant_service.get_participants_list_light`, `session_service.get_sessions_for_dashboard`, `billing_service.get_revenue_report` — still run on the service-role key because they don't accept an injected client. Moving them is the planned step 2; `memory.py` (chat history) is likewise still service-role.
@@ -162,11 +164,12 @@ judgment call left to the model. The LLM only ever chooses *which*
 pre-approved, pre-scoped function to call; it never decides *what* that
 function is allowed to touch.
 
-### B. The 19 tools
+### B. The tools
 
-`backend/app/services/chatbox/tools.py` defines 19 tools, not 9 — the count
-below is current as of `develop` on 2026-09-16; an earlier description of
-this file undercounted it by 10 tools added since.
+`backend/app/services/chatbox/tools.py` defines 22 tools as of 2026-11-23
+(the list below dates from 2026-09-16; the three added since are
+`get_expiring_credentials`, `get_financial_overview` and
+`get_participant_overview`, see §6).
 
 **13 structured data lookups:**
 
