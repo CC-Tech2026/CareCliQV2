@@ -4,7 +4,8 @@ export interface StatBlock {
   type: "stat";
   label: string;
   value: number | string | null;
-  target?: number | null;
+  /** A number reads as "/ 90 target"; text is shown as written, e.g. "48% of plan time". */
+  target?: number | string | null;
 }
 
 export interface TableBlock {

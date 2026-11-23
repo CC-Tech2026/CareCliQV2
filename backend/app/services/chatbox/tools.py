@@ -18,6 +18,7 @@ else: organisation finances aren't part of a support coordinator's role
 (billing_service.get_revenue_report()).
 """
 
+import asyncio
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
@@ -42,12 +43,16 @@ from ...core.access import (
 from .. import (
     audit_service,
     billing_service,
+    credential_verification_service,
+    director_participant_service,
+    financial_summary_service,
     incident_service,
     participant_service,
     rag_service,
     session_service,
     shift_pdf_export_service,
 )
+from ..credential_verification_service import canonical_credential_type
 from .db import quill_client
 from ...api.coordinator import _execute_shift_query_with_legacy_fallback
 from ...api.dashboards import (
@@ -76,6 +81,20 @@ def _match_by_name(records: list[dict], name: str, name_key: str = "full_name") 
         if needle in (r.get(name_key) or "").strip().lower():
             return r
     return None
+
+
+def _name_candidates(records: list[dict], name: str, name_key: str = "full_name") -> list[dict]:
+    """Every record the name could mean, for tools where picking the wrong
+    person matters: exact case-insensitive matches if there are any, else
+    substring matches. Two participants with the same name both come back,
+    so the tool can ask which one rather than guess."""
+    needle = (name or "").strip().lower()
+    if not needle:
+        return []
+    exact = [r for r in records if (r.get(name_key) or "").strip().lower() == needle]
+    if exact:
+        return exact
+    return [r for r in records if needle in (r.get(name_key) or "").strip().lower()]
 
 
 async def _log_tool_call(current_user: dict, thread_id: str, tool_name: str, result: dict) -> None:
@@ -133,7 +152,33 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
     current_user is captured by closure, never supplied by the LLM, so a tool
     call can't be redirected to another org or user. Every tool call is
     audit-logged individually via _log_tool_call, wired on below.
+
+    The tools are built fresh for each question, so the shared fetches below
+    last for one question only: when Quill calls several tools at once (the
+    compliance, RP-flag and activity tools all read the same sessions), each
+    list is loaded once and shared instead of once per tool.
     """
+    shared: dict = {}
+
+    async def _shared(key, load):
+        if key not in shared:
+            shared[key] = asyncio.ensure_future(load())
+        return await shared[key]
+
+    async def sessions_for_dashboard() -> list[dict]:
+        return await _shared("sessions", lambda: session_service.get_sessions_for_dashboard(400, current_user))
+
+    async def participants_light() -> list[dict]:
+        return await _shared("participants", lambda: participant_service.get_participants_list_light(current_user))
+
+    async def team_members(org_id: str, team_worker_ids: Optional[set] = None) -> list[dict]:
+        key = ("team", org_id, None if team_worker_ids is None else frozenset(team_worker_ids))
+        return await _shared(key, lambda: _team_members(org_id, team_worker_ids))
+
+    def resolve_scope():
+        if "scope" not in shared:
+            shared["scope"] = _resolve_team_or_org_scope(current_user)
+        return shared["scope"]
 
     @tool
     async def get_compliance_snapshot() -> dict:
@@ -146,15 +191,15 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        scope_result = _resolve_team_or_org_scope(current_user)
+        scope_result = resolve_scope()
         if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
         scope, team_worker_ids = scope_result
 
-        sessions = await session_service.get_sessions_for_dashboard(400, current_user)
+        sessions = await sessions_for_dashboard()
         if team_worker_ids is not None:
             sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
-        team = await _team_members(org_id, team_worker_ids)
+        team = await team_members(org_id, team_worker_ids)
 
         compliance_score = _average_score(sessions)
         compliance_target = 90
@@ -223,12 +268,12 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        scope_result = _resolve_team_or_org_scope(current_user)
+        scope_result = resolve_scope()
         if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
         scope, team_worker_ids = scope_result
 
-        sessions = await session_service.get_sessions_for_dashboard(400, current_user)
+        sessions = await sessions_for_dashboard()
         if team_worker_ids is not None:
             sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
 
@@ -280,9 +325,9 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
 
         # Resolve raw worker_id/participant_id into display names — matching
         # the pattern get_compliance_snapshot already uses for workers.
-        team = await _team_members(org_id)
+        team = await team_members(org_id)
         worker_names = {str(m.get("id")): m.get("full_name") for m in team}
-        participants = await participant_service.get_participants_list_light(current_user)
+        participants = await participants_light()
         participant_names = {str(p.get("id")): p.get("full_name") for p in participants}
 
         asker_tz = request_timezone()
@@ -337,7 +382,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         org_id = get_user_organization_id(current_user)
         if not org_id:
             return {"error": "No organization membership found for this user."}
-        scope_result = _resolve_team_or_org_scope(current_user)
+        scope_result = resolve_scope()
         if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
         scope, team_worker_ids = scope_result
@@ -345,7 +390,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
             return {"error": "Give either a participant name or a worker name, not both."}
 
         supabase = quill_client(current_user)
-        participants = await participant_service.get_participants_list_light(current_user)
+        participants = await participants_light()
         if team_worker_ids is not None:
             participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
 
@@ -360,7 +405,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
             participant_filter_id = str(participant.get("id"))
             range_tz = participant_timezone(participant, organization_id=org_id)
 
-        team = await _team_members(org_id, team_worker_ids)
+        team = await team_members(org_id, team_worker_ids)
         if worker_name:
             worker = _match_by_name(team, worker_name)
             if not worker:
@@ -432,12 +477,12 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        scope_result = _resolve_team_or_org_scope(current_user)
+        scope_result = resolve_scope()
         if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
         scope, team_worker_ids = scope_result
 
-        participants = await participant_service.get_participants_list_light(current_user)
+        participants = await participants_light()
         if team_worker_ids is not None:
             participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
 
@@ -455,12 +500,12 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        scope_result = _resolve_team_or_org_scope(current_user)
+        scope_result = resolve_scope()
         if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
         scope, team_worker_ids = scope_result
 
-        participants = await participant_service.get_participants_list_light(current_user)
+        participants = await participants_light()
         if team_worker_ids is not None:
             participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
 
@@ -477,12 +522,12 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        scope_result = _resolve_team_or_org_scope(current_user)
+        scope_result = resolve_scope()
         if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
         scope, team_worker_ids = scope_result
 
-        participants = await participant_service.get_participants_list_light(current_user)
+        participants = await participants_light()
         if team_worker_ids is not None:
             participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
 
@@ -505,11 +550,11 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        scope_result = _resolve_team_or_org_scope(current_user)
+        scope_result = resolve_scope()
         if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
         scope, team_worker_ids = scope_result
-        team = await _team_members(org_id, team_worker_ids)
+        team = await team_members(org_id, team_worker_ids)
 
         active_workers = [m for m in team if m.get("role") == "support_worker" and m.get("is_active")]
         return {"scope": scope, "active_worker_count": len(active_workers)}
@@ -525,11 +570,11 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        scope_result = _resolve_team_or_org_scope(current_user)
+        scope_result = resolve_scope()
         if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
         scope, team_worker_ids = scope_result
-        team = await _team_members(org_id, team_worker_ids)
+        team = await team_members(org_id, team_worker_ids)
 
         active_workers = [m for m in team if m.get("role") == "support_worker" and m.get("is_active")]
         return {
@@ -559,7 +604,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if is_coordinator_role(current_user) and not is_managing_director(current_user):
             team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
 
-        participants = await participant_service.get_participants_list_light(current_user)
+        participants = await participants_light()
         if team_worker_ids is not None:
             participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
         participant = _match_by_name(participants, participant_name)
@@ -625,7 +670,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if is_coordinator_role(current_user) and not is_managing_director(current_user):
             team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
 
-        participants = await participant_service.get_participants_list_light(current_user)
+        participants = await participants_light()
         if team_worker_ids is not None:
             participants = _filter_participants_by_worker_ids(participants, team_worker_ids)
         participant = _match_by_name(participants, participant_name)
@@ -672,10 +717,10 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
 
         supabase = quill_client(current_user)
         if is_managing_director(current_user):
-            team = await _team_members(org_id)
+            team = await team_members(org_id)
         elif is_coordinator_role(current_user):
             team_worker_ids = set(get_coordinator_team_ids(current_user, supabase))
-            team = await _team_members(org_id, team_worker_ids)
+            team = await team_members(org_id, team_worker_ids)
         else:
             return {"error": "This tool is only available to coordinators and managing directors."}
 
@@ -761,12 +806,12 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         if not org_id:
             return {"error": "No organization membership found for this user."}
 
-        scope_result = _resolve_team_or_org_scope(current_user)
+        scope_result = resolve_scope()
         if scope_result is None:
             return {"error": "This tool is only available to coordinators and managing directors."}
         scope, team_worker_ids = scope_result
 
-        sessions = await session_service.get_sessions_for_dashboard(400, current_user)
+        sessions = await sessions_for_dashboard()
         if team_worker_ids is not None:
             sessions = _filter_sessions_by_worker_ids(sessions, team_worker_ids)
 
@@ -897,6 +942,249 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         )
         return {"scope": scope, "matches": results}
 
+    @tool
+    async def get_financial_overview(period: str = "month") -> dict:
+        """Get the organisation's profit and loss for "month" (this calendar
+        month), "quarter" (this quarter) or "year" (this Australian financial
+        year, 1 July to 30 June): revenue billed, money collected, money
+        owed (outstanding and overdue invoices), wages for completed shifts,
+        overheads, net profit and margin, cost per shift, and the cash
+        position and runway, plus a month-by-month breakdown. Use this for
+        any question about profit, margin, costs, wages, cash, runway,
+        overdue invoices, or "are we making money". Managing director only.
+        All money is in AUD dollars."""
+        if not is_managing_director(current_user):
+            return {"error": "Financial figures are only available to the managing director."}
+        period_key = (period or "month").strip().lower()
+        if period_key not in ("month", "quarter", "year"):
+            return {"error": "period must be 'month', 'quarter' or 'year'."}
+        try:
+            fin = await asyncio.to_thread(financial_summary_service.get_financial_summary, current_user, period_key)
+        except Exception:
+            return {"error": "Could not load the financial summary right now."}
+
+        def aud(cents):
+            return None if cents is None else round(cents / 100, 2)
+
+        pnl = fin.get("profit_and_loss") or {}
+        cash = fin.get("cash") or {}
+        notes = []
+        if not pnl.get("overheads_set"):
+            notes.append("Monthly overheads haven't been entered on the Financial page, so profit leaves them out.")
+        if fin.get("session_count") and not pnl.get("wages_complete"):
+            notes.append("Some completed shifts have no wages calculated yet, so wages and profit are incomplete.")
+        if cash.get("on_hand_cents") is None:
+            notes.append("Cash on hand hasn't been entered, so there is no runway figure.")
+        return {
+            "scope": "organisation-wide",
+            "period": fin.get("period_label"),
+            "period_start": fin.get("period_start"),
+            "period_end": fin.get("period_end"),
+            "invoices_raised": fin.get("invoice_count"),
+            "billed_aud": aud(fin.get("billed_cents")),
+            "collected_aud": aud(fin.get("collected_cents")),
+            "outstanding_aud": aud(fin.get("outstanding_cents")),
+            "overdue_aud": aud(fin.get("overdue_cents")),
+            "wages_aud": aud(pnl.get("wages_cents")),
+            "overheads_aud": aud(pnl.get("overheads_cents")),
+            "net_profit_aud": aud(pnl.get("net_profit_cents")),
+            "margin_pct": pnl.get("margin_pct"),
+            "completed_shifts": fin.get("session_count"),
+            "cost_per_shift_aud": aud(fin.get("cost_per_session_cents")),
+            "cash": {
+                "on_hand_aud": aud(cash.get("on_hand_cents")),
+                "as_of": cash.get("as_of"),
+                "avg_monthly_net_aud": aud(cash.get("avg_monthly_net_cents")),
+                "runway_months": cash.get("runway_months"),
+                "covers_months": cash.get("covers_months"),
+                "cash_positive": cash.get("cash_positive"),
+            },
+            "monthly": [
+                {
+                    "month": m.get("month"),
+                    "billed_aud": aud(m.get("billed_cents")),
+                    "collected_aud": aud(m.get("collected_cents")),
+                    "wages_aud": aud(m.get("wages_cents")),
+                    "net_aud": aud(m.get("net_cents")),
+                }
+                for m in fin.get("revenue_by_month") or [] if not m.get("future")
+            ],
+            "notes": notes,
+        }
+
+    @tool
+    async def get_expiring_credentials(days_ahead: int = 30) -> dict:
+        """Get workers' credentials (NDIS worker screening, first aid, WWCC,
+        police checks, licences, training certificates and so on) that have
+        already expired or will expire within the next days_ahead days
+        (default 30, at most 365). A credential the worker has since renewed
+        is left out. Scoped to the whole organisation for a managing
+        director, or to a coordinator's own team. Use this for any question
+        about expiring, expired or overdue credentials, checks, screening or
+        certificates."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id:
+            return {"error": "No organization membership found for this user."}
+        scope_result = resolve_scope()
+        if scope_result is None:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+        scope, team_worker_ids = scope_result
+
+        try:
+            days = max(0, min(int(days_ahead if days_ahead is not None else 30), 365))
+        except (TypeError, ValueError):
+            days = 30
+        today = app_today()
+        until = today + timedelta(days=days)
+
+        try:
+            # Only the columns needed here; credential numbers never reach the model.
+            rows, team = await asyncio.gather(
+                asyncio.to_thread(credential_verification_service.list_credential_expiries, org_id),
+                team_members(org_id, team_worker_ids),
+            )
+        except Exception:
+            return {"error": "Could not load credentials right now."}
+
+        names = {str(m.get("id")): m.get("full_name") for m in team}
+
+        def expiry(row) -> Optional[date]:
+            try:
+                return date.fromisoformat(str(row.get("expiry_date"))[:10])
+            except ValueError:
+                return None
+
+        # A worker's newest credential of each type is the one that counts:
+        # an expired first aid certificate doesn't matter once a renewed one
+        # is on file.
+        latest: dict[tuple[str, str], dict] = {}
+        for row in rows:
+            wid = str(row.get("user_id") or "")
+            if wid not in names or row.get("status") == "rejected":
+                continue
+            key = (wid, canonical_credential_type(row.get("credential_type") or row.get("title")))
+            current = latest.get(key)
+            row_exp, current_exp = expiry(row), (expiry(current) if current else None)
+            if current is None or (row_exp is None) or (current_exp is not None and row_exp > current_exp):
+                latest[key] = row
+
+        due = []
+        for (wid, _type), row in latest.items():
+            exp = expiry(row)
+            if exp is None or exp > until:
+                continue
+            days_left = (exp - today).days
+            due.append({
+                "worker_name": names.get(wid) or "Worker",
+                "credential": row.get("title") or row.get("credential_type") or "Credential",
+                "expiry_date": exp.isoformat(),
+                "days_left": days_left,
+                "status": "expired" if days_left < 0 else "expiring",
+            })
+        due.sort(key=lambda c: c["expiry_date"])
+
+        return {
+            "scope": scope,
+            "days_ahead": days,
+            "expired_count": sum(1 for c in due if c["status"] == "expired"),
+            "expiring_count": sum(1 for c in due if c["status"] == "expiring"),
+            "credentials": due[:100],
+        }
+
+    @tool
+    async def get_participant_overview(participant_name: str) -> dict:
+        """Get a director's brief on ONE participant by name: NDIS plan
+        dates, funding (total, spent, remaining, percent used against
+        percent of the plan's time gone, each support category, anything
+        overspent), service delivery (shifts and hours in the last 30 days,
+        upcoming and unfilled shifts in the next 14 days), progress-note
+        quality, open incidents and complaints, medication, the service
+        agreement, the care team, and the list of things that need a
+        decision. Use this for "how is X going", "is X's funding on track",
+        "what's happening with X" or "what needs doing for X". Managing
+        director only."""
+        if not is_managing_director(current_user):
+            return {"error": "Participant briefs are only available to the managing director."}
+        org_id = get_user_organization_id(current_user)
+        if not org_id:
+            return {"error": "No organization membership found for this user."}
+
+        participants = await participants_light()
+        candidates = _name_candidates(participants, participant_name)
+        if not candidates:
+            return {"error": f"No participant matching '{participant_name}' found."}
+        if len(candidates) > 1:
+            return {
+                "error": f"More than one participant matches '{participant_name}'. Ask which one is meant.",
+                "candidates": [p.get("full_name") for p in candidates[:10]],
+            }
+        participant_id = str(candidates[0].get("id"))
+
+        try:
+            o = await director_participant_service.build_overview(participant_id, org_id, current_user)
+        except Exception:
+            return {"error": "Could not load that participant's overview right now."}
+
+        p = o.get("participant") or {}
+        team = o.get("team") or {}
+        delivery = o.get("delivery") or {}
+        risk = o.get("risk") or {}
+        agreement = o.get("agreement") or {}
+        next_shift = delivery.get("next_shift") or {}
+        asker_tz = request_timezone()
+
+        def name(person):
+            return (person or {}).get("name")
+
+        # Contact details, date of birth, NDIS number and health details are
+        # left out: the brief is about how services are going, not who the
+        # person is, so they never need to reach the model.
+        return {
+            "scope": "organisation-wide",
+            "participant": {
+                "full_name": p.get("full_name"),
+                "preferred_name": p.get("preferred_name"),
+                "risk_level": p.get("risk_level"),
+                "plan_status": p.get("plan_status"),
+                "plan_start_date": p.get("plan_start_date"),
+                "plan_end_date": p.get("plan_end_date"),
+                "plan_review_date": p.get("upcoming_review_date"),
+                "plan_management": p.get("plan_management_type"),
+            },
+            "services_status": (o.get("intake") or {}).get("status"),
+            "team": {
+                "coordinator": name(team.get("coordinator")),
+                "key_worker": name(team.get("main_worker")),
+                "backup_workers": [b.get("name") for b in team.get("backups") or []],
+            },
+            "funding": o.get("funding"),
+            "delivery": {
+                "completed_shifts_30d": delivery.get("completed_30d"),
+                "cancelled_shifts_30d": delivery.get("cancelled_30d"),
+                "hours_30d": delivery.get("hours_30d"),
+                "upcoming_shifts_14d": delivery.get("upcoming_14d"),
+                "unfilled_shifts_14d": delivery.get("unfilled_14d"),
+                "next_shift": _format_local(next_shift.get("start"), asker_tz) if next_shift else None,
+                "next_shift_worker": name(next_shift.get("worker")) if next_shift else None,
+                "last_completed_shift": _format_local(delivery.get("last_shift_at"), asker_tz),
+            },
+            "progress_notes": o.get("quality"),
+            "risk": {
+                "incidents_total": risk.get("incidents_total"),
+                "open_incidents": [
+                    {k: i.get(k) for k in ("title", "severity", "status", "date", "ndis_reportable")}
+                    for i in risk.get("incidents_open") or []
+                ],
+                "open_complaints": len(risk.get("complaints_open") or []),
+            },
+            "medication": o.get("medication"),
+            "service_agreement": {k: agreement.get(k) for k in ("status", "start_date", "end_date")} if agreement else None,
+            "needs_decision": [
+                {"title": d.get("title"), "detail": d.get("detail"), "urgency": "urgent" if d.get("tone") == "danger" else "soon"}
+                for d in o.get("decisions") or []
+            ],
+        }
+
     all_tools = [
         get_compliance_snapshot,
         get_incident_summary,
@@ -917,11 +1205,18 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         get_worker_progress_notes_zip,
         get_all_progress_notes_zip,
         get_session_activity,
+        get_expiring_credentials,
+        get_financial_overview,
+        get_participant_overview,
     ]
     if not is_managing_director(current_user):
         # Not merely an error at call time: a coordinator's assistant
-        # shouldn't know organisation revenue is something it can look up.
+        # shouldn't know organisation finances are something it can look up.
         all_tools.remove(get_revenue_summary)
+        all_tools.remove(get_financial_overview)
+        # The director's participant brief (director_participants.py is
+        # MD-only too); coordinators work the record itself.
+        all_tools.remove(get_participant_overview)
 
     for t in all_tools:
         original_coroutine = t.coroutine

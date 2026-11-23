@@ -37,7 +37,7 @@ def test_system_prompt_tells_the_model_not_to_guess_the_date():
          patch.object(chatbox_graph, "create_react_agent") as mock_create:
         chatbox_graph._build_agent("anthropic", tools=[])
 
-    passed_prompt = mock_create.call_args.kwargs["prompt"]
+    passed_prompt = chatbox_graph.prompt_text(mock_create.call_args.kwargs["prompt"])
     assert "never from your own" in passed_prompt
     assert "Current date and time" in passed_prompt
     assert datetime.now(MELBOURNE).strftime("%d %B %Y") in passed_prompt
@@ -49,7 +49,7 @@ def test_build_agent_computes_the_date_fresh_each_call():
     calls = []
 
     def fake_create_react_agent(*, model, tools, prompt):
-        calls.append(prompt)
+        calls.append(chatbox_graph.prompt_text(prompt))
         return object()
 
     with patch.object(chatbox_graph, "create_react_agent", side_effect=fake_create_react_agent), \

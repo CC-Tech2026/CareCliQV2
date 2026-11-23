@@ -11,6 +11,7 @@ import {
   type ChatBlock,
   type ThreadSummary,
 } from "@/services/chatboxService";
+import { useAuth } from "@/contexts/AuthContext";
 
 const PLUM  = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
@@ -35,7 +36,9 @@ function StatBlockView({ block }: { block: Extract<ChatBlock, { type: "stat" }> 
       <p className="text-[18px] font-black leading-tight" style={{ color: PLUM }}>
         {block.value ?? "—"}
         {block.target != null && (
-          <span className="text-[11px] font-semibold" style={{ color: MUTED }}> / {block.target} target</span>
+          <span className="text-[11px] font-semibold" style={{ color: MUTED }}>
+            {typeof block.target === "number" ? ` / ${block.target} target` : ` · ${block.target}`}
+          </span>
         )}
       </p>
     </div>
@@ -75,17 +78,28 @@ function TableBlockView({ block }: { block: Extract<ChatBlock, { type: "table" }
 }
 
 function BarChartBlockView({ block }: { block: Extract<ChatBlock, { type: "bar_chart" }> }) {
-  const seriesKey = block.series[0]?.key;
+  const series = block.series.slice(0, SERIES.length);
   return (
     <div className="rounded-xl border px-3 py-2" style={{ borderColor: BORDER }}>
-      <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: MUTED }}>{block.title}</p>
+      <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{block.title}</p>
+        {series.length > 1 &&
+          series.map((s, i) => (
+            <span key={s.key} className="flex items-center gap-1 text-[10px] font-semibold" style={{ color: MUTED }}>
+              <span className="h-2 w-2 rounded-sm" style={{ background: SERIES[i] }} />
+              {s.label}
+            </span>
+          ))}
+      </div>
       <div style={{ width: "100%", height: 120 }}>
         <ResponsiveContainer>
           <BarChart data={block.data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
             <CartesianGrid {...GRID_PROPS} />
             <XAxis dataKey={block.x_key} {...AXIS_PROPS} tick={{ fontSize: 10, fill: MUTED }} />
             <Tooltip {...TOOLTIP_PROPS} cursor={{ fill: "var(--cc-soft)" }} />
-            {seriesKey && <Bar dataKey={seriesKey} name={block.series[0]?.label ?? seriesKey} fill={SERIES[0]} {...BAR_PROPS} />}
+            {series.map((s, i) => (
+              <Bar key={s.key} dataKey={s.key} name={s.label ?? s.key} fill={SERIES[i]} {...BAR_PROPS} />
+            ))}
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -150,17 +164,48 @@ function formatThreadDate(iso: string): string {
 
 const LOADING_PHRASES = ["Thinking", "Looking that up", "Checking the data", "Putting it together", "Almost there"];
 
-const WELCOME_MESSAGE: ChatMessage = {
-  id: "welcome",
-  role: "bot",
-  text: "Hi, I'm the CareCliQ Assistant. I can help you look up participants, check compliance status, summarise a shift or draft a note. This is an early preview — I can't take real actions yet.",
-};
+function welcomeMessage(isDirector: boolean): ChatMessage {
+  return {
+    id: "welcome",
+    role: "bot",
+    text: isDirector
+      ? "Hi, I'm Quill. Ask me how the organisation is going: finances, participants and their funding, the roster, compliance, credentials and incidents. I look up the live figures for you. I can read your data but I can't change anything."
+      : "Hi, I'm Quill. Ask me about your participants, the roster, compliance, credentials and incidents, and I'll look up the live figures. I can read your data but I can't change anything.",
+  };
+}
 
-const SUGGESTIONS = [
+const DIRECTOR_SUGGESTIONS = [
+  "How are we tracking financially this month?",
+  "What needs my attention this week?",
+  "Which credentials expire in the next 30 days?",
   "Who's on shift right now?",
-  "Any compliance items expiring soon?",
-  "Summarise today's incidents",
 ];
+
+const COORDINATOR_SUGGESTIONS = [
+  "Who's on shift right now?",
+  "Which credentials expire in the next 30 days?",
+  "How many incidents are open?",
+];
+
+// Quill is mounted by both page shells. If a page ever renders one shell
+// inside another, only the first copy shows, so there is never a second
+// launcher sitting on top of the first.
+let activeInstance: symbol | null = null;
+
+function useIsActiveInstance(): boolean {
+  const [id] = useState(() => Symbol("quill"));
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    if (activeInstance === null) {
+      activeInstance = id;
+      setActive(true);
+    }
+    return () => {
+      if (activeInstance === id) activeInstance = null;
+    };
+  }, [id]);
+  return active;
+}
 
 const CHAT_ERROR_REPLY = "Sorry, I couldn't get that data right now — please try again in a moment.";
 const HISTORY_ERROR_REPLY = "Sorry, I couldn't load that conversation right now.";
@@ -170,9 +215,13 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export function FloatingAiAssistant() {
+  const { user } = useAuth();
+  const isDirector = user?.role === "managing_director";
+  const suggestions = isDirector ? DIRECTOR_SUGGESTIONS : COORDINATOR_SUGGESTIONS;
+  const isActiveInstance = useIsActiveInstance();
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [welcomeMessage(isDirector)]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [loadingPhrase, setLoadingPhrase] = useState(LOADING_PHRASES[0]);
@@ -283,7 +332,7 @@ export function FloatingAiAssistant() {
   function startNewChat() {
     if (sending) return;
     setThreadId(undefined);
-    setMessages([WELCOME_MESSAGE]);
+    setMessages([welcomeMessage(isDirector)]);
     setDraft("");
   }
 
@@ -350,7 +399,7 @@ export function FloatingAiAssistant() {
     }
   }
 
-  if (!pos) return null;
+  if (!pos || !isActiveInstance) return null;
 
   const openUpward = pos.y > window.innerHeight / 2;
   const openLeftward = pos.x > window.innerWidth / 2;
@@ -380,7 +429,7 @@ export function FloatingAiAssistant() {
           className="z-[110] flex flex-col overflow-hidden rounded-3xl border shadow-2xl animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200"
           style={{ ...panelStyle, background: "var(--cc-bg)", borderColor: BORDER }}
           role="dialog"
-          aria-label="CareCliQ AI Assistant (demo)"
+          aria-label="Quill, the CareCliQ assistant"
         >
           {/* Header — solid plum, no gradient */}
           <div
@@ -398,7 +447,7 @@ export function FloatingAiAssistant() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-black text-white leading-tight tracking-tight">Quill</p>
-              <p className="text-[10px] font-semibold text-white/70">CareCliQ Assistant · Demo</p>
+              <p className="text-[10px] font-semibold text-white/70">CareCliQ Assistant</p>
             </div>
             <div className="relative shrink-0" ref={settingsRef}>
               <button
@@ -559,7 +608,7 @@ export function FloatingAiAssistant() {
                     Try asking
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {SUGGESTIONS.map((s) => (
+                    {suggestions.map((s) => (
                       <button
                         key={s}
                         type="button"
