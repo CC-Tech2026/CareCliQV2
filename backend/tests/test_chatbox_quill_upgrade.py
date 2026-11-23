@@ -141,7 +141,7 @@ async def test_an_empty_reply_moves_on_to_the_other_provider():
          patch.object(chatbox_graph, "save_turn", AsyncMock()) as save, \
          patch.object(chatbox_graph, "preferred_provider", return_value="anthropic"), \
          patch.object(chatbox_graph, "_build_agent", side_effect=build):
-        reply, blocks = await chatbox_graph.ask_quill(_user("managing_director"), "Who's on shift?", "t1")
+        reply, blocks, _ = await chatbox_graph.ask_quill(_user("managing_director"), "Who's on shift?", "t1")
 
     assert built == ["anthropic", "openai"]
     assert reply == "Three workers are on shift."
@@ -369,3 +369,124 @@ def test_exact_name_wins_over_partial_matches():
     people = [{"full_name": "Sam Lee"}, {"full_name": "Samantha Lee"}]
     assert chatbox_tools._name_candidates(people, "sam lee") == [{"full_name": "Sam Lee"}]
     assert len(chatbox_tools._name_candidates(people, "lee")) == 2
+
+
+# ── Follow-up questions ──────────────────────────────────────────────────────
+
+from backend.app.services.chatbox import followups as chatbox_followups  # noqa: E402
+from backend.app.services.chatbox import memory as chatbox_memory  # noqa: E402
+
+
+def test_follow_ups_come_from_the_tools_that_answered():
+    out = chatbox_followups.follow_ups(["get_financial_overview"], is_director=True, asked="How are we going?")
+    assert out[0] == "How does this quarter look?"
+    assert len(out) <= chatbox_followups.MAX_FOLLOW_UPS
+
+
+def test_coordinators_are_never_offered_director_questions():
+    out = chatbox_followups.follow_ups(
+        ["get_participant_overview", "get_financial_overview"], is_director=False, asked="x",
+    )
+    assert "How are we tracking financially this month?" not in out
+    assert all("quarter" not in q for q in out)
+
+
+def test_the_question_just_asked_is_not_offered_again():
+    out = chatbox_followups.follow_ups(
+        ["get_compliance_snapshot"], is_director=True, asked="which credentials expire in the next 30 days",
+    )
+    assert "Which credentials expire in the next 30 days?" not in out
+
+
+@pytest.mark.asyncio
+async def test_ask_quill_returns_follow_ups_and_saves_the_blocks():
+    from langchain_core.messages import ToolMessage
+
+    md = _user("managing_director")
+    agent = MagicMock()
+
+    async def ainvoke(state):
+        return {"messages": [
+            *state["messages"],
+            ToolMessage(content="{}", tool_call_id="c1", name="get_expiring_credentials",
+                        artifact={"scope": "organisation-wide", "days_ahead": 30, "expired_count": 1,
+                                  "expiring_count": 0, "credentials": []}),
+            AIMessage(content="One credential has expired."),
+        ]}
+
+    agent.ainvoke = AsyncMock(side_effect=ainvoke)
+    with patch.object(chatbox_graph, "build_tools_for_user", return_value=[]), \
+         patch.object(chatbox_graph, "load_history", AsyncMock(return_value=[])), \
+         patch.object(chatbox_graph, "save_turn", AsyncMock()) as save, \
+         patch.object(chatbox_graph, "_build_agent", return_value=agent):
+        reply, blocks, suggestions = await chatbox_graph.ask_quill(md, "Which credentials expire?", "t1")
+
+    assert blocks and blocks[0]["type"] == "stat"
+    assert suggestions[0] == "What expires in the next 90 days?"
+    assert save.await_args_list[-1].kwargs["blocks"] == blocks
+
+
+# ── Saved blocks, before and after migration 269 ─────────────────────────────
+
+class _Table:
+    """A stand-in for the Supabase table builder that can pretend the
+    blocks column doesn't exist yet."""
+
+    def __init__(self, has_blocks_column: bool, rows: list[dict] | None = None):
+        self.has_blocks = has_blocks_column
+        self.rows = rows or []
+        self.inserted: list[dict] = []
+        self._columns = ""
+        self._insert = None
+
+    def select(self, columns):
+        self._columns, self._insert = columns, None
+        return self
+
+    def insert(self, row):
+        self._insert = row
+        return self
+
+    def eq(self, *_):
+        return self
+
+    def order(self, *_):
+        return self
+
+    def execute(self):
+        missing = Exception("column chatbox_messages.blocks does not exist (42703)")
+        if self._insert is not None:
+            if "blocks" in self._insert and not self.has_blocks:
+                raise missing
+            self.inserted.append(self._insert)
+            return MagicMock(data=[self._insert])
+        if "blocks" in self._columns and not self.has_blocks:
+            raise missing
+        return MagicMock(data=self.rows)
+
+
+def _client(table):
+    client = MagicMock()
+    client.table.return_value = table
+    return client
+
+
+@pytest.mark.parametrize("has_column", [True, False])
+@pytest.mark.asyncio
+async def test_answers_save_with_or_without_the_blocks_column(has_column):
+    table = _Table(has_column)
+    with patch.object(chatbox_memory, "get_supabase_admin", return_value=_client(table)):
+        await chatbox_memory.save_turn(_user("managing_director"), "t1", "assistant", "Hi", blocks=[{"type": "stat"}])
+    assert len(table.inserted) == 1
+    assert ("blocks" in table.inserted[0]) is has_column
+
+
+@pytest.mark.parametrize("has_column", [True, False])
+@pytest.mark.asyncio
+async def test_history_loads_with_or_without_the_blocks_column(has_column):
+    rows = [{"role": "assistant", "content": "Hi", "created_at": "2026-11-23", **({"blocks": [{"type": "stat"}]} if has_column else {})}]
+    table = _Table(has_column, rows)
+    with patch.object(chatbox_memory, "get_supabase_admin", return_value=_client(table)):
+        history = await chatbox_memory.load_history(_user("managing_director"), "t1")
+    assert history[0]["content"] == "Hi"
+    assert history[0]["blocks"] == ([{"type": "stat"}] if has_column else [])

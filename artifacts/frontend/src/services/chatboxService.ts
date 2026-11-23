@@ -36,12 +36,15 @@ export interface ChatResponse {
   reply: string;
   thread_id: string;
   blocks: ChatBlock[];
+  /** Questions to offer next, chosen by the backend from the tools that answered. */
+  suggestions?: string[];
 }
 
-export function sendChatMessage(message: string, threadId?: string) {
+export function sendChatMessage(message: string, threadId?: string, signal?: AbortSignal) {
   return jsonFetch<ChatResponse>("/api/chatbox/chat", {
     method: "POST",
     body: JSON.stringify({ message, thread_id: threadId }),
+    signal,
   });
 }
 
@@ -56,6 +59,8 @@ export interface ThreadMessage {
   role: "user" | "assistant";
   content: string;
   created_at: string;
+  /** The answer's tables and charts; empty for questions and older answers. */
+  blocks?: ChatBlock[];
 }
 
 export function listChatThreads() {
