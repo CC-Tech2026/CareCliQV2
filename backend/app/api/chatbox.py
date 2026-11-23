@@ -32,6 +32,8 @@ class ChatResponse(BaseModel):
     reply: str
     thread_id: str
     blocks: list[dict] = []
+    # Questions to offer next, picked by code from the tools that answered.
+    suggestions: list[str] = []
 
 
 class ThreadSummary(BaseModel):
@@ -45,6 +47,8 @@ class ThreadMessage(BaseModel):
     role: str
     content: str
     created_at: str
+    # The answer's tables and charts (empty for questions and older answers).
+    blocks: list[dict] = []
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -61,11 +65,12 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
     user_id = get_user_id(current_user)
 
     blocks: list[dict] = []
+    suggestions: list[str] = []
     try:
-        reply, blocks = await ask_quill(current_user, message, thread_id)
+        reply, blocks, suggestions = await ask_quill(current_user, message, thread_id)
     except Exception as e:
         logger.error(f"Chatbox error: {str(e)}")
-        reply = "Sorry, I couldn't get that data right now — please try again in a moment."
+        reply = "Sorry, I couldn't get that data right now. Please try again in a moment."
 
     try:
         await audit_service.log_action(
@@ -79,7 +84,7 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
     except Exception:
         logger.warning("Failed to write chatbox audit log for thread %s", thread_id)
 
-    return ChatResponse(reply=reply, thread_id=thread_id, blocks=blocks)
+    return ChatResponse(reply=reply, thread_id=thread_id, blocks=blocks, suggestions=suggestions)
 
 
 @router.get("/threads", response_model=list[ThreadSummary])

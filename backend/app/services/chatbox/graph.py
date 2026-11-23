@@ -27,6 +27,7 @@ from ...core.access import is_managing_director
 from ...core.timezone import request_timezone
 from . import tracing  # noqa: F401 — sets up LangSmith env vars at import time
 from .blocks import build_blocks
+from .followups import follow_ups
 from .llm import fallback_provider, get_chat_model, preferred_provider
 from .memory import load_history, save_turn
 from .tools import build_tools_for_user
@@ -145,9 +146,10 @@ def _reply_text(message) -> str:
     return str(content)
 
 
-async def ask_quill(current_user: dict, message: str, thread_id: str) -> tuple[str, list[dict]]:
-    """Returns (reply_text, blocks) — blocks are built deterministically from
-    each tool call's raw artifact, not parsed from the model's prose.
+async def ask_quill(current_user: dict, message: str, thread_id: str) -> tuple[str, list[dict], list[str]]:
+    """Returns (reply_text, blocks, follow_up_questions). Blocks are built
+    deterministically from each tool call's raw artifact, not parsed from the
+    model's prose; follow-ups are picked by code from the tools that ran.
 
     Tries the preferred provider first, then the other one if that call
     fails — see module docstring."""
@@ -187,12 +189,17 @@ async def ask_quill(current_user: dict, message: str, thread_id: str) -> tuple[s
     if result is None:
         raise last_exc
 
+    # Only this turn's tool calls: the history sent in carries no tool messages.
     blocks: list[dict] = []
+    tools_used: list[str] = []
     for m in result["messages"]:
         if isinstance(m, ToolMessage) and m.name:
             blocks.extend(build_blocks(m.name, m.artifact))
+            if m.name not in tools_used:
+                tools_used.append(m.name)
 
     await save_turn(current_user, thread_id, "user", message)
-    await save_turn(current_user, thread_id, "assistant", reply_text)
+    await save_turn(current_user, thread_id, "assistant", reply_text, blocks=blocks)
 
-    return reply_text, blocks
+    suggestions = follow_ups(tools_used, is_director=is_managing_director(current_user), asked=message)
+    return reply_text, blocks, suggestions

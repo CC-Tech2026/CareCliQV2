@@ -31,21 +31,43 @@ async def load_history(current_user: dict, thread_id: str) -> list[dict]:
     if not user_id or not org_id or not thread_id:
         return []
 
-    try:
-        supabase = get_supabase_admin()
-        result = (
-            supabase.table(TABLE)
-            .select("role, content ,created_at")
+    def query(columns: str):
+        return (
+            get_supabase_admin().table(TABLE)
+            .select(columns)
             .eq("thread_id", thread_id)
             .eq("user_id", user_id)
             .eq("organization_id", org_id)
             .order("created_at")
             .execute()
         )
-        return [{"role": r["role"], "content": r["content"], "created_at": r["created_at"]} for r in (result.data or [])]
+
+    try:
+        try:
+            result = query("role, content, created_at, blocks")
+        except Exception as exc:
+            if not _is_missing_blocks_column(exc):
+                raise
+            result = query("role, content, created_at")
+        return [
+            {
+                "role": r["role"],
+                "content": r["content"],
+                "created_at": r["created_at"],
+                "blocks": r.get("blocks") or [],
+            }
+            for r in (result.data or [])
+        ]
     except Exception as exc:
         logger.warning("Failed to load chatbox history for thread %s: %s", thread_id, exc)
         return []
+
+
+def _is_missing_blocks_column(exc: Exception) -> bool:
+    """Migration 269 adds chatbox_messages.blocks; before it runs, a query
+    naming the column fails. Detected so history still loads and saves."""
+    text = str(exc).lower()
+    return "blocks" in text and ("column" in text or "schema cache" in text or "42703" in text or "pgrst204" in text)
 
 
 async def list_threads(current_user: dict) -> list[dict]:
@@ -124,21 +146,32 @@ async def delete_all_threads(current_user: dict) -> None:
         logger.warning("Failed to clear chatbox history for user %s: %s", user_id, exc)
 
 
-async def save_turn(current_user: dict, thread_id: str, role: str, content: str) -> None:
-    """Persist a single turn (one user message or one assistant reply)."""
+async def save_turn(
+    current_user: dict, thread_id: str, role: str, content: str, blocks: list[dict] | None = None,
+) -> None:
+    """Persist a single turn (one user message or one assistant reply), with
+    the answer's tables and charts when there are any."""
     user_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     if not user_id or not org_id or not thread_id or not content:
         return
 
+    row = {
+        "organization_id": org_id,
+        "user_id": user_id,
+        "thread_id": thread_id,
+        "role": role,
+        "content": content,
+    }
     try:
         supabase = get_supabase_admin()
-        supabase.table(TABLE).insert({
-            "organization_id": org_id,
-            "user_id": user_id,
-            "thread_id": thread_id,
-            "role": role,
-            "content": content,
-        }).execute()
+        if blocks:
+            try:
+                supabase.table(TABLE).insert({**row, "blocks": blocks}).execute()
+                return
+            except Exception as exc:
+                if not _is_missing_blocks_column(exc):
+                    raise
+        supabase.table(TABLE).insert(row).execute()
     except Exception as exc:
         logger.warning("Failed to save chatbox turn for thread %s: %s", thread_id, exc)
