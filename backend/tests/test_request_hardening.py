@@ -105,3 +105,42 @@ def test_optional_user_treats_signed_out_token_as_anonymous():
         assert asyncio.run(get_optional_user(req, creds)) is None
     with patch.object(dss, "is_session_active", return_value=True):
         assert asyncio.run(get_optional_user(req, creds))["sub"] == "u1"
+
+
+def test_session_check_does_not_hold_up_other_requests():
+    # A slow session lookup must run off the event loop, so other requests
+    # (here a 10 ms timer) keep moving while it waits.
+    import asyncio
+    import time
+
+    from fastapi.security import HTTPAuthorizationCredentials
+    from starlette.requests import Request as StarletteRequest
+
+    from backend.app.core.security import create_access_token, get_current_user
+    from backend.app.services import device_security_service as dss
+
+    tok = create_access_token({"sub": "u1", "role": "support_worker", "jti": "j1"})
+    req = StarletteRequest({"type": "http", "method": "GET", "path": "/api/x", "headers": [], "query_string": b""})
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=tok)
+
+    def slow_lookup(_jti):
+        time.sleep(0.3)
+        return True
+
+    async def run():
+        ticks = 0
+
+        async def other_request():
+            nonlocal ticks
+            for _ in range(10):
+                await asyncio.sleep(0.01)
+                ticks += 1
+
+        await asyncio.gather(get_current_user(req, creds), other_request())
+        return ticks
+
+    with patch.object(dss, "is_session_active", side_effect=slow_lookup):
+        start = time.monotonic()
+        ticks = asyncio.run(run())
+    assert ticks == 10
+    assert time.monotonic() - start < 0.6  # ran side by side, not one after the other
