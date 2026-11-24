@@ -33,7 +33,8 @@ const SELECTED_BG = "var(--cc-brand-purple-soft)";
 const SELECTED_TEXT = "var(--cc-brand-purple)";
 const DISPLAY = "var(--app-font-display)";
 
-const MASCOT_SRC = "/carecliq-bot-quill-animated.svg";
+// The bot on its own, without the ivory tile, so it sits beside the lettering.
+const MASCOT_SRC = "/carecliq-bot-quill-mark.svg";
 const BTN_SIZE = 56;
 const MARGIN = 16;
 const PANEL_W = 420;
@@ -311,12 +312,13 @@ export function QuillAssistant() {
           style={{ ...panelPosition(pos), background: SURFACE, borderColor: BORDER, boxShadow: "0 12px 40px rgba(26,26,46,0.16)" }}
         >
           <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3" style={{ borderColor: BORDER }}>
-            <Mascot size={26} />
-            <div className="min-w-0 flex-1">
-              <span style={{ color: TEXT }}>
-                <QuillWordmark height={18} />
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <Mascot size={34} />
+              <span className="shrink-0" style={{ color: TEXT }}>
+                <QuillWordmark height={22} />
               </span>
-              <p className="mt-0.5 truncate text-[11px] leading-tight" style={{ color: MUTED }}>
+              <span className="mx-1.5 h-4 w-px shrink-0" style={{ background: BORDER }} aria-hidden="true" />
+              <p className="min-w-0 truncate text-[12px]" style={{ color: MUTED }}>
                 {historyOpen ? "Past conversations" : title}
               </p>
             </div>
@@ -373,9 +375,9 @@ export function QuillAssistant() {
                 aria-label="Past conversations"
               >
                 <div className="flex h-14 items-center gap-2 px-3">
-                  <Mascot size={26} />
-                  <span className="flex-1" style={{ color: TEXT }}>
-                    <QuillWordmark height={22} />
+                  <span className="flex flex-1 items-center gap-1.5" style={{ color: TEXT }}>
+                    <Mascot size={38} />
+                    <QuillWordmark height={26} />
                   </span>
                   <HeaderButton
                     label="Hide past conversations"
@@ -463,9 +465,7 @@ export function QuillAssistant() {
           }}
         >
           {view === "closed" ? (
-            <span className="h-full w-full overflow-hidden rounded-full">
-              <img src={MASCOT_SRC} alt="" className="h-full w-full" draggable={false} />
-            </span>
+            <img src={MASCOT_SRC} alt="" className="block h-[44px] w-[44px]" draggable={false} />
           ) : (
             <X size={22} color="#fff" />
           )}
@@ -497,12 +497,15 @@ function panelPosition(pos: { x: number; y: number }): React.CSSProperties {
 
 function Mascot({ size }: { size: number }) {
   return (
-    <span
-      className="inline-flex shrink-0 overflow-hidden rounded-full border"
-      style={{ width: size, height: size, minWidth: size, borderColor: BORDER }}
-    >
-      <img src={MASCOT_SRC} alt="" className="block h-full w-full object-cover" draggable={false} />
-    </span>
+    <img
+      src={MASCOT_SRC}
+      alt=""
+      width={size}
+      height={size}
+      className="block shrink-0"
+      style={{ width: size, height: size, minWidth: size }}
+      draggable={false}
+    />
   );
 }
 
@@ -745,7 +748,7 @@ function EmptyState({
 }) {
   return (
     <div className={full ? "pt-[8vh]" : "pt-2"}>
-      <Mascot size={full ? 44 : 36} />
+      <Mascot size={full ? 64 : 52} />
       <h2
         className={`mt-3 font-semibold ${full ? "text-[26px]" : "text-[19px]"} leading-tight`}
         style={{ color: TEXT, fontFamily: DISPLAY }}
@@ -809,7 +812,7 @@ function AnswerView({
   return (
     <div className="flex gap-3">
       <div className="pt-0.5">
-        <Mascot size={full ? 28 : 24} />
+        <Mascot size={full ? 32 : 28} />
       </div>
       <div className="min-w-0 flex-1 space-y-3">
         <div
@@ -875,7 +878,7 @@ function Thinking() {
   }, []);
   return (
     <div className="flex items-center gap-3" role="status">
-      <Mascot size={24} />
+      <Mascot size={28} />
       <span className="flex items-center gap-2 text-[12.5px]" style={{ color: MUTED }}>
         {THINKING[i]}
         <span className="flex gap-1" aria-hidden="true">
