@@ -10,7 +10,7 @@ import {
   Mail, UserPlus, Users, ShieldCheck, AlertTriangle, Clock,
   UserCheck, UserX, Loader2, ChevronRight, Link2, MoreHorizontal,
   Search, LayoutList, LayoutGrid, GraduationCap, Sparkles, ShieldAlert,
-  Settings2, Trash2, Columns3, ArrowUp, ArrowDown, ArrowUpDown,
+  Settings2, Trash2, Columns3, ArrowUp, ArrowDown, ArrowUpDown, Users2,
 } from "lucide-react";
 import { useGetParticipants } from "@workspace/api-client-react";
 import {
@@ -30,6 +30,7 @@ import { TemporaryAccessBanner } from "@/components/TemporaryAccessBanner";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { WorkerDetail, isWorkerCredentialsComplete } from "@/components/team/WorkerDetail";
 import { DeactivateWorkerPanel } from "@/components/team/DeactivateWorkerPanel";
+import { OrgMembersPanel } from "@/components/team/OrgMembersPanel";
 import { IndexTemplate, IndexHeader } from "@/components/layout/templates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -162,6 +163,7 @@ export default function Team() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("support_worker");
   const [inviteSending, setInviteSending] = useState(false);
@@ -195,6 +197,15 @@ export default function Team() {
   const { hasCapability: hasDelegatedCapability, grantFor: delegatedGrantFor } = useMyAccessGrants();
   const canDeleteAccount = isMD || hasDelegatedCapability("delete_staff_account");
   const canInviteStaff = isMD || hasDelegatedCapability("staff_invitations");
+
+  // "Invite staff" elsewhere (the director's setup checklist) links here with
+  // ?invite=1, so the invite panel is open when the page arrives.
+  useEffect(() => {
+    if (!canInviteStaff) return;
+    if (new URLSearchParams(window.location.search).get("invite") !== "1") return;
+    setInviteOpen(true);
+    navigate("/team", { replace: true });
+  }, [canInviteStaff, navigate]);
 
   const orgId = user?.organizationId ?? "__no_org__";
 
@@ -579,15 +590,24 @@ export default function Team() {
         count={workers.length}
         info="Your support workers: compliance, credentials, availability, and shift history, all in one place."
         primaryAction={
-          canInviteStaff ? (
+          <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="navy"
-              onClick={() => setInviteOpen(true)}
-              className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black"
+              variant="outline"
+              onClick={() => setMembersOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
             >
-              <UserPlus size={16} /> {translate("team.inviteWorker")}
+              <Users2 size={16} /> Members and roles
             </Button>
-          ) : undefined
+            {canInviteStaff && (
+              <Button
+                variant="navy"
+                onClick={() => setInviteOpen(true)}
+                className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black"
+              >
+                <UserPlus size={16} /> {translate("team.inviteWorker")}
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -1051,6 +1071,8 @@ export default function Team() {
             )}
           </div>
       </SidePanel>
+
+      <OrgMembersPanel open={membersOpen} onOpenChange={setMembersOpen} />
 
       {deactivateTarget && (
         <DeactivateWorkerPanel

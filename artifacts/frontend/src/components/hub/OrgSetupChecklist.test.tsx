@@ -24,7 +24,8 @@ it("shows what a brand-new organisation still has to do", () => {
   fireEvent.click(screen.getByRole("button", { name: /Add details/ }));
   expect(navigate).toHaveBeenCalledWith("/settings?section=provider");
   fireEvent.click(screen.getByRole("button", { name: /Invite staff/ }));
-  expect(navigate).toHaveBeenCalledWith("/settings?section=team");
+  // Inviting happens on the Team page, with the invite panel already open.
+  expect(navigate).toHaveBeenCalledWith("/team?invite=1");
   fireEvent.click(screen.getByRole("button", { name: /Add participant/ }));
   expect(navigate).toHaveBeenCalledWith("/onboard-participant");
 });
