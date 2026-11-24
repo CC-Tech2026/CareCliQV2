@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { ThreadSummary } from "@/services/chatboxService";
 import { QuillBlocks, tableAsText, type QuillSize } from "./QuillBlocks";
 import { QuillText, plainText } from "./QuillText";
+import { QuillWordmark } from "./QuillWordmark";
 import { groupThreads, useQuillChat, type QuillMessage } from "./useQuillChat";
 
 const TEXT = "var(--cc-text)";
@@ -312,10 +313,10 @@ export function QuillAssistant() {
           <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3" style={{ borderColor: BORDER }}>
             <Mascot size={26} />
             <div className="min-w-0 flex-1">
-              <p className="text-[13.5px] font-semibold leading-tight" style={{ color: TEXT, fontFamily: DISPLAY }}>
-                Quill
-              </p>
-              <p className="truncate text-[11px] leading-tight" style={{ color: MUTED }}>
+              <span style={{ color: TEXT }}>
+                <QuillWordmark height={18} />
+              </span>
+              <p className="mt-0.5 truncate text-[11px] leading-tight" style={{ color: MUTED }}>
                 {historyOpen ? "Past conversations" : title}
               </p>
             </div>
@@ -373,9 +374,9 @@ export function QuillAssistant() {
               >
                 <div className="flex h-14 items-center gap-2 px-3">
                   <Mascot size={26} />
-                  <p className="flex-1 text-[15px] font-semibold" style={{ color: TEXT, fontFamily: DISPLAY }}>
-                    Quill
-                  </p>
+                  <span className="flex-1" style={{ color: TEXT }}>
+                    <QuillWordmark height={22} />
+                  </span>
                   <HeaderButton
                     label="Hide past conversations"
                     onClick={() => (narrow ? setHistoryOpen(false) : setSidebarOpen(false))}
