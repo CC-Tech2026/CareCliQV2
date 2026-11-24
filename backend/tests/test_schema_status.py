@@ -38,15 +38,20 @@ def test_up_to_date_only_when_nothing_is_pending_and_the_api_sees_it_all():
     with patch.object(ss, "_applied", return_value=set(files)), patch.object(ss, "_visible", return_value=True):
         s = ss.check(fresh=True)
     assert s["pending"] == [] and s["api_sees_newest"] is True and s["up_to_date"] is True
+    # Whichever column the newest migrations add (not a fixed one: newer
+    # migrations keep moving older ones out of the window checked).
+    assert s["visible"], "none of the newest migrations adds a column to check"
+    key = next(iter(s["visible"]))
+    hidden_column = key.split(".", 1)[1]
 
     with patch.object(ss, "_applied", return_value=set(files[:-1])), patch.object(ss, "_visible", return_value=True):
         s = ss.check(fresh=True)
     assert s["pending"] == [files[-1]] and s["up_to_date"] is False
 
     with patch.object(ss, "_applied", return_value=set(files)), \
-         patch.object(ss, "_visible", side_effect=lambda t, c: c != "voice_transcription_enabled"):
+         patch.object(ss, "_visible", side_effect=lambda t, c: c != hidden_column):
         s = ss.check(fresh=True)
-    assert s["visible"]["organizations.voice_transcription_enabled"] is False
+    assert s["visible"][key] is False
     assert s["api_sees_newest"] is False and s["up_to_date"] is False
 
 

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -58,6 +59,16 @@ def decode_access_token(token: str) -> Optional[dict]:
         return None
 
 
+async def _session_is_active(jti: str) -> bool:
+    """Whether this sign-in hasn't been ended (signed out, revoked, org
+    suspended). It's a database read, so it runs on a worker thread: run
+    directly in this async dependency it held up every other request on
+    the machine while it waited."""
+    from ..services import device_security_service as dss
+
+    return await asyncio.to_thread(dss.is_session_active, jti)
+
+
 async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
@@ -82,9 +93,7 @@ async def get_current_user(
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    from ..services import device_security_service as dss
-
-    if payload.get("jti") and not dss.is_session_active(payload.get("jti")):
+    if payload.get("jti") and not await _session_is_active(payload.get("jti")):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session has ended. Please sign in again.",
@@ -124,9 +133,7 @@ async def get_optional_user(
     if payload.get("role") == "participant" and not participant_may_call(request.url.path):
         return None
     # A signed-out session's token is anonymous here too, as in get_current_user.
-    from ..services import device_security_service as dss
-
-    if payload.get("jti") and not dss.is_session_active(payload.get("jti")):
+    if payload.get("jti") and not await _session_is_active(payload.get("jti")):
         return None
     _count_ai_use_as(payload)
     return payload
