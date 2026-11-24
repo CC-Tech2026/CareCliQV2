@@ -84,7 +84,7 @@ const COPY: Record<Kind, { noun: string; plural: string; lands: string; action: 
       "Each person gets an email invitation to set their password and join your team. Their CareCliQ onboarding (credentials and training) starts when they accept.",
     action: (n) => `Send ${n} ${n === 1 ? "invitation" : "invitations"}`,
     done: (n) => `${n} ${n === 1 ? "invitation was" : "invitations were"} sent`,
-    next: { label: "See your team and pending invitations", href: "/settings?section=team" },
+    next: { label: "See your team and pending invitations", href: "/team" },
   },
 };
 

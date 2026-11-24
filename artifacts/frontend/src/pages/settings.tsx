@@ -45,8 +45,6 @@ import {
   Plus,
   X,
   Info,
-  Users2,
-  UserMinus,
   ChevronDown,
   Copy,
   Bell,
@@ -96,7 +94,7 @@ import { apiFetch } from "@/lib/api-fetch";
 import { BranchesSection, BranchStateSelect } from "@/components/branches/BranchesSection";
 import { useBranches, useInvalidateBranches } from "@/hooks/useBranches";
 import { useReAuth } from "@/hooks/useReAuth";
-import { Link, useSearch, useLocation } from "wouter";
+import { useSearch, useLocation } from "wouter";
 import {
   useGetPractitionerSettings,
   useSavePractitionerSettings,
@@ -142,14 +140,14 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "security" | "provider" | "defaults" | "compliance" | "notifications" | "team" | "accessibility" | "privacy" | "billing" | "branding" | "branches" | "bugReport" | "improvementFeedback" | "delegatedAccess" | "integrations";
+type SectionId = "account" | "security" | "provider" | "defaults" | "compliance" | "notifications" | "accessibility" | "privacy" | "billing" | "branding" | "branches" | "bugReport" | "improvementFeedback" | "delegatedAccess" | "integrations";
 
 const SETTINGS_DESCRIPTIONS: Partial<Record<SectionId, string>> = {
   account: "Profile and contact details", security: "Password, sign-in and devices",
   provider: "Organisation and business details", defaults: "Your documentation preferences",
   compliance: "Documentation and signature settings", accessibility: "Text, colours and language",
   privacy: "Your information and permissions", notifications: "Alerts and reminders",
-  team: "Staff access and invitations", billing: "CareCliQ plan and subscription",
+  billing: "CareCliQ plan and subscription",
   branding: "Logo and organisation appearance", delegatedAccess: "Temporary access for staff",
   integrations: "Xero and other connected systems",
   bugReport: "Get help with a technical issue", improvementFeedback: "Suggest an improvement",
@@ -164,7 +162,6 @@ const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ 
   { id: "accessibility", labelKey: "settings.nav.accessibility",     icon: AccessibilityIcon },
   { id: "privacy",       labelKey: "settings.nav.privacy",           icon: Shield      },
   { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOrMdOnly: true },
-  { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOrMdOnly: true },
   { id: "bugReport",     labelKey: "settings.nav.bugReport",         icon: Bug         },
   // improvementFeedback and delegatedAccess stay strictly MD-only — neither
   // is in the delegated-access capability catalog (product feedback to the
@@ -310,36 +307,6 @@ function StickyActionBar({
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
-const ROLE_LABELS: Record<string, string> = {
-  support_coordinator: "Support Coordinator",
-  support_worker:      "Support Worker",
-};
-
-const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
-  support_coordinator: { bg: "var(--cc-plum-soft)", color: "var(--cc-plum)" },
-  support_worker:      { bg: "var(--cc-soft)",       color: "var(--cc-muted)" },
-};
-
-interface OrgMember {
-  id: string;
-  user_id: string;
-  role: string;
-  joined_at: string;
-  full_name: string;
-  email: string;
-  /** Office the member works from (198_branches.sql). */
-  branch_id?: string | null;
-}
-
-interface PendingInvite {
-  id: string;
-  email: string;
-  role: string;
-  expires_at: string;
-  invite_url?: string;
-  token?: string;
-}
-
 // -----------------------------------------------------------------------------
 // CARECLIQV2-241: Notification Preferences section
 // -----------------------------------------------------------------------------
@@ -1476,6 +1443,11 @@ export default function Settings() {
   useEffect(() => {
     setActiveSection(resolveSettingsSection(search, visibleNavItems.map(item => item.id), "account"));
   }, [search, user?.role, allowedSectionsKey]);
+  // Team members and invitations live on the Team page now; old links and
+  // bookmarks to Settings > Team go there.
+  useEffect(() => {
+    if (new URLSearchParams(search).get("section") === "team") navigate("/team", { replace: true });
+  }, [search, navigate]);
   function selectSection(section: SectionId) {
     if (!visibleNavItems.some(item => item.id === section)) return;
     setActiveSection(section);
@@ -1541,57 +1513,7 @@ export default function Settings() {
     "manual therapy", "sports therapy",
   ];
 
-  // -- Team state (support coordinator only) ----------------------------------
-  const [members, setMembers] = useState<OrgMember[]>([]);
-  const [invites, setInvites] = useState<PendingInvite[]>([]);
-  const [loadingTeam, setLoadingTeam] = useState(false);
-  const [copiedToken, setCopiedToken] = useState<string | null>(null);
-
-  const fetchTeam = useCallback(async () => {
-    if ((!isCoordinator && !isMD) || !authToken) return;
-    setLoadingTeam(true);
-    try {
-      const [membersRes, invitesRes] = await Promise.all([
-        apiFetch("/api/invitations/members"),
-        apiFetch("/api/invitations/list"),
-      ]);
-      if (membersRes.ok) setMembers(await membersRes.json());
-      if (invitesRes.ok) setInvites(await invitesRes.json());
-    } catch {
-      // silently skip: team data is supplementary
-    } finally {
-      setLoadingTeam(false);
-    }
-  }, [isCoordinator, isMD, authToken]);
-
-  useEffect(() => {
-    if (activeSection === "team") fetchTeam();
-  }, [activeSection, fetchTeam]);
-
-  const handleRevokeInvite = async (id: string) => {
-    if (!authToken) return;
-    try {
-      await requireReAuth(() => apiFetch(`/api/invitations/revoke/${id}`, { method: "DELETE" }));
-      setInvites((prev) => prev.filter((i) => i.id !== id));
-      toast({ title: translate("settings.toast.inviteRevoked") });
-    } catch {
-      toast({ title: translate("settings.toast.inviteRevokeFailed"), variant: "destructive" });
-    }
-  };
-
-  const handleRemoveMember = async (memberId: string, name: string) => {
-    if (!authToken) return;
-    if (!confirm(`Remove ${name || "this member"} from the organization?`)) return;
-    try {
-      await requireReAuth(() => apiFetch(`/api/invitations/members/${memberId}`, { method: "DELETE" }));
-      setMembers((prev) => prev.filter((m) => m.id !== memberId));
-      toast({ title: translate("settings.toast.memberRemoved") });
-    } catch {
-      toast({ title: translate("settings.toast.memberRemoveFailed"), variant: "destructive" });
-    }
-  };
-
-  const { branches: branchList, byId: branchById, multiBranch: branchesMulti, headOffice, states: branchStates, isLoading: branchesLoading } = useBranches();
+  const { multiBranch: branchesMulti, headOffice, states: branchStates, isLoading: branchesLoading } = useBranches();
   const invalidateBranches = useInvalidateBranches();
 
   // Single-office timezone picker — sets Head Office's state (and hence its
@@ -1622,53 +1544,6 @@ export default function Settings() {
     } finally {
       setSavingLocation(false);
     }
-  };
-
-  const handleChangeBranch = async (userId: string, branchId: string) => {
-    if (!authToken || !branchId) return;
-    try {
-      const res = await apiFetch(`/api/branches/members/${userId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ branch_id: branchId }),
-      });
-      if (!res.ok) throw new Error();
-      setMembers((prev) => prev.map((m) => (m.user_id === userId ? { ...m, branch_id: branchId } : m)));
-      invalidateBranches();
-      toast({
-        title: "Branch updated",
-        description: `${branchById.get(branchId)?.name ?? "Branch"} — their shifts and pay now follow that office's time.`,
-      });
-    } catch {
-      toast({ title: "Could not update branch", variant: "destructive" });
-    }
-  };
-
-  const handleChangeRole = async (memberId: string, newRole: string) => {
-    if (!authToken) return;
-    try {
-      await requireReAuth(() =>
-        apiFetch(`/api/invitations/members/${memberId}/role`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: newRole }),
-        })
-      );
-      setMembers((prev) => prev.map((m) => m.id === memberId ? { ...m, role: newRole } : m));
-      toast({ title: translate("settings.toast.roleUpdated"), description: translateParams("settings.toast.roleUpdatedDesc", { role: ROLE_LABELS[newRole] ?? newRole }) });
-    } catch {
-      toast({ title: translate("settings.toast.roleUpdateFailed"), variant: "destructive" });
-    }
-  };
-
-  const copyInviteLink = (invite: PendingInvite) => {
-    const url = invite.invite_url
-      ? `${window.location.origin}${invite.invite_url}`
-      : `${window.location.origin}/accept-invite?token=${invite.token}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedToken(invite.id);
-      setTimeout(() => setCopiedToken(null), 2000);
-    });
   };
 
   // -- API --------------------------------------------------------------------
@@ -2584,193 +2459,6 @@ export default function Settings() {
         {/* -- Notifications section (coordinator + managing director) ------- */}
         {activeSection === "notifications" && (isCoordinator || isMD) && (
           <NotificationsSection />
-        )}
-
-        {activeSection === "team" && (isCoordinator || isMD) && (
-          <Section
-            title={translate("settings.team.title")}
-            description={translate("settings.team.subtitle")}
-            icon={Users2}
-          >
-            {/* Active members */}
-            <PanelCard label={translate("settings.team.activeMembers")}>
-              {loadingTeam ? (
-                <div className="flex items-center gap-2 text-[13px] py-4" style={{ color: "var(--cc-muted)" }}>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading members…
-                </div>
-              ) : members.length === 0 ? (
-                <p className="text-[13px] py-4 text-center" style={{ color: "var(--cc-muted)" }}>
-                  No members found. Invite your first staff member below.
-                </p>
-              ) : (
-                <div className="divide-y" style={{ borderColor: "var(--cc-border)" }}>
-                  {members.map((m) => {
-                    const rc = ROLE_COLORS[m.role] ?? ROLE_COLORS.support_worker;
-                    return (
-                      <div key={m.id} className="flex items-center gap-3 py-3">
-                        {/* Avatar */}
-                        <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold"
-                          style={{ background: "var(--cc-plum-soft)", color: "var(--cc-plum)" }}
-                        >
-                          {(m.full_name || m.email || "?")[0].toUpperCase()}
-                        </div>
-
-                        {/* Name + email */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold truncate" style={{ color: "var(--cc-text)" }}>
-                            {m.full_name || "(No name)"}
-                          </p>
-                          <p className="text-[11px] truncate" style={{ color: "var(--cc-muted)" }}>{m.email}</p>
-                        </div>
-
-                        {/* Role selector: prevent changing own role */}
-                        {m.user_id !== user?.id ? (
-                          <select
-                            title="User role"
-                            value={m.role}
-                            onChange={(e) => handleChangeRole(m.id, e.target.value)}
-                            className="text-[11px] font-semibold px-2 py-0.5 rounded-full border-0 outline-none cursor-pointer shrink-0"
-                            style={{ background: rc.bg, color: rc.color }}
-                          >
-                            <option value="support_worker">Support Worker</option>
-                            <option value="support_coordinator">Support Coordinator</option>
-                          </select>
-                        ) : (
-                          <span
-                            className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0"
-                            style={{ background: rc.bg, color: rc.color }}
-                          >
-                            {ROLE_LABELS[m.role] ?? m.role}
-                          </span>
-                        )}
-
-                        {/* Branch (office) — sets the member's timezone */}
-                        {branchesMulti && (
-                          isMD ? (
-                            <select
-                              title="Branch"
-                              value={m.branch_id ?? ""}
-                              onChange={(e) => handleChangeBranch(m.user_id, e.target.value)}
-                              className="text-[11px] font-semibold px-2 py-0.5 rounded-full border outline-none cursor-pointer shrink-0 bg-white"
-                              style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
-                            >
-                              {branchList.map((b) => (
-                                <option key={b.id} value={b.id}>{b.name}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span className="text-[11px] shrink-0" style={{ color: "var(--cc-muted)" }}>
-                              {branchById.get(m.branch_id ?? "")?.name ?? ""}
-                            </span>
-                          )
-                        )}
-
-                        {/* Joined date */}
-                        <span className="text-[11px] shrink-0 hidden sm:block" style={{ color: "var(--cc-muted)" }}>
-                          Joined {m.joined_at ? new Date(m.joined_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "N/A"}
-                        </span>
-
-                        {/* Remove: prevent removing self */}
-                        {m.user_id !== user?.id && (
-                          <button
-                            onClick={() => handleRemoveMember(m.id, m.full_name)}
-                            title="Remove member"
-                            className="p-1.5 rounded-lg transition-colors hover:bg-red-50 shrink-0"
-                            style={{ color: "var(--cc-muted)" }}
-                          >
-                            <UserMinus size={14} />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </PanelCard>
-
-            {/* Pending invitations */}
-            <PanelCard label={translate("settings.team.pendingInvites")}>
-              {invites.length === 0 ? (
-                <p className="text-[13px] py-3 text-center" style={{ color: "var(--cc-muted)" }}>
-                  No pending invitations.
-                </p>
-              ) : (
-                <div className="divide-y" style={{ borderColor: "var(--cc-border)" }}>
-                  {invites.map((inv) => {
-                    const rc = ROLE_COLORS[inv.role] ?? ROLE_COLORS.support_worker;
-                    const expires = new Date(inv.expires_at);
-                    const expired = expires < new Date();
-                    return (
-                      <div key={inv.id} className="flex items-center gap-3 py-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold truncate" style={{ color: "var(--cc-text)" }}>{inv.email}</p>
-                          <p className="text-[11px]" style={{ color: expired ? "#dc2626" : "var(--cc-muted)" }}>
-                            {expired ? "Expired" : "Expires"} {expires.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}
-                          </p>
-                        </div>
-                        <span
-                          className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0"
-                          style={{ background: rc.bg, color: rc.color }}
-                        >
-                          {ROLE_LABELS[inv.role] ?? inv.role}
-                        </span>
-
-                        {/* Copy link */}
-                        <button
-                          onClick={() => copyInviteLink(inv)}
-                          title="Copy invite link"
-                          className="p-1.5 rounded-lg transition-colors hover:bg-[var(--cc-soft)] shrink-0"
-                          style={{ color: copiedToken === inv.id ? "#22c55e" : "var(--cc-muted)" }}
-                        >
-                          {copiedToken === inv.id ? <Check size={13} /> : <Copy size={13} />}
-                        </button>
-
-                        {/* Revoke */}
-                        <button
-                          onClick={() => handleRevokeInvite(inv.id)}
-                          title="Revoke invitation"
-                          className="p-1.5 rounded-lg transition-colors hover:bg-red-50 shrink-0"
-                          style={{ color: "var(--cc-muted)" }}
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </PanelCard>
-
-            {/* Invite button */}
-            <div className="flex justify-end">
-              <Link href="/team" className="inline-flex items-center gap-2 rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm font-medium">
-                <Plus size={15} /> {translate("settings.team.inviteStaff")}
-              </Link>
-            </div>
-
-            {/* Explainer */}
-            <div
-              className="rounded-2xl p-4 text-[12px] leading-relaxed space-y-2"
-              style={{
-                background: "var(--cc-soft)",
-                border: "1px solid var(--cc-border)",
-                borderLeft: "3px solid var(--cc-plum)",
-              }}
-            >
-              <p className="font-bold text-[13px]" style={{ color: "var(--cc-text)" }}>How staff invitations work</p>
-              <p style={{ color: "var(--cc-text)" }}>
-                Inviting a staff member generates a secure token link (7-day expiry). The invitee
-                clicks the link, sets their password, and is immediately added to your organisation
-                with the role you selected. Their access is scoped to only the participants and sessions
-                your org allocates to them.
-              </p>
-              <p style={{ color: "var(--cc-text)" }}>
-                Email delivery is not yet configured. Copy and share the link manually. Pending invitations
-                can be revoked at any time before they are accepted.
-              </p>
-            </div>
-          </Section>
         )}
 
         {activeSection === "billing" && (isMD || hasDelegatedCapability("platform_billing")) && (

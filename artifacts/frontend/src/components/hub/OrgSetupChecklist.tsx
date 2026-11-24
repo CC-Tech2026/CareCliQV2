@@ -71,7 +71,7 @@ export function OrgSetupChecklist({
       title: "Invite your team",
       body: "Send invitations to your coordinators and support workers. This is ticked once the first person accepts.",
       done: staffCount > 0,
-      href: "/settings?section=team",
+      href: "/team?invite=1",
       action: "Invite staff",
       importHref: "/md/import?kind=staff",
     },
