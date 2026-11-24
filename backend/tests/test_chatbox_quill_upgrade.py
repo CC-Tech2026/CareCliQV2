@@ -132,7 +132,7 @@ def _fake_agent(reply_content):
 async def test_an_empty_reply_moves_on_to_the_other_provider():
     built = []
 
-    def build(provider, tools, current_user=None):
+    def build(provider, tools, current_user=None, answer_style=None):
         built.append(provider)
         return _fake_agent([] if provider == "anthropic" else "Three workers are on shift.")
 
@@ -490,3 +490,16 @@ async def test_history_loads_with_or_without_the_blocks_column(has_column):
         history = await chatbox_memory.load_history(_user("managing_director"), "t1")
     assert history[0]["content"] == "Hi"
     assert history[0]["blocks"] == ([{"type": "stat"}] if has_column else [])
+
+
+# ── Answer length setting ────────────────────────────────────────────────────
+
+def test_detailed_answers_are_asked_for_outside_the_cached_instructions():
+    md = _user("managing_director")
+    brief = chatbox_graph._system_prompt("anthropic", md, "brief")
+    detailed = chatbox_graph._system_prompt("anthropic", md, "detailed")
+    # The cached block is identical, so the setting never breaks the cache.
+    assert brief.content[0]["text"] == detailed.content[0]["text"]
+    assert "detailed answers" in detailed.content[1]["text"]
+    assert "detailed answers" not in brief.content[1]["text"]
+    assert "detailed answers" in chatbox_graph._system_prompt("openai", md, "detailed")

@@ -8,8 +8,10 @@ import {
   Maximize2,
   Minimize2,
   PanelLeft,
+  ArrowLeft,
   RotateCcw,
   Search,
+  Settings,
   Square,
   SquarePen,
   Trash2,
@@ -21,6 +23,8 @@ import { QuillBlocks, tableAsText, type QuillSize } from "./QuillBlocks";
 import { QuillText, plainText } from "./QuillText";
 import { QuillWordmark } from "./QuillWordmark";
 import { groupThreads, useQuillChat, type QuillMessage } from "./useQuillChat";
+import { QuillSettingsView } from "./QuillSettingsView";
+import { readLastFullScreen, textSizes, useQuillSettings, writeLastFullScreen } from "./quillSettings";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -39,7 +43,6 @@ const BTN_SIZE = 56;
 const MARGIN = 16;
 const PANEL_W = 420;
 const PANEL_H = 680;
-const MODE_KEY = "quill.full-screen";
 
 const DIRECTOR_STARTERS = [
   "How are we tracking financially this month?",
@@ -93,22 +96,6 @@ function useIsNarrow(): boolean {
   return narrow;
 }
 
-function readFullScreenPreference(): boolean {
-  try {
-    return window.localStorage.getItem(MODE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function writeFullScreenPreference(full: boolean) {
-  try {
-    window.localStorage.setItem(MODE_KEY, full ? "1" : "0");
-  } catch {
-    /* storage blocked: the choice just isn't remembered */
-  }
-}
-
 function greeting(name: string | undefined, now = new Date()): string {
   const hour = now.getHours();
   const part = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -126,12 +113,15 @@ export function QuillAssistant() {
   const starters = isDirector ? DIRECTOR_STARTERS : COORDINATOR_STARTERS;
   const isActiveInstance = useIsActiveInstance();
   const narrow = useIsNarrow();
-  const chat = useQuillChat();
+  const { settings, update: updateSetting } = useQuillSettings();
+  const chat = useQuillChat({ answerStyle: settings.answerLength });
+  const large = settings.textSize === "large";
 
   const [mode, setMode] = useState<Mode>("closed");
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false); // the panel's history list, and the full screen's sidebar on phones
   const [sidebarOpen, setSidebarOpen] = useState(true); // the full screen's sidebar on wider screens
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -164,27 +154,30 @@ export function QuillAssistant() {
   const close = useCallback(() => {
     setMode("closed");
     setHistoryOpen(false);
+    setSettingsOpen(false);
     requestAnimationFrame(() => launcherRef.current?.focus());
   }, []);
 
   const setFullScreen = useCallback((full: boolean) => {
-    writeFullScreenPreference(full);
+    writeLastFullScreen(full);
     setHistoryOpen(false);
     setMode(full ? "full" : "panel");
   }, []);
 
-  // Esc steps back: out of full screen to the panel, then closed.
+  // Esc steps back: out of settings or history, out of full screen to the
+  // panel, then closed.
   useEffect(() => {
     if (view === "closed") return undefined;
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape" || e.defaultPrevented) return;
-      if (historyOpen) setHistoryOpen(false);
+      if (settingsOpen) setSettingsOpen(false);
+      else if (historyOpen) setHistoryOpen(false);
       else if (view === "full" && !narrow) setFullScreen(false);
       else close();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [view, narrow, historyOpen, close, setFullScreen]);
+  }, [view, narrow, historyOpen, settingsOpen, close, setFullScreen]);
 
   // The page behind a full-screen Quill shouldn't scroll.
   useEffect(() => {
@@ -197,8 +190,10 @@ export function QuillAssistant() {
   }, [view]);
 
   function toggleFromLauncher() {
-    if (mode === "closed") setMode(readFullScreenPreference() ? "full" : "panel");
-    else close();
+    if (mode === "closed") {
+      const full = settings.openIn === "full" || (settings.openIn === "last" && readLastFullScreen());
+      setMode(full ? "full" : "panel");
+    } else close();
   }
 
   function handlePointerDown(e: React.PointerEvent) {
@@ -237,12 +232,14 @@ export function QuillAssistant() {
     chat.newChat();
     setDraft("");
     setHistoryOpen(false);
+    setSettingsOpen(false);
     focusInput();
   }
 
   function openThread(id: string) {
     void chat.openThread(id);
     setHistoryOpen(false);
+    setSettingsOpen(false);
     focusInput();
   }
 
@@ -254,6 +251,11 @@ export function QuillAssistant() {
   function clearAll() {
     if (!window.confirm("Delete every past conversation? This can't be undone.")) return;
     void chat.clearAll();
+  }
+
+  function toggleSettings() {
+    setSettingsOpen((v) => !v);
+    setHistoryOpen(false);
   }
 
   const title = useMemo(() => {
@@ -285,6 +287,8 @@ export function QuillAssistant() {
       greeting={greeting(user?.full_name)}
       isDirector={isDirector}
       starters={starters}
+      large={large}
+      followUps={settings.followUps}
       onAsk={submit}
       onRetry={chat.retry}
     />
@@ -299,6 +303,18 @@ export function QuillAssistant() {
       onStop={chat.stop}
       pending={chat.pending}
       size={size}
+      large={large}
+      enterSends={settings.enterSends}
+    />
+  );
+
+  const settingsView = (
+    <QuillSettingsView
+      settings={settings}
+      onChange={updateSetting}
+      onDeleteAll={clearAll}
+      hasConversations={chat.threads.length > 0}
+      full={size === "full"}
     />
   );
 
@@ -311,7 +327,7 @@ export function QuillAssistant() {
           className="fixed z-[110] flex flex-col overflow-hidden rounded-2xl border animate-in fade-in-0 zoom-in-95 duration-150"
           style={{ ...panelPosition(pos), background: SURFACE, borderColor: BORDER, boxShadow: "0 12px 40px rgba(26,26,46,0.16)" }}
         >
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3" style={{ borderColor: BORDER }}>
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b pl-4 pr-2" style={{ borderColor: BORDER }}>
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
               <Mascot size={34} />
               <span className="shrink-0" style={{ color: TEXT }}>
@@ -319,27 +335,38 @@ export function QuillAssistant() {
               </span>
               <span className="mx-1.5 h-4 w-px shrink-0" style={{ background: BORDER }} aria-hidden="true" />
               <p className="min-w-0 truncate text-[12px]" style={{ color: MUTED }}>
-                {historyOpen ? "Past conversations" : title}
+                {settingsOpen ? "Settings" : historyOpen ? "Past conversations" : title}
               </p>
             </div>
-            <HeaderButton label={historyOpen ? "Back to the conversation" : "Past conversations"} active={historyOpen} onClick={() => setHistoryOpen((v) => !v)}>
-              <History size={16} />
-            </HeaderButton>
-            <HeaderButton label="New chat" onClick={startNewChat}>
-              <SquarePen size={16} />
-            </HeaderButton>
-            <HeaderButton label="Full screen" onClick={() => setFullScreen(true)}>
-              <Maximize2 size={15} />
-            </HeaderButton>
-            <HeaderButton label="Close Quill" onClick={close}>
-              <X size={17} />
-            </HeaderButton>
-          </header>
-          {historyOpen ? (
-            <div className="flex min-h-0 flex-1 flex-col">
-              {history}
-              <ClearAllButton onClick={clearAll} disabled={!chat.threads.length} />
+            <div className="flex shrink-0 items-center gap-0.5">
+              <HeaderButton
+                label={historyOpen ? "Back to the conversation" : "Past conversations"}
+                active={historyOpen}
+                onClick={() => {
+                  setHistoryOpen((v) => !v);
+                  setSettingsOpen(false);
+                }}
+              >
+                <History size={16} />
+              </HeaderButton>
+              <HeaderButton label="New chat" onClick={startNewChat}>
+                <SquarePen size={16} />
+              </HeaderButton>
+              <HeaderButton label={settingsOpen ? "Close settings" : "Settings"} active={settingsOpen} onClick={toggleSettings}>
+                <Settings size={16} />
+              </HeaderButton>
+              <HeaderButton label="Full screen" onClick={() => setFullScreen(true)}>
+                <Maximize2 size={15} />
+              </HeaderButton>
+              <HeaderButton label="Close Quill" onClick={close}>
+                <X size={17} />
+              </HeaderButton>
             </div>
+          </header>
+          {settingsOpen ? (
+            settingsView
+          ) : historyOpen ? (
+            <div className="flex min-h-0 flex-1 flex-col pt-2">{history}</div>
           ) : (
             <>
               {conversation}
@@ -397,13 +424,35 @@ export function QuillAssistant() {
                   </button>
                 </div>
                 {history}
-                <ClearAllButton onClick={clearAll} disabled={!chat.threads.length} />
+                <div className="border-t px-3 py-2" style={{ borderColor: BORDER }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      toggleSettings();
+                      if (narrow) setHistoryOpen(false);
+                    }}
+                    aria-pressed={settingsOpen}
+                    className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-[13px] transition-colors hover:bg-[var(--cc-soft)]"
+                    style={{
+                      color: settingsOpen ? SELECTED_TEXT : TEXT,
+                      background: settingsOpen ? SELECTED_BG : undefined,
+                      fontWeight: settingsOpen ? 600 : 400,
+                    }}
+                  >
+                    <Settings size={15} /> Settings
+                  </button>
+                </div>
               </aside>
             </>
           )}
 
           <main className="flex min-w-0 flex-1 flex-col">
-            <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3 sm:px-4" style={{ borderColor: BORDER }}>
+            <header className="flex h-14 shrink-0 items-center gap-1 border-b px-3" style={{ borderColor: BORDER }}>
+              {settingsOpen && (
+                <HeaderButton label="Back to the conversation" onClick={() => setSettingsOpen(false)}>
+                  <ArrowLeft size={16} />
+                </HeaderButton>
+              )}
               {(narrow || !sidebarOpen) && (
                 <HeaderButton
                   label="Show past conversations"
@@ -417,8 +466,8 @@ export function QuillAssistant() {
                   <SquarePen size={16} />
                 </HeaderButton>
               )}
-              <p className="min-w-0 flex-1 truncate px-1 text-[14px] font-semibold" style={{ color: TEXT, fontFamily: DISPLAY }}>
-                {title}
+              <p className="min-w-0 flex-1 truncate px-2 text-[14px] font-semibold" style={{ color: TEXT, fontFamily: DISPLAY }}>
+                {settingsOpen ? "Settings" : title}
               </p>
               {!narrow && (
                 <HeaderButton label="Exit full screen" onClick={() => setFullScreen(false)}>
@@ -429,8 +478,14 @@ export function QuillAssistant() {
                 <X size={17} />
               </HeaderButton>
             </header>
-            {conversation}
-            {composer}
+            {settingsOpen ? (
+              settingsView
+            ) : (
+              <>
+                {conversation}
+                {composer}
+              </>
+            )}
           </main>
         </div>
       )}
@@ -578,14 +633,14 @@ function HistoryList({
           />
         </label>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2">
         {state === "loading" && !threads.length && (
-          <p className="px-2 py-3 text-[12px]" style={{ color: MUTED }}>
+          <p className="px-2.5 py-3 text-[12px]" style={{ color: MUTED }}>
             Loading conversations...
           </p>
         )}
         {state === "error" && (
-          <p className="px-2 py-3 text-[12px]" style={{ color: MUTED }}>
+          <p className="px-2.5 py-3 text-[12px]" style={{ color: MUTED }}>
             Couldn't load past conversations.{" "}
             <button type="button" onClick={onRetry} className="font-semibold hover:underline" style={{ color: LINK }}>
               Try again
@@ -593,18 +648,18 @@ function HistoryList({
           </p>
         )}
         {state === "ready" && !threads.length && (
-          <p className="px-2 py-3 text-[12px]" style={{ color: MUTED }}>
+          <p className="px-2.5 py-3 text-[12px]" style={{ color: MUTED }}>
             Your conversations with Quill will appear here.
           </p>
         )}
         {state === "ready" && threads.length > 0 && !filtered.length && (
-          <p className="px-2 py-3 text-[12px]" style={{ color: MUTED }}>
+          <p className="px-2.5 py-3 text-[12px]" style={{ color: MUTED }}>
             No conversations match "{query.trim()}".
           </p>
         )}
         {groups.map((g) => (
           <section key={g.label} className="mb-2">
-            <h3 className="px-2 pb-1 pt-2 text-[11px] font-semibold" style={{ color: MUTED }}>
+            <h3 className="px-2.5 pb-1 pt-2 text-[11px] font-semibold" style={{ color: MUTED }}>
               {g.label}
             </h3>
             <ul>
@@ -642,22 +697,6 @@ function HistoryList({
   );
 }
 
-function ClearAllButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
-  return (
-    <div className="border-t px-3 py-2" style={{ borderColor: BORDER }}>
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        className="flex items-center gap-1.5 rounded-md px-1 py-1 text-[12px] font-medium transition-opacity hover:underline disabled:opacity-40 disabled:no-underline"
-        style={{ color: "var(--cc-danger-text)" }}
-      >
-        <Trash2 size={13} /> Delete all conversations
-      </button>
-    </div>
-  );
-}
-
 // ── Conversation ─────────────────────────────────────────────────────────────
 
 function Conversation({
@@ -668,6 +707,8 @@ function Conversation({
   greeting: hello,
   isDirector,
   starters,
+  large,
+  followUps,
   onAsk,
   onRetry,
 }: {
@@ -678,11 +719,17 @@ function Conversation({
   greeting: string;
   isDirector: boolean;
   starters: string[];
+  large: boolean;
+  followUps: boolean;
   onAsk: (text: string) => void;
   onRetry: (id: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const full = size === "full";
+  const fonts = textSizes(full, large);
+  // One avatar size for answers and the "looking that up" row, so the text
+  // doesn't shift sideways when the answer arrives.
+  const avatar = full ? 32 : 28;
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -701,7 +748,7 @@ function Conversation({
         )}
 
         {!opening && !messages.length && (
-          <EmptyState full={full} hello={hello} isDirector={isDirector} starters={starters} onAsk={onAsk} />
+          <EmptyState full={full} fontSize={fonts.body} hello={hello} isDirector={isDirector} starters={starters} onAsk={onAsk} />
         )}
 
         <div className={full ? "space-y-7" : "space-y-5"} aria-live="polite">
@@ -709,8 +756,8 @@ function Conversation({
             m.role === "user" ? (
               <div key={m.id} className="flex justify-end">
                 <div
-                  className={`max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md px-3.5 py-2 ${full ? "text-[14.5px]" : "text-[13px]"} leading-relaxed`}
-                  style={{ background: SOFT, color: TEXT }}
+                  className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md px-3.5 py-2 leading-relaxed"
+                  style={{ background: SOFT, color: TEXT, fontSize: fonts.body }}
                 >
                   {m.text}
                 </div>
@@ -720,13 +767,15 @@ function Conversation({
                 key={m.id}
                 message={m}
                 size={size}
-                showFollowUps={m === lastAssistant && !pending}
+                avatar={avatar}
+                fontSize={fonts.body}
+                showFollowUps={followUps && m === lastAssistant && !pending}
                 onAsk={onAsk}
                 onRetry={onRetry}
               />
             ),
           )}
-          {pending && <Thinking />}
+          {pending && <Thinking avatar={avatar} fontSize={fonts.small} />}
         </div>
       </div>
     </div>
@@ -735,12 +784,14 @@ function Conversation({
 
 function EmptyState({
   full,
+  fontSize,
   hello,
   isDirector,
   starters,
   onAsk,
 }: {
   full: boolean;
+  fontSize: number;
   hello: string;
   isDirector: boolean;
   starters: string[];
@@ -755,7 +806,7 @@ function EmptyState({
       >
         {hello}
       </h2>
-      <p className={`mt-1.5 ${full ? "text-[14.5px]" : "text-[13px]"} leading-relaxed`} style={{ color: MUTED }}>
+      <p className="mt-1.5 leading-relaxed" style={{ color: MUTED, fontSize }}>
         {isDirector
           ? "Ask me how the organisation is going: finances, participants and their funding, the roster, compliance, credentials and incidents. I look up the live figures for you. I can read your data but I can't change anything."
           : "Ask me about your participants, the roster, compliance, credentials and incidents, and I'll look up the live figures. I can read your data but I can't change anything."}
@@ -769,8 +820,8 @@ function EmptyState({
             <button
               type="button"
               onClick={() => onAsk(s)}
-              className={`group flex w-full items-center gap-3 px-3.5 text-left transition-colors hover:bg-[var(--cc-soft)] ${full ? "py-3 text-[14px]" : "py-2.5 text-[13px]"}`}
-              style={{ color: TEXT }}
+              className={`group flex w-full items-center gap-3 px-3.5 text-left transition-colors hover:bg-[var(--cc-soft)] ${full ? "py-3" : "py-2.5"}`}
+              style={{ color: TEXT, fontSize: fontSize - 0.5 }}
             >
               <span className="flex-1">{s}</span>
               <ArrowUpRight size={15} className="shrink-0 transition-colors group-hover:text-[var(--cc-plum)]" style={{ color: MUTED }} />
@@ -785,18 +836,21 @@ function EmptyState({
 function AnswerView({
   message,
   size,
+  avatar,
+  fontSize,
   showFollowUps,
   onAsk,
   onRetry,
 }: {
   message: QuillMessage;
   size: QuillSize;
+  avatar: number;
+  fontSize: number;
   showFollowUps: boolean;
   onAsk: (text: string) => void;
   onRetry: (id: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const full = size === "full";
 
   async function copy() {
     const tables = (message.blocks ?? []).flatMap((b) => (b.type === "table" ? [tableAsText(b)] : []));
@@ -812,13 +866,10 @@ function AnswerView({
   return (
     <div className="flex gap-3">
       <div className="pt-0.5">
-        <Mascot size={full ? 32 : 28} />
+        <Mascot size={avatar} />
       </div>
       <div className="min-w-0 flex-1 space-y-3">
-        <div
-          className={`${full ? "text-[14.5px]" : "text-[13px]"} leading-relaxed`}
-          style={{ color: message.status === "stopped" ? MUTED : TEXT }}
-        >
+        <div className="leading-relaxed" style={{ color: message.status === "stopped" ? MUTED : TEXT, fontSize }}>
           <QuillText text={message.text} />
         </div>
 
@@ -841,7 +892,7 @@ function AnswerView({
                 onClick={copy}
                 aria-label={copied ? "Copied" : "Copy answer"}
                 title={copied ? "Copied" : "Copy answer"}
-                className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[11.5px] transition-colors hover:bg-[var(--cc-soft)]"
+                className="-ml-1.5 flex h-7 items-center gap-1 rounded-md px-1.5 text-[11.5px] transition-colors hover:bg-[var(--cc-soft)]"
               >
                 {copied ? <Check size={13} /> : <Copy size={13} />}
                 {copied && <span>Copied</span>}
@@ -870,7 +921,7 @@ function AnswerView({
   );
 }
 
-function Thinking() {
+function Thinking({ avatar, fontSize }: { avatar: number; fontSize: number }) {
   const [i, setI] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => setI((n) => (n + 1) % THINKING.length), 1800);
@@ -878,8 +929,8 @@ function Thinking() {
   }, []);
   return (
     <div className="flex items-center gap-3" role="status">
-      <Mascot size={28} />
-      <span className="flex items-center gap-2 text-[12.5px]" style={{ color: MUTED }}>
+      <Mascot size={avatar} />
+      <span className="flex items-center gap-2" style={{ color: MUTED, fontSize }}>
         {THINKING[i]}
         <span className="flex gap-1" aria-hidden="true">
           {[0, 1, 2].map((d) => (
@@ -905,6 +956,8 @@ function Composer({
   onStop,
   pending,
   size,
+  large,
+  enterSends,
 }: {
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
@@ -913,8 +966,11 @@ function Composer({
   onStop: () => void;
   pending: boolean;
   size: QuillSize;
+  large: boolean;
+  enterSends: boolean;
 }) {
   const full = size === "full";
+  const fonts = textSizes(full, large);
 
   // Grow with the text up to about six lines, then scroll.
   useEffect(() => {
@@ -925,7 +981,7 @@ function Composer({
   }, [value, inputRef]);
 
   return (
-    <div className={`shrink-0 ${full ? "px-6 pb-5" : "border-t px-3 pb-3 pt-3"}`} style={{ borderColor: BORDER }}>
+    <div className={`shrink-0 ${full ? "px-6 pb-5" : "border-t px-4 pb-3 pt-3"}`} style={{ borderColor: BORDER }}>
       <form
         className={`mx-auto w-full ${full ? "max-w-[768px]" : ""}`}
         onSubmit={(e) => {
@@ -943,15 +999,17 @@ function Composer({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+              const modifier = e.ctrlKey || e.metaKey;
+              if (enterSends ? !e.shiftKey : modifier) {
                 e.preventDefault();
                 onSubmit();
               }
             }}
             placeholder="Ask Quill about your organisation"
             aria-label="Message Quill"
-            className={`max-h-[168px] min-h-[24px] flex-1 resize-none bg-transparent py-1 leading-relaxed outline-none ${full ? "text-[14.5px]" : "text-[13px]"}`}
-            style={{ color: TEXT }}
+            className="max-h-[168px] min-h-[24px] flex-1 resize-none bg-transparent py-1 leading-relaxed outline-none"
+            style={{ color: TEXT, fontSize: fonts.body }}
           />
           {pending ? (
             <button
@@ -979,7 +1037,7 @@ function Composer({
         </div>
         <p className="mt-1.5 text-center text-[11px]" style={{ color: MUTED }}>
           {full
-            ? "Enter to send, Shift + Enter for a new line. Quill can make mistakes, so check important figures where they come from."
+            ? `${enterSends ? "Enter to send, Shift + Enter for a new line." : "Ctrl + Enter to send."} Quill can make mistakes, so check important figures where they come from.`
             : "Quill can make mistakes. Check important figures where they come from."}
         </p>
       </form>

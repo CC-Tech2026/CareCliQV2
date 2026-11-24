@@ -30,7 +30,10 @@ const nextId = (prefix: string) => `${prefix}-${Date.now()}-${seq++}`;
 
 /** Conversation state for Quill: the open thread, its messages, the list of
  * past threads, and sending (with stop and try again). */
-export function useQuillChat() {
+export function useQuillChat(options: { answerStyle?: "brief" | "detailed" } = {}) {
+  // Read at send time, so changing the setting applies to the next question.
+  const answerStyleRef = useRef(options.answerStyle);
+  answerStyleRef.current = options.answerStyle;
   const [messages, setMessages] = useState<QuillMessage[]>([]);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
@@ -64,7 +67,7 @@ export function useQuillChat() {
       const startedIn = threadIdRef.current;
       const conversation = conversationRef.current;
       try {
-        const res = await sendChatMessage(question, startedIn, controller.signal);
+        const res = await sendChatMessage(question, startedIn, controller.signal, answerStyleRef.current);
         // The person may have started a new chat or opened another one meanwhile.
         if (conversationRef.current !== conversation) return;
         setThreadId(res.thread_id);

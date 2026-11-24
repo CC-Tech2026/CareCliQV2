@@ -40,10 +40,15 @@ export interface ChatResponse {
   suggestions?: string[];
 }
 
-export function sendChatMessage(message: string, threadId?: string, signal?: AbortSignal) {
+export function sendChatMessage(
+  message: string,
+  threadId?: string,
+  signal?: AbortSignal,
+  answerStyle?: "brief" | "detailed",
+) {
   return jsonFetch<ChatResponse>("/api/chatbox/chat", {
     method: "POST",
-    body: JSON.stringify({ message, thread_id: threadId }),
+    body: JSON.stringify({ message, thread_id: threadId, answer_style: answerStyle }),
     signal,
   });
 }
