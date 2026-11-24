@@ -11,9 +11,11 @@ from ..services.settings_service import get_physical_exam_session_types
 from ..services import embedding_pipeline
 from ..services.embedding_pipeline import run_session_embedding_pipeline
 from ..schemas.alert import AlertCreate
+from ..core.errors import internal_error_detail
 from ..core.security import get_current_user
 from ..core.access import get_user_organization_id, get_user_id
 from ..services import audit_service
+from ..services.ai_usage_guard import limit_ai_requests
 from .security import require_recent_reauth
 import logging
 import json
@@ -339,7 +341,7 @@ async def get_session_note_versions(session_id: str, current_user: dict = Depend
     return {"versions": session_service.list_session_note_versions(session_id, org_id)}
 
 
-@router.post("/{session_id}/save-with-ai")
+@router.post("/{session_id}/save-with-ai", dependencies=[Depends(limit_ai_requests("ai-actions", 30, 1500))])
 async def save_session_with_ai(
     session_id: str,
     body: Optional[SaveWithAIBody] = None,
@@ -837,10 +839,10 @@ async def save_session_with_ai(
             }).eq("id", session_id).execute()
         except Exception as marker_err:
             logger.warning(f"Could not persist compliance_check_status=failed marker (non-critical): {marker_err}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't save the note with the AI check", e))
 
 
-@router.post("/{session_id}/preview-progress")
+@router.post("/{session_id}/preview-progress", dependencies=[Depends(limit_ai_requests("ai-actions", 30, 1500))])
 async def preview_session_progress(
     session_id: str,
     body: Optional[PreviewProgressBody] = None,
@@ -1473,11 +1475,10 @@ async def upload_photo(session_id: str, file: UploadFile = File(...), current_us
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Photo upload error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't upload the photo", e))
 
 
-@router.post("/{session_id}/transcribe-audio")
+@router.post("/{session_id}/transcribe-audio", dependencies=[Depends(limit_ai_requests("transcription", 20, 1500, "Transcription"))])
 async def transcribe_audio(session_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     voice_access.require_voice_notes(get_user_organization_id(current_user))
     try:
@@ -1489,9 +1490,10 @@ async def transcribe_audio(session_id: str, file: UploadFile = File(...), curren
         # overwrite structured progress notes used by the live Notes feed.
         await session_service.update_session(session_id, {"transcription": text}, current_user)
         return {"transcription": text}
+    except HTTPException:
+        raise  # "Session not found", and the AI usage limit's 429
     except Exception as e:
-        logger.error(f"Transcription error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't transcribe the recording", e))
 
 
 # ---------------------------------------------------------------------------
@@ -1521,8 +1523,7 @@ async def create_session_message(session_id: str, body: MessageCreate, current_u
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"create_session_message error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't send the message", e))
 
 
 @router.patch("/{session_id}/messages/{message_id}")
@@ -1543,8 +1544,7 @@ async def update_session_message(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"update_session_message error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't update the message", e))
 
 
 @router.get("/{session_id}/timeline")

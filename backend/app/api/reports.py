@@ -7,6 +7,7 @@ from ..services.compliance_engine import collect_budget_rule_alerts_from_session
 from ..services.supabase_client import get_supabase_admin
 from ..core.access import get_user_id, get_user_organization_id
 from ..core.security import get_current_user
+from ..services.ai_usage_guard import limit_ai_requests
 from .security import require_recent_reauth
 import logging
 import json
@@ -234,7 +235,7 @@ async def report_file(report_id: str, current_user: dict = Depends(get_current_u
     )
 
 
-@router.post("/participant/{participant_id}/generate", status_code=201)
+@router.post("/participant/{participant_id}/generate", status_code=201, dependencies=[Depends(limit_ai_requests("ai-actions", 30, 1500))])
 async def generate_participant_report(
     request: Request,
     participant_id: str,

@@ -13,7 +13,7 @@ import urllib.request
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status, Depends
 from pydantic import BaseModel, Field, model_validator
 from ..core.config import settings
-from ..services.supabase_client import get_supabase, get_supabase_admin, signed_storage_url
+from ..services.supabase_client import get_supabase_admin, new_auth_client, signed_storage_url
 
 PROFILE_PHOTOS_BUCKET = "profile-photos"
 from ..core.security import create_access_token, decode_access_token, get_current_user
@@ -782,7 +782,7 @@ async def login(body: LoginRequest, request: Request, background_tasks: Backgrou
     login_email = await _resolve_login_email(body.resolved_identifier())
     await _check_account_lockout(login_email)
 
-    supabase = get_supabase()
+    supabase = new_auth_client()  # one per sign-in; see new_auth_client
     try:
         result = await asyncio.to_thread(
             supabase.auth.sign_in_with_password,
@@ -938,13 +938,13 @@ async def login(body: LoginRequest, request: Request, background_tasks: Backgrou
         # they must complete a TOTP step-up before we issue our own app JWT.
         try:
             aal = await asyncio.to_thread(
-                get_supabase().auth.mfa.get_authenticator_assurance_level
+                supabase.auth.mfa.get_authenticator_assurance_level
             )
         except Exception as exc:
             logger.debug("Native MFA AAL check failed for %s: %s", login_email, exc)
             aal = None
         if aal and aal.next_level == "aal2" and aal.current_level != "aal2":
-            factors = await asyncio.to_thread(get_supabase().auth.mfa.list_factors)
+            factors = await asyncio.to_thread(supabase.auth.mfa.list_factors)
             verified_totp = [f for f in factors.totp if f.status == "verified"]
             if verified_totp:
                 supabase_for_native = _serialize_supabase_session(result.session)
@@ -1011,7 +1011,7 @@ async def login_mfa(body: MfaLoginRequest, request: Request, background_tasks: B
     if refresh_token:
         try:
             refreshed = await asyncio.to_thread(
-                get_supabase().auth.refresh_session,
+                new_auth_client().auth.refresh_session,
                 str(refresh_token),
             )
             supabase_session = refreshed.session
@@ -1243,7 +1243,7 @@ async def refresh_supabase_session(
     """Refresh Supabase Auth session for client-side Realtime subscriptions."""
     try:
         result = await asyncio.to_thread(
-            get_supabase().auth.refresh_session,
+            new_auth_client().auth.refresh_session,
             body.refresh_token,
         )
     except Exception as exc:

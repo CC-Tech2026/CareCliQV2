@@ -108,4 +108,4 @@ Immediately flag if:
 	• Budget misuse is detected 
 	• Legal/NDIS breach language appears
 
-So here is the Antitropic API key: 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
+So here is the Antitropic API key: [REDACTED-ANTHROPIC-KEY]

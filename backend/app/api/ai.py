@@ -1,19 +1,31 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, Field
+from typing import Annotated, Optional, List
 from ..services import ai_service, participant_service, session_service
+from ..core.errors import internal_error_detail
 from ..core.security import get_current_user
+from ..services.ai_usage_guard import limit_ai_requests
 from ..core.access import get_user_organization_id
 import logging
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/ai", tags=["ai"])
+# Every /ai endpoint calls a model; cap how often one person can.
+# Caps on what one request can send to a model: well past any real shift
+# note, short of a pasted document run up the token bill.
+NoteText = Annotated[str, Field(max_length=20000)]
+ShortText = Annotated[str, Field(max_length=2000)]
+
+router = APIRouter(
+    prefix="/ai",
+    tags=["ai"],
+    dependencies=[Depends(limit_ai_requests("ai", 60, 3000))],
+)
 
 
 class InsightRequest(BaseModel):
     session_id: str
     participant_id: str
-    notes: Optional[str] = ""
+    notes: Optional[NoteText] = ""
     session_type: Optional[str] = ""
     duration_minutes: Optional[int] = 0
     tags: Optional[List[str]] = []
@@ -22,7 +34,7 @@ class InsightRequest(BaseModel):
 
 class ComplianceRequest(BaseModel):
     session_id: Optional[str] = None
-    notes: Optional[str] = ""
+    notes: Optional[NoteText] = ""
     duration_minutes: Optional[int] = 0
     goals_addressed: Optional[List[str]] = []
     session_type: Optional[str] = ""
@@ -30,27 +42,27 @@ class ComplianceRequest(BaseModel):
 
 
 class ExplainComplianceRequest(BaseModel):
-    failed_rules: List[dict]
-    session_notes: Optional[str] = ""
+    failed_rules: Annotated[List[dict], Field(max_length=100)]
+    session_notes: Optional[NoteText] = ""
 
 
 class TranslateRequest(BaseModel):
-    text: str
+    text: NoteText
     source_language: Optional[str] = "auto"
 
 
 class ClinicalRewriteRequest(BaseModel):
-    text: str
+    text: NoteText
     source_language: Optional[str] = "auto"
 
 
 class TranslatePreviewRequest(BaseModel):
-    text: str
+    text: NoteText
     target_language: str
 
 
 class AssessNoteRequest(BaseModel):
-    note_text: str
+    note_text: NoteText
     session_id: Optional[str] = None
     participant_id: Optional[str] = None
     session_started: bool = False
@@ -59,17 +71,17 @@ class AssessNoteRequest(BaseModel):
 
 
 class TaskSuggestionsRequest(BaseModel):
-    task_title: str
-    context: str
-    participant_name: str
+    task_title: ShortText
+    context: NoteText
+    participant_name: ShortText
 
 
 class TaskInstructionsRequest(BaseModel):
-    task_title: str
-    task_purpose: str
-    goal_name: Optional[str] = None
-    goal_description: Optional[str] = None
-    participant_name: str
+    task_title: ShortText
+    task_purpose: NoteText
+    goal_name: Optional[ShortText] = None
+    goal_description: Optional[NoteText] = None
+    participant_name: ShortText
     participant_id: Optional[str] = None
 
 
@@ -92,9 +104,10 @@ async def get_insights(body: InsightRequest, current_user: dict = Depends(get_cu
         if str(e) == ai_service.LEGAL_RECORD_REQUIRED_MESSAGE:
             raise HTTPException(status_code=422, detail=str(e))
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"AI insight error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't create the AI insight. Please try again.", e))
 
 
 @router.post("/compliance")
@@ -122,9 +135,10 @@ async def check_compliance(body: ComplianceRequest, current_user: dict = Depends
         if str(e) == ai_service.LEGAL_RECORD_REQUIRED_MESSAGE:
             raise HTTPException(status_code=422, detail=str(e))
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Compliance check error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't run the compliance check. Please try again.", e))
 
 
 @router.post("/explain-compliance")
@@ -133,9 +147,10 @@ async def explain_compliance(body: ExplainComplianceRequest, current_user: dict 
     try:
         result = await ai_service.explain_compliance(body.failed_rules, body.session_notes or "")
         return result
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Explain compliance error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't explain the compliance result. Please try again.", e))
 
 
 @router.post("/improve-note")
@@ -165,9 +180,10 @@ async def improve_note_endpoint(
             participant_id=participant_id,
             organisation_id=org_id,
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Improve-note error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't improve the note. Please try again.", e))
 
     # The rewrite must only use what the worker wrote. One that brings in an
     # incident, a restrictive practice or a clinical task the worker never
@@ -234,9 +250,10 @@ async def get_ai_summary(participant_id: str, current_user: dict = Depends(get_c
             "summary": summary,
             "sessions_count": len(sessions)
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"AI summary error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't create the summary. Please try again.", e))
 
 
 @router.post("/translate")
@@ -266,9 +283,10 @@ async def rewrite_clinical(body: ClinicalRewriteRequest, current_user: dict = De
     try:
         result = await ai_service.clinical_rewrite(body.text, body.source_language or "auto")
         return result
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Clinical rewrite error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't rewrite the note. Please try again.", e))
 
 
 class IncidentComplyRequest(BaseModel):
@@ -297,9 +315,10 @@ async def comply_incident_endpoint(
             participant_name=body.participant_name or "the participant",
         )
         return result
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("Incident comply error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't check the incident report. Please try again.", e))
 
 
 @router.post("/assess-note")
@@ -346,9 +365,10 @@ async def assess_note(body: AssessNoteRequest, current_user: dict = Depends(get_
             goals=goals,
             progress_delta=progress_delta,
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Assess-note error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't check the note. Please try again.", e))
 
     # If billing-ready, flag the session record
     if result.get("is_ready_for_billing") and body.session_id:
@@ -397,9 +417,10 @@ async def get_task_suggestions(
             participant_name=body.participant_name,
         )
         return result
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Task suggestions error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't suggest tasks. Please try again.", e))
 
 
 @router.post("/task-instructions")
@@ -431,6 +452,7 @@ async def get_task_instructions(
             organisation_id=org_id,
         )
         return result
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Task instructions error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't write the task instructions. Please try again.", e))

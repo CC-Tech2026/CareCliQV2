@@ -925,10 +925,16 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      {/* API test console: development builds only (it reads a password from
+          the build environment, which would be public in production). */}
       <Route path="/dev/progress-test">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <DevProgressTestPage />
-        </ProtectedRoute>
+        {import.meta.env.DEV ? (
+          <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+            <DevProgressTestPage />
+          </ProtectedRoute>
+        ) : (
+          <NotFound />
+        )}
       </Route>
 
       <Route component={NotFound} />

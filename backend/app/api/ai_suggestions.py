@@ -9,24 +9,25 @@ from typing import List, Optional
 import logging
 import json
 from openai import OpenAI
-import os
 
 from ..core.security import get_current_user
+from ..services.ai_usage_guard import limit_ai_requests
 from ..services.rag_service import retrieve_similar, RetrievalResult
-from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/ai", tags=["AI Suggestions"])
+router = APIRouter(
+    prefix="/api/ai",
+    tags=["AI Suggestions"],
+    # Asked about once a second while a coordinator types (debounced).
+    dependencies=[Depends(limit_ai_requests("ai-suggestions", 90, 3000))],
+)
 
-# Initialize OpenAI client
 def _get_openai_client() -> OpenAI:
-    """Get OpenAI client - prefer Replit integration or direct API key"""
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    integ_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    if base_url and integ_key:
-        return OpenAI(api_key=integ_key, base_url=base_url)
-    return OpenAI(api_key=settings.openai_api_key)
+    """The shared, metered OpenAI client builder (counts toward AI usage limits)."""
+    from ..services.ai_service import _build_openai_client
+
+    return _build_openai_client()
 
 
 # ── Pydantic Models ───────────────────────────────────────────────────────

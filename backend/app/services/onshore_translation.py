@@ -34,6 +34,8 @@ import threading
 import urllib.error
 import urllib.request
 
+from .ai_usage_guard import consume_ai_call
+
 logger = logging.getLogger(__name__)
 
 AUSTRALIAN_LOCATIONS = ("australia-southeast1", "australia-southeast2")
@@ -187,6 +189,9 @@ def translate_sync(text: str, target_language_name: str = "English") -> dict:
     problem = configuration_problem()
     if problem:
         raise OnshoreTranslationNotConfigured(problem)
+
+    # Counts toward the caller's AI usage limits; raises a 429 once they're reached.
+    consume_ai_call("gemini")
 
     region, model_name = location(), model()
     url = endpoint_url(_env("GOOGLE_VERTEX_PROJECT"), region, model_name)
