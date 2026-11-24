@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from ..core.security import create_access_token, decode_access_token, get_current_user
 from ..services import supabase_mfa_service as native_mfa
-from ..services.supabase_client import get_supabase
+from ..services.supabase_client import new_auth_client
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +138,7 @@ async def unenroll_native_totp(
     # Re-auth with password first, matching the security posture of the old
     # /security/mfa/disable endpoint, before removing the factor.
     try:
-        result = get_supabase().auth.sign_in_with_password({"email": email, "password": body.password})
+        result = new_auth_client().auth.sign_in_with_password({"email": email, "password": body.password})
         if not result.user:
             raise HTTPException(status_code=401, detail="Current password is incorrect")
     except HTTPException:

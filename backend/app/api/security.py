@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from ..core.config import settings
 from ..core.security import create_access_token, decode_access_token, get_current_user
 from ..services import device_security_service as dss
-from ..services.supabase_client import get_supabase
+from ..services.supabase_client import new_auth_client
 
 router = APIRouter(prefix="/security", tags=["security"])
 
@@ -61,7 +61,7 @@ async def reauthenticate(body: ReAuthRequest, current_user: dict = Depends(get_c
         raise HTTPException(status_code=422, detail="Password is required")
 
     try:
-        result = get_supabase().auth.sign_in_with_password({"email": email, "password": body.password})
+        result = new_auth_client().auth.sign_in_with_password({"email": email, "password": body.password})
         if not result.user or not result.session:
             raise HTTPException(status_code=401, detail="Current password is incorrect")
     except HTTPException:
@@ -138,7 +138,7 @@ async def verify_totp_enrollment(
 async def disable_mfa(body: ReAuthRequest, current_user: dict = Depends(get_current_user)):
     email = current_user.get("email")
     try:
-        result = get_supabase().auth.sign_in_with_password({"email": email, "password": body.password})
+        result = new_auth_client().auth.sign_in_with_password({"email": email, "password": body.password})
         if not result.user:
             raise HTTPException(status_code=401, detail="Current password is incorrect")
     except HTTPException:
@@ -192,7 +192,7 @@ async def logout_other_sessions(
 ):
     email = current_user.get("email")
     try:
-        result = get_supabase().auth.sign_in_with_password({"email": email, "password": body.password})
+        result = new_auth_client().auth.sign_in_with_password({"email": email, "password": body.password})
         if not result.user:
             raise HTTPException(status_code=401, detail="Current password is incorrect")
     except HTTPException:

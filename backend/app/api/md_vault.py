@@ -23,9 +23,9 @@ def _require_md(user: dict) -> str:
 
 
 def _client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    # ClientIPMiddleware already put the real address here. Not
+    # X-Forwarded-For: its first entry is whatever the caller typed, so a
+    # share-event audit row could be given any address.
     return request.client.host if request.client else None
 
 

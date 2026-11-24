@@ -20,6 +20,7 @@ from ..core.security import get_current_user
 from ..services import meet_greet_summary_service, participant_service
 from ..services import participant_intake_service as svc
 from ..services.organization_branding_service import get_branding
+from ..services.ai_usage_guard import limit_ai_requests
 
 router = APIRouter(prefix="/participant-intakes", tags=["participant-intake"])
 
@@ -207,14 +208,14 @@ class SummaryLineReview(BaseModel):
     action: Literal["include", "dismiss"]
 
 
-@router.post("/{intake_id}/meet-greet/summary")
+@router.post("/{intake_id}/meet-greet/summary", dependencies=[Depends(limit_ai_requests("ai-actions", 30, 1500))])
 async def summarise_meet_greet(intake_id: str, current_user: dict = Depends(get_current_user)):
     org_id = _require_md(current_user)
     intake = svc.get_intake(intake_id, org_id)
     return meet_greet_summary_service.summarise(intake, current_user.get("sub") or current_user.get("id"))
 
 
-@router.post("/{intake_id}/meet-greet/summary/lines/{line_id}")
+@router.post("/{intake_id}/meet-greet/summary/lines/{line_id}", dependencies=[Depends(limit_ai_requests("ai-actions", 30, 1500))])
 async def review_meet_greet_line(
     intake_id: str, line_id: str, body: SummaryLineReview, current_user: dict = Depends(get_current_user),
 ):

@@ -17,6 +17,7 @@ from ..services.plan_meeting_service import (
     apply_plan_meeting_suggestions,
 )
 from ..services.ai_service import _build_openai_client
+from ..services.ai_usage_guard import limit_ai_requests
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/coordinator", tags=["plan-meetings"])
@@ -479,7 +480,7 @@ async def get_plan_meeting(
     }
 
 
-@router.post("/plan-meetings/{meeting_id}/ai-review")
+@router.post("/plan-meetings/{meeting_id}/ai-review", dependencies=[Depends(limit_ai_requests("ai-actions", 30, 1500))])
 async def trigger_ai_review(
     meeting_id: str,
     current_user: dict = Depends(get_current_user),
@@ -505,7 +506,7 @@ async def trigger_ai_review(
     }
 
 
-@router.post("/plan-meetings/transcribe", response_model=TranscriptionResponse)
+@router.post("/plan-meetings/transcribe", response_model=TranscriptionResponse, dependencies=[Depends(limit_ai_requests("transcription", 20, 1500, "Transcription"))])
 async def transcribe_plan_meeting_audio(
     audio_file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
@@ -628,7 +629,7 @@ def _parse_speaker_segments(raw_text: str) -> list[dict[str, Any]]:
     return segments
 
 
-@router.post("/plan-meetings/{session_id}/transcribe-and-resolve", status_code=status.HTTP_200_OK)
+@router.post("/plan-meetings/{session_id}/transcribe-and-resolve", status_code=status.HTTP_200_OK, dependencies=[Depends(limit_ai_requests("transcription", 20, 1500, "Transcription"))])
 async def transcribe_and_resolve_names(
     session_id: str,
     audio_file: UploadFile = File(...),
@@ -859,7 +860,7 @@ async def transcribe_and_resolve_names(
     }
 
 
-@router.post("/plan-meetings/{session_id}/extract-goals-tasks", status_code=status.HTTP_200_OK)
+@router.post("/plan-meetings/{session_id}/extract-goals-tasks", status_code=status.HTTP_200_OK, dependencies=[Depends(limit_ai_requests("ai-actions", 30, 1500))])
 async def extract_goals_and_tasks(
     session_id: str,
     current_user: dict = Depends(get_current_user),

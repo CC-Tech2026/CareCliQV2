@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from ..core.errors import internal_error_detail
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
+from ..services.ai_usage_guard import limit_ai_requests
 from ..core.timezone import app_today, participant_timezone, shift_local_date
 from ..models.billing_period import normalize_plan_management_type, plan_management_type_label
 from ..schemas.session import GoalProgressNote, SessionCreate
@@ -2122,8 +2123,7 @@ async def generic_upload(
     try:
         result = upload_evidence_bytes(storage_path, data, file.content_type or "application/octet-stream")
     except Exception as exc:
-        logger.exception("generic upload failed")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc) or "Upload failed") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=internal_error_detail("Upload failed", exc)) from exc
     return {"url": result.file_url}
 
 
@@ -2371,7 +2371,7 @@ async def worker_list_session_note_versions(
     }
 
 
-@router.post("/sessions/{session_id}/transcribe")
+@router.post("/sessions/{session_id}/transcribe", dependencies=[Depends(limit_ai_requests("transcription", 20, 1500, "Transcription"))])
 async def worker_transcribe_session_audio(
     session_id: str,
     audio_file: UploadFile = File(...),

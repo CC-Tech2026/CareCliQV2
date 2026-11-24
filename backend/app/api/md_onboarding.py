@@ -169,7 +169,7 @@ async def get_overview(current_user: dict = Depends(get_current_user)):
             "new_starter_table": new_starters,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't load the onboarding overview", e))
 
 
 # ── Programs ─────────────────────────────────────────────────────────────────

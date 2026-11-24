@@ -3,13 +3,14 @@ import uuid
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, is_managing_director
 from ..core.security import get_current_user
 from ..services import audit_service
 from ..services.chatbox.graph import ask_quill
 from ..services.chatbox.memory import delete_all_threads, delete_thread, list_threads, load_history
+from ..services.ai_usage_guard import limit_ai_requests
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chatbox", tags=["chatbox"])
@@ -24,7 +25,8 @@ def _require_quill_access(current_user: dict) -> None:
 
 
 class ChatRequest(BaseModel):
-    message: str
+    # A question, not a document: long pastes would run up the model bill.
+    message: str = Field(max_length=4000)
     thread_id: Optional[str] = None
     # The answer-length setting in Quill: "brief" (the default) or "detailed".
     answer_style: Optional[Literal["brief", "detailed"]] = None
@@ -53,7 +55,7 @@ class ThreadMessage(BaseModel):
     blocks: list[dict] = []
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse, dependencies=[Depends(limit_ai_requests("quill", 12, 300, "Quill"))])
 async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)):
     """Quill chatbox — support_coordinator and managing_director only."""
     _require_quill_access(current_user)

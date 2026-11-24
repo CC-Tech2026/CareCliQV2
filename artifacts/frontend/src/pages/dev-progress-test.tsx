@@ -34,9 +34,12 @@ const ACTIVE = "var(--cc-active-bg)";
 const BORDER = "var(--cc-border)";
 const TICKETS_PER_PAGE = 5;
 
-const DEV_CONSOLE_PASSWORD = (
-  import.meta.env.VITE_DEV_CONSOLE_PASSWORD as string | undefined
-)?.trim() ?? "";
+// Development builds only. Anything read from import.meta.env is written
+// into the JavaScript every visitor downloads, so in a production build the
+// password would be public; there the page isn't routed at all (App.tsx).
+const DEV_CONSOLE_PASSWORD = import.meta.env.DEV
+  ? ((import.meta.env.VITE_DEV_CONSOLE_PASSWORD as string | undefined)?.trim() ?? "")
+  : "";
 
 const UNLOCK_STORAGE_KEY = "ccq_dev_progress_console_unlocked";
 

@@ -15,6 +15,8 @@ from .api import voice_settings as voice_settings_api
 from .api import xero_payroll as xero_payroll_api
 from .api import public_v1 as public_v1_api
 from .core.security import get_current_user
+from .middleware.body_limit import BodySizeLimitMiddleware
+from .middleware.client_ip import ClientIPMiddleware
 from .middleware.org_context import OrgContextMiddleware
 from .middleware.security_headers import SecurityHeadersMiddleware
 from .middleware.subscription_access import SubscriptionAccessMiddleware
@@ -216,6 +218,11 @@ app.add_middleware(
 # Runs after CORS so preflight OPTIONS requests pass through unaffected.
 app.add_middleware(OrgContextMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+# Uploads are read into memory by their endpoints; refuse huge ones first.
+app.add_middleware(BodySizeLimitMiddleware)
+# Added last so it runs first: every limit below sees the visitor's real
+# address instead of Fly's proxy, and the AI usage count starts here.
+app.add_middleware(ClientIPMiddleware)
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(participants.router, prefix="/api")

@@ -95,7 +95,16 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Participants Portal accounts can't access this.",
         )
+    _count_ai_use_as(payload)
     return payload
+
+
+def _count_ai_use_as(payload: dict) -> None:
+    """AI calls made for this request count toward this user's and their
+    organisation's limits (services/ai_usage_guard.py), not the address's."""
+    from ..services import ai_usage_guard
+
+    ai_usage_guard.set_request_user(payload.get("sub"), payload.get("organization_id"))
 
 
 async def get_optional_user(
@@ -110,8 +119,16 @@ async def get_optional_user(
     if not credentials:
         return None
     payload = decode_access_token(credentials.credentials)
-    if payload and payload.get("role") == "participant" and not participant_may_call(request.url.path):
+    if not payload:
         return None
+    if payload.get("role") == "participant" and not participant_may_call(request.url.path):
+        return None
+    # A signed-out session's token is anonymous here too, as in get_current_user.
+    from ..services import device_security_service as dss
+
+    if payload.get("jti") and not dss.is_session_active(payload.get("jti")):
+        return None
+    _count_ai_use_as(payload)
     return payload
 
 

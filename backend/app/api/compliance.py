@@ -17,6 +17,7 @@ from ..services.settings_service import get_physical_exam_session_types
 from ..services.supabase_client import get_supabase_admin
 import logging
 from ..core.timezone import app_today, participant_timezone, shift_local_date
+from ..services.ai_usage_guard import limit_ai_requests
 
 
 def _local_day(value) -> str:
@@ -67,7 +68,7 @@ def _derive_status(score) -> str:
     return "non_compliant"
 
 
-@router.post("/run/{session_id}")
+@router.post("/run/{session_id}", dependencies=[Depends(limit_ai_requests("ai-actions", 30, 1500))])
 async def run_compliance(session_id: str, current_user: dict = Depends(get_current_user)):
     """Run the compliance engine on a specific session, store results, and get AI explanation."""
     session = await session_service.get_session_by_id(session_id, current_user)

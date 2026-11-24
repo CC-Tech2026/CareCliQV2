@@ -1,4 +1,4 @@
-from supabase import create_client, Client
+from supabase import ClientOptions, create_client, Client
 from ..core.config import settings
 from ..core.supabase_region import validate_supabase_region
 
@@ -21,11 +21,30 @@ def _ensure_supabase_region() -> None:
 
 
 def get_supabase() -> Client:
+    """Shared anon-key client. Never sign anyone in on it: a sign-in stores
+    that user's session on the client, so concurrent requests would read
+    each other's session. Use new_auth_client() for anything per user."""
     global _client
     _ensure_supabase_region()
     if _client is None:
         _client = create_client(settings.supabase_url, settings.supabase_anon_key)
     return _client
+
+
+def new_auth_client() -> Client:
+    """A fresh anon-key client for one sign-in, refresh or MFA check.
+
+    Each request gets its own so its session can't be swapped for another
+    user's mid-request (on the shared client, two people signing in at
+    once could see each other's MFA level, letting one skip their
+    authenticator code). No background token refresh, nothing kept.
+    """
+    _ensure_supabase_region()
+    return create_client(
+        settings.supabase_url,
+        settings.supabase_anon_key,
+        options=ClientOptions(auto_refresh_token=False, persist_session=False),
+    )
 
 
 def get_supabase_admin() -> Client:

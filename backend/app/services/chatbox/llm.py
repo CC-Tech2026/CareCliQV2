@@ -14,9 +14,11 @@ provider; it doesn't decide which one to use.
 import os
 
 from langchain_anthropic import ChatAnthropic
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_openai import ChatOpenAI
 
 from ...core.config import settings
+from ..ai_usage_guard import consume_ai_call
 
 CHATBOX_MODEL = "claude-opus-5-5"
 
@@ -38,6 +40,18 @@ CHATBOX_MODEL_OPENAI = "gpt-4o-mini"
 PROVIDERS = ("anthropic", "openai")
 
 
+class MeterModelCalls(BaseCallbackHandler):
+    """Counts each model step of a Quill answer toward the asker's AI usage
+    limits (one question can take several steps of tool calls), and stops
+    the answer once they're reached."""
+
+    raise_error = True  # let the limit stop the call instead of being logged
+    run_inline = True   # run in the request's context, where the user is known
+
+    def on_chat_model_start(self, serialized, messages, **kwargs):
+        consume_ai_call("quill")
+
+
 def chatbox_effort() -> str:
     configured = (os.environ.get("CHATBOX_EFFORT") or "").strip().lower()
     return configured if configured in CHATBOX_EFFORT_LEVELS else DEFAULT_EFFORT
@@ -57,6 +71,7 @@ def _get_anthropic_chat_model() -> ChatAnthropic:
         # so the next step reads it back cheaply instead of paying for it
         # again. graph.py also marks the fixed instructions for caching.
         "model_kwargs": {"cache_control": {"type": "ephemeral"}},
+        "callbacks": [MeterModelCalls()],
     }
     if base_url and integ_key:
         kwargs["anthropic_api_key"] = integ_key
@@ -68,7 +83,12 @@ def _get_anthropic_chat_model() -> ChatAnthropic:
 
 
 def _get_openai_chat_model() -> ChatOpenAI:
-    return ChatOpenAI(model=CHATBOX_MODEL_OPENAI, api_key=settings.openai_api_key, temperature=0)
+    return ChatOpenAI(
+        model=CHATBOX_MODEL_OPENAI,
+        api_key=settings.openai_api_key,
+        temperature=0,
+        callbacks=[MeterModelCalls()],
+    )
 
 
 def get_chat_model(provider: str | None = None):

@@ -22,7 +22,7 @@ from ..services.notification_service import (
     clean_quiet_hours,
     default_notification_preferences,
 )
-from ..services.supabase_client import get_supabase, get_supabase_admin, signed_storage_url
+from ..services.supabase_client import get_supabase_admin, new_auth_client, signed_storage_url
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["users"])
@@ -268,7 +268,7 @@ async def change_my_password(
 
     try:
         result = await asyncio.to_thread(
-            get_supabase().auth.sign_in_with_password,
+            new_auth_client().auth.sign_in_with_password,
             {"email": email, "password": body.current_password},
         )
         if not result.user:

@@ -8,6 +8,7 @@ from openai import OpenAI
 from typing import Any
 from ..core.config import settings
 from . import onshore_translation
+from .ai_usage_guard import consume_ai_call, metered_anthropic, metered_openai
 import asyncio
 import base64
 import json
@@ -30,12 +31,16 @@ def _openai_configured() -> bool:
 
 def _build_openai_client() -> OpenAI:
     """Prefer Replit AI Integrations (OpenAI-compatible, no user key required);
-    fall back to a direct OPENAI_API_KEY when the integration is not configured."""
+    fall back to a direct OPENAI_API_KEY when the integration is not configured.
+
+    The client is metered: every call counts toward the caller's AI usage
+    limits and is refused once they're reached (ai_usage_guard). Build
+    OpenAI clients here rather than with OpenAI(...) so that holds."""
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     integ_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
     if base_url and integ_key:
-        return OpenAI(api_key=integ_key, base_url=base_url)
-    return OpenAI(api_key=settings.openai_api_key)
+        return metered_openai(api_key=integ_key, base_url=base_url)
+    return metered_openai(api_key=settings.openai_api_key)
 
 
 client = _build_openai_client()
@@ -223,10 +228,9 @@ def get_anthropic_client():
     if not ((base_url and integ_key) or api_key):
         return None
     try:
-        import anthropic
         if base_url and integ_key:
-            return anthropic.Anthropic(api_key=integ_key, base_url=base_url)
-        return anthropic.Anthropic(api_key=api_key)
+            return metered_anthropic(api_key=integ_key, base_url=base_url)
+        return metered_anthropic(api_key=api_key)
     except Exception as e:
         logger.warning(f"Failed to create Anthropic client: {e}")
         return None
@@ -250,6 +254,7 @@ def _google_cloud_translate_sync(text: str) -> dict:
     """Translate text via Google Cloud Translation API v2. Raises on failure."""
     if not _GOOGLE_CLOUD_TRANSLATION_API_KEY:
         raise RuntimeError("GOOGLE_CLOUD_TRANSLATION_API_KEY not configured")
+    consume_ai_call("google_translate")
     payload = json.dumps({"q": text, "target": "en", "format": "text"}).encode()
     req = urllib.request.Request(
         f"{_GOOGLE_TRANSLATE_URL}?key={_GOOGLE_CLOUD_TRANSLATION_API_KEY}",
@@ -1551,6 +1556,7 @@ def _transcribe_google_speech_sync(audio_bytes: bytes, filename: str) -> str:
             "audio": {"content": base64.b64encode(audio_bytes).decode("ascii")},
         }
     ).encode()
+    consume_ai_call("google_speech")
     req = urllib.request.Request(
         f"{_google_speech_recognize_url()}?key={api_key}",
         data=payload,

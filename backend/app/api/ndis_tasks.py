@@ -309,8 +309,10 @@ async def schedule_recurring_tasks(
         raise HTTPException(status_code=400, detail="Invalid date format (use YYYY-MM-DD)")
     except RecurringTaskSchedulerError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't schedule the recurring tasks", e))
 
 
 @router.get("/task-instances")
@@ -350,8 +352,10 @@ async def list_task_instances(
         raise HTTPException(status_code=400, detail="Invalid date format (use YYYY-MM-DD)")
     except RecurringTaskSchedulerError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't load the task list", e))
 
 
 @router.post("/task-instances/{instance_id}/assign")
@@ -374,5 +378,7 @@ async def assign_task_instance(
         return result
     except RecurringTaskSchedulerError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=internal_error_detail("Couldn't assign the task", e))
