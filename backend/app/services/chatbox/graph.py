@@ -105,15 +105,29 @@ def _current_datetime_line() -> str:
     return f'Current date and time: {now.strftime("%A, %d %B %Y, %H:%M")} ({now.tzname()}).'
 
 
-def _system_prompt(provider: str, current_user: dict | None):
+# The person's answer-length setting in Quill. "brief" is how the fixed
+# instructions already ask Quill to answer, so it adds nothing.
+_DETAILED = (
+    "This person has asked for detailed answers. After the one or two sentence "
+    "answer, add a short paragraph or two explaining what is behind the figures: "
+    "what stands out, how it compares, and what they might look at next. Keep it "
+    "plain prose, and still don't repeat every row of a table."
+)
+
+
+def _system_prompt(provider: str, current_user: dict | None, answer_style: str | None = None):
     instructions = _instructions(current_user)
-    clock = _current_datetime_line()
+    # Everything that changes between questions goes after the cached
+    # instructions: the clock, and the answer-length setting.
+    per_question = _current_datetime_line()
+    if answer_style == "detailed":
+        per_question = f"{per_question}\n\n{_DETAILED}"
     if provider == "anthropic":
         return SystemMessage(content=[
             {"type": "text", "text": instructions, "cache_control": {"type": "ephemeral"}},
-            {"type": "text", "text": clock},
+            {"type": "text", "text": per_question},
         ])
-    return f"{instructions}\n\n{clock}"
+    return f"{instructions}\n\n{per_question}"
 
 
 def prompt_text(prompt) -> str:
@@ -126,11 +140,11 @@ def prompt_text(prompt) -> str:
     return str(prompt)
 
 
-def _build_agent(provider: str, tools, current_user: dict | None = None):
+def _build_agent(provider: str, tools, current_user: dict | None = None, answer_style: str | None = None):
     return create_react_agent(
         model=get_chat_model(provider),
         tools=tools,
-        prompt=_system_prompt(provider, current_user),
+        prompt=_system_prompt(provider, current_user, answer_style),
     )
 
 
@@ -146,7 +160,9 @@ def _reply_text(message) -> str:
     return str(content)
 
 
-async def ask_quill(current_user: dict, message: str, thread_id: str) -> tuple[str, list[dict], list[str]]:
+async def ask_quill(
+    current_user: dict, message: str, thread_id: str, answer_style: str | None = None,
+) -> tuple[str, list[dict], list[str]]:
     """Returns (reply_text, blocks, follow_up_questions). Blocks are built
     deterministically from each tool call's raw artifact, not parsed from the
     model's prose; follow-ups are picked by code from the tools that ran.
@@ -170,7 +186,7 @@ async def ask_quill(current_user: dict, message: str, thread_id: str) -> tuple[s
     last_exc: Exception | None = None
     for i, provider in enumerate(providers_to_try):
         try:
-            agent = _build_agent(provider, tools, current_user)
+            agent = _build_agent(provider, tools, current_user, answer_style)
             result = await agent.ainvoke({"messages": messages})
             reply_text = _reply_text(result["messages"][-1]).strip()
             if not reply_text:

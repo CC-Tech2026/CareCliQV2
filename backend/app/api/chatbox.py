@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -26,6 +26,8 @@ def _require_quill_access(current_user: dict) -> None:
 class ChatRequest(BaseModel):
     message: str
     thread_id: Optional[str] = None
+    # The answer-length setting in Quill: "brief" (the default) or "detailed".
+    answer_style: Optional[Literal["brief", "detailed"]] = None
 
 
 class ChatResponse(BaseModel):
@@ -67,7 +69,7 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
     blocks: list[dict] = []
     suggestions: list[str] = []
     try:
-        reply, blocks, suggestions = await ask_quill(current_user, message, thread_id)
+        reply, blocks, suggestions = await ask_quill(current_user, message, thread_id, body.answer_style)
     except Exception as e:
         logger.error(f"Chatbox error: {str(e)}")
         reply = "Sorry, I couldn't get that data right now. Please try again in a moment."
