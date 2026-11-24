@@ -34,7 +34,7 @@ from ..services.branch_service import member_branch_id
 from ..services.email_service import queue_invitation_email, queue_invite_verification_email
 from ..services.employee_id_service import generate_employee_id
 from ..services.supabase_client import get_supabase_admin
-from ..services import webhook_service
+from ..services import audit_service, webhook_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/invitations", tags=["invitations"])
@@ -349,6 +349,67 @@ async def revoke_invite(invite_id: str, request: Request, current_user: dict = D
     except Exception as e:
         logger.error("revoke_invite error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to revoke invitation")
+
+
+@router.post("/{invite_id}/link")
+async def get_invite_link(invite_id: str, request: Request, current_user: dict = Depends(get_current_user)):
+    """The sign-up link for one pending invitation, so the office can send it
+    another way (a text message, say) when the email doesn't arrive.
+
+    The link is a credential: whoever opens it can set up the account for the
+    invited email. So it's never part of /list. It's handed out one invite at
+    a time, only to someone who could have sent that invitation (create's own
+    rule), after they confirm their password, and only while the invite is
+    still usable. Every hand-out is audit-logged.
+    """
+    user_role = current_user.get("role", "")
+    if user_role != "managing_director" and not has_active_grant(current_user, "staff_invitations", get_supabase_admin()):
+        raise HTTPException(status_code=403, detail="Only managing directors can share invitation links")
+    require_recent_reauth(request, current_user)
+
+    org_id = current_user.get("organization_id")
+    if not org_id:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    try:
+        result = (
+            get_supabase_admin().table("invitations")
+            .select("id, email, role, token, short_code, expires_at, accepted_at")
+            .eq("id", invite_id)
+            .eq("organization_id", org_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:
+        logger.error("get_invite_link error: %s", e)
+        raise HTTPException(status_code=500, detail="Couldn't load that invitation")
+
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    invite = result.data[0]
+    if invite.get("accepted_at"):
+        raise HTTPException(status_code=410, detail="This invitation has already been accepted")
+    if _parse_iso(invite["expires_at"]) < _now_utc():
+        raise HTTPException(status_code=410, detail="This invitation has expired. Revoke it and send a new one.")
+
+    try:
+        await audit_service.log_action(
+            action_type="invitation.link_shared",
+            entity_type="invitation",
+            entity_id=invite["id"],
+            user_id=current_user.get("sub"),
+            organization_id=org_id,
+            details={"email": invite["email"], "role": invite["role"]},
+        )
+    except Exception:
+        logger.warning("Failed to audit invitation link share for %s", invite["id"])
+
+    return {
+        "invite_url": f"{settings.frontend_base_url.rstrip('/')}/accept-invite?token={invite['token']}",
+        "short_code": invite.get("short_code"),
+        "email": invite["email"],
+        "expires_at": invite["expires_at"],
+    }
 
 
 @router.get("/organizations")
