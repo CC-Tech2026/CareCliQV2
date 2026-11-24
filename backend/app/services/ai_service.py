@@ -7,6 +7,7 @@ to be NDIS-compliant, person-centred, and audit-ready.
 from openai import OpenAI
 from typing import Any
 from ..core.config import settings
+from . import onshore_translation
 import asyncio
 import base64
 import json
@@ -269,11 +270,11 @@ def _google_cloud_translate_sync(text: str) -> dict:
     }
 
 
-def _libretranslate_sync(text: str) -> dict:
+def _libretranslate_sync(text: str, target: str = "en") -> dict:
     """Try LibreTranslate via LIBRETRANSLATE_URL env var. Raises on failure."""
     if not _LIBRETRANSLATE_URL:
         raise RuntimeError("LIBRETRANSLATE_URL not configured")
-    payload = json.dumps({"q": text, "source": "auto", "target": "en", "format": "text"}).encode()
+    payload = json.dumps({"q": text, "source": "auto", "target": target, "format": "text"}).encode()
     req = urllib.request.Request(
         f"{_LIBRETRANSLATE_URL}/translate",
         data=payload,
@@ -957,10 +958,27 @@ async def translate_to_english(text: str, source_language: str = "auto") -> dict
             "model": None,
         }
 
+    # 1. Gemini on Vertex AI in Sydney: the text stays in Australia.
     try:
-        return _libretranslate_sync(text)
+        return await asyncio.to_thread(onshore_translation.translate_sync, text, "English")
+    except onshore_translation.OnshoreTranslationNotConfigured as exc:
+        logger.info("Gemini in Australia not set up (%s), trying LibreTranslate", exc)
+    except Exception as exc:
+        logger.warning("Gemini in Australia failed, trying LibreTranslate: %s", exc)
+
+    # 2. LibreTranslate, self-hosted (keep it hosted in Australia).
+    try:
+        return await asyncio.to_thread(_libretranslate_sync, text)
     except Exception as libre_exc:
-        logger.info("LibreTranslate unavailable, trying Google Cloud Translation: %s", libre_exc)
+        logger.info("LibreTranslate unavailable: %s", libre_exc)
+
+    # 3. Services outside Australia, only while that's allowed: Google Cloud
+    #    Translation has no Australian endpoint, and OpenAI is in the US.
+    if not onshore_translation.offshore_allowed():
+        raise TranslationProviderUnavailable(
+            "Translation couldn't be done in Australia right now (Gemini in Sydney and LibreTranslate both failed), "
+            "and sending notes overseas is switched off."
+        )
 
     try:
         return _google_cloud_translate_sync(text)
@@ -969,7 +987,8 @@ async def translate_to_english(text: str, source_language: str = "auto") -> dict
 
     if not _openai_configured():
         raise TranslationProviderUnavailable(
-            "Translation provider is not configured. Add GOOGLE_CLOUD_TRANSLATION_API_KEY, OPENAI_API_KEY, or LIBRETRANSLATE_URL on the backend."
+            "Translation provider is not configured. Set up Gemini in Australia (GOOGLE_VERTEX_PROJECT, "
+            "GOOGLE_VERTEX_CREDENTIALS_JSON) or LIBRETRANSLATE_URL on the backend."
         )
 
     lang_hint = (
@@ -1022,6 +1041,10 @@ Respond with a JSON object:
     }
 
 
+# LibreTranslate's codes to try for each preview language: newer versions
+# call Simplified Chinese "zh-Hans", older ones "zh".
+_LIBRETRANSLATE_CODES = {"zh": ("zh-Hans", "zh")}
+
 _WORKER_PREVIEW_LANGUAGE_NAMES = {
     "vi": "Vietnamese",
     "zh": "Chinese (Simplified)",
@@ -1041,7 +1064,22 @@ async def translate_for_worker_preview(text: str, target_language: str) -> dict:
     """
     trimmed = (text or "").strip()
     language_name = _WORKER_PREVIEW_LANGUAGE_NAMES.get(target_language)
-    if not trimmed or not language_name or not _openai_configured():
+    if not trimmed or not language_name:
+        return {"translated": trimmed, "target_language": target_language, "translated_ok": False}
+
+    # Gemini in Sydney first, then LibreTranslate: both keep the note in Australia.
+    try:
+        result = await asyncio.to_thread(onshore_translation.translate_sync, trimmed[:2000], language_name)
+        return {"translated": result["translated"], "target_language": target_language, "translated_ok": True}
+    except Exception as exc:
+        logger.info("Worker-preview translation in Australia via Gemini unavailable: %s", exc)
+    for code in _LIBRETRANSLATE_CODES.get(target_language, (target_language,)):
+        try:
+            result = await asyncio.to_thread(_libretranslate_sync, trimmed[:2000], code)
+            return {"translated": result["translated"], "target_language": target_language, "translated_ok": True}
+        except Exception as exc:
+            logger.info("Worker-preview translation via LibreTranslate (%s) unavailable: %s", code, exc)
+    if not onshore_translation.offshore_allowed() or not _openai_configured():
         return {"translated": trimmed, "target_language": target_language, "translated_ok": False}
 
     prompt = f"""Translate the following English clinical/care note into natural, fluent {language_name}. Preserve the meaning exactly - do not add, omit, or alter any information.
