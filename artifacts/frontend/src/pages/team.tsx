@@ -164,6 +164,9 @@ export default function Team() {
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
+  // A pending invite's link, shown only when the browser wouldn't let us copy it.
+  const [shownLink, setShownLink] = useState<{ id: string; url: string } | null>(null);
+  const [linkBusyId, setLinkBusyId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("support_worker");
   const [inviteSending, setInviteSending] = useState(false);
@@ -206,6 +209,47 @@ export default function Team() {
     setInviteOpen(true);
     navigate("/team", { replace: true });
   }, [canInviteStaff, navigate]);
+
+  // A pending invite's sign-up link, for when the email didn't arrive. The
+  // link lets whoever opens it set up that account, so the API asks for the
+  // password again and records each copy; it's never in the invite list.
+  async function copyInviteLink(inv: PendingInvite) {
+    setLinkBusyId(inv.id);
+    setShownLink(null);
+    try {
+      const outcome = await requireReAuth(async () => {
+        try {
+          const link = await jsonFetch<{ invite_url: string; email: string; expires_at: string }>(
+            `/api/invitations/${inv.id}/link`,
+            { method: "POST" },
+          );
+          return { link } as const;
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : "Please try again." } as const;
+        }
+      });
+      if (!outcome) return; // the password check was cancelled
+      if ("error" in outcome) {
+        toast({ title: "Couldn't get the invite link", description: outcome.error, variant: "destructive" });
+        return;
+      }
+      const { link } = outcome;
+      const until = safeFormat(link.expires_at, "d MMM yyyy");
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(link.invite_url);
+        copied = true;
+      } catch {
+        setShownLink({ id: inv.id, url: link.invite_url });
+      }
+      toast({
+        title: copied ? "Invite link copied" : "Here's the invite link",
+        description: `Send it only to ${link.email}: anyone with it can set up their account. It works until ${until}.`,
+      });
+    } finally {
+      setLinkBusyId(null);
+    }
+  }
 
   const orgId = user?.organizationId ?? "__no_org__";
 
@@ -984,6 +1028,7 @@ export default function Team() {
           if (!open) {
             setInviteEmail("");
             setInviteRole("support_worker");
+            setShownLink(null);
           }
         }}
         icon={UserPlus}
@@ -1043,7 +1088,7 @@ export default function Team() {
                   return (
                     <li
                       key={inv.id}
-                      className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-2.5 py-2"
                       style={{ borderColor: BORDER, background: SOFT }}
                     >
                       <div className="min-w-0">
@@ -1054,6 +1099,20 @@ export default function Team() {
                           {expired ? translate("team.invite.expired") : translate("team.invite.pending")}
                         </p>
                       </div>
+                      {canInviteStaff && !expired && (
+                        <button
+                          type="button"
+                          onClick={() => void copyInviteLink(inv)}
+                          disabled={linkBusyId === inv.id}
+                          className="shrink-0 rounded-full p-1 hover:bg-black/5 disabled:opacity-40"
+                          title="Copy invite link"
+                          aria-label={`Copy invite link for ${inv.email}`}
+                        >
+                          {linkBusyId === inv.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: MUTED }} />
+                            : <Link2 className="h-3.5 w-3.5" style={{ color: MUTED }} />}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => revokeInviteMut.mutate(inv.id)}
@@ -1064,6 +1123,22 @@ export default function Team() {
                       >
                         <UserX className="h-3.5 w-3.5" style={{ color: MUTED }} />
                       </button>
+                      {shownLink?.id === inv.id && (
+                        <div className="basis-full pt-1">
+                          <input
+                            readOnly
+                            value={shownLink.url}
+                            aria-label={`Invite link for ${inv.email}`}
+                            onFocus={(e) => e.currentTarget.select()}
+                            autoFocus
+                            className="w-full rounded-md border px-2 py-1 text-[11px]"
+                            style={{ borderColor: BORDER, color: TEXT, background: SURFACE }}
+                          />
+                          <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
+                            Copy this and send it only to {inv.email}.
+                          </p>
+                        </div>
+                      )}
                     </li>
                   );
                 })}
