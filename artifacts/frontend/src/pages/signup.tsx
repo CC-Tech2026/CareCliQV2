@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
 import { OtpInput } from "@/components/auth/OtpInput";
+import { PasswordChecklist, missingPasswordRules, passwordMeetsRules } from "@/components/auth/PasswordChecklist";
 import { uploadProfilePhoto } from "@/services/userService";
 import { abnIsValid, formatAbn, registrationValid } from "@/components/settings/OrganisationDetailsCard";
 
@@ -32,55 +33,6 @@ const BG = "var(--auth-input-bg)";
 
 // Solid brand colors — no gradients.
 const LOGO_PURPLE = "#7C3AED";
-
-// ── Password Strength Indicator ───────────────────────────────────────────────
-function PasswordStrengthBar({ password, t }: { password: string; t: (key: string) => string }) {
-  const getScore = (pwd: string): number => {
-    let score = 0;
-    if (pwd.length >= 10) score++;
-    if (pwd.length >= 12) score++;
-    if (/[a-z]/.test(pwd)) score++;
-    if (/[A-Z]/.test(pwd)) score++;
-    if (/[0-9]/.test(pwd)) score++;
-    if (/[^a-zA-Z0-9]/.test(pwd)) score++;
-    return Math.min(score, 4);
-  };
-
-  const score = getScore(password);
-  const colors = ["#EF4444", "#F97316", "#FBBF24", "#22C55E"];
-  const labels = [
-    t("auth.signup.passwordWeak"),
-    t("auth.signup.passwordFair"),
-    t("auth.signup.passwordGood"),
-    t("auth.signup.passwordStrong"),
-  ];
-
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-1.5">
-        {[...Array(4)].map((_, i) => (
-          <div
-            key={i}
-            className="flex-1 h-1.5 rounded-full transition-all duration-300"
-            style={{
-              background: i < score ? colors[score - 1] : "#E8E8EA",
-            }}
-          />
-        ))}
-      </div>
-      {password && (
-        <>
-          <p className="text-[11px] font-medium" style={{ color: colors[Math.max(score - 1, 0)] }}>
-            {labels[Math.max(score - 1, 0)]}
-          </p>
-          <p className="text-[11px] leading-snug" style={{ color: "var(--cc-muted)" }}>
-            {t("auth.signup.passwordHint")}
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface FormData {
@@ -288,6 +240,10 @@ export default function Signup() {
   const urlInviteToken = new URLSearchParams(window.location.search).get("token") ?? "";
   const [mode, setMode] = useState<"join" | "create">(urlInviteToken ? "join" : "join");
   const [step, setStep] = useState(1);
+  // The step whose Continue was pressed while something was still missing;
+  // its list of problems shows (and updates as they're fixed) until the step changes.
+  const [attemptedStep, setAttemptedStep] = useState<number | null>(null);
+  useEffect(() => setAttemptedStep(null), [step]);
   const [form, setForm] = useState<FormData>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [emailVerify, setEmailVerify] = useState(false);
@@ -424,12 +380,50 @@ export default function Signup() {
   const STEP_LABELS = isJoin ? JOIN_STEP_LABELS : CREATE_STEP_LABELS;
 
   function accountDetailsValid() {
-    return (
-      form.full_name.trim() !== "" &&
-      form.email.trim() !== "" &&
-      form.password.length >= 10 &&
-      form.password === form.confirm_password
-    );
+    return accountProblems().length === 0;
+  }
+
+  // What still stops each step, in plain words. Continue stays clickable
+  // and lists these on a click, instead of sitting greyed out with no
+  // reason given (people read a greyed-out button as the page being broken).
+  function accountProblems(): string[] {
+    const problems: string[] = [];
+    if (form.full_name.trim() === "") problems.push("Enter your full name.");
+    if (form.email.trim() === "") {
+      problems.push(isJoin ? "This invite has no email address. Ask for a new invite." : "Enter your email address.");
+    }
+    const missing = missingPasswordRules(form.password);
+    if (missing.length) problems.push(`Your password needs ${missing.join(", ")}.`);
+    else if (form.password !== form.confirm_password) problems.push("Type the same password again in Confirm password.");
+    return problems;
+  }
+
+  function profileProblems(): string[] {
+    const problems: string[] = [];
+    if (form.sp_address.trim() === "") problems.push("Enter your address.");
+    if (!isFoundingDirector) return problems;
+    const abn = form.sp_abn.replace(/\s/g, "");
+    const reg = form.sp_ndis_reg.replace(/\s/g, "");
+    if (form.sp_state === "") problems.push("Choose the state your head office is in.");
+    if (abn !== "" && !abnIsValid(abn)) problems.push("Check the ABN: it should be 11 digits, or leave it blank for now.");
+    if (reg !== "" && !registrationValid(reg)) problems.push("Check the NDIS registration number, or leave it blank for now.");
+    return problems;
+  }
+
+  function step2Problems(): string[] {
+    const required: [string, string][] = [
+      [form.sp_organisation_name, t("auth.signup.field.organisationName")],
+      [form.sp_provider_type, t("auth.signup.field.providerType")],
+      [form.sp_org_type, t("auth.signup.field.orgType")],
+      [form.sp_registration_status, t("auth.signup.field.registrationStatus")],
+      [form.sp_team_size, t("auth.signup.field.teamSize")],
+      [form.sp_participant_volume, t("auth.signup.field.participantVolume")],
+      [form.sp_contact_number, t("auth.signup.field.contactNumber")],
+      [form.sp_address, t("auth.signup.field.address")],
+      [form.sp_state, "State"],
+    ];
+    const missing = required.filter(([value]) => value.trim() === "").map(([, label]) => label);
+    return missing.length ? [`Fill in: ${missing.join(", ")}.`] : [];
   }
 
   function step1Valid() {
@@ -437,15 +431,7 @@ export default function Signup() {
   }
 
   function profileValid() {
-    if (form.sp_address.trim() === "") return false;
-    if (!isFoundingDirector) return true;
-    const abn = form.sp_abn.replace(/\s/g, "");
-    const reg = form.sp_ndis_reg.replace(/\s/g, "");
-    return (
-      form.sp_state !== "" &&
-      (abn === "" || abnIsValid(abn)) &&
-      (reg === "" || registrationValid(reg))
-    );
+    return profileProblems().length === 0;
   }
 
   /** Writes the founding director's answers onto the organisation itself,
@@ -475,17 +461,7 @@ export default function Signup() {
   }
 
   function step2Valid() {
-    return (
-      form.sp_organisation_name.trim() !== "" &&
-      form.sp_provider_type.trim() !== "" &&
-      form.sp_org_type.trim() !== "" &&
-      form.sp_registration_status.trim() !== "" &&
-      form.sp_team_size.trim() !== "" &&
-      form.sp_participant_volume.trim() !== "" &&
-      form.sp_contact_number.trim() !== "" &&
-      form.sp_address.trim() !== "" &&
-      form.sp_state.trim() !== ""
-    );
+    return step2Problems().length === 0;
   }
 
   async function handleLookupInviteCode() {
@@ -706,7 +682,11 @@ export default function Signup() {
   async function handleSubmit(e?: React.FormEvent) {
     if (e) e.preventDefault();
 
-    if (!step2Valid() || busy) return;
+    if (busy) return;
+    if (!step2Valid()) {
+      setAttemptedStep(2);
+      return;
+    }
 
     if (invite?.token && mode === "create") {
       await handleInviteSubmit();
@@ -803,7 +783,7 @@ export default function Signup() {
   const mismatch =
     !!form.confirm_password && form.password !== form.confirm_password;
 
-  const short = !!form.password && form.password.length < 10;
+  const short = attemptedStep !== null && !passwordMeetsRules(form.password);
 
   if (inviteLoading) {
     return (
@@ -898,7 +878,7 @@ export default function Signup() {
   const showFooter = isJoin ? step < 5 : step < 3;
 
   return (
-    <div className="relative h-screen w-screen flex overflow-hidden md:gap-6 md:p-6 bg-[var(--auth-shell-bg)] md:bg-[#7C3AED] text-cc-text">
+    <div className="relative h-screen supports-[height:100dvh]:h-[100dvh] w-full flex overflow-hidden md:gap-6 md:p-6 bg-[var(--auth-shell-bg)] md:bg-[#7C3AED] text-cc-text">
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -942,7 +922,7 @@ export default function Signup() {
         }}
       />
       {/* LEFT */}
-      <div className="hidden md:flex md:flex-1 relative h-full overflow-hidden flex-col justify-between p-12 md:rounded-[28px]">
+      <div className="hidden md:flex md:flex-1 relative h-full overflow-hidden flex-col justify-between p-12 [@media(max-height:760px)]:p-8 md:rounded-[28px]">
         {/* Hero photo fills the panel. Text sits on a flat (non-gradient) dark
             scrim, so colours here are hardcoded light values instead of the
             theme-conditional --auth-* vars — the backdrop is always a dark
@@ -964,7 +944,7 @@ export default function Signup() {
           </div>
 
           <div>
-            <h1 className="text-[42px] font-black leading-[1.15] tracking-tight" style={{ color: "#FFFFFF" }}>
+            <h1 className="text-[42px] [@media(max-height:760px)]:text-[30px] lg:max-xl:text-[34px] font-black leading-[1.15] tracking-tight" style={{ color: "#FFFFFF" }}>
               <span className="auth-headline-line" style={{ animationDelay: "0ms" }}>
                 {t("auth.signup.marketing.headline1")}
               </span>
@@ -978,7 +958,7 @@ export default function Signup() {
 
             {/* Testimonial */}
             <div
-              className="mt-8 max-w-[380px] rounded-2xl p-4"
+              className="mt-8 max-w-[380px] rounded-2xl p-4 [@media(max-height:760px)]:hidden"
               style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
             >
               <Quote size={16} style={{ color: LOGO_PURPLE }} />
@@ -1011,7 +991,7 @@ export default function Signup() {
       </div>
 
       {/* RIGHT */}
-      <div className="auth-scroll-hide relative w-full md:w-[600px] md:shrink-0 flex items-start justify-center overflow-y-auto p-4 sm:p-8 md:p-12 lg:px-16 md:rounded-[28px] md:border md:bg-[var(--auth-form-bg)] md:[border-color:var(--auth-card-border)] md:shadow-[var(--cc-shadow-lg)]">
+      <div className="relative w-full md:w-[min(600px,55vw)] md:shrink-0 flex items-start justify-center overflow-y-auto overscroll-contain p-4 sm:p-8 md:p-12 lg:px-16 [@media(max-height:760px)]:md:py-6 md:rounded-[28px] md:border md:bg-[var(--auth-form-bg)] md:[border-color:var(--auth-card-border)] md:shadow-[var(--cc-shadow-lg)]">
         <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
           <AuthThemeToggle />
         </div>
@@ -1040,7 +1020,7 @@ export default function Signup() {
             ))}
           </div>
 
-          <div className="w-full min-h-0 pointer-events-auto rounded-[2rem] px-5 py-6 sm:p-8 shadow-[var(--cc-shadow-md)] border overflow-y-auto bg-[var(--auth-form-bg)] max-h-[calc(100vh-8rem)]" style={{ borderColor: "var(--auth-card-border)" }}>
+          <div className="w-full pointer-events-auto rounded-[2rem] px-5 py-6 sm:p-8 shadow-[var(--cc-shadow-md)] border bg-[var(--auth-form-bg)]" style={{ borderColor: "var(--auth-card-border)" }}>
             {isJoin && step === 1 && (
               <form
                 onSubmit={(e) => {
@@ -1117,6 +1097,7 @@ export default function Signup() {
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (accountDetailsValid()) setStep(3);
+                  else setAttemptedStep(2);
                 }}
                 className="space-y-4 step-content"
               >
@@ -1161,11 +1142,7 @@ export default function Signup() {
                     showPasswordLabel={t("auth.signup.showPassword")}
                     hidePasswordLabel={t("auth.signup.hidePassword")}
                   />
-                  {form.password ? (
-                    <div className="mt-2.5">
-                      <PasswordStrengthBar password={form.password} t={t} />
-                    </div>
-                  ) : null}
+                  <PasswordChecklist password={form.password} />
                 </div>
 
                 <div>
@@ -1179,6 +1156,7 @@ export default function Signup() {
                   </div>
                   <StyledInput
                     name="confirm_password"
+                    autoComplete="new-password"
                     type="password"
                     value={form.confirm_password}
                     onChange={(v) => updateField("confirm_password", v)}
@@ -1189,6 +1167,7 @@ export default function Signup() {
                   />
                 </div>
 
+                <StepProblems problems={attemptedStep === 2 ? accountProblems() : []} />
                 <div className="flex gap-3 pt-3">
                   <button
                     type="button"
@@ -1200,7 +1179,6 @@ export default function Signup() {
                   </button>
                   <button
                     type="submit"
-                    disabled={!accountDetailsValid()}
                     className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
                     style={{ background: PLUM }}
                   >
@@ -1215,6 +1193,7 @@ export default function Signup() {
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (profileValid()) setStep(4);
+                  else setAttemptedStep(3);
                 }}
                 className="space-y-4 step-content"
               >
@@ -1327,6 +1306,7 @@ export default function Signup() {
                   </>
                 )}
 
+                <StepProblems problems={attemptedStep === 3 ? profileProblems() : []} />
                 <div className="flex gap-3 pt-3">
                   <button
                     type="button"
@@ -1338,7 +1318,6 @@ export default function Signup() {
                   </button>
                   <button
                     type="submit"
-                    disabled={!profileValid()}
                     className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
                     style={{ background: PLUM }}
                   >
@@ -1469,6 +1448,7 @@ export default function Signup() {
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (step1Valid()) setStep(2);
+                  else setAttemptedStep(1);
                 }}
                 className="space-y-4 step-content"
               >
@@ -1517,11 +1497,7 @@ export default function Signup() {
                     showPasswordLabel={t("auth.signup.showPassword")}
                     hidePasswordLabel={t("auth.signup.hidePassword")}
                   />
-                  {form.password ? (
-                    <div className="mt-2.5">
-                      <PasswordStrengthBar password={form.password} t={t} />
-                    </div>
-                  ) : null}
+                  <PasswordChecklist password={form.password} />
                 </div>
 
                 <div>
@@ -1535,6 +1511,7 @@ export default function Signup() {
                   </div>
                   <StyledInput
                     name="confirm_password"
+                    autoComplete="new-password"
                     type="password"
                     value={form.confirm_password}
                     onChange={(v) => updateField("confirm_password", v)}
@@ -1545,6 +1522,7 @@ export default function Signup() {
                   />
                 </div>
 
+                <StepProblems problems={attemptedStep === 1 ? accountProblems() : []} />
                 <div className="flex gap-3 pt-3">
                   <button
                     type="button"
@@ -1556,7 +1534,6 @@ export default function Signup() {
                   </button>
                   <button
                     type="submit"
-                    disabled={!step1Valid()}
                     className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
                     style={{ background: PLUM }}
                   >
@@ -1585,6 +1562,7 @@ export default function Signup() {
                   t={t}
                 />
 
+                <StepProblems problems={attemptedStep === 2 ? step2Problems() : []} />
                 <div className="flex gap-3 pt-3">
                   <button
                     type="button"
@@ -1596,7 +1574,7 @@ export default function Signup() {
                   </button>
                   <button
                     type="submit"
-                    disabled={!step2Valid() || busy}
+                    disabled={busy}
                     className="flex-1 h-11 rounded-xl text-white font-black transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
                     style={{ background: PLUM }}
                   >
@@ -2007,5 +1985,29 @@ function SmallProviderFields({
         </p>
       </div>
     </>
+  );
+}
+
+/** What still stops Continue, shown after it's pressed. Announced to screen
+ * readers, and it shrinks as each item is fixed. */
+function StepProblems({ problems }: { problems: string[] }) {
+  if (!problems.length) return null;
+  return (
+    <div
+      role="alert"
+      className="rounded-xl border px-3.5 py-2.5 text-[13px] leading-snug"
+      style={{
+        borderColor: "var(--cc-status-danger, #DC2626)",
+        background: "color-mix(in srgb, var(--cc-status-danger, #DC2626) 6%, transparent)",
+        color: "var(--cc-text)",
+      }}
+    >
+      <p className="font-bold">Before you continue</p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-5">
+        {problems.map((problem) => (
+          <li key={problem}>{problem}</li>
+        ))}
+      </ul>
+    </div>
   );
 }

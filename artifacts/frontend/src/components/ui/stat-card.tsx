@@ -189,7 +189,7 @@ const KpiCard = React.forwardRef<HTMLDivElement, KpiCardProps>(
             {value}
           </p>
           {sub && (
-            <p className="mt-1.5 text-[11px] font-medium truncate" style={{ color: "var(--cc-muted)" }}>
+            <p className="mt-1.5 text-[11px] font-medium leading-snug line-clamp-2" style={{ color: "var(--cc-muted)" }}>
               {sub}
             </p>
           )}
@@ -215,7 +215,7 @@ const KpiCard = React.forwardRef<HTMLDivElement, KpiCardProps>(
               {value}
             </p>
             {sub && (
-              <p className="mt-1 text-[10px] font-medium truncate" style={{ color: "var(--cc-muted)" }}>
+              <p className="mt-1 text-[10px] font-medium leading-snug line-clamp-2" style={{ color: "var(--cc-muted)" }}>
                 {sub}
               </p>
             )}
@@ -231,7 +231,7 @@ KpiCard.displayName = "KpiCard"
 /** Responsive grid wrapper for KpiCard — 1 col on mobile, 2 on sm, 4 on lg. */
 const KpiGrid = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4", className)} {...props} />
+    <div ref={ref} className={cn("grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4", className)} {...props} />
   ),
 )
 KpiGrid.displayName = "KpiGrid"

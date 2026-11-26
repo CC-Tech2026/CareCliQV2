@@ -44,3 +44,21 @@ def password_strength_score(password: str) -> int:
     if re.search(r"\d", password) and re.search(r"[^A-Za-z0-9]", password):
         score += 1
     return min(score, 4)
+
+
+def auth_password_error(exc: Exception) -> str | None:
+    """A readable reason when the auth service refuses a password.
+
+    Supabase can be stricter than our own policy (its project settings may
+    demand more character types, or block passwords seen in breaches). Its
+    refusal used to surface as "Failed to create account, please try again",
+    which reads like an outage, so people tried the same password again."""
+    text = str(exc).lower()
+    if "pwned" in text or "breach" in text or "leaked" in text:
+        return "This password has appeared in a data breach. Choose a different password."
+    if "weak" in text or ("password" in text and ("should" in text or "must" in text or "at least" in text)):
+        return (
+            "This password isn't strong enough. Use at least 10 characters with "
+            "a capital letter, a lower-case letter and a number."
+        )
+    return None

@@ -33,6 +33,7 @@ from ..api.security import require_recent_reauth
 from ..services.branch_service import member_branch_id
 from ..services.email_service import queue_invitation_email, queue_invite_verification_email
 from ..services.employee_id_service import generate_employee_id
+from ..services.password_policy import auth_password_error, validate_password_policy
 from ..services.supabase_client import get_supabase_admin
 from ..services import audit_service, webhook_service
 
@@ -988,6 +989,12 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
     # friction without a corresponding security gap it closed. Removed rather
     # than reintroduce the (already broken) code screen.
 
+    if not body.full_name.strip():
+        raise HTTPException(status_code=422, detail="Enter your full name.")
+    policy_error = validate_password_policy(body.password)
+    if policy_error:
+        raise HTTPException(status_code=422, detail=policy_error)
+
     email = invite["email"]
     role  = invite["role"]
     org_id = invite["organization_id"]
@@ -1015,6 +1022,9 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
                 status_code=409,
                 detail="An account with this email already exists. Please sign in and contact your support coordinator to link you to the organization.",
             )
+        password_error = auth_password_error(e)
+        if password_error:
+            raise HTTPException(status_code=422, detail=password_error)
         logger.error("accept_invite create_user error: %s", e)
         raise HTTPException(status_code=400, detail="Failed to create account — please try again")
 

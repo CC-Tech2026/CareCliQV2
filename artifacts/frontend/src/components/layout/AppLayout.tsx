@@ -544,7 +544,7 @@ function SidebarContents({
       </div>
 
       {/* Nav */}
-      <nav className={cn("flex-1 overflow-y-auto scrollbar-none py-3", compact ? "px-1.5" : "px-3")}>
+      <nav className={cn("flex-1 overflow-y-auto cc-sidebar-scroll py-3", compact ? "px-1.5" : "px-3")}>
         {sections.map((section, si) => (
           <div key={si} className={si > 0 ? "mt-5" : ""}>
             {section.group && !compact && (

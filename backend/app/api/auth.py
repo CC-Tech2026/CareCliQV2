@@ -22,6 +22,7 @@ from ..services.branch_service import member_branch_id
 from ..services.employee_id_service import generate_employee_id
 from ..services import email_service
 from ..services import device_security_service as dss
+from ..services.password_policy import auth_password_error, validate_password_policy
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -565,6 +566,10 @@ async def register(body: RegisterRequest):
             detail=f"Invalid account_type. Must be one of: {', '.join(VALID_ACCOUNT_TYPES)}",
         )
 
+    policy_error = validate_password_policy(body.password)
+    if policy_error:
+        raise HTTPException(status_code=422, detail=policy_error)
+
     role = _ACCOUNT_TYPE_TO_ROLE[body.account_type]
     supabase_admin = get_supabase_admin()
 
@@ -598,6 +603,9 @@ async def register(body: RegisterRequest):
                 status_code=409,
                 detail="An account with this email already exists. Please sign in.",
             )
+        password_error = auth_password_error(e)
+        if password_error:
+            raise HTTPException(status_code=422, detail=password_error)
         raise HTTPException(
             status_code=400,
             detail="Registration failed — please check your details and try again.",
@@ -1182,10 +1190,9 @@ async def confirm_password_reset(body: PasswordResetConfirmRequest):
     token = body.access_token.strip()
     token_hash = body.token_hash.strip()
     password = body.password
-    if len(password) < 10:
-        raise HTTPException(
-            status_code=422, detail="Password must be at least 10 characters."
-        )
+    policy_error = validate_password_policy(password)
+    if policy_error:
+        raise HTTPException(status_code=422, detail=policy_error)
     if not token and token_hash:
         verify_result = _supabase_auth_request(
             "verify",
