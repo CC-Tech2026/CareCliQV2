@@ -25,18 +25,47 @@ function group(blocks: ChatBlock[]): Group[] {
   return out;
 }
 
+type Section = { name: string | null; blocks: ChatBlock[] };
+
+/** Blocks by topic, in the order each topic first appears. Two tools can
+ * share a topic (revenue and the financial overview are both "Finances"). */
+function sections(blocks: ChatBlock[]): Section[] {
+  const out: Section[] = [];
+  for (const block of blocks) {
+    const name = block.section ?? null;
+    const existing = out.find((s) => s.name === name);
+    if (existing) existing.blocks.push(block);
+    else out.push({ name, blocks: [block] });
+  }
+  return out;
+}
+
 export function QuillBlocks({ blocks, size }: { blocks: ChatBlock[]; size: QuillSize }) {
   if (!blocks.length) return null;
+  const groups = sections(blocks);
+  // One topic needs no heading: the card titles already say what it is.
+  const labelled = groups.length > 1;
   return (
-    <div className="space-y-3">
-      {group(blocks).map((g, i) => {
-        if (g.kind === "stats") return <StatStrip key={i} stats={g.stats} size={size} />;
-        const b = g.block;
-        if (b.type === "table") return <TableView key={i} block={b} size={size} />;
-        if (b.type === "bar_chart") return <ChartView key={i} block={b} size={size} />;
-        if (b.type === "download") return <DownloadView key={i} block={b} />;
-        return null;
-      })}
+    <div className={labelled ? "space-y-5 pt-1" : "space-y-3"}>
+      {groups.map((section, s) => (
+        <section key={section.name ?? `s${s}`} aria-label={labelled ? (section.name ?? "Other details") : undefined}>
+          {labelled && (
+            <h3 className="mb-2 text-[12px] font-semibold" style={{ color: MUTED }}>
+              {section.name ?? "Other details"}
+            </h3>
+          )}
+          <div className="space-y-2.5">
+            {group(section.blocks).map((g, i) => {
+              if (g.kind === "stats") return <StatStrip key={i} stats={g.stats} size={size} />;
+              const b = g.block;
+              if (b.type === "table") return <TableView key={i} block={b} size={size} />;
+              if (b.type === "bar_chart") return <ChartView key={i} block={b} size={size} />;
+              if (b.type === "download") return <DownloadView key={i} block={b} />;
+              return null;
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -60,7 +89,7 @@ function StatStrip({ stats, size }: { stats: StatBlock[]; size: QuillSize }) {
             className="min-w-0 px-3.5 py-2.5"
             style={{ background: "var(--cc-surface)", gridColumn: spanRest ? `span ${cols - (stats.length % cols) + 1}` : undefined }}
           >
-            <p className="truncate text-[11px] font-medium" style={{ color: MUTED }} title={s.label}>
+            <p className="line-clamp-2 text-[11px] font-medium leading-snug" style={{ color: MUTED }} title={s.label}>
               {s.label}
             </p>
             <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5">
@@ -88,6 +117,7 @@ function StatStrip({ stats, size }: { stats: StatBlock[]; size: QuillSize }) {
 type Cell = string | number | null;
 
 const NUMERIC = /^-?\$?-?[\d,]+(\.\d+)?%?$/;
+const SHORT_CELL = 18;
 
 function toNumber(cell: Cell): number | null {
   if (typeof cell === "number") return cell;
@@ -192,7 +222,7 @@ function TableView({ block, size }: { block: TableBlock; size: QuillSize }) {
                   key={i}
                   scope="col"
                   aria-sort={sort?.col === i ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
-                  className={`whitespace-nowrap px-3.5 py-2 font-medium ${numeric[i] ? "text-right" : "text-left"}`}
+                  className={`whitespace-nowrap ${size === "full" ? "px-3.5" : "px-2.5"} py-2 font-medium ${numeric[i] ? "text-right" : "text-left"}`}
                   style={{ color: MUTED, fontSize: 11.5 }}
                 >
                   {c ? (
@@ -217,10 +247,14 @@ function TableView({ block, size }: { block: TableBlock; size: QuillSize }) {
               <tr key={r} className="border-t" style={{ borderColor: BORDER }}>
                 {row.map((cell, c) => {
                   const tone = cellTone(cell);
+                  // In full screen, names, dates and "37 days ago" stay on
+                  // one line. The side panel is too narrow for that without
+                  // pushing the last column out of view, so there they wrap.
+                  const short = size === "full" && cell != null && String(cell).length <= SHORT_CELL;
                   return (
                     <td
                       key={c}
-                      className={`px-3.5 py-2 align-top ${numeric[c] ? "text-right tabular-nums whitespace-nowrap" : ""}`}
+                      className={`${size === "full" ? "px-3.5" : "px-2.5"} py-2 align-top ${numeric[c] ? "text-right tabular-nums whitespace-nowrap" : short ? "whitespace-nowrap" : ""}`}
                       style={{ color: tone ?? TEXT, fontWeight: tone && tone !== MUTED ? 600 : undefined }}
                     >
                       {cell ?? "—"}
