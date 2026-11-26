@@ -79,7 +79,7 @@ export function writeLastFullScreen(full: boolean) {
 
 /** Text sizes for each Quill size and text-size setting, in pixels. */
 export function textSizes(full: boolean, large: boolean) {
-  const base = full ? 14.5 : 13;
+  const base = full ? 15.5 : 14;
   const bump = large ? 1.5 : 0;
   return { body: base + bump, small: (full ? 12.5 : 12) + bump };
 }

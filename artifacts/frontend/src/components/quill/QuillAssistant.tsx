@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
+  ArrowDown,
   ArrowUpRight,
   Check,
   Copy,
@@ -41,7 +42,7 @@ const DISPLAY = "var(--app-font-display)";
 const MASCOT_SRC = "/carecliq-bot-quill-mark.svg";
 const BTN_SIZE = 56;
 const MARGIN = 16;
-const PANEL_W = 420;
+const PANEL_W = 460;
 const PANEL_H = 680;
 
 const DIRECTOR_STARTERS = [
@@ -57,8 +58,6 @@ const COORDINATOR_STARTERS = [
   "How many incidents are open?",
   "What shifts are on tomorrow?",
 ];
-
-const THINKING = ["Looking that up", "Checking the records", "Putting it together"];
 
 type Mode = "closed" | "panel" | "full";
 
@@ -222,7 +221,7 @@ export function QuillAssistant() {
   }
 
   function submit(text: string) {
-    if (!text.trim() || chat.pending) return;
+    if (!text.trim() || chat.pending || chat.openingThread) return;
     chat.send(text);
     setDraft("");
     focusInput();
@@ -302,6 +301,7 @@ export function QuillAssistant() {
       onSubmit={() => submit(draft)}
       onStop={chat.stop}
       pending={chat.pending}
+      opening={chat.openingThread}
       size={size}
       large={large}
       enterSends={settings.enterSends}
@@ -725,6 +725,9 @@ function Conversation({
   onRetry: (id: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const nearBottom = useRef(true);
+  const [showLatest, setShowLatest] = useState(false);
   const full = size === "full";
   const fonts = textSizes(full, large);
   // One avatar size for answers and the "looking that up" row, so the text
@@ -733,14 +736,31 @@ function Conversation({
 
   useEffect(() => {
     const el = scrollRef.current;
-    el?.scrollTo?.({ top: el.scrollHeight, behavior: "smooth" });
+    if (messages.at(-1)?.role === "user") nearBottom.current = true;
+    if (nearBottom.current) el?.scrollTo?.({ top: el.scrollHeight, behavior: "instant" });
   }, [messages.length, pending, opening]);
+
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined" || !contentRef.current) return;
+    const observer = new ResizeObserver(() => {
+      const el = scrollRef.current;
+      if (el && nearBottom.current) el.scrollTo?.({ top: el.scrollHeight, behavior: "instant" });
+    });
+    observer.observe(contentRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
 
   return (
-    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-      <div className={`mx-auto w-full ${full ? "max-w-[768px] px-6 py-8" : "px-4 py-4"}`}>
+    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain" onScroll={() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      setShowLatest(!nearBottom.current);
+    }}>
+      <div ref={contentRef} className={`mx-auto w-full ${full ? "max-w-[820px] px-6 py-8" : "px-4 py-5"}`}>
         {opening && (
           <p className="py-6 text-center text-[12.5px]" style={{ color: MUTED }}>
             Opening conversation...
@@ -751,12 +771,12 @@ function Conversation({
           <EmptyState full={full} fontSize={fonts.body} hello={hello} isDirector={isDirector} starters={starters} onAsk={onAsk} />
         )}
 
-        <div className={full ? "space-y-7" : "space-y-5"} aria-live="polite">
+        <div className={full ? "space-y-9" : "space-y-6"} role="log" aria-label="Conversation messages" aria-live="polite" aria-relevant="additions">
           {messages.map((m) =>
             m.role === "user" ? (
               <div key={m.id} className="flex justify-end">
                 <div
-                  className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md px-3.5 py-2 leading-relaxed"
+                  className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md px-4 py-3 leading-relaxed [overflow-wrap:anywhere]"
                   style={{ background: SOFT, color: TEXT, fontSize: fonts.body }}
                 >
                   {m.text}
@@ -770,6 +790,7 @@ function Conversation({
                 avatar={avatar}
                 fontSize={fonts.body}
                 showFollowUps={followUps && m === lastAssistant && !pending}
+                canRegenerate={m === messages.at(-1) && !pending}
                 onAsk={onAsk}
                 onRetry={onRetry}
               />
@@ -778,6 +799,15 @@ function Conversation({
           {pending && <Thinking avatar={avatar} fontSize={fonts.small} />}
         </div>
       </div>
+    </div>
+    {showLatest && <button type="button" onClick={() => {
+      nearBottom.current = true;
+      setShowLatest(false);
+      const el = scrollRef.current;
+      el?.scrollTo?.({ top: el.scrollHeight, behavior: "instant" });
+    }} className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border bg-[var(--cc-surface)] px-3 py-2 text-xs font-medium text-[var(--cc-text)] shadow-md hover:bg-[var(--cc-soft)]" style={{ borderColor: BORDER }}>
+      <ArrowDown size={14} /> Latest message
+    </button>}
     </div>
   );
 }
@@ -839,6 +869,7 @@ function AnswerView({
   avatar,
   fontSize,
   showFollowUps,
+  canRegenerate,
   onAsk,
   onRetry,
 }: {
@@ -847,6 +878,7 @@ function AnswerView({
   avatar: number;
   fontSize: number;
   showFollowUps: boolean;
+  canRegenerate: boolean;
   onAsk: (text: string) => void;
   onRetry: (id: string) => void;
 }) {
@@ -864,18 +896,23 @@ function AnswerView({
   }
 
   return (
-    <div className="flex gap-3">
+    <article aria-label="Quill response" className="flex gap-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
       <div className="pt-0.5">
         <Mascot size={avatar} />
       </div>
       <div className="min-w-0 flex-1 space-y-3">
-        <div className="leading-relaxed" style={{ color: message.status === "stopped" ? MUTED : TEXT, fontSize }}>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]" style={{ color: MUTED }}>
+          <span className="text-[12px] font-semibold" style={{ color: TEXT }}>Quill</span>
+          <span className="rounded border px-1.5 py-0.5 text-[10px] leading-none" style={{ borderColor: BORDER }}>AI assistant</span>
+          {message.createdAt && !Number.isNaN(Date.parse(message.createdAt)) && <time dateTime={message.createdAt} className="ml-auto" title={new Date(message.createdAt).toLocaleString()}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time>}
+        </div>
+        <div className={`leading-[1.75] ${message.status === "error" ? "rounded-xl border border-[var(--cc-border)] bg-[var(--cc-soft)] p-3" : ""}`} style={{ color: message.status === "stopped" ? MUTED : TEXT, fontSize }}>
           <QuillText text={message.text} />
         </div>
 
         {message.blocks && message.blocks.length > 0 && <QuillBlocks blocks={message.blocks} size={size} />}
 
-        <div className="flex flex-wrap items-center gap-1" style={{ color: MUTED }}>
+        <div className="flex flex-wrap items-center gap-2" style={{ color: MUTED }}>
           {message.status && message.question ? (
             <button
               type="button"
@@ -892,13 +929,16 @@ function AnswerView({
                 onClick={copy}
                 aria-label={copied ? "Copied" : "Copy answer"}
                 title={copied ? "Copied" : "Copy answer"}
-                className="-ml-1.5 flex h-7 items-center gap-1 rounded-md px-1.5 text-[11.5px] transition-colors hover:bg-[var(--cc-soft)]"
+                className="-ml-1.5 flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-[11.5px] transition-colors hover:bg-[var(--cc-soft)]"
               >
                 {copied ? <Check size={13} /> : <Copy size={13} />}
-                {copied && <span>Copied</span>}
+                <span>{copied ? "Copied" : "Copy"}</span>
               </button>
             )
           )}
+          {!message.status && message.question && canRegenerate && <button type="button" onClick={() => onRetry(message.id)} className="flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-[11.5px] hover:bg-[var(--cc-soft)]" aria-label="Regenerate answer"><RotateCcw size={13} /> Regenerate</button>}
+          {!message.status && message.durationMs != null && <span className="ml-auto text-[10.5px]" title="Time from sending your question to receiving the answer">Answered in {Math.max(1, Math.round(message.durationMs / 1000))}s</span>}
+          <span role="status" className="sr-only">{copied ? "Answer copied to clipboard" : ""}</span>
         </div>
 
         {showFollowUps && message.suggestions && message.suggestions.length > 0 && (
@@ -906,13 +946,13 @@ function AnswerView({
             <p className="mb-1 text-[11.5px] font-semibold" style={{ color: MUTED }}>
               Ask next
             </p>
-            <ul className="divide-y border-y" style={{ borderColor: BORDER }}>
+            <ul className="flex flex-wrap gap-2">
               {message.suggestions.map((s) => (
                 <li key={s} style={{ borderColor: BORDER }}>
                   <button
                     type="button"
                     onClick={() => onAsk(s)}
-                    className="group flex w-full items-center gap-3 py-2 text-left text-[12.5px] transition-colors hover:text-[var(--cc-plum)]"
+                    className="group flex w-full items-center gap-3 rounded-xl border border-[var(--cc-border)] px-3 py-2 text-left text-[12px] transition-colors hover:bg-[var(--cc-soft)] hover:text-[var(--cc-plum)]"
                     style={{ color: TEXT }}
                   >
                     <span className="flex-1">{s}</span>
@@ -929,31 +969,38 @@ function AnswerView({
           </div>
         )}
       </div>
-    </div>
+    </article>
   );
 }
 
 function Thinking({ avatar, fontSize }: { avatar: number; fontSize: number }) {
-  const [i, setI] = useState(0);
+  const [slow, setSlow] = useState(false);
   useEffect(() => {
-    const id = window.setInterval(() => setI((n) => (n + 1) % THINKING.length), 1800);
-    return () => window.clearInterval(id);
+    const id = window.setTimeout(() => setSlow(true), 15000);
+    return () => window.clearTimeout(id);
   }, []);
   return (
-    <div className="flex items-center gap-3" role="status">
-      <Mascot size={avatar} />
+    <div className="flex items-start gap-3" role="status" aria-live="polite">
+      <div className="pt-0.5"><Mascot size={avatar} /></div>
+      <div className="min-w-0 flex-1 py-1">
       <span className="flex items-center gap-2" style={{ color: MUTED, fontSize }}>
-        {THINKING[i]}
+        {slow ? "Still working on your answer…" : "Preparing your answer"}
         <span className="flex gap-1" aria-hidden="true">
           {[0, 1, 2].map((d) => (
             <span
               key={d}
-              className="h-1.5 w-1.5 animate-bounce rounded-full"
+              className="h-1 w-1 motion-safe:animate-pulse rounded-full"
               style={{ background: MUTED, animationDelay: `${d * 150}ms` }}
             />
           ))}
         </span>
       </span>
+      <div aria-hidden="true" className="mt-4 space-y-2.5 motion-safe:animate-pulse">
+        <div className="h-2 w-[85%] rounded-full bg-[var(--cc-soft)]" />
+        <div className="h-2 w-[65%] rounded-full bg-[var(--cc-soft)]" />
+      </div>
+      {slow && <p className="mt-3 text-[11px]" style={{ color: MUTED }}>You can stop this request at any time.</p>}
+      </div>
     </div>
   );
 }
@@ -967,6 +1014,7 @@ function Composer({
   onSubmit,
   onStop,
   pending,
+  opening,
   size,
   large,
   enterSends,
@@ -977,6 +1025,7 @@ function Composer({
   onSubmit: () => void;
   onStop: () => void;
   pending: boolean;
+  opening: boolean;
   size: QuillSize;
   large: boolean;
   enterSends: boolean;
@@ -995,14 +1044,14 @@ function Composer({
   return (
     <div className={`shrink-0 ${full ? "px-6 pb-5" : "border-t px-4 pb-3 pt-3"}`} style={{ borderColor: BORDER }}>
       <form
-        className={`mx-auto w-full ${full ? "max-w-[768px]" : ""}`}
+        className={`mx-auto w-full ${full ? "max-w-[820px]" : ""}`}
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit();
         }}
       >
         <div
-          className="flex items-end gap-2 rounded-2xl border px-3 py-2 transition-shadow focus-within:ring-2"
+          className="flex items-end gap-2 rounded-2xl border px-3 py-2.5 shadow-sm transition-shadow focus-within:ring-2"
           style={{ borderColor: BORDER, background: SURFACE, ["--tw-ring-color" as string]: "var(--cc-plum-ring)" }}
         >
           <textarea
@@ -1029,7 +1078,7 @@ function Composer({
               onClick={onStop}
               aria-label="Stop answering"
               title="Stop answering"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
               style={{ background: CTA }}
             >
               <Square size={11} fill="currentColor" />
@@ -1037,10 +1086,10 @@ function Composer({
           ) : (
             <button
               type="submit"
-              disabled={!value.trim()}
+              disabled={!value.trim() || opening}
               aria-label="Send message"
               title="Send"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white transition-opacity disabled:opacity-30"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-opacity disabled:opacity-30"
               style={{ background: CTA }}
             >
               <ArrowUp size={16} />
