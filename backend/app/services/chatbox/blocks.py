@@ -11,6 +11,8 @@ Block shapes (kept intentionally small — 4 types cover every tool today):
   {"type": "table", "title": str, "columns": [str, ...], "rows": [[cell, ...], ...]}
   {"type": "bar_chart", "title": str, "x_key": str, "series": [{"key": str, "label": str}], "data": [dict, ...]}
   {"type": "download", "title": str, "url": str, "count": int|None}
+
+Every block also carries "section": the topic it belongs to (see _SECTIONS).
 """
 
 from datetime import datetime
@@ -385,6 +387,35 @@ _BUILDERS = {
 }
 
 
+# The topic each tool's cards sit under in an answer. When one question
+# calls several tools ("what needs my attention?"), the answer shows its
+# cards grouped under these names instead of as one unlabelled pile.
+_SECTIONS = {
+    "get_financial_overview": "Finances",
+    "get_revenue_summary": "Finances",
+    "get_expiring_credentials": "Credentials",
+    "get_participant_overview": "Participant",
+    "get_compliance_snapshot": "Compliance",
+    "get_rp_flag_count": "Compliance",
+    "get_incident_summary": "Incidents",
+    "search_incident_history": "Incidents",
+    "get_shift_coverage": "Roster",
+    "get_shift_schedule": "Roster",
+    "get_session_activity": "Sessions",
+    "get_goal_achievement_rate": "Goals",
+    "get_retention_rate": "Staff",
+    "get_active_worker_count": "Staff",
+    "get_active_worker_list": "Staff",
+    "get_participant_count": "Participants",
+    "get_participant_list": "Participants",
+    "search_session_notes": "Shift notes",
+    "get_shift_progress_note": "Progress notes",
+    "get_participant_progress_notes_zip": "Progress notes",
+    "get_worker_progress_notes_zip": "Progress notes",
+    "get_all_progress_notes_zip": "Progress notes",
+}
+
+
 def build_blocks(tool_name: str, artifact: Any) -> list[dict]:
     if not isinstance(artifact, dict) or "error" in artifact:
         return []
@@ -392,6 +423,11 @@ def build_blocks(tool_name: str, artifact: Any) -> list[dict]:
     if not builder:
         return []
     try:
-        return builder(artifact)
+        blocks = builder(artifact)
     except Exception:
         return []
+    section = _SECTIONS.get(tool_name)
+    if section:
+        for block in blocks:
+            block.setdefault("section", section)
+    return blocks

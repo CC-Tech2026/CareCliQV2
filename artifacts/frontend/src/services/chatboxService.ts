@@ -1,6 +1,13 @@
 import { jsonFetch } from "@/services/http";
 
-export interface StatBlock {
+/** The topic a block belongs to ("Compliance", "Incidents"...), so an answer
+ * that drew on several tools can show its detail grouped. Older saved
+ * answers have none. */
+interface BlockBase {
+  section?: string;
+}
+
+export interface StatBlock extends BlockBase {
   type: "stat";
   label: string;
   value: number | string | null;
@@ -8,14 +15,14 @@ export interface StatBlock {
   target?: number | string | null;
 }
 
-export interface TableBlock {
+export interface TableBlock extends BlockBase {
   type: "table";
   title: string;
   columns: string[];
   rows: (string | number | null)[][];
 }
 
-export interface BarChartBlock {
+export interface BarChartBlock extends BlockBase {
   type: "bar_chart";
   title: string;
   x_key: string;
@@ -23,7 +30,7 @@ export interface BarChartBlock {
   data: Record<string, string | number>[];
 }
 
-export interface DownloadBlock {
+export interface DownloadBlock extends BlockBase {
   type: "download";
   title: string;
   url: string;

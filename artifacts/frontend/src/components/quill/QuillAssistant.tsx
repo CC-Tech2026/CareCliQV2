@@ -902,18 +902,30 @@ function AnswerView({
         </div>
 
         {showFollowUps && message.suggestions && message.suggestions.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {message.suggestions.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => onAsk(s)}
-                className="rounded-full border px-3 py-1.5 text-[12px] transition-colors hover:border-[var(--cc-plum)] hover:text-[var(--cc-plum)]"
-                style={{ borderColor: BORDER, color: TEXT, background: SURFACE }}
-              >
-                {s}
-              </button>
-            ))}
+          <div>
+            <p className="mb-1 text-[11.5px] font-semibold" style={{ color: MUTED }}>
+              Ask next
+            </p>
+            <ul className="divide-y border-y" style={{ borderColor: BORDER }}>
+              {message.suggestions.map((s) => (
+                <li key={s} style={{ borderColor: BORDER }}>
+                  <button
+                    type="button"
+                    onClick={() => onAsk(s)}
+                    className="group flex w-full items-center gap-3 py-2 text-left text-[12.5px] transition-colors hover:text-[var(--cc-plum)]"
+                    style={{ color: TEXT }}
+                  >
+                    <span className="flex-1">{s}</span>
+                    <ArrowUpRight
+                      size={14}
+                      aria-hidden="true"
+                      className="shrink-0 transition-colors group-hover:text-[var(--cc-plum)]"
+                      style={{ color: MUTED }}
+                    />
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

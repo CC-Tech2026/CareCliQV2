@@ -503,3 +503,21 @@ def test_detailed_answers_are_asked_for_outside_the_cached_instructions():
     assert "detailed answers" in detailed.content[1]["text"]
     assert "detailed answers" not in brief.content[1]["text"]
     assert "detailed answers" in chatbox_graph._system_prompt("openai", md, "detailed")
+
+
+def test_blocks_carry_their_topic_so_an_answer_can_group_them():
+    out = chatbox_blocks.build_blocks(
+        "get_incident_summary", {"total": 3, "open": 2, "critical": 0, "overdue": 2},
+    )
+    assert out and all(b["section"] == "Incidents" for b in out)
+
+
+def test_every_block_builder_has_a_topic():
+    assert set(chatbox_blocks._BUILDERS) <= set(chatbox_blocks._SECTIONS)
+
+
+def test_answers_are_asked_for_as_a_headline_then_topic_list():
+    text = chatbox_graph._instructions(None)
+    assert "headline" in text
+    assert "**Credentials:**" in text
+    assert "Furthermore" in text  # named as filler to avoid
