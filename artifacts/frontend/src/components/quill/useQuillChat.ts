@@ -20,6 +20,8 @@ export type QuillMessage = {
   status?: "error" | "stopped";
   /** The question an error or stopped answer belongs to, for Try again. */
   question?: string;
+  createdAt?: string;
+  durationMs?: number;
 };
 
 export const CHAT_ERROR_REPLY = "Sorry, I couldn't get that answer. Check your connection and try again.";
@@ -64,16 +66,18 @@ export function useQuillChat(options: { answerStyle?: "brief" | "detailed" } = {
       setPending(true);
       const controller = new AbortController();
       abortRef.current = controller;
+      const startedAt = performance.now();
       const startedIn = threadIdRef.current;
       const conversation = conversationRef.current;
       try {
         const res = await sendChatMessage(question, startedIn, controller.signal, answerStyleRef.current);
+        if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
         // The person may have started a new chat or opened another one meanwhile.
         if (conversationRef.current !== conversation) return;
         setThreadId(res.thread_id);
         setMessages((prev) => [
           ...prev,
-          { id: nextId("a"), role: "assistant", text: res.reply, blocks: res.blocks ?? [], suggestions: res.suggestions ?? [] },
+          { id: nextId("a"), role: "assistant", text: res.reply, blocks: res.blocks ?? [], suggestions: res.suggestions ?? [], question, createdAt: new Date().toISOString(), durationMs: performance.now() - startedAt },
         ]);
         void loadThreads();
       } catch {
@@ -86,8 +90,10 @@ export function useQuillChat(options: { answerStyle?: "brief" | "detailed" } = {
             : { id: nextId("a"), role: "assistant", text: CHAT_ERROR_REPLY, status: "error", question },
         ]);
       } finally {
-        if (abortRef.current === controller) abortRef.current = null;
-        setPending(false);
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+          setPending(false);
+        }
       }
     },
     [loadThreads],
@@ -96,23 +102,23 @@ export function useQuillChat(options: { answerStyle?: "brief" | "detailed" } = {
   const send = useCallback(
     (text: string) => {
       const question = text.trim();
-      if (!question || pending) return;
-      setMessages((prev) => [...prev, { id: nextId("u"), role: "user", text: question }]);
+      if (!question || abortRef.current || openingThread) return;
+      setMessages((prev) => [...prev, { id: nextId("u"), role: "user", text: question, createdAt: new Date().toISOString() }]);
       void ask(question);
     },
-    [ask, pending],
+    [ask, openingThread],
   );
 
   /** Ask a failed or stopped question again, replacing that answer. */
   const retry = useCallback(
     (messageId: string) => {
-      if (pending) return;
+      if (abortRef.current || openingThread) return;
       const failed = messages.find((m) => m.id === messageId);
       if (!failed?.question) return;
       setMessages((prev) => prev.filter((m) => m.id !== messageId));
       void ask(failed.question);
     },
-    [ask, messages, pending],
+    [ask, messages, openingThread],
   );
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
@@ -120,6 +126,9 @@ export function useQuillChat(options: { answerStyle?: "brief" | "detailed" } = {
   const newChat = useCallback(() => {
     conversationRef.current += 1;
     abortRef.current?.abort();
+    abortRef.current = null;
+    setPending(false);
+    setOpeningThread(false);
     threadIdRef.current = undefined;
     setThreadId(undefined);
     setMessages([]);
@@ -129,27 +138,31 @@ export function useQuillChat(options: { answerStyle?: "brief" | "detailed" } = {
     async (id: string) => {
       if (id === threadIdRef.current && messages.length) return;
       conversationRef.current += 1;
+      const conversation = conversationRef.current;
       abortRef.current?.abort();
+      abortRef.current = null;
+      setPending(false);
       threadIdRef.current = id;
       setThreadId(id);
       setMessages([]);
       setOpeningThread(true);
       try {
         const history = await getChatThreadMessages(id);
-        if (threadIdRef.current !== id) return;
+        if (conversationRef.current !== conversation) return;
         setMessages(
           history.map((m, i) => ({
             id: `${id}-${i}`,
             role: m.role === "assistant" ? "assistant" : "user",
             text: m.content,
             blocks: m.blocks ?? [],
+            createdAt: m.created_at || undefined,
           })),
         );
       } catch {
-        if (threadIdRef.current !== id) return;
+        if (conversationRef.current !== conversation) return;
         setMessages([{ id: nextId("a"), role: "assistant", text: HISTORY_ERROR_REPLY, status: "error" }]);
       } finally {
-        if (threadIdRef.current === id) setOpeningThread(false);
+        if (conversationRef.current === conversation) setOpeningThread(false);
       }
     },
     [messages.length],
