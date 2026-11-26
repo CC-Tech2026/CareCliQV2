@@ -1369,3 +1369,13 @@ html .text-\[84px\]     { font-size: calc(85.3px * var(--font-scale, 1)) !import
     transition-duration: 0.01ms !important;
   }
 }
+/* Sidebar menu: a thin, quiet scrollbar instead of none, so on short laptop
+   screens (1366x768 at 125% leaves ~600px) people can see there are more
+   items below the fold. */
+.cc-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+.cc-sidebar-scroll::-webkit-scrollbar { width: 6px; }
+.cc-sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); border-radius: 3px; }
+.cc-sidebar-scroll::-webkit-scrollbar-track { background: transparent; }

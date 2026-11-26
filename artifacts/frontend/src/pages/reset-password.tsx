@@ -6,6 +6,7 @@ import { PasswordNativeInput } from "@/components/PasswordInput";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
+import { PasswordChecklist, missingPasswordRules, passwordMeetsRules } from "@/components/auth/PasswordChecklist";
 
 const PLUM = "var(--cc-plum)";
 const BORDER = "#FADAE4";
@@ -38,8 +39,12 @@ export default function ResetPassword() {
       toast({ title: t("auth.reset.toast.expired"), description: t("auth.reset.toast.requestNew"), variant: "destructive" });
       return;
     }
-    if (password.length < 10) {
-      toast({ title: t("auth.reset.toast.tooShort"), description: t("auth.reset.toast.minChars"), variant: "destructive" });
+    if (!passwordMeetsRules(password)) {
+      toast({
+        title: t("auth.reset.toast.tooShort"),
+        description: `Your password needs ${missingPasswordRules(password).join(", ")}.`,
+        variant: "destructive",
+      });
       return;
     }
     if (password !== confirm) {
@@ -130,10 +135,12 @@ export default function ResetPassword() {
                     placeholder={t("auth.reset.passwordPlaceholder")}
                     required
                     disabled={busy}
+                    autoComplete="new-password"
                     className="w-full h-12 pl-11 rounded-2xl text-[14px] font-medium outline-none border bg-[#ECECEC]"
                     style={{ borderColor: BORDER, color: "var(--cc-text)" }}
                   />
                 </div>
+                <PasswordChecklist password={password} />
               </div>
               <div>
                 <label className="text-[11px] font-bold uppercase tracking-wider mb-1.5 block" style={{ color: PLUM }}>
@@ -145,13 +152,14 @@ export default function ResetPassword() {
                   placeholder={t("auth.reset.confirmPlaceholder")}
                   required
                   disabled={busy}
+                  autoComplete="new-password"
                   className="w-full h-12 px-4 rounded-2xl text-[14px] font-medium outline-none border bg-[#ECECEC]"
                   style={{ borderColor: BORDER, color: "var(--cc-text)" }}
                 />
               </div>
               <button
                 type="submit"
-                disabled={busy || !hasRecoveryToken || password.length < 10 || password !== confirm}
+                disabled={busy || !hasRecoveryToken}
                 className="w-full h-14 rounded-2xl text-white text-[15px] font-black flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
                 style={{ background: "var(--cc-cta)" }}
               >
