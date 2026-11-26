@@ -221,25 +221,27 @@ export default function Login() {
           className="auth-hero-photo absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0" style={{ background: "rgba(26, 26, 46, 0.55)" }} />
-        <div className="relative z-10 px-6 pt-12 pb-9">
+        <div className="relative z-10 px-6 pt-7 pb-9 md:pt-12">
           {/* Logo row */}
-          <CareCliQLogo size={96} />
+          <CareCliQLogo size={72} />
           <p className="mt-2 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
             {t("auth.login.marketing.tagline")}
           </p>
 
           {/* Hero copy */}
-          <h2 className="mt-5 text-[28px] font-black leading-[1.12] tracking-tight" style={{ color: "#FFFFFF" }}>
+          <h2 className="mt-3 md:mt-5 text-[24px] md:text-[28px] font-black leading-[1.12] tracking-tight" style={{ color: "#FFFFFF" }}>
             <span className="auth-headline-line" style={{ animationDelay: "0ms" }}>{t("auth.login.marketing.headline1")}</span>
             <span className="auth-headline-line" style={{ animationDelay: "90ms", color: "#C4B5FD" }}>{t("auth.login.marketing.headline2")}</span>
           </h2>
-          <p className="mt-3 text-[13px] font-medium leading-relaxed" style={{ color: "rgba(255, 255, 255, 0.85)" }}>
+          {/* Phones skip the description, testimonial and trust strip so the
+              sign-in form starts on the first screen; tablets keep them. */}
+          <p className="hidden md:block mt-3 text-[13px] font-medium leading-relaxed" style={{ color: "rgba(255, 255, 255, 0.85)" }}>
             {t("auth.login.marketing.description")}
           </p>
 
           {/* Testimonial */}
           <div
-            className="mt-5 rounded-2xl p-4"
+            className="hidden md:block mt-5 rounded-2xl p-4"
             style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
           >
             <p className="text-[13px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
@@ -251,7 +253,7 @@ export default function Login() {
           </div>
 
           {/* Trust strip */}
-          <div className="mt-5 flex items-center gap-3">
+          <div className="hidden md:flex mt-5 items-center gap-3">
             <div className="flex -space-x-2">
               {TRUST_AVATARS.slice(0, 4).map((a) => (
                 <div
