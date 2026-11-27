@@ -30,10 +30,9 @@ export const QUESTIONS: QuestionDef[] = [
     otherKey: "teamSizeOther",
     prompt: "How many people are on your team?",
     options: [
-      { value: "1-4", label: "1 to 4 people" },
-      { value: "5-10", label: "5 to 10 people" },
-      { value: "11-25", label: "11 to 25 people" },
-      { value: "25+", label: "More than 25 people" },
+      { value: "1-25", label: "1 to 25 people" },
+      { value: "26-55", label: "26 to 55 people" },
+      { value: "55+", label: "More than 55 people" },
       { value: "other", label: "Something else" },
     ],
   },
@@ -85,10 +84,9 @@ const PROVIDER_PHRASE: Record<NonNullable<Answers["providerType"]>, string> = {
 };
 
 const TEAM_PHRASE: Record<NonNullable<Answers["teamSize"]>, string> = {
-  "1-4": "with 1 to 4 people",
-  "5-10": "with 5 to 10 people",
-  "11-25": "with 11 to 25 people",
-  "25+": "with more than 25 people",
+  "1-25": "with 1 to 25 people",
+  "26-55": "with 26 to 55 people",
+  "55+": "with more than 55 people",
   other: "",
 };
 

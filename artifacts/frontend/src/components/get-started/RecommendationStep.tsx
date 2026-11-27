@@ -5,14 +5,12 @@ import { TIERS, type PlanTier } from "./PricingStep";
 
 function recommendTier(teamSize: Answers["teamSize"]): { tier: PlanTier; note?: string } {
   switch (teamSize) {
-    case "1-4":
-      return { tier: "micro" };
-    case "5-10":
+    case "1-25":
       return { tier: "small" };
-    case "11-25":
+    case "26-55":
       return { tier: "medium" };
-    case "25+":
-      return { tier: "medium", note: "For more than 25 people, talk to us about a larger rollout." };
+    case "55+":
+      return { tier: "medium", note: "For more than 55 people, talk to us about a plan for your organisation." };
     default:
       return { tier: "small", note: "A starting point. Talk to us if it's not the right fit." };
   }
