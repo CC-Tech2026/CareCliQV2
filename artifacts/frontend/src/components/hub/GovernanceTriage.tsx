@@ -312,7 +312,7 @@ export function GovernanceTriage({
         <button
           type="button"
           onClick={() => setRetryKey((key) => key + 1)}
-          className="min-h-11 rounded-lg border border-cc-border px-4 text-sm font-medium text-cc-plum hover:bg-cc-soft"
+          className="min-h-11 md:min-h-9 rounded-lg border border-cc-border px-4 text-sm font-medium text-cc-plum hover:bg-cc-soft"
         >
           Retry action items
         </button>
@@ -359,7 +359,7 @@ export function GovernanceTriage({
         <button
           onClick={() => setFloatingOpen((v) => !v)}
           aria-expanded={floatingOpen}
-          className="flex items-center gap-2 rounded-full border px-4 py-2.5 text-[12px] font-black transition-all hover:-translate-y-0.5"
+          className="flex items-center gap-2 rounded-full border px-4 py-2.5 md:py-1.5 text-[12px] font-black transition-all hover:-translate-y-0.5"
           style={{ borderColor: BORDER, background: SURFACE, color: TEXT }}
         >
           <HeaderIcon

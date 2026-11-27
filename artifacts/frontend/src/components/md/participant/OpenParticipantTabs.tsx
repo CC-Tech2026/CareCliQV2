@@ -74,7 +74,7 @@ export function OpenParticipantTabs({
   if (shown.length === 0 && activeId === null) return null;
 
   const tabClass = (active: boolean) =>
-    "relative inline-flex min-h-10 shrink-0 items-center gap-2 rounded-t-2xl border border-b-0 px-4 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum " +
+    "relative inline-flex min-h-10 md:min-h-8 shrink-0 items-center gap-2 rounded-t-2xl border border-b-0 px-4 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum " +
     (active ? "bg-cc-surface text-cc-text" : "border-transparent text-cc-muted hover:bg-cc-surface/60 hover:text-cc-text");
 
   return (

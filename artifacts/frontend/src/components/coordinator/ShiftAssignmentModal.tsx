@@ -688,7 +688,7 @@ export function ShiftAssignmentModal({
   ].filter(Boolean);
 
   const fieldLabel = "mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em]";
-  const field = "h-10 w-full rounded-lg border bg-white px-3 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-[#E8457A]/40";
+  const field = "h-10 md:h-8 w-full rounded-lg border bg-white px-3 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-[#E8457A]/40";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -795,7 +795,7 @@ export function ShiftAssignmentModal({
             <div>
               <label className={fieldLabel} style={{ color: MUTED }}>Location</label>
               <div
-                className="flex h-10 items-center gap-1.5 truncate rounded-lg border px-3 text-[13px]"
+                className="flex h-10 md:h-8 items-center gap-1.5 truncate rounded-lg border px-3 text-[13px]"
                 style={{ borderColor: BORDER, color: participantAddress ? TEXT : MUTED, background: SOFT }}
                 title={participantAddress ? "From the participant's record" : undefined}
               >

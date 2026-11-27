@@ -121,7 +121,7 @@ export function BillingSection() {
           </p>
           <Button
             variant="outline"
-            className="mt-4 min-h-11"
+            className="mt-4 min-h-11 md:min-h-9"
             onClick={() => setAttempt((v) => v + 1)}
           >
             <RefreshCw size={16} /> Retry subscription
@@ -162,7 +162,7 @@ export function BillingSection() {
                 Trial ends <strong className="font-semibold">{trialEnd}</strong>
               </p>
             )}
-            <Button asChild className="mt-5 min-h-11 w-full sm:w-auto">
+            <Button asChild className="mt-5 min-h-11 md:min-h-9 w-full sm:w-auto">
               <Link href="/platform-billing">
                 <CreditCard size={16} />
                 {hasPlan || status?.stripe_customer_id

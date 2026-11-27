@@ -173,7 +173,7 @@ export function MonthGrid({
             <div
               key={key}
               onClick={() => onSelectDay(day)}
-              className="min-h-[88px] cursor-pointer p-1.5 transition-colors hover:bg-[#F8F6FE]"
+              className="min-h-[76px] cursor-pointer p-1.5 transition-colors hover:bg-[#F8F6FE]"
               style={{
                 borderBottom: `1px solid ${BORDER}`,
                 borderRight:  `1px solid ${BORDER}`,
@@ -256,7 +256,7 @@ function DayPanel({
           </Button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto max-h-[560px] px-3 py-3 space-y-2">
+      <div className="flex-1 overflow-y-auto max-h-[max(560px,calc(100dvh-22rem))] px-3 py-3 space-y-2">
         {dayShifts.length === 0 ? (
           <div className="py-14 text-center">
             <CalendarDays className="mx-auto mb-2" size={22} style={{ color: MUTED }} />
@@ -598,7 +598,7 @@ export default function CoordinatorRosteringPage() {
             onClick={() => setOpenListOpen(true)}
             variant="outline"
             aria-label={`Open shifts, ${openShifts.length} without a worker`}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold"
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full px-3.5 text-sm font-semibold"
             style={{ borderColor: BORDER, color: TEXT }}
           >
             <CalendarPlus size={14} /> Open shifts
@@ -617,7 +617,7 @@ export default function CoordinatorRosteringPage() {
               onClick={() => setLeaveOpen(true)}
               variant="outline"
               aria-label={`Leave clashes, ${leaveClashCount} shift${leaveClashCount === 1 ? "" : "s"} to cover`}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold"
+              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full px-3.5 text-sm font-semibold"
               style={{ borderColor: BORDER, color: TEXT }}
             >
               <CalendarOff size={14} /> Leave clashes
@@ -632,7 +632,7 @@ export default function CoordinatorRosteringPage() {
           <Button
             onClick={() => setTeamPanelOpen(true)}
             variant="outline"
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold"
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full px-3.5 text-sm font-semibold"
             style={{ borderColor: BORDER, color: TEXT }}
           >
             <Users2 size={14} /> {translate("coordinator.rostering.team")}
@@ -640,14 +640,14 @@ export default function CoordinatorRosteringPage() {
           <Button
             onClick={() => setSeriesOpen(true)}
             variant="outline"
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold"
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full px-3.5 text-sm font-semibold"
             style={{ borderColor: BORDER, color: TEXT }}
           >
             <Repeat size={14} /> Regular schedules
           </Button>
           <Button
             onClick={() => setAssignOpen(true)}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold text-white"
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full px-3.5 text-sm font-semibold text-white"
             style={{ background: "var(--cc-cta)" }}
           >
             <Plus size={15} /> {translate("coordinator.rostering.createShift")}
@@ -685,13 +685,13 @@ export default function CoordinatorRosteringPage() {
             const Icon = tab.icon;
             return (
               <button key={tab.id} type="button" aria-pressed={active} onClick={() => setPageTab(tab.id)}
-                className={"inline-flex min-h-11 min-w-0 items-center justify-center gap-2 border-b-2 px-2 text-xs font-semibold sm:px-3 sm:text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] " + (active ? "border-cc-plum text-cc-plum" : "border-transparent text-muted-foreground hover:bg-muted/50")}>
+                className={"inline-flex min-h-10 min-w-0 items-center justify-center gap-2 border-b-2 px-2 text-xs font-semibold sm:px-3 sm:text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] " + (active ? "border-cc-plum text-cc-plum" : "border-transparent text-muted-foreground hover:bg-muted/50")}>
                 <Icon size={16} aria-hidden="true" className="hidden shrink-0 sm:block" />
                 {tab.label}
               </button>
             );
           })}
-          <Link href="/coordinator/verification" className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 border-b-2 border-transparent px-2 text-xs font-semibold text-muted-foreground sm:px-3 sm:text-sm hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px]">
+          <Link href="/coordinator/verification" className="inline-flex min-h-10 min-w-0 items-center justify-center gap-2 border-b-2 border-transparent px-2 text-xs font-semibold text-muted-foreground sm:px-3 sm:text-sm hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px]">
             <ClipboardCheck size={16} aria-hidden="true" className="hidden shrink-0 sm:block" />
             {translate("schedule.verification")}
           </Link>
@@ -740,7 +740,7 @@ export default function CoordinatorRosteringPage() {
               type="button"
               onClick={() => switchView(mode)}
               aria-pressed={viewMode === mode}
-              className="h-8 rounded-full px-3.5 text-sm font-medium capitalize transition-colors"
+              className="h-7 rounded-full px-3 text-sm font-medium capitalize transition-colors"
               style={{ background: viewMode === mode ? "var(--cc-text)" : "transparent", color: viewMode === mode ? "var(--cc-bg)" : MUTED }}
             >
               {VIEW_LABELS[mode]}
@@ -757,7 +757,7 @@ export default function CoordinatorRosteringPage() {
                 title={l.title}
                 onClick={() => chooseLayout(l.value)}
                 aria-pressed={boardLayout === l.value}
-                className="h-8 rounded-full px-3.5 text-sm font-medium transition-colors"
+                className="h-7 rounded-full px-3 text-sm font-medium transition-colors"
                 style={{ background: boardLayout === l.value ? "var(--cc-text)" : "transparent", color: boardLayout === l.value ? "var(--cc-bg)" : MUTED }}
               >
                 {l.label}
@@ -770,7 +770,7 @@ export default function CoordinatorRosteringPage() {
           <button
             title={translate("coordinator.rostering.previousPeriod")}
             onClick={handlePrev}
-            className="flex h-9 w-9 items-center justify-center rounded-full border bg-cc-surface transition-colors hover:bg-cc-soft"
+            className="flex h-8 w-8 items-center justify-center rounded-full border bg-cc-surface transition-colors hover:bg-cc-soft"
             style={{ borderColor: BORDER }}
           >
             <ChevronLeft size={15} />
@@ -779,14 +779,14 @@ export default function CoordinatorRosteringPage() {
           <button
             title={translate("coordinator.rostering.nextPeriod")}
             onClick={handleNext}
-            className="flex h-9 w-9 items-center justify-center rounded-full border bg-cc-surface transition-colors hover:bg-cc-soft"
+            className="flex h-8 w-8 items-center justify-center rounded-full border bg-cc-surface transition-colors hover:bg-cc-soft"
             style={{ borderColor: BORDER }}
           >
             <ChevronRight size={15} />
           </button>
           <button
             onClick={handleToday}
-            className="h-9 rounded-full border bg-cc-surface px-4 text-sm font-medium transition-colors hover:bg-cc-soft"
+            className="h-8 rounded-full border bg-cc-surface px-3.5 text-sm font-medium transition-colors hover:bg-cc-soft"
             style={{ borderColor: BORDER, color: TEXT }}
           >
             {translate("coordinator.rostering.todayBtn")}
@@ -797,7 +797,7 @@ export default function CoordinatorRosteringPage() {
           {/* Searchable by name, staff ID, suburb, phone or email: a long
               team doesn't fit a plain dropdown, and same-named staff show
               their staff ID and suburb. */}
-          <div className="flex-1 sm:w-[240px] [&_button[role=combobox]]:h-10 [&_button[role=combobox]]:rounded-full [&_button[role=combobox]]:px-4">
+          <div className="flex-1 sm:w-[240px] [&_button[role=combobox]]:h-9 [&_button[role=combobox]]:rounded-full [&_button[role=combobox]]:px-4">
             <SearchableSelect
               value={workerFilter}
               onValueChange={setWorkerFilter}
@@ -827,7 +827,7 @@ export default function CoordinatorRosteringPage() {
           </div>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-10 flex-1 rounded-full bg-cc-surface px-4 text-sm sm:w-[160px]" style={{ borderColor: BORDER }}>
+            <SelectTrigger className="h-9 flex-1 rounded-full bg-cc-surface px-4 text-sm sm:w-[160px]" style={{ borderColor: BORDER }}>
               <SelectValue placeholder={translate("coordinator.rostering.allStatuses")} />
             </SelectTrigger>
             <SelectContent>
@@ -854,7 +854,7 @@ export default function CoordinatorRosteringPage() {
       {rosterLoading && !rosterError && <div role="status" className="flex min-h-48 items-center justify-center gap-2 rounded-xl border border-cc-border bg-cc-surface text-sm text-muted-foreground"><Loader2 size={18} className="animate-spin" />{translate("common.loading")}</div>}
 
       {!rosterLoading && !rosterError && viewMode === "month" && (
-        <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
+        <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
           <MonthGrid month={currentMonth} shifts={shifts} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
           <DayPanel day={selectedDay} shifts={shifts} workers={workers} onAssign={() => setAssignOpen(true)} />
         </div>
@@ -917,7 +917,7 @@ export default function CoordinatorRosteringPage() {
                   onChange={(e) => setAvailSearch(e.target.value)}
                   placeholder="Find by name, staff ID or suburb"
                   aria-label="Find a worker"
-                  className="h-10 w-full rounded-xl border bg-cc-surface px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
+                  className="h-10 md:h-8 w-full rounded-xl border bg-cc-surface px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
                   style={{ borderColor: BORDER }}
                 />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

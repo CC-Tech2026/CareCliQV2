@@ -924,7 +924,7 @@ function WorkerDashboardView({
       {/* Greeting header — consistent with My Shifts page */}
       <header className="flex items-start justify-between gap-3 pt-1">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>
+          <p className="sr-only" style={{ color: "var(--cc-coral)" }}>
             {translate("common.supportWorker")}
           </p>
           <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
@@ -938,7 +938,7 @@ function WorkerDashboardView({
           <Link href="/my-clients">
             <button
               type="button"
-              className="flex h-11 items-center rounded-full px-4 text-xs font-black text-white shadow-sm transition hover:opacity-90"
+              className="flex h-11 md:h-9 items-center rounded-full px-4 text-xs font-black text-white shadow-sm transition hover:opacity-90"
               style={{ background: PLUM }}
             >
               {translate("dashboard.myClients")}
@@ -1048,7 +1048,7 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+          <p className="sr-only" style={{ color: CORAL }}>
             {format(appNow(), "EEEE, d MMMM yyyy")}
           </p>
           <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>
@@ -1095,7 +1095,7 @@ function AlliedFallbackDashboard() {
   return (
     <div className="space-y-5 pb-8">
       <div>
-        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Overview</p>
+        <p className="sr-only" style={{ color: CORAL }}>Overview</p>
         <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>Dashboard</h1>
         <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>Quick access to your caseload, sessions and reports</p>
       </div>

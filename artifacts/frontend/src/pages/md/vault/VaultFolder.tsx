@@ -302,7 +302,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
           <div className="flex items-center gap-4">
             <FolderIcon size={56} />
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight" style={{ color: "var(--cc-text)", fontFamily: "var(--app-font-display)" }}>
+              <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--cc-text)", fontFamily: "var(--app-font-display)" }}>
                 {label}
               </h1>
               <p className="mt-1 text-sm" style={{ color: "var(--cc-muted)" }}>
@@ -314,7 +314,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Button
-              className="min-h-11 gap-2 rounded-full px-5"
+              className="min-h-11 md:min-h-9 gap-2 rounded-full px-5"
               disabled={documents.length === 0}
               onClick={() => setShareOpen(true)}
               style={{ background: "var(--cc-brand-purple)", color: "white" }}
@@ -323,13 +323,13 @@ export default function VaultFolderPage({ category }: { category: string }) {
               {selectedIds.size ? `Share ${selectedIds.size} selected` : "Share folder"}
             </Button>
             {isGovernance && (
-              <Button variant="outline" className="min-h-11 gap-2 rounded-full px-4" onClick={openNewPolicyEditor}>
+              <Button variant="outline" className="min-h-11 md:min-h-9 gap-2 rounded-full px-4" onClick={openNewPolicyEditor}>
                 <FileEdit size={15} />
                 Write in-app
               </Button>
             )}
             {canUpload && (
-              <Button className="min-h-11 gap-2 rounded-full px-5" onClick={() => setUploadOpen(true)} style={{ background: "var(--cc-cta)", color: "white" }}>
+              <Button className="min-h-11 md:min-h-9 gap-2 rounded-full px-5" onClick={() => setUploadOpen(true)} style={{ background: "var(--cc-cta)", color: "white" }}>
                 <Upload size={15} />
                 Upload file
               </Button>
@@ -401,10 +401,10 @@ export default function VaultFolderPage({ category }: { category: string }) {
             )}
             <div className="relative min-w-[200px] flex-1 sm:max-w-sm">
               <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: "var(--cc-muted)" }} />
-              <Input aria-label="Search files" className="h-11 rounded-full bg-cc-surface pl-11" placeholder="Search by title, name or ID" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input aria-label="Search files" className="h-11 md:h-9 rounded-full bg-cc-surface pl-11" placeholder="Search by title, name or ID" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <Select value={person} onValueChange={setPerson}>
-              <SelectTrigger aria-label="Filter by person" className="h-11 w-[200px] rounded-full bg-cc-surface px-4">
+              <SelectTrigger aria-label="Filter by person" className="h-11 md:h-9 w-[200px] rounded-full bg-cc-surface px-4">
                 <SelectValue placeholder="All participants" />
               </SelectTrigger>
               <SelectContent>

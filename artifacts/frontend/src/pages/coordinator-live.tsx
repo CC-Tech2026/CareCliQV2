@@ -161,7 +161,7 @@ function FilterSelect({
         aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-10 appearance-none rounded-full border border-cc-border bg-cc-surface pl-4 pr-10 text-sm text-cc-text outline-none transition hover:bg-cc-soft focus-visible:ring-2 focus-visible:ring-cc-plum"
+        className="h-10 md:h-8 appearance-none rounded-full border border-cc-border bg-cc-surface pl-4 pr-10 text-sm text-cc-text outline-none transition hover:bg-cc-soft focus-visible:ring-2 focus-visible:ring-cc-plum"
       >
         {children}
       </select>
@@ -1217,7 +1217,7 @@ export default function CoordinatorLivePage({
             setFilter(filter === "attention" ? "all" : "attention")
           }
           className={
-            "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-medium transition " +
+            "inline-flex min-h-10 md:min-h-8 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-medium transition " +
             (filter === "attention"
               ? "bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
               : "text-cc-text hover:bg-cc-soft")

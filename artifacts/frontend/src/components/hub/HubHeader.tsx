@@ -102,7 +102,7 @@ export function HubHeader() {
       <div className="min-w-0">
 
         <h1
-          className="text-[25px] font-black tracking-tight"
+          className="text-[20px] font-black tracking-tight"
           style={{
             color: "var(--cc-text)",
           }}

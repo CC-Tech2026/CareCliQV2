@@ -219,7 +219,7 @@ export function ParticipantOverviewTab({
             <button
               type="button"
               onClick={onEditContacts}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text hover:bg-cc-soft"
+              className="inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text hover:bg-cc-soft"
             >
               <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit contacts
             </button>

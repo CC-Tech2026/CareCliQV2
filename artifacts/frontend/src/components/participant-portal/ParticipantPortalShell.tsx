@@ -115,7 +115,7 @@ export function ParticipantPortalShell({ children }: { children: React.ReactNode
                     key={tab.href}
                     href={tab.href}
                     aria-current={active ? "page" : undefined}
-                    className="flex min-h-11 items-center gap-2 rounded-xl px-3.5 py-2 text-[14px] font-bold transition-colors hover:bg-black/5"
+                    className="flex min-h-11 md:min-h-9 items-center gap-2 rounded-xl px-3.5 py-2 text-[14px] font-bold transition-colors hover:bg-black/5"
                     style={{ background: active ? "var(--cc-plum-soft)" : undefined, color: active ? PLUM : MUTED }}
                   >
                     <Icon size={18} className="shrink-0" /> {tab.label}

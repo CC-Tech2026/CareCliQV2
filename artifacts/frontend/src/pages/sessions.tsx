@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { flagSessionForReview } from "@/services/coordinatorService";
 import { SectionInfo } from "@/components/ui/section-info";
-import { SummaryStrip } from "@/components/layout/PageKit";
+import { SummaryLine } from "@/components/layout/PageKit";
 import {
   Search, Calendar, Clock, ShieldCheck, ChevronDown,
   ChevronRight, FileDown, Loader2, X, ArrowUpDown, Users,
@@ -494,22 +494,33 @@ export default function Sessions() {
 
   // -- Render ---------------------------------------------------------------------
   return (
-    <div className="space-y-5 pb-10">
+    <div className="space-y-4 pb-10">
 
       {/* One compact row, so the notes start near the top. Directors and
           coordinators reach this page as "Shift notes" in their navigation. */}
-      <header className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+      <header className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
         <h1
-          className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
+          className="flex items-center gap-2 text-xl font-semibold tracking-tight"
           style={{ color: "var(--cc-text)", fontFamily: "var(--app-font-display)" }}
         >
           {isCoordinator ? "Shift notes" : translate("sessions.title")}
           <SectionInfo text="The record of every support shift: what happened, outcomes, and progress toward the participant's goals." />
         </h1>
+          <SummaryLine
+            loading={isLoading}
+            items={[
+              { value: sessions.length, label: isCoordinator ? "notes in total" : translate("sessions.stat.total").toLowerCase() },
+              { value: thisWeekCount, label: translate("sessions.stat.thisWeek").toLowerCase() },
+              { value: avgCompliance, label: "average score", tone: "info" },
+              { value: inProgressCount, label: "in progress", tone: inProgressCount > 0 ? "warning" : undefined },
+            ]}
+          />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/sessions/new"
-            className="inline-flex min-h-10 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90"
+            className="inline-flex min-h-10 md:min-h-8 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90"
             style={{ background: "var(--cc-cta)" }}
           >
             <Plus size={16} strokeWidth={2.5} />
@@ -518,31 +529,22 @@ export default function Sessions() {
         </div>
       </header>
 
-      <SummaryStrip
-        loading={isLoading}
-        items={[
-          { value: sessions.length, label: isCoordinator ? "notes in total" : translate("sessions.stat.total").toLowerCase() },
-          { value: thisWeekCount, label: translate("sessions.stat.thisWeek").toLowerCase() },
-          { value: avgCompliance, label: "average score", tone: "info" },
-          { value: inProgressCount, label: "in progress", tone: inProgressCount > 0 ? "warning" : undefined },
-        ]}
-      />
 
       {/* Filter + session list — dashboard card style */}
       <section className="overflow-hidden rounded-2xl bg-cc-surface">
 
         {/* Filter bar */}
-        <div className="p-5 border-b space-y-4" style={{ borderColor: BORDER }}>
+        <div className="px-4 py-3 border-b space-y-2" style={{ borderColor: BORDER }}>
 
           {/* Row 1: search + status + participant */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
             <div className="md:col-span-6 lg:col-span-7 flex w-full">
               <Field icon={<Search size={14} />}>
                 <input
                   placeholder={translate("sessions.searchPlaceholder")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full h-10 rounded-full text-sm pl-9 outline-none pr-4 border bg-cc-surface focus:ring-2 focus:ring-cc-plum"
+                  className="w-full h-10 md:h-8 rounded-full text-sm pl-9 outline-none pr-4 border bg-cc-surface focus:ring-2 focus:ring-cc-plum"
                   style={{ borderColor: BORDER, color: T1 }}
                 />
               </Field>
@@ -550,7 +552,7 @@ export default function Sessions() {
 
             <div className="md:col-span-3 lg:col-span-2 w-full">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-10 rounded-full px-4 text-sm w-full bg-cc-surface" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectTrigger className="h-10 md:h-8 rounded-full px-4 text-sm w-full bg-cc-surface" style={{ borderColor: BORDER, color: T2 }}>
                   <SelectValue placeholder={translate("sessions.filter.allStatusesPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -564,7 +566,7 @@ export default function Sessions() {
 
             <div className="md:col-span-3 lg:col-span-3 w-full">
               <Select value={participantFilter} onValueChange={setParticipantFilter}>
-                <SelectTrigger className="h-10 rounded-full px-4 text-sm w-full bg-cc-surface flex items-center" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectTrigger className="h-10 md:h-8 rounded-full px-4 text-sm w-full bg-cc-surface flex items-center" style={{ borderColor: BORDER, color: T2 }}>
                   <div className="flex items-center truncate">
                     <Users size={13} className="mr-1.5 opacity-60 shrink-0" />
                     <SelectValue placeholder={translate("sessions.filter.allParticipantsPlaceholder")} />
@@ -586,20 +588,20 @@ export default function Sessions() {
             type="button"
             onClick={() => setMoreFilters((v) => !v)}
             aria-expanded={moreFilters}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium md:hidden"
+            className="inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium md:hidden"
             style={{ color: T2 }}
           >
             <Calendar size={13} />
             {moreFilters ? "Fewer filters" : hasDateFilter ? "Dates and sort (dates set)" : "Dates and sort"}
           </button>
-          <div className={`${moreFilters ? "flex" : "hidden"} md:flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1`}>
+          <div className={`${moreFilters ? "flex" : "hidden"} md:flex flex-col lg:flex-row lg:items-center justify-between gap-2`}>
             <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
               <span className="flex items-center gap-1.5 text-[12px] font-medium whitespace-nowrap" style={{ color: T3 }}>
                 <Calendar size={13} /> {translate("sessions.dateRange")}
               </span>
               <input
                 type="date"
-                className="flex-1 sm:flex-initial h-10 min-w-[130px] rounded-full text-sm px-4 outline-none border bg-cc-surface"
+                className="flex-1 sm:flex-initial h-10 md:h-8 min-w-[130px] rounded-full text-sm px-4 outline-none border bg-cc-surface"
                 style={{ borderColor: BORDER, color: T1 }}
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
@@ -608,7 +610,7 @@ export default function Sessions() {
               <span className="text-[12px]" style={{ color: T3 }}>{translate("sessions.dateToLabel")}</span>
               <input
                 type="date"
-                className="flex-1 sm:flex-initial h-10 min-w-[130px] rounded-full text-sm px-4 outline-none border bg-cc-surface"
+                className="flex-1 sm:flex-initial h-10 md:h-8 min-w-[130px] rounded-full text-sm px-4 outline-none border bg-cc-surface"
                 style={{ borderColor: BORDER, color: T1 }}
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
@@ -640,7 +642,7 @@ export default function Sessions() {
             <div className="flex items-center gap-2 self-end lg:self-auto w-full sm:w-auto justify-end">
               <ArrowUpDown size={13} style={{ color: T3 }} className="shrink-0" />
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-                <SelectTrigger className="h-10 rounded-full px-4 text-sm w-full sm:w-48 bg-cc-surface" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectTrigger className="h-10 md:h-8 rounded-full px-4 text-sm w-full sm:w-48 bg-cc-surface" style={{ borderColor: BORDER, color: T2 }}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

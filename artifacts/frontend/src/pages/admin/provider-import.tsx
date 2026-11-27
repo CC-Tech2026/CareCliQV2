@@ -30,7 +30,7 @@ export default function AdminProviderImportPage() {
         </button>
         <header>
           <p className="text-xs font-semibold text-[var(--cc-brand-purple)]">Move to CareCliQ</p>
-          <h1 className="text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>
+          <h1 className="text-xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>
             Bring {name ? `${name}'s` : "their"} records across
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-cc-muted">

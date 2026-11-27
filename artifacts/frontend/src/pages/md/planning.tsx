@@ -210,7 +210,7 @@ export default function PlanningPage() {
                   <OutcomeList outcomes={rings} onNavigate={jump} />
                   <div className="grid gap-phi-4 lg:grid-golden">
                     <details className="group min-w-0 self-start rounded-xl border border-cc-border bg-cc-surface">
-                      <summary className="flex min-h-11 cursor-pointer list-none items-center px-phi-4 text-sm font-semibold text-cc-text hover:bg-cc-soft [&::-webkit-details-marker]:hidden">
+                      <summary className="flex min-h-11 md:min-h-9 cursor-pointer list-none items-center px-phi-4 text-sm font-semibold text-cc-text hover:bg-cc-soft [&::-webkit-details-marker]:hidden">
                         Why we say this
                       </summary>
                       <ul className="space-y-phi-3 border-t border-cc-border px-phi-4 py-phi-4 text-sm leading-6 text-cc-text">
@@ -339,7 +339,7 @@ export default function PlanningPage() {
                 <label className="text-sm font-medium text-cc-text">
                   Target share of staff hours worked
                   <select
-                    className="mt-1.5 min-h-10 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm"
+                    className="mt-1.5 min-h-10 md:min-h-8 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm"
                     value={settings.targetUtilisation}
                     onChange={(e) => setSettings((s) => ({ ...s, targetUtilisation: Number(e.target.value) }))}
                   >
@@ -349,7 +349,7 @@ export default function PlanningPage() {
                 <label className="text-sm font-medium text-cc-text">
                   On-costs on top of pay
                   <select
-                    className="mt-1.5 min-h-10 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm"
+                    className="mt-1.5 min-h-10 md:min-h-8 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm"
                     value={settings.onCostRate}
                     onChange={(e) => setSettings((s) => ({ ...s, onCostRate: Number(e.target.value) }))}
                   >
@@ -360,7 +360,7 @@ export default function PlanningPage() {
                 <label className="text-sm font-medium text-cc-text">
                   Weeks to hire
                   <select
-                    className="mt-1.5 min-h-10 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm"
+                    className="mt-1.5 min-h-10 md:min-h-8 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm"
                     value={settings.leadTimeWeeks ?? ""}
                     onChange={(e) => setSettings((s) => ({ ...s, leadTimeWeeks: e.target.value ? Number(e.target.value) : null }))}
                   >
@@ -385,9 +385,9 @@ export default function PlanningPage() {
                       onChange={(e) => setWageDraft(e.target.value.replace(/[^\d.]/g, ""))}
                       placeholder={plan.finance.wage_source === "pay records" ? `${money(plan.finance.wage_per_hour ?? 0)} from pay` : "e.g. 38.50"}
                       disabled={plan.finance.wage_source === "pay records"}
-                      className="min-h-10 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm disabled:opacity-60"
+                      className="min-h-10 md:min-h-8 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm disabled:opacity-60"
                     />
-                    <button type="submit" disabled={plan.finance.wage_source === "pay records"} className="min-h-10 rounded-lg border border-cc-border px-3 text-sm font-semibold hover:bg-cc-soft disabled:opacity-50">
+                    <button type="submit" disabled={plan.finance.wage_source === "pay records"} className="min-h-10 md:min-h-8 rounded-lg border border-cc-border px-3 text-sm font-semibold hover:bg-cc-soft disabled:opacity-50">
                       Use
                     </button>
                   </div>

@@ -51,10 +51,10 @@ function Swatch({ name, cssVar, hex, role }: { name: string; cssVar: string; hex
 
 export default function DesignSystem() {
   return (
-    <div className="max-w-5xl space-y-10 pb-16">
+    <div className="max-w-5xl space-y-5  pb-16">
       <div>
-        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>Internal reference</p>
-        <h1 className="mt-1 text-2xl font-black tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Design system</h1>
+        <p className="sr-only" style={{ color: "var(--cc-coral)" }}>Internal reference</p>
+        <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Design system</h1>
         <p className="mt-1 text-sm" style={{ color: MUTED }}>
           Tokens and shared components per DESIGN_BRIEF.md. If a page doesn't match what's shown here, the page is wrong — fix the page, not this reference.
         </p>

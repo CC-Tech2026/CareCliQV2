@@ -76,7 +76,7 @@ export function IntegrationPage({
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex min-h-10 items-center gap-1 rounded-full pr-3 text-sm font-medium text-cc-plum hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+        className="inline-flex min-h-10 md:min-h-8 items-center gap-1 rounded-full pr-3 text-sm font-medium text-cc-plum hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
       >
         <ChevronLeft className="h-4 w-4" aria-hidden />
         Back to Integrations

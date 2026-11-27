@@ -146,7 +146,7 @@ export default function SessionNew() {
   const startDisabled = !!selectedParticipantId && selectedGoalIds.length === 0;
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-4  pb-10">
 
       {/* -- Header -- */}
       <div>

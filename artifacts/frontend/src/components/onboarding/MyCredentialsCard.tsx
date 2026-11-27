@@ -308,7 +308,7 @@ export function MyCredentialsCard() {
               title="Credential type"
               value={form.credential_type}
               onChange={(event) => setForm({ ...form, credential_type: event.target.value })}
-              className="mt-1 h-10 w-full rounded-xl border border-[#E8E8EA] bg-white px-3 text-sm"
+              className="mt-1 h-10 md:h-8 w-full rounded-xl border border-[#E8E8EA] bg-white px-3 text-sm"
             >
               {WORKER_TYPES.map((type) => (
                 <option key={type} value={type}>

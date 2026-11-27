@@ -485,7 +485,7 @@ export function RosterCalendar({
   return (
     // `isolate` keeps the sticky headings' stacking inside the calendar, so the
     // page's own menus (profile, notifications) open over it, not under it.
-    <div ref={scroller} role="region" aria-label="Roster calendar" className="isolate max-h-[72vh] overflow-auto rounded-2xl border bg-cc-surface" style={{ borderColor: BORDER }}>
+    <div ref={scroller} role="region" aria-label="Roster calendar" className="isolate max-h-[max(72vh,calc(100dvh-19rem))] overflow-auto rounded-xl border bg-cc-surface" style={{ borderColor: BORDER }}>
       <div className="grid" style={{ gridTemplateColumns: gridColumns, width: "max-content", minWidth: "100%" }}>
         {/* Day headings, each over its own columns. */}
         <div className="sticky left-0 top-0 z-50 border-b bg-cc-surface" style={{ height: DAY_HEAD_PX, borderColor: BORDER }} />

@@ -207,7 +207,7 @@ function ShiftListCardContent({
           <Link href={notesHref}>
             <button
               type="button"
-              className="mt-3 flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black text-white sm:h-12"
+              className="mt-3 flex h-11 md:h-9 w-full items-center justify-center rounded-xl px-4 text-sm font-black text-white sm:h-12"
               style={{ background: CORAL }}
             >
               {translate("shifts.listCard.completeNotes")}
@@ -364,7 +364,7 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
           href={mapsUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-card px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
+          className="inline-flex h-10 md:h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-card px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
         >
           <Navigation size={14} className="shrink-0" />
           <span className="truncate">{translate("shifts.listCard.directions")}</span>
@@ -372,7 +372,7 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
       ) : (
         <button
           type="button"
-          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-card px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
+          className="inline-flex h-10 md:h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-card px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
           onClick={() =>
             toast({
               title: translate("shifts.listCard.directions"),
@@ -388,7 +388,7 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
       {phone ? (
         <a
           href={`tel:${phone.replace(/\s/g, "")}`}
-          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-card px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
+          className="inline-flex h-10 md:h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-card px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
         >
           <Phone size={14} className="shrink-0" />
           <span className="truncate">{translate("shifts.listCard.call")}</span>
@@ -396,7 +396,7 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
       ) : (
         <button
           type="button"
-          className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-card px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
+          className="inline-flex h-10 md:h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-cc-border bg-card px-2 text-[11px] font-black text-cc-text hover:bg-cc-soft sm:h-12 sm:gap-2 sm:px-3 sm:text-sm"
           onClick={() =>
             toast({
               title: translate("shifts.listCard.call"),
@@ -412,7 +412,7 @@ export function ShiftListCard({ shift, showActions = false }: Props) {
       <button
         type="button"
         disabled={starting}
-        className="inline-flex h-10 min-w-0 flex-[1.35] items-center justify-center gap-1.5 rounded-xl px-2 text-[11px] font-black text-white disabled:opacity-60 sm:h-12 sm:px-3 sm:text-sm"
+        className="inline-flex h-10 md:h-8 min-w-0 flex-[1.35] items-center justify-center gap-1.5 rounded-xl px-2 text-[11px] font-black text-white disabled:opacity-60 sm:h-12 sm:px-3 sm:text-sm"
         style={{ background: CORAL }}
         data-tutorial="start-session"
         onClick={() => void handleClockIn()}

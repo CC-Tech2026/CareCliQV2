@@ -189,14 +189,14 @@ export function TrainingModuleEditor({
             <button
               disabled={disabled}
               onClick={close}
-              className="inline-flex h-11 items-center justify-center rounded-xl border px-4 text-sm font-semibold"
+              className="inline-flex h-11 md:h-9 items-center justify-center rounded-xl border px-4 text-sm font-semibold"
             >
               Close
             </button>
             <button
               disabled={disabled || !title.trim()}
               onClick={() => void save()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+              className="inline-flex h-11 md:h-9 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50"
             >
               {busy && <Loader2 size={15} className="animate-spin" />}
               {module ? "Save module" : "Create module"}

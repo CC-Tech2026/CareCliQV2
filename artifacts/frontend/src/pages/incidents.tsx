@@ -129,8 +129,8 @@ function WorkerIncidentsList() {
   }, [hasMore, loadMore, visible.length]);
 
   return (
-    <div className="space-y-6 pb-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="space-y-4 pb-10">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("incidents.title")}
@@ -139,7 +139,7 @@ function WorkerIncidentsList() {
         </div>
         <button
           onClick={() => navigate("/incidents/new")}
-          className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95"
+          className="inline-flex min-h-11 md:min-h-8 items-center justify-center gap-2 rounded-full px-5 text-sm font-black text-white shadow-sm transition hover:opacity-95"
           style={{ background: "var(--cc-cta)" }}
         >
           <Plus size={15} strokeWidth={2.5} />
@@ -147,8 +147,8 @@ function WorkerIncidentsList() {
         </button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1 xl:max-w-sm">
           <Input
             placeholder={translate("incidents.searchPlaceholder")}
             value={search}

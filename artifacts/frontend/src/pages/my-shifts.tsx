@@ -160,10 +160,10 @@ export default function MyShifts() {
 
       {/* Greeting header */}
       <header className="pt-1">
-        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-cc-plum">
+        <p className="sr-only">
           {translate("common.supportWorker")}
         </p>
-        <h1 className="mt-0.5 text-2xl font-black tracking-tight text-cc-text">
+        <h1 className="mt-0.5 text-xl font-black tracking-tight text-cc-text">
           {translate(greetingKey)}, {firstName}
         </h1>
         <p className="mt-1 text-sm font-medium text-cc-muted">{dateLabel}</p>

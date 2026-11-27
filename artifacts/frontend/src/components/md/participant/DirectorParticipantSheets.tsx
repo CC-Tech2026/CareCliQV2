@@ -148,7 +148,7 @@ export function TeamSheet({
                 const option = staffOption(w);
                 return (
                   <li key={w.id} className="border-cc-border">
-                    <label className="flex min-h-11 cursor-pointer items-center gap-3 px-4 py-1.5">
+                    <label className="flex min-h-11 md:min-h-9 cursor-pointer items-center gap-3 px-4 py-1.5">
                       <Checkbox
                         checked={checked}
                         onCheckedChange={(v) => setBackups((b) => (v ? [...b, w.id] : b.filter((id) => id !== w.id)))}
@@ -550,7 +550,7 @@ export function AuditSheet({ open, onOpenChange, participantId }: { open: boolea
             type="button"
             aria-pressed={show === value}
             onClick={() => setShow(value)}
-            className="min-h-10 rounded-full px-4 text-sm font-medium transition"
+            className="min-h-10 md:min-h-8 rounded-full px-4 text-sm font-medium transition"
             style={show === value ? { background: TEXT, color: "var(--cc-bg)" } : { color: TEXT, boxShadow: "inset 0 0 0 1px var(--cc-border)" }}
           >
             {label}

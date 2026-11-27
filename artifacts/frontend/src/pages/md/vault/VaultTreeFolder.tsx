@@ -267,7 +267,7 @@ export default function VaultTreeFolderPage({
 
   return (
     <HubLayout>
-      <div className="space-y-6 pb-12">
+      <div className="space-y-4  pb-12">
         <div className="flex flex-wrap items-center gap-2">
           <nav aria-label="Folder path" className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold" style={{ color: MUTED }}>
             {crumbs.map((c, i) => (
@@ -297,13 +297,13 @@ export default function VaultTreeFolderPage({
 
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{title}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{title}</h1>
             {personSub && <StatePill state={personSub.state} />}
             {canGenerateReport && (
               <button
                 type="button"
                 onClick={() => setReportOpen(true)}
-                className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+                className="ml-auto inline-flex min-h-11 md:min-h-9 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
                 style={{ background: "var(--cc-cta)" }}
               >
                 <FileText size={15} />

@@ -403,7 +403,7 @@ function DetailShell({ onBack, children }: { onBack: () => void; children: React
 
 function GoButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-5 text-[14px] font-semibold text-white" style={{ background: "var(--cc-cta)" }}>
+    <button type="button" onClick={onClick} className="mt-5 flex min-h-11 md:min-h-9 w-full items-center justify-center gap-2 rounded-full px-5 text-[14px] font-semibold text-white" style={{ background: "var(--cc-cta)" }}>
       {label} <ArrowRight size={15} aria-hidden />
     </button>
   );

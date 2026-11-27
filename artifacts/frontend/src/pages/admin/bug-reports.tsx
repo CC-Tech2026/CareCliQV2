@@ -161,7 +161,7 @@ export default function AdminBugReportsPage() {
     <AdminShell>
       <div className="space-y-5">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>Bug reports</h1>
+          <h1 className="text-xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>Bug reports</h1>
           <Button className="gap-1.5" onClick={() => setReportPanelOpen(true)}>
             <Plus size={15} /> Report Bug
           </Button>
@@ -217,7 +217,7 @@ export default function AdminBugReportsPage() {
                   value={filters.search}
                   onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
                   placeholder="Search description or organisation"
-                  className="h-11 rounded-xl border-0 pl-11 text-[13px] shadow-none focus-visible:ring-1"
+                  className="h-11 md:h-9 rounded-xl border-0 pl-11 text-[13px] shadow-none focus-visible:ring-1"
                   style={{ background: SOFT }}
                 />
                 {filters.search && (
@@ -280,7 +280,7 @@ export default function AdminBugReportsPage() {
               {filtersActive && (
                 <button
                   onClick={clearFilters}
-                  className="flex h-11 shrink-0 items-center justify-center gap-1 rounded-xl px-3 text-[11px] font-bold hover:bg-black/5"
+                  className="flex h-11 md:h-9 shrink-0 items-center justify-center gap-1 rounded-xl px-3 text-[11px] font-bold hover:bg-black/5"
                   style={{ color: MUTED }}
                 >
                   <X size={13} /> Clear

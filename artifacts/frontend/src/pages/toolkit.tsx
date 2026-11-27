@@ -185,9 +185,9 @@ export default function Toolkit() {
   }
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-4  pb-10">
       <div>
-        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+        <p className="sr-only" style={{ color: CORAL }}>
           {isCoordinator ? "Organisation" : "Support Worker"}
         </p>
         <h1 className="mt-1 text-xl font-black tracking-tight" style={{ color: TEXT }}>

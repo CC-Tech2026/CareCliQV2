@@ -166,7 +166,7 @@ export default function ParticipantDocumentsPage() {
     <ParticipantPortalShell>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Documents</h1>
+          <h1 className="text-xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Documents</h1>
           <p className="mt-1 text-[14px]" style={{ color: MUTED }}>Everything on file for your supports.</p>
         </div>
 

@@ -1873,7 +1873,7 @@ function ModulesTab({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search training modules"
-            className="h-11 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
+            className="h-11 md:h-9 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
             style={{ borderColor: BORDER, color: TEXT }}
           />
         </label>
@@ -1888,7 +1888,7 @@ function ModulesTab({
           <select
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
-            className="min-h-10 rounded-full border bg-cc-surface px-4 text-sm"
+            className="min-h-10 md:min-h-8 rounded-full border bg-cc-surface px-4 text-sm"
             style={{ borderColor: BORDER }}
           >
             <option value="all">All modules</option>
@@ -2379,13 +2379,13 @@ export function MDOnboardingSetupPage() {
       <div className="space-y-5 pb-10">
         <button
           onClick={() => navigate("/md/onboarding")}
-          className="inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold"
+          className="inline-flex h-10 md:h-8 items-center gap-2 rounded-xl border px-4 text-sm font-semibold"
         >
           <ArrowLeft size={15} />
           Back to onboarding
         </button>
         <div>
-          <h1 className="text-2xl font-bold">Onboarding setup</h1>
+          <h1 className="text-xl font-bold">Onboarding setup</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Manage new-starter programmes, induction and stage approvals.
           </p>

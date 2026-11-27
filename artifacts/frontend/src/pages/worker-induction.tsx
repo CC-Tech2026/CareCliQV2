@@ -40,10 +40,10 @@ export default function WorkerInductionPage() {
   return (
     <div className="w-full space-y-5 pb-12">
       <header>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: PLUM }}>
+        <p className="sr-only" style={{ color: PLUM }}>
           {translate("induction.eyebrow") || "Getting started"}
         </p>
-        <h1 className="mt-1 flex items-center gap-2 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
+        <h1 className="mt-1 flex items-center gap-2 text-2xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("induction.title") || "Induction"}
           <SectionInfo text="Your checklist for getting set up: required reading, policies, and first steps before your first shift." />
         </h1>

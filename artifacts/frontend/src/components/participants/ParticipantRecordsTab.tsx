@@ -113,7 +113,7 @@ export function ParticipantRecordsTab({
           aria-label="Profile"
           className="rounded-xl border border-cc-border bg-white p-4"
         >
-          <label className="flex min-h-11 cursor-pointer items-center gap-3">
+          <label className="flex min-h-11 md:min-h-9 cursor-pointer items-center gap-3">
             <input
               type="checkbox"
               className="h-4 w-4 shrink-0"
@@ -171,7 +171,7 @@ export function ParticipantRecordsTab({
           aria-label="Shift history"
           className="rounded-xl border border-cc-border bg-white p-4"
         >
-          <label className="flex min-h-11 cursor-pointer items-center gap-3">
+          <label className="flex min-h-11 md:min-h-9 cursor-pointer items-center gap-3">
             <input
               type="checkbox"
               className="h-4 w-4 shrink-0"
@@ -197,7 +197,7 @@ export function ParticipantRecordsTab({
           aria-label="Invoices"
           className="rounded-xl border border-cc-border bg-white p-4"
         >
-          <label className="flex min-h-11 cursor-pointer items-center gap-3">
+          <label className="flex min-h-11 md:min-h-9 cursor-pointer items-center gap-3">
             <input
               type="checkbox"
               className="h-4 w-4 shrink-0"
@@ -221,7 +221,7 @@ export function ParticipantRecordsTab({
             <label className="mt-2 block text-sm sm:max-w-xs">
               Only with status
               <select
-                className="mt-1 min-h-11 w-full rounded-md border border-cc-border bg-white px-3"
+                className="mt-1 min-h-11 md:min-h-9 w-full rounded-md border border-cc-border bg-white px-3"
                 value={invoiceStatus}
                 disabled={busy}
                 onChange={(e) => setInvoiceStatus(e.target.value)}
@@ -241,7 +241,7 @@ export function ParticipantRecordsTab({
           aria-label="Documents"
           className="rounded-xl border border-cc-border bg-white p-4"
         >
-          <label className="flex min-h-11 cursor-pointer items-center gap-3">
+          <label className="flex min-h-11 md:min-h-9 cursor-pointer items-center gap-3">
             <input
               type="checkbox"
               className="h-4 w-4 shrink-0"
@@ -282,7 +282,7 @@ export function ParticipantRecordsTab({
             </p>
           </div>
           <Button
-            className="min-h-11 w-full sm:w-auto"
+            className="min-h-11 md:min-h-9 w-full sm:w-auto"
             disabled={exportDisabled}
             onClick={downloadSelection}
           >

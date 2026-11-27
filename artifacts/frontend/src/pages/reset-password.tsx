@@ -110,7 +110,7 @@ export default function ResetPassword() {
               <button
                 type="button"
                 onClick={() => navigate(signInPath)}
-                className="mt-4 h-11 px-5 rounded-2xl text-white font-bold transition-all hover:opacity-90 active:scale-[0.97]"
+                className="mt-4 h-11 md:h-9 px-5 rounded-2xl text-white font-bold transition-all hover:opacity-90 active:scale-[0.97]"
                 style={{ background: "var(--cc-cta)" }}
               >
                 {t("auth.reset.signIn")}

@@ -25,7 +25,7 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { SectionInfo } from "@/components/ui/section-info";
-import { PageHeader, StatusText, SummaryStrip, ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
+import { PageHeader, StatusText, SummaryLine, ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
 import { ChoiceCard, DropZone, Field, PanelFooter, PanelHeader, PrimaryButton, SecondaryButton, inputClass, textareaClass } from "@/pages/md/vault/components/PanelKit";
 import {
   AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, Briefcase, CalendarDays, ChevronDown, ChevronRight, ChevronUp, Clock, Clock3, CheckCircle2,
@@ -527,7 +527,7 @@ function HireDetail({
               </div>
 
               {hire.status === "draft" && (
-                <Button variant="navy" className="min-h-11 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending || documents.length === 0}>
+                <Button variant="navy" className="min-h-11 md:min-h-9 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending || documents.length === 0}>
                   {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send for signature
                 </Button>
               )}
@@ -557,7 +557,7 @@ function HireDetail({
                         <Copy size={13} style={{ color: MUTED }} />
                       </button>
                     </div>
-                    <Button variant="outline" className="min-h-11 w-full gap-2 rounded-full" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
+                    <Button variant="outline" className="min-h-11 md:min-h-9 w-full gap-2 rounded-full" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
                       {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={13} />} Resend offer email
                     </Button>
                   </div>
@@ -572,14 +572,14 @@ function HireDetail({
                       The offer link expired after {OFFER_LINK_TTL_DAYS} days without a signature. Resend to issue a fresh link.
                     </p>
                   </div>
-                  <Button variant="navy" className="min-h-11 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
+                  <Button variant="navy" className="min-h-11 md:min-h-9 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
                     {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Resend offer
                   </Button>
                 </div>
               )}
 
               {hire.status === "signed" && (
-                <Button variant="navy" className="min-h-11 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendInviteMut.mutate()} disabled={sendInviteMut.isPending}>
+                <Button variant="navy" className="min-h-11 md:min-h-9 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendInviteMut.mutate()} disabled={sendInviteMut.isPending}>
                   {sendInviteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send login invite
                 </Button>
               )}
@@ -605,7 +605,7 @@ function HireDetail({
                     </div>
                     <Button
                       variant={inviteExpiry?.expired ? "navy" : "outline"}
-                      className="min-h-11 w-full gap-2 rounded-full"
+                      className="min-h-11 md:min-h-9 w-full gap-2 rounded-full"
                       onClick={() => sendInviteMut.mutate()}
                       disabled={sendInviteMut.isPending}
                     >
@@ -1289,8 +1289,8 @@ function ApplicantDetailSheet({
                       {docFile ? docFile.name : "Choose or drop a file (PDF or image)"}
                     </FileDropZone>
                     <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="sm" className="min-h-10 rounded-full px-4" onClick={() => { setAddOpen(false); setDocFile(null); }}>Cancel</Button>
-                      <Button variant="navy" size="sm" className="min-h-10 rounded-full px-4 text-white" style={{ background: "var(--cc-cta)" }} onClick={() => addDocMut.mutate()} disabled={!docFile || addDocMut.isPending}>
+                      <Button variant="outline" size="sm" className="min-h-10 md:min-h-8 rounded-full px-4" onClick={() => { setAddOpen(false); setDocFile(null); }}>Cancel</Button>
+                      <Button variant="navy" size="sm" className="min-h-10 md:min-h-8 rounded-full px-4 text-white" style={{ background: "var(--cc-cta)" }} onClick={() => addDocMut.mutate()} disabled={!docFile || addDocMut.isPending}>
                         {addDocMut.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null} Upload
                       </Button>
                     </div>
@@ -1745,6 +1745,14 @@ export default function StaffOnboardingBoard() {
         <PageHeader
           eyebrow="Workforce & People"
           title="Staff onboarding"
+          summary={data ? <SummaryLine
+          items={[
+            { value: inPipelineCount, label: "in progress", onClick: () => setKpiFilter("pipeline"), active: activeKpi === "pipeline" },
+            { value: data.kpis.credentials_overdue, label: "credentials overdue", tone: data.kpis.credentials_overdue ? "warning" : "good", onClick: () => setKpiFilter("credentials"), active: activeKpi === "credentials" },
+            { value: data.kpis.starting_this_week, label: "starting this week", tone: data.kpis.starting_this_week ? "good" : undefined, onClick: () => { setActiveKpi("starting"); setStageFilter("all"); }, active: activeKpi === "starting" },
+            { value: data.kpis.auto_deactivated_month, label: "auto-deactivated this month", onClick: () => { setActiveKpi("deactivated"); setStageFilter("all"); setNotProceedingOpen(true); }, active: activeKpi === "deactivated" },
+          ]}
+        /> : undefined}
           description="Candidates from interview through to their first shift, with credentials and training tracked on the way."
           actions={
             <>
@@ -1782,23 +1790,14 @@ export default function StaffOnboardingBoard() {
           </div>
         ) : (
           <>
-            <SummaryStrip
-              items={[
-                { value: inPipelineCount, label: "in progress", onClick: () => setKpiFilter("pipeline"), active: activeKpi === "pipeline" },
-                { value: data.kpis.credentials_overdue, label: "credentials overdue", tone: data.kpis.credentials_overdue ? "warning" : "good", onClick: () => setKpiFilter("credentials"), active: activeKpi === "credentials" },
-                { value: data.kpis.starting_this_week, label: "starting this week", tone: data.kpis.starting_this_week ? "good" : undefined, onClick: () => { setActiveKpi("starting"); setStageFilter("all"); }, active: activeKpi === "starting" },
-                { value: data.kpis.auto_deactivated_month, label: "auto-deactivated this month", onClick: () => { setActiveKpi("deactivated"); setStageFilter("all"); setNotProceedingOpen(true); }, active: activeKpi === "deactivated" },
-              ]}
-            />
-
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="relative min-w-0 flex-1 sm:max-w-sm">
                 <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
-                <Input aria-label="Search candidates" value={search} onChange={(e) => { setSearch(e.target.value); setActiveKpi(null); }} placeholder="Search candidates" className="h-11 rounded-full bg-cc-surface pl-11 pr-9 text-sm" />
+                <Input aria-label="Search candidates" value={search} onChange={(e) => { setSearch(e.target.value); setActiveKpi(null); }} placeholder="Search candidates" className="h-11 md:h-9 rounded-full bg-cc-surface pl-11 pr-9 text-sm" />
                 {search && <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5"><X size={13} style={{ color: MUTED }} /></button>}
               </div>
               <Select value={stageFilter} onValueChange={(value) => { setStageFilter(value); setActiveKpi(null); }}>
-                <SelectTrigger className="h-10 w-full rounded-full bg-cc-surface px-4 text-sm sm:ml-auto sm:w-[170px]"><SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="All stages" /></SelectTrigger>
+                <SelectTrigger className="h-10 md:h-8 w-full rounded-full bg-cc-surface px-4 text-sm sm:ml-auto sm:w-[170px]"><SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="All stages" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All stages</SelectItem>
                   <SelectItem value="applied">Applied</SelectItem>

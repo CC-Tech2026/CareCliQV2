@@ -770,7 +770,7 @@ function InvoiceQueue({
 }
 
 const fieldClass =
-  "mt-1 min-h-10 w-full rounded-xl border border-cc-border bg-white px-3 text-sm text-cc-text focus:outline-none focus:ring-2 focus:ring-[var(--cc-plum)] disabled:opacity-60";
+  "mt-1 min-h-10 md:min-h-8 w-full rounded-xl border border-cc-border bg-white px-3 text-sm text-cc-text focus:outline-none focus:ring-2 focus:ring-[var(--cc-plum)] disabled:opacity-60";
 
 /** The invoice panel's footer: the one thing to do next for this invoice.
  * Remount it per invoice and status (key) so its fields start fresh. */
@@ -849,7 +849,7 @@ function InvoiceNextAction({
   if (invoice.status === "draft")
     return (
       <div className={footer}>
-        <label className="flex min-h-11 items-start gap-3 text-sm">
+        <label className="flex min-h-11 md:min-h-9 items-start gap-3 text-sm">
           <input
             type="checkbox"
             className="mt-1 h-5 w-5 shrink-0 accent-cc-plum"
@@ -1710,7 +1710,7 @@ export default function Billing() {
           )}
         </SheetContent>
       </Sheet>
-      <div className="w-full min-w-0 space-y-6 pb-10">
+      <div className="w-full min-w-0 space-y-4 pb-10">
         <PageHeader
           eyebrow="NDIS revenue"
           title={
@@ -2150,7 +2150,7 @@ export default function Billing() {
                           </Label>
                           <select
                             id="invoice-price-region"
-                            className="h-10 w-full rounded-md border border-cc-border bg-white px-2 text-sm"
+                            className="h-10 md:h-8 w-full rounded-md border border-cc-border bg-white px-2 text-sm"
                             value={form.location_type}
                             onChange={(e) => {
                               priceRequest.current++;
@@ -2376,15 +2376,15 @@ export default function Billing() {
               }}
             />
             <section className="rounded-2xl border border-cc-border bg-white" aria-label={translate("billing.invoiceRegister")}>
-              <div className="flex flex-col gap-3 border-b border-cc-border p-4 sm:flex-row sm:items-center">
-                <div className="relative min-w-0 flex-1">
+              <div className="flex flex-col gap-2 border-b border-cc-border px-4 py-3 sm:flex-row sm:items-center">
+                <div className="relative min-w-0 flex-1 xl:max-w-sm">
                   <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cc-muted" />
                   <Input
                     aria-label="Search invoices"
                     placeholder="Search participant, invoice number or email"
                     value={invoiceSearch}
                     onChange={(event) => setInvoiceSearch(event.target.value)}
-                    className="h-10 rounded-xl pl-9"
+                    className="h-10 md:h-8 rounded-xl pl-9"
                   />
                 </div>
                 <div className="flex flex-wrap gap-1" role="group" aria-label="Filter invoice status">
@@ -2792,7 +2792,7 @@ export function NdisCatalogueBrowser() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by item code, name, or category"
-            className="min-h-11 rounded-xl pl-8 text-sm"
+            className="min-h-11 md:min-h-9 rounded-xl pl-8 text-sm"
           />
         </div>
         <Select
@@ -2801,7 +2801,7 @@ export function NdisCatalogueBrowser() {
         >
           <SelectTrigger
             aria-label="Filter rate source"
-            className="min-h-11 w-full rounded-xl text-sm sm:w-[170px]"
+            className="min-h-11 md:min-h-9 w-full rounded-xl text-sm sm:w-[170px]"
           >
             <SelectValue />
           </SelectTrigger>
@@ -2819,7 +2819,7 @@ export function NdisCatalogueBrowser() {
           Pricing region
           <select
             aria-label="Catalogue pricing region"
-            className="ml-2 min-h-10 rounded-lg border border-cc-border bg-white px-3"
+            className="ml-2 min-h-10 md:min-h-8 rounded-lg border border-cc-border bg-white px-3"
             value={region}
             onChange={(event) => setRegion(event.target.value as typeof region)}
           >
@@ -3249,7 +3249,7 @@ export function RevenueInvoiceLedger({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search recipient, invoice number, email or ID"
-              className="min-h-11 rounded-xl pl-8 text-sm"
+              className="min-h-11 md:min-h-9 rounded-xl pl-8 text-sm"
             />
           </div>
           <Select
@@ -3260,7 +3260,7 @@ export function RevenueInvoiceLedger({
           >
             <SelectTrigger
               aria-label="Filter invoice history status"
-              className="min-h-11 w-full rounded-xl text-sm sm:w-[150px]"
+              className="min-h-11 md:min-h-9 w-full rounded-xl text-sm sm:w-[150px]"
             >
               <SelectValue />
             </SelectTrigger>
@@ -3277,7 +3277,7 @@ export function RevenueInvoiceLedger({
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="min-h-11 w-full min-w-0 rounded-xl text-sm"
+              className="min-h-11 md:min-h-9 w-full min-w-0 rounded-xl text-sm"
             />
             <Input
               aria-label="Invoice created to"
@@ -3285,7 +3285,7 @@ export function RevenueInvoiceLedger({
               min={dateFrom || undefined}
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="min-h-11 w-full min-w-0 rounded-xl text-sm"
+              className="min-h-11 md:min-h-9 w-full min-w-0 rounded-xl text-sm"
             />
           </div>
           {hasFilters && (

@@ -231,7 +231,7 @@ function StepNav({
                 type="button"
                 onClick={() => onSelect(i)}
                 aria-current={isCurrent ? "step" : undefined}
-                className={`flex min-h-11 w-[76px] flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum lg:w-full lg:flex-row lg:gap-3 lg:px-3 lg:text-left ${isCurrent ? "bg-cc-soft" : "hover:bg-cc-soft"}`}
+                className={`flex min-h-11 md:min-h-9 w-[76px] flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum lg:w-full lg:flex-row lg:gap-3 lg:px-3 lg:text-left ${isCurrent ? "bg-cc-soft" : "hover:bg-cc-soft"}`}
               >
                 <span
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold"

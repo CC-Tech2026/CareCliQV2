@@ -151,7 +151,7 @@ export function ShiftOfficeMessagePanel({
             {messagePhotoPreviews.length < 2 && (
               <button
                 type="button"
-                className="inline-flex h-10 items-center gap-2 rounded-lg border border-cc-border bg-card px-3 text-sm font-semibold text-cc-text transition-colors hover:border-cc-plum hover:text-cc-plum"
+                className="inline-flex h-10 md:h-8 items-center gap-2 rounded-lg border border-cc-border bg-card px-3 text-sm font-semibold text-cc-text transition-colors hover:border-cc-plum hover:text-cc-plum"
                 onClick={() => messagePhotoInputRef.current?.click()}
               >
                 <Camera size={15} className="text-cc-plum" />

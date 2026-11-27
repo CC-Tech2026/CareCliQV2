@@ -32,12 +32,12 @@ export default function WorkerPerformanceDashboardPage() {
   const trend = data?.trend;
 
   return (
-    <div className="w-full space-y-6 pb-12">
+    <div className="w-full space-y-4  pb-12">
       <header>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+        <p className="sr-only" style={{ color: CORAL }}>
           {translate("performance.eyebrow")}
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
+        <h1 className="mt-1 text-2xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("performance.title")}
         </h1>
         <p className="mt-2 text-sm font-medium" style={{ color: MUTED }}>

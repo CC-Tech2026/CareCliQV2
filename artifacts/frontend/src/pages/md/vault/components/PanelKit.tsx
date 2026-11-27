@@ -89,7 +89,7 @@ export function Field({
 
 /** Text input styled for the panels. */
 export const inputClass =
-  "h-11 w-full rounded-xl border bg-cc-surface px-4 text-sm outline-none transition placeholder:text-cc-muted focus:border-[color:var(--cc-brand-purple)] focus:ring-4 focus:ring-[color:var(--cc-brand-purple-soft)]";
+  "h-11 md:h-9 w-full rounded-xl border bg-cc-surface px-4 text-sm outline-none transition placeholder:text-cc-muted focus:border-[color:var(--cc-brand-purple)] focus:ring-4 focus:ring-[color:var(--cc-brand-purple-soft)]";
 export const textareaClass =
   "w-full rounded-xl border bg-cc-surface px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-cc-muted focus:border-[color:var(--cc-brand-purple)] focus:ring-4 focus:ring-[color:var(--cc-brand-purple-soft)]";
 
@@ -182,7 +182,7 @@ export function PrimaryButton({
       form={form}
       onClick={onClick}
       disabled={disabled || busy}
-      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum ${className}`}
+      className={`inline-flex min-h-11 md:min-h-9 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum ${className}`}
       style={{ background: tone === "danger" ? "var(--cc-danger-text)" : "var(--cc-cta)" }}
     >
       {busy && <Loader2 size={15} className="animate-spin" />}
@@ -207,7 +207,7 @@ export function SecondaryButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-5 text-sm font-medium transition hover:bg-cc-soft disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum ${className}`}
+      className={`inline-flex min-h-11 md:min-h-9 items-center justify-center gap-2 rounded-full border px-5 text-sm font-medium transition hover:bg-cc-soft disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum ${className}`}
       style={{ borderColor: BORDER, color: TEXT }}
     >
       {children}

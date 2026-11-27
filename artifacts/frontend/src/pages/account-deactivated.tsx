@@ -40,7 +40,7 @@ export default function AccountDeactivated() {
           <Lock className="h-8 w-8" style={{ color: PLUM }} />
         </div>
 
-        <h1 className="mt-5 text-2xl font-black tracking-tight" style={{ color: TEXT }}>
+        <h1 className="mt-5 text-xl font-black tracking-tight" style={{ color: TEXT }}>
           {copy ? copy.title : "Your account has been deactivated"}
         </h1>
 

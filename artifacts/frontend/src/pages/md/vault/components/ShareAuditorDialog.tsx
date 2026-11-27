@@ -423,7 +423,7 @@ export function ShareAuditorDialog({
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <Popover>
               <PopoverTrigger asChild>
-                <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft" style={fieldStyle}>
+                <button type="button" className="inline-flex min-h-11 md:min-h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft" style={fieldStyle}>
                   <Settings2 size={15} /> Pack options
                 </button>
               </PopoverTrigger>
@@ -452,7 +452,7 @@ export function ShareAuditorDialog({
 
             <Popover>
               <PopoverTrigger asChild>
-                <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft" style={fieldStyle}>
+                <button type="button" className="inline-flex min-h-11 md:min-h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft" style={fieldStyle}>
                   <Mail size={15} /> Email
                 </button>
               </PopoverTrigger>
@@ -510,14 +510,14 @@ export function ShareAuditorDialog({
                   aria-label="Time period"
                   value={preset}
                   onChange={(e) => setPreset(e.target.value as PeriodPreset)}
-                  className="h-10 rounded-full border bg-cc-surface px-3 text-sm outline-none"
+                  className="h-10 md:h-8 rounded-full border bg-cc-surface px-3 text-sm outline-none"
                   style={fieldStyle}
                 >
                   {PERIOD_PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
                 </select>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button type="button" className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-sm font-semibold transition hover:bg-cc-soft" style={{ color: PURPLE }}>
+                    <button type="button" className="inline-flex h-10 md:h-8 items-center gap-1.5 rounded-full px-3 text-sm font-semibold transition hover:bg-cc-soft" style={{ color: PURPLE }}>
                       <FolderPlus size={15} /> Add a folder
                     </button>
                   </PopoverTrigger>
@@ -531,7 +531,7 @@ export function ShareAuditorDialog({
                       ) : (
                         addable.map((source) => (
                           <li key={source.key}>
-                            <button type="button" onClick={() => addSource(source)} className="flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm transition hover:bg-cc-soft" style={{ color: TEXT }}>
+                            <button type="button" onClick={() => addSource(source)} className="flex min-h-10 md:min-h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm transition hover:bg-cc-soft" style={{ color: TEXT }}>
                               <FolderMark />
                               <span className="min-w-0 flex-1 truncate">{source.label}</span>
                               <span className="text-xs tabular-nums" style={{ color: MUTED }}>{source.count}</span>

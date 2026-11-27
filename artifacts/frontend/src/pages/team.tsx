@@ -639,7 +639,7 @@ export default function Team() {
             <Button
               variant="outline"
               onClick={() => setMembersOpen(true)}
-              className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
+              className="inline-flex items-center gap-2 rounded-full px-4 py-3 md:py-1.5 text-sm font-semibold"
             >
               <Users2 size={16} /> Members and roles
             </Button>
@@ -647,7 +647,7 @@ export default function Team() {
               <Button
                 variant="navy"
                 onClick={() => setInviteOpen(true)}
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black"
+                className="inline-flex items-center gap-2 rounded-full px-5 py-3 md:py-1.5 text-sm font-black"
               >
                 <UserPlus size={16} /> {translate("team.inviteWorker")}
               </Button>
@@ -707,11 +707,11 @@ export default function Team() {
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 placeholder={translate("team.search.placeholder")}
                 aria-label={translate("team.search.placeholder")}
-                className="h-11 rounded-full border-cc-border bg-cc-surface pl-11 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-cc-plum"
+                className="h-11 md:h-9 rounded-full border-cc-border bg-cc-surface pl-11 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-cc-plum"
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <LabelFilter target="workers" value={labelFilter} onChange={(v) => { setLabelFilter(v); setPage(1); }} className="w-[170px] [&_button]:h-10 [&_button]:rounded-full [&_button]:text-sm" />
+              <LabelFilter target="workers" value={labelFilter} onChange={(v) => { setLabelFilter(v); setPage(1); }} className="w-[170px] [&_button]:h-10 md:[&_button]:h-8 [&_button]:rounded-full [&_button]:text-sm" />
               {/* Status — mutually exclusive, low cardinality: a segmented control reads as one choice, not a scrolling list */}
               <div className="flex gap-0.5 rounded-full border bg-cc-surface p-1" style={{ borderColor: BORDER }}>
                 {([
@@ -763,7 +763,7 @@ export default function Team() {
               {viewMode === "list" && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-10 gap-1.5 rounded-full px-4 text-sm font-medium" title="Show or hide columns">
+                    <Button variant="outline" size="sm" className="h-10 md:h-8 gap-1.5 rounded-full px-4 text-sm font-medium" title="Show or hide columns">
                       <Columns3 size={14} /> Columns
                     </Button>
                   </DropdownMenuTrigger>
@@ -787,7 +787,7 @@ export default function Team() {
                 variant="outline"
                 size="sm"
                 onClick={() => setRulesOpen(true)}
-                className="h-10 gap-1.5 rounded-full px-4 text-sm font-medium"
+                className="h-10 md:h-8 gap-1.5 rounded-full px-4 text-sm font-medium"
                 title="Configure required credentials per shift type"
               >
                 <Settings2 size={14} /> Rules
@@ -816,7 +816,7 @@ export default function Team() {
                   type="button"
                   aria-pressed={active}
                   onClick={() => toggleAttentionFilter(value)}
-                  className="inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-sm font-medium transition-colors"
+                  className="inline-flex min-h-10 md:min-h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-sm font-medium transition-colors"
                   style={{
                     borderColor: active ? "var(--cc-text)" : flagged ? "var(--cc-status-warning)" : BORDER,
                     background: active ? "var(--cc-text)" : flagged ? "var(--cc-status-warning-bg)" : "var(--cc-surface)",
@@ -1220,7 +1220,7 @@ export default function Team() {
                 title="Shift type"
                 value={ruleShiftType}
                 onChange={(event) => setRuleShiftType(event.target.value)}
-                className="mt-1 h-10 w-full rounded-xl border px-3 text-sm"
+                className="mt-1 h-10 md:h-8 w-full rounded-xl border px-3 text-sm"
                 style={{ borderColor: BORDER, background: "var(--cc-bg)" }}
               >
                 {SHIFT_TYPES.map((type) => <option key={type} value={type}>{type.replace(/_/g, " ")}</option>)}
@@ -1232,7 +1232,7 @@ export default function Team() {
                 title="Required credential"
                 value={ruleCredentialType}
                 onChange={(event) => setRuleCredentialType(event.target.value)}
-                className="mt-1 h-10 w-full rounded-xl border px-3 text-sm"
+                className="mt-1 h-10 md:h-8 w-full rounded-xl border px-3 text-sm"
                 style={{ borderColor: BORDER, background: "var(--cc-bg)" }}
               >
                 {[...new Set([...WORKER_CREDENTIAL_TYPES, ...ALLIED_CREDENTIAL_TYPES])].sort((a, b) => a.localeCompare(b)).map((type) => (

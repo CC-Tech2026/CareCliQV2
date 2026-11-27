@@ -329,7 +329,7 @@ export function AgreementsSection({
               type="button"
               onClick={r.onClick}
               aria-label={`${r.action} ${r.title.toLowerCase()}`}
-              className="inline-flex min-h-10 items-center rounded-full px-3 text-sm font-medium hover:bg-cc-soft"
+              className="inline-flex min-h-10 md:min-h-8 items-center rounded-full px-3 text-sm font-medium hover:bg-cc-soft"
               style={{ color: PLUM }}
             >
               {r.action}

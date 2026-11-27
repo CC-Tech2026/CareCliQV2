@@ -77,7 +77,7 @@ export default function MyCompliance() {
   const complianceDetail = complianceDetailQuery.data;
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-4  pb-10">
       <div>
         <p className="hidden" style={{ color: MUTED }}>Support Worker</p>
         <h1 className="flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>

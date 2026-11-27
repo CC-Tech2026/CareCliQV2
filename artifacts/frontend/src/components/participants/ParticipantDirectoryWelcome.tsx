@@ -6,13 +6,13 @@ export function ParticipantDirectoryWelcome({ participants, onSelect, loading, e
   participants: DirectoryParticipant[]; onSelect: (id: string) => void; loading: boolean; error: boolean; onRetry: () => void;
 }) {
   if (loading) return <div role="status" className="p-8 text-sm text-cc-muted">Loading participant directory…</div>;
-  if (error) return <div role="alert" className="p-8"><h2 className="text-lg font-semibold text-cc-text">Participant records couldn’t be loaded</h2><p className="mt-2 text-sm text-cc-muted">Try loading the directory again.</p><button onClick={onRetry} className="mt-4 min-h-11 rounded-lg border border-cc-border px-4 text-sm font-semibold">Try again</button></div>;
+  if (error) return <div role="alert" className="p-8"><h2 className="text-lg font-semibold text-cc-text">Participant records couldn’t be loaded</h2><p className="mt-2 text-sm text-cc-muted">Try loading the directory again.</p><button onClick={onRetry} className="mt-4 min-h-11 md:min-h-9 rounded-lg border border-cc-border px-4 text-sm font-semibold">Try again</button></div>;
   const active = participants.filter(p => p.plan_status === "active").length;
   const review = participants.filter(p => p.plan_status === "review" || p.plan_status === "expired").length;
   return <div className="space-y-6 overflow-y-auto p-5 sm:p-7">
     <header>
       <p className="text-xs font-medium uppercase tracking-wider text-cc-muted">Participant workspace</p>
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight text-cc-text">People, plans and support</h1>
+      <h1 className="mt-2 text-xl font-semibold tracking-tight text-cc-text">People, plans and support</h1>
       <p className="mt-3 max-w-xl text-sm leading-6 text-cc-muted">Choose a participant to review their care information, plan, goals and delivered support. Search by name or NDIS number in the directory.</p>
     </header>
     <dl className="grid gap-3 sm:grid-cols-3">

@@ -56,7 +56,7 @@ const choiceClass = (selected: boolean, disabled = false) =>
 
 const pillClass = (selected: boolean) =>
   cn(
-    "inline-flex min-h-10 items-center rounded-full border px-3.5 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum",
+    "inline-flex min-h-10 md:min-h-8 items-center rounded-full border px-3.5 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum",
     selected ? "border-cc-plum bg-[var(--cc-plum-soft)] font-semibold text-cc-text" : "border-cc-border text-cc-text hover:bg-cc-soft",
   );
 
@@ -201,7 +201,7 @@ function GrantFlow({
       <button
         type="button"
         onClick={onClose}
-        className="inline-flex min-h-10 items-center gap-1 rounded-full pr-3 text-sm font-medium text-cc-plum hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+        className="inline-flex min-h-10 md:min-h-8 items-center gap-1 rounded-full pr-3 text-sm font-medium text-cc-plum hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
       >
         <ChevronLeft className="h-4 w-4" aria-hidden />
         Back to Delegated Access
@@ -482,7 +482,7 @@ function ActiveGrantRow({
             type="button"
             disabled={ending}
             onClick={onEnd}
-            className="inline-flex min-h-10 items-center rounded-full bg-[var(--cc-danger-text)] px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+            className="inline-flex min-h-10 md:min-h-8 items-center rounded-full bg-[var(--cc-danger-text)] px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
           >
             {ending ? "Ending..." : "End access"}
           </button>

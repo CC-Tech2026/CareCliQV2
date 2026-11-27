@@ -609,7 +609,7 @@ function SidebarContents({
         <div className="px-3 pb-2 shrink-0">
           <Link href="/incidents/new" onClick={onNav}>
             <div
-              className="flex h-10 cursor-pointer items-center gap-2.5 rounded-lg px-3 text-[13px] font-semibold transition-colors duration-150 hover:bg-white/[0.08]"
+              className="flex h-10 md:h-8 cursor-pointer items-center gap-2.5 rounded-lg px-3 text-[13px] font-semibold transition-colors duration-150 hover:bg-white/[0.08]"
               style={{
                 background: "var(--cc-coral-soft)",
                 color: "rgba(255,255,255,0.9)",

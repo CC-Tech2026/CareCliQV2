@@ -250,13 +250,13 @@ export function ScheduleLiveCard({
       </button>
       {stage === "completed" && !readOnly && (
         shift.verified ? (
-          <p className="mx-4 mb-4 flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+          <p className="mx-4 mb-4 flex min-h-11 md:min-h-9 items-center justify-center gap-1.5 rounded-full bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
             <CheckCircle2 size={14} aria-hidden /> {translate("schedule.status.verified")}
           </p>
         ) : (
           <Link
             href={`/coordinator/verification?shiftId=${encodeURIComponent(shift.id)}`}
-            className="mx-4 mb-4 flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-[var(--cc-cta)] px-4 text-sm font-semibold text-white transition hover:opacity-90"
+            className="mx-4 mb-4 flex min-h-11 md:min-h-9 items-center justify-center gap-1.5 rounded-full bg-[var(--cc-cta)] px-4 text-sm font-semibold text-white transition hover:opacity-90"
           >
             <ArrowRight size={14} aria-hidden />
             {translate("schedule.reviewShift")}

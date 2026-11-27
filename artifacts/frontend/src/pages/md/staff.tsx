@@ -159,7 +159,7 @@ function FilterPill({
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className="inline-flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+      className="inline-flex min-h-10 md:min-h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
       style={
         selected
           ? { background: TEXT, color: "var(--cc-bg)" }
@@ -732,29 +732,43 @@ export default function MDStaffPage() {
 
   return (
     <HubLayout>
-      <div className="space-y-5 pb-12">
+      <div className="space-y-4 pb-12">
         {/* =========================================================
             HEADER: sits on the page, not in a card, so the team list
             below is the first thing that reads as content.
         ========================================================= */}
 
-        <header className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
-          <div className="min-w-0">
+        <header className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
             <p className="sr-only">Staff directory</p>
             <h1
-              className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
+              className="flex items-center gap-2 text-xl font-semibold tracking-tight"
               style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
             >
               Your team
               <SectionInfo text="The people delivering support to your participants: who's active, how their notes are going, credentials due, and who's coming through hiring. Open anyone to see their shifts, credentials and training." />
             </h1>
+            {data && (
+              <p role="status" className="text-sm" style={{ color: MUTED }}>
+                {filtered.length === allStaff.length
+                  ? `${allStaff.length} ${allStaff.length === 1 ? "person" : "people"}`
+                  : `Showing ${filtered.length} of ${allStaff.length}`}
+                {stats.average > 0 && (
+                  <>
+                    {" · note score "}
+                    <span className="font-semibold" style={{ color: getScoreColor(stats.average) }}>{stats.average}%</span>
+                  </>
+                )}
+                {` · ${data.staff_retention_rate}% retention`}
+              </p>
+            )}
           </div>
 
           <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:gap-2">
             <button
               type="button"
               onClick={() => navigate("/md/vault")}
-              className="min-h-11 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft"
+              className="min-h-11 md:min-h-8 rounded-full px-3.5 text-sm font-medium transition hover:bg-cc-soft"
               style={{ color: TEXT }}
             >
               Document vault
@@ -762,7 +776,7 @@ export default function MDStaffPage() {
             <button
               type="button"
               onClick={() => navigate("/billing")}
-              className="min-h-11 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft"
+              className="min-h-11 md:min-h-8 rounded-full px-3.5 text-sm font-medium transition hover:bg-cc-soft"
               style={{ color: TEXT }}
             >
               NDIS invoices
@@ -770,7 +784,7 @@ export default function MDStaffPage() {
             <button
               type="button"
               onClick={() => navigate("/md/staff-onboarding")}
-              className="order-first inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum sm:order-none sm:w-auto"
+              className="order-first inline-flex min-h-11 md:min-h-8 w-full items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum sm:order-none sm:w-auto"
               style={{ background: CTA, color: "#fff" }}
             >
               <Briefcase size={15} />
@@ -804,7 +818,7 @@ export default function MDStaffPage() {
             <button
               type="button"
               onClick={refreshStaff}
-              className="mt-4 min-h-11 rounded-full border border-cc-border px-5 text-sm font-semibold"
+              className="mt-4 min-h-11 md:min-h-9 rounded-full border border-cc-border px-5 text-sm font-semibold"
               style={{ color: TEXT }}
             >
               Try again
@@ -816,9 +830,9 @@ export default function MDStaffPage() {
                 THE TEAM: leads the page, it's what people come here for.
             ===================================================== */}
 
-            <section id="staff-directory" className="space-y-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="relative w-full lg:max-w-sm">
+            <section id="staff-directory" className="space-y-3">
+              <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+                <div className="relative w-full xl:w-72 xl:shrink-0">
                   <Search
                     size={16}
                     className="absolute left-4 top-1/2 -translate-y-1/2"
@@ -830,7 +844,7 @@ export default function MDStaffPage() {
                     aria-label="Search staff"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    className="h-11 w-full rounded-full border bg-cc-surface pl-11 pr-11 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
+                    className="h-11 md:h-9 w-full rounded-full border bg-cc-surface pl-11 pr-11 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
                     style={{ borderColor: BORDER, color: TEXT }}
                   />
                   {search && (
@@ -845,12 +859,12 @@ export default function MDStaffPage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center xl:order-last">
                   {distinctRoles.length > 1 && (
                     <Select value={roleFilter} onValueChange={setRoleFilter}>
                       <SelectTrigger
                         aria-label="Filter staff by role"
-                        className="h-11 w-full rounded-full border bg-cc-surface px-4 text-sm sm:w-[160px]"
+                        className="h-11 md:h-9 w-full rounded-full border bg-cc-surface px-4 text-sm sm:w-[160px]"
                         style={{ borderColor: BORDER, color: TEXT }}
                       >
                         <SelectValue placeholder="All roles" />
@@ -866,9 +880,9 @@ export default function MDStaffPage() {
                     </Select>
                   )}
 
-                  <LabelFilter target="workers" value={labelFilter} onChange={setLabelFilter} className="w-full sm:w-[170px] [&_button]:h-11 [&_button]:rounded-full [&_button]:px-4 [&_button]:text-sm" />
+                  <LabelFilter target="workers" value={labelFilter} onChange={setLabelFilter} className="w-full sm:w-[170px] [&_button]:h-11 md:[&_button]:h-9 [&_button]:rounded-full [&_button]:px-4 [&_button]:text-sm" />
                   <label className="sr-only" htmlFor="staff-sort">Sort staff</label>
-                  <div className="flex h-11 min-w-0 items-center rounded-full border bg-cc-surface pl-4 focus-within:ring-2 focus-within:ring-cc-plum lg:hidden" style={{ borderColor: BORDER }}>
+                  <div className="flex h-11 md:h-9 min-w-0 items-center rounded-full border bg-cc-surface pl-4 focus-within:ring-2 focus-within:ring-cc-plum lg:hidden" style={{ borderColor: BORDER }}>
                     <select
                       id="staff-sort"
                       value={sortKey}
@@ -893,72 +907,58 @@ export default function MDStaffPage() {
                       type="button"
                       onClick={() => setSortAsc((value) => !value)}
                       aria-label={sortAsc ? "Sort descending" : "Sort ascending"}
-                      className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-cc-soft"
+                      className="flex h-11 w-11 md:h-9 md:w-9 items-center justify-center rounded-full hover:bg-cc-soft"
                       style={{ color: TEXT }}
                     >
                       {sortAsc ? <ArrowUp size={15} /> : <ArrowDown size={15} />}
                     </button>
                   </div>
                 </div>
+                <div className="-mx-1 flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-1 py-0.5 sm:mx-0 sm:flex-wrap sm:px-0" aria-label="Filter staff">
+                  {(
+                    [
+                      ["all", "Everyone", allStaff.length],
+                      ["at_risk", "Needs attention", stats.atRisk.length],
+                      ["strong", "Notes on target", stats.strong.length],
+                      ["credentials", "Credential issues", credentialIssueCount],
+                    ] as [Filter, string, number][]
+                  ).map(([item, label, count]) => (
+                    <FilterPill
+                      key={item}
+                      label={label}
+                      count={count}
+                      selected={filter === item && !unassignedOnly}
+                      onClick={() => {
+                        setFilter(item);
+                        setUnassignedOnly(false);
+                      }}
+                    />
+                  ))}
+
+                  {workerStats && (
+                    <FilterPill
+                      label="No coordinator yet"
+                      count={unassignedCount}
+                      selected={unassignedOnly}
+                      onClick={() => {
+                        setUnassignedOnly((v) => !v);
+                        setFilter("all");
+                      }}
+                    />
+                  )}
+
+                  {filtersActive && (
+                    <button
+                      type="button"
+                      onClick={resetFilters}
+                      className="min-h-10 md:min-h-8 px-3 text-sm font-medium underline-offset-4 hover:underline"
+                      style={{ color: PLUM }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
-
-              <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" aria-label="Filter staff">
-                {(
-                  [
-                    ["all", "Everyone", allStaff.length],
-                    ["at_risk", "Needs attention", stats.atRisk.length],
-                    ["strong", "Notes on target", stats.strong.length],
-                    ["credentials", "Credential issues", credentialIssueCount],
-                  ] as [Filter, string, number][]
-                ).map(([item, label, count]) => (
-                  <FilterPill
-                    key={item}
-                    label={label}
-                    count={count}
-                    selected={filter === item && !unassignedOnly}
-                    onClick={() => {
-                      setFilter(item);
-                      setUnassignedOnly(false);
-                    }}
-                  />
-                ))}
-
-                {workerStats && (
-                  <FilterPill
-                    label="No coordinator yet"
-                    count={unassignedCount}
-                    selected={unassignedOnly}
-                    onClick={() => {
-                      setUnassignedOnly((v) => !v);
-                      setFilter("all");
-                    }}
-                  />
-                )}
-
-                {filtersActive && (
-                  <button
-                    type="button"
-                    onClick={resetFilters}
-                    className="min-h-10 px-3 text-sm font-medium underline-offset-4 hover:underline"
-                    style={{ color: PLUM }}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-
-              <p role="status" className="text-sm" style={{ color: MUTED }}>
-                {filtered.length === allStaff.length
-                  ? `${allStaff.length} ${allStaff.length === 1 ? "person" : "people"} on your team`
-                  : `Showing ${filtered.length} of ${allStaff.length} people`}
-                {stats.average > 0 && (
-                  <>
-                    {" · average note score "}
-                    <span className="font-semibold" style={{ color: getScoreColor(stats.average) }}>{stats.average}%</span>
-                  </>
-                )}
-                {` · ${data.staff_retention_rate}% retention`}
-              </p>
 
               {filtered.length === 0 ? (
                 <div className="rounded-3xl bg-cc-surface px-6 py-14 text-center">
@@ -977,7 +977,7 @@ export default function MDStaffPage() {
                       if (allStaff.length === 0) navigate("/md/staff-onboarding");
                       else resetFilters();
                     }}
-                    className="mt-5 min-h-11 rounded-full border border-cc-border px-5 text-sm font-semibold"
+                    className="mt-5 min-h-11 md:min-h-9 rounded-full border border-cc-border px-5 text-sm font-semibold"
                     style={{ color: TEXT }}
                   >
                     {allStaff.length === 0 ? "Open staff onboarding" : "Clear filters"}

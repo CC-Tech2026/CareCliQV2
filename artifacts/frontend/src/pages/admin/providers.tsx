@@ -104,7 +104,7 @@ export default function AdminProvidersPage() {
       <div className="space-y-5">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>Providers</h1>
+            <h1 className="text-xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>Providers</h1>
             {orgs !== null && !loadError && (
               <p className="mt-1 text-sm text-cc-muted">
                 {orgs.length} {orgs.length === 1 ? "provider" : "providers"} · {trialCount} on trial
@@ -134,7 +134,7 @@ export default function AdminProvidersPage() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name or org ID"
               aria-label="Search providers"
-              className="h-11 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-10 text-sm text-cc-text outline-none focus:ring-2 focus:ring-cc-plum"
+              className="h-11 md:h-9 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-10 text-sm text-cc-text outline-none focus:ring-2 focus:ring-cc-plum"
             />
             {search && (
               <button type="button" onClick={() => setSearch("")} className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full hover:bg-cc-soft" aria-label="Clear search">
@@ -171,7 +171,7 @@ export default function AdminProvidersPage() {
               <button
                 type="button"
                 onClick={() => { setSearch(""); setPlanFilter("all"); setStatusFilter("all"); setOrgTypeFilter("all"); }}
-                className="col-span-2 inline-flex h-11 items-center justify-center gap-1 rounded-full px-4 text-sm font-semibold text-cc-muted hover:bg-cc-soft sm:col-span-1"
+                className="col-span-2 inline-flex h-11 md:h-9 items-center justify-center gap-1 rounded-full px-4 text-sm font-semibold text-cc-muted hover:bg-cc-soft sm:col-span-1"
               >
                 <X size={14} /> Clear
               </button>
@@ -196,7 +196,7 @@ export default function AdminProvidersPage() {
               <AlertTriangle size={22} style={{ color: "var(--cc-status-warning)" }} />
               <p className="text-sm font-semibold text-cc-text">Couldn't load providers</p>
               <p className="max-w-sm text-sm text-cc-muted">{loadError}</p>
-              <button type="button" onClick={load} className="min-h-10 rounded-full border border-cc-border px-4 text-sm font-semibold">Try again</button>
+              <button type="button" onClick={load} className="min-h-10 md:min-h-8 rounded-full border border-cc-border px-4 text-sm font-semibold">Try again</button>
             </div>
           ) : visible.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm text-cc-muted">{orgs.length === 0 ? "No providers yet." : "No providers match these filters."}</p>

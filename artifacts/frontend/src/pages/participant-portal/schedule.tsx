@@ -62,7 +62,7 @@ export default function ParticipantSchedulePage() {
     <ParticipantPortalShell>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Support Schedule</h1>
+          <h1 className="text-xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Support Schedule</h1>
           <p className="mt-1 text-[14px]" style={{ color: MUTED }}>When your support team is coming, and the visits that have already happened.</p>
         </div>
 

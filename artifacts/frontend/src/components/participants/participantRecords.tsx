@@ -152,7 +152,7 @@ export function PeriodPicker({
       </label>
       <select
         id={id}
-        className="mt-2 min-h-11 w-full rounded-md border border-cc-border bg-white px-3 text-sm"
+        className="mt-2 min-h-11 md:min-h-9 w-full rounded-md border border-cc-border bg-white px-3 text-sm"
         value={state.period}
         disabled={disabled}
         onChange={(e) => {
@@ -185,7 +185,7 @@ export function PeriodPicker({
             From
             <Input
               type="date"
-              className="mt-1 min-h-11"
+              className="mt-1 min-h-11 md:min-h-9"
               value={state.customFrom}
               onChange={(e) => {
                 state.setCustomFrom(e.target.value);
@@ -197,7 +197,7 @@ export function PeriodPicker({
             To
             <Input
               type="date"
-              className="mt-1 min-h-11"
+              className="mt-1 min-h-11 md:min-h-9"
               value={state.customTo}
               min={state.customFrom || undefined}
               onChange={(e) => {

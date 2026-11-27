@@ -120,10 +120,10 @@ export default function CoordinatorMonitorPage({ embedded = false }: { embedded?
   const dist = heatmap.data?.distribution ?? {};
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-4 pb-10">
       {!embedded && (
       <div>
-        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>
+        <p className="sr-only" style={{ color: "var(--cc-coral)" }}>
           Schedule
         </p>
         <h1 className="mt-1 flex items-center gap-2 text-xl font-black" style={{ color: "var(--cc-text)" }}>
@@ -143,8 +143,8 @@ export default function CoordinatorMonitorPage({ embedded = false }: { embedded?
       )}
 
       {heatmap.data && (
-        <Card className="rounded-2xl border-0 shadow-sm p-5">
-          <div className="mb-3 flex items-center gap-2">
+        <Card className="rounded-2xl border-0 shadow-sm p-4">
+          <div className="mb-2 flex items-center gap-2">
             <Activity size={18} style={{ color: PLUM }} />
             <h2 className="text-sm font-black" style={{ color: PLUM }}>Engagement heatmap</h2>
           </div>

@@ -120,14 +120,14 @@ export function TrainingReviews() {
             <button
               disabled={busy || !reasons[item.id]?.trim()}
               onClick={() => void review(item.id, false)}
-              className="min-h-11 rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50"
+              className="min-h-11 md:min-h-9 rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50"
             >
               Request revision
             </button>
             <button
               disabled={busy}
               onClick={() => void review(item.id, true)}
-              className="min-h-11 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground disabled:opacity-50"
+              className="min-h-11 md:min-h-9 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground disabled:opacity-50"
             >
               Approve
             </button>

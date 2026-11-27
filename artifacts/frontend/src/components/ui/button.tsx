@@ -35,7 +35,7 @@ const buttonVariants = cva(
       },
       size: {
         // WCAG 2.1 AA — 44px minimum touch targets
-        default: "min-h-11 px-4 py-2",
+        default: "min-h-11 md:min-h-9 px-4 py-2",
         sm: "min-h-10 rounded-md px-3 text-xs",
         lg: "min-h-12 rounded-md px-8",
         icon: "touch-target h-11 w-11",

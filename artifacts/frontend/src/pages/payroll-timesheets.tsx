@@ -366,7 +366,7 @@ export default function PayrollTimesheetsPage() {
         aria-label="How often you pay"
         value={frequency}
         onChange={(e) => { setFrequency(e.target.value as Frequency); setOffset(-1); }}
-        className="h-10 rounded-full border bg-cc-surface px-3 text-sm"
+        className="h-10 md:h-8 rounded-full border bg-cc-surface px-3 text-sm"
         style={{ borderColor: BORDER, color: TEXT }}
       >
         <option value="weekly">Weekly</option>

@@ -209,7 +209,7 @@ export default function AgreementSignPage() {
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full" style={{ background: "var(--cc-status-success-bg)" }}>
                 <Check size={26} strokeWidth={3} style={{ color: "var(--cc-status-success)" }} />
               </div>
-              <h1 className="text-2xl font-black" style={{ color: TEXT }}>Signed — thank you</h1>
+              <h1 className="text-xl font-black" style={{ color: TEXT }}>Signed — thank you</h1>
               <p className="mx-auto max-w-sm text-sm" style={{ color: MUTED }}>
                 {view.participant_signed_name ? `${view.participant_signed_name} signed` : "Signed"}
                 {formatDate(view.participant_signed_at) ? ` on ${formatDate(view.participant_signed_at)}` : ""}. {org} has been
@@ -225,7 +225,7 @@ export default function AgreementSignPage() {
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full" style={{ background: "var(--cc-soft)" }}>
                 <Mail size={20} style={{ color: PLUM }} />
               </div>
-              <h1 className="mt-3 text-center text-2xl font-black" style={{ color: TEXT }}>
+              <h1 className="mt-3 text-center text-xl font-black" style={{ color: TEXT }}>
                 Hi {view.signer_name?.split(" ")[0] ?? "there"}, confirm it's you
               </h1>
               <p className="mt-2 text-center text-sm" style={{ color: MUTED }}>
@@ -315,10 +315,10 @@ function ReviewAndSign({
   const a = view.agreement;
   return (
     <>
-      <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: PLUM }}>
+      <p className="sr-only" style={{ color: PLUM }}>
         {a?.agreement_number ?? "Service agreement"}
       </p>
-      <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>Read {whose} service agreement</h1>
+      <h1 className="mt-1 text-xl font-black" style={{ color: TEXT }}>Read {whose} service agreement</h1>
       <p className="mt-2 text-sm" style={{ color: MUTED }}>
         Here's a summary. Open the full agreement to read every term before you sign.
       </p>
@@ -404,7 +404,7 @@ function ReviewAndSign({
           </span>
         </label>
         {signError && <p role="alert" className="mt-3 text-xs font-bold" style={{ color: DANGER }}>{signError}</p>}
-        <Button variant="navy" className="mt-5 h-11 w-full gap-2 rounded-lg sm:w-auto sm:px-8" onClick={onSign} disabled={!canSign || signing}>
+        <Button variant="navy" className="mt-5 h-11 md:h-9 w-full gap-2 rounded-lg sm:w-auto sm:px-8" onClick={onSign} disabled={!canSign || signing}>
           {signing ? <Loader2 size={14} className="animate-spin" /> : null} Sign agreement
         </Button>
         <p className="mt-3 text-[11px]" style={{ color: MUTED }}>

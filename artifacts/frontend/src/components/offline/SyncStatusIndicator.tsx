@@ -30,7 +30,7 @@ export function SyncStatusIndicator({ className }: Props) {
       <button
         type="button"
         className={cn(
-          "touch-target flex h-11 items-center gap-1.5 rounded-full border bg-[var(--cc-surface)] px-3 text-[12px] font-bold transition-colors hover:bg-[var(--cc-bg)]",
+          "touch-target flex h-11 md:h-9 items-center gap-1.5 rounded-full border bg-[var(--cc-surface)] px-3 text-[12px] font-bold transition-colors hover:bg-[var(--cc-bg)]",
           className,
         )}
         style={{ borderColor: BORDER, color: TEXT }}

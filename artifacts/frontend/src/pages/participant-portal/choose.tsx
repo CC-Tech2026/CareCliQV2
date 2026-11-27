@@ -62,7 +62,7 @@ export default function ParticipantChoosePage() {
 
         {participants !== null && (loadError || participants.length === 0) && (
           <div className="max-w-md">
-            <h1 className="text-2xl font-black" style={{ color: TEXT }}>
+            <h1 className="text-xl font-black" style={{ color: TEXT }}>
               {loadError ? "Something went wrong" : "No portal access"}
             </h1>
             <p className="mt-2 text-[15px]" style={{ color: MUTED }}>
@@ -73,7 +73,7 @@ export default function ParticipantChoosePage() {
 
         {participants && participants.length > 1 && (
           <>
-            <h1 className="text-3xl font-black sm:text-5xl" style={{ color: TEXT }}>Who would you like to view?</h1>
+            <h1 className="text-2xl font-black sm:text-5xl" style={{ color: TEXT }}>Who would you like to view?</h1>
             <ul className="mt-10 flex max-w-4xl flex-wrap justify-center gap-4 sm:gap-10">
               {participants.map((p, index) => (
                 <li key={p.participant_id}>

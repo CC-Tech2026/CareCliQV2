@@ -176,7 +176,7 @@ export function FolderUploadDialog({
               hint="Its title and description are copied in below. Edit them and attach the revised file."
             >
               <Select value={replaceId} onValueChange={setReplaceId}>
-                <SelectTrigger className="h-11 rounded-xl px-4" aria-label="Policy being replaced">
+                <SelectTrigger className="h-11 md:h-9 rounded-xl px-4" aria-label="Policy being replaced">
                   <SelectValue placeholder="Choose a policy" />
                 </SelectTrigger>
                 <SelectContent>

@@ -91,7 +91,7 @@ function PasswordForm() {
       <button
         type="submit"
         disabled={busy || !current || !next || !confirm}
-        className="flex min-h-11 items-center gap-2 rounded-lg px-5 py-2.5 text-[14px] font-bold text-white disabled:opacity-60"
+        className="flex min-h-11 md:min-h-9 items-center gap-2 rounded-lg px-5 py-2.5 text-[14px] font-bold text-white disabled:opacity-60"
         style={{ background: PLUM }}
       >
         {busy && <Loader2 size={15} className="animate-spin" />} Change password
@@ -107,11 +107,11 @@ export default function ParticipantSettingsPage() {
     <ParticipantPortalShell>
       <div className="mx-auto w-full min-w-0 max-w-3xl space-y-5 pb-8">
         <header>
-          <h1 className="text-2xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Settings</h1>
+          <h1 className="text-xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Settings</h1>
           <p className="mt-2 text-sm" style={{ color: MUTED }}>Choose how CareCliQ looks and keep your sign-in details secure.</p>
         </header>
         <nav aria-label="Settings sections" className="grid grid-cols-2 gap-2 rounded-xl border border-cc-border bg-cc-surface p-2">
-          {(["display", "password"] as const).map(id => <button type="button" key={id} aria-pressed={section === id} onClick={() => setSection(id)} className={"min-h-11 rounded-lg px-3 py-2 text-sm font-semibold " + (section === id ? "bg-cc-soft text-cc-plum" : "text-cc-muted hover:bg-cc-soft")}>{id === "display" ? "Display & accessibility" : "Password"}</button>)}
+          {(["display", "password"] as const).map(id => <button type="button" key={id} aria-pressed={section === id} onClick={() => setSection(id)} className={"min-h-11 md:min-h-9 rounded-lg px-3 py-2 text-sm font-semibold " + (section === id ? "bg-cc-soft text-cc-plum" : "text-cc-muted hover:bg-cc-soft")}>{id === "display" ? "Display & accessibility" : "Password"}</button>)}
         </nav>
         <div hidden={section !== "display"}>
           <SettingsSection icon={SlidersHorizontal} title="Display & accessibility" description="Text size, colours and language.">
