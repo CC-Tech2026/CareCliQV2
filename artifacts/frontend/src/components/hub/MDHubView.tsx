@@ -21,8 +21,8 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { COMPLIANCE_TREND_KEY, MD_DASHBOARD_KEY } from "@/lib/query-keys";
 import { getMdDemandCapacity, type MdDemandCapacity } from "@/services/dashboardService";
 import { attentionRoute } from "@/components/hub/GovernanceTriage";
-import { ActionList, OutcomeList, actionCountLine } from "@/components/hub/GovernanceOutcomes";
-import { buildActions, buildOutcomes } from "@/lib/governance-outcomes";
+import { ActionList, OutcomeStrip } from "@/components/hub/GovernanceOutcomes";
+import { briefingLine, buildActions, buildOutcomes } from "@/lib/governance-outcomes";
 import { getHubComplianceAlerts } from "@/services/hubService";
 import { OrgSetupChecklist } from "@/components/hub/OrgSetupChecklist";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -153,43 +153,107 @@ function MetricBreakdown({ items }: { items: Array<{ label: string; value: numbe
   );
 }
 
-function ActiveStaffCard({
-  total,
-  retentionRate,
-  supportWorkers,
-  coordinators,
-  onClick,
-}: {
-  total: number;
-  retentionRate: number;
-  supportWorkers: number;
-  coordinators: number;
-  onClick: () => void;
-}) {
+/** A section heading inside a tab, with the link to where the full list lives. */
+function PanelHeading({ title, link, onClick }: { title: string; link: string; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className="flex flex-col justify-start rounded-2xl bg-cc-surface overflow-hidden text-left transition-colors hover:bg-cc-soft"
-      style={{ borderColor: BORDER, background: SURFACE }}
-    >
-      <div className="w-full flex-1 px-5 py-5">
-        <p className="text-xs font-semibold" style={{ color: MUTED }}>Active staff</p>
-        <p className="mt-0.5 text-3xl font-semibold leading-tight" style={{ color: TEXT }}>{formatNumber(total)}</p>
+    <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <h3 className="text-sm font-semibold text-cc-text">{title}</h3>
+      <button type="button" onClick={onClick} className="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-cc-text hover:underline">
+        {link}
+        <ArrowRight size={13} aria-hidden />
+      </button>
+    </div>
+  );
+}
+
+/** Participants and staff side by side: a count, how it splits, and the
+ *  plan statuses that need following up. */
+function PeoplePanel({ data, onNavigate }: { data: MDData; onNavigate: (path: string) => void }) {
+  const sex = data.participants_by_sex ?? { male: 0, female: 0, unspecified: 0 };
+  const plan = data.participants_by_plan_status ?? { active: 0, pending: 0, review: 0, expired: 0, inactive: 0 };
+  return (
+    <div className="grid divide-y divide-cc-border lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+      <section aria-label="Participants" className="p-5">
+        <PanelHeading title="Participants" link="View participants" onClick={() => onNavigate("/onboard-participant/active")} />
+        <p className="mt-3 flex items-baseline gap-2">
+          <span className="text-3xl font-semibold tabular-nums tracking-tight text-cc-text">{formatNumber(data.active_participants)}</span>
+          <span className="text-sm text-cc-muted">active</span>
+        </p>
+        <div className="mt-3">
+          <SegmentedBar
+            label="Participants by sex"
+            unit="participants"
+            parts={[
+              { key: "female", label: "Female", value: sex.female, color: "var(--viz-1)" },
+              { key: "male", label: "Male", value: sex.male, color: "var(--viz-2)" },
+              ...(sex.unspecified ? [{ key: "unspecified", label: "Not recorded", value: sex.unspecified, color: "var(--viz-3)" }] : []),
+            ]}
+            empty="No active participants yet"
+          />
+        </div>
+        <div className="mt-5 border-t border-cc-border pt-4">
+          <div className="mb-2 flex items-center gap-1.5">
+            <p className="text-xs font-semibold text-cc-muted">NDIS plans to follow up</p>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" aria-label="What does plan status mean?" className="flex h-4 w-4 items-center justify-center rounded-full text-cc-muted hover:opacity-70">
+                  <Info size={12} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" className="w-[280px] space-y-2.5 p-3.5 text-[11px] leading-relaxed">
+                <p><strong>Pending:</strong> waiting on the NDIA or the plan manager to confirm the plan. Don't bill against it until it's confirmed.</p>
+                <p><strong>Review:</strong> the plan is being reassessed. Budget and goals may change once it's finalised.</p>
+                <p><strong>Expired:</strong> the plan's end date has passed with no new plan on file. Support delivered now may not be billable, so follow up before continuing.</p>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <dl className="grid grid-cols-3 gap-4">
+            {([
+              ["Pending", plan.pending, AMBER],
+              ["Review", plan.review, AMBER],
+              ["Expired", plan.expired, RED],
+            ] as const).map(([label, value, color]) => (
+              <div key={label}>
+                <dt className="text-xs text-cc-muted">{label}</dt>
+                <dd className="text-xl font-semibold tabular-nums" style={{ color: value > 0 ? color : TEXT }}>{formatNumber(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+      <section aria-label="Staff" className="p-5">
+        <PanelHeading title="Staff" link="Open staff directory" onClick={() => onNavigate("/md/staff")} />
+        <p className="mt-3 flex items-baseline gap-2">
+          <span className="text-3xl font-semibold tabular-nums tracking-tight text-cc-text">{formatNumber(data.active_staff)}</span>
+          <span className="text-sm text-cc-muted">active</span>
+        </p>
         <div className="mt-3">
           <SegmentedBar
             label="Active staff by role"
             unit="staff"
             parts={[
-              { key: "workers", label: "Support workers", value: supportWorkers, color: "var(--viz-1)" },
-              { key: "coordinators", label: "Coordinators", value: coordinators, color: "var(--viz-2)" },
+              { key: "workers", label: "Support workers", value: data.support_workers, color: "var(--viz-1)" },
+              { key: "coordinators", label: "Coordinators", value: data.coordinators, color: "var(--viz-2)" },
             ]}
             empty="No active staff yet"
           />
         </div>
-        <p className="mt-3 text-[11px]" style={{ color: MUTED }}>{retentionRate}% retention</p>
-      </div>
-      <span className="flex w-full items-center justify-between border-t border-cc-border px-5 py-3 text-xs font-semibold text-cc-text">Open staff directory<ArrowRight size={14} /></span>
-    </button>
+        <dl className="mt-5 grid grid-cols-3 gap-4 border-t border-cc-border pt-4">
+          <div>
+            <dt className="text-xs text-cc-muted">Retention</dt>
+            <dd className="text-xl font-semibold tabular-nums text-cc-text">{data.staff_retention_rate}%</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-cc-muted">Shifts this week</dt>
+            <dd className="text-xl font-semibold tabular-nums text-cc-text">{formatNumber(data.sessions_this_week)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-cc-muted">Incidents this month</dt>
+            <dd className="text-xl font-semibold tabular-nums text-cc-text">{formatNumber(data.incidents_this_month)}</dd>
+          </div>
+        </dl>
+      </section>
+    </div>
   );
 }
 
@@ -211,11 +275,11 @@ export function DemandCapacityPanel({ data, loading, error, onRetry, onNavigate 
   data?: MdDemandCapacity; loading: boolean; error: boolean;
   onRetry: () => void; onNavigate: (path: string) => void;
 }) {
-  if (error) return <div role="alert" className="rounded-2xl bg-cc-surface p-5 text-sm">
+  if (error) return <div role="alert" className="p-5 text-sm">
     <p>Enquiries and available hours could not be loaded.</p>
     <button type="button" onClick={onRetry} className="mt-3 min-h-11 font-semibold text-cc-plum">Try again</button>
   </div>;
-  if (loading || !data) return <div role="status" className="rounded-2xl bg-cc-surface p-5 text-sm text-cc-muted">Loading enquiries and available hours...</div>;
+  if (loading || !data) return <div role="status" className="p-5 text-sm text-cc-muted">Loading enquiries and available hours...</div>;
   const reliable = Math.round(data.capacity.reliable_hours);
   const casual = Math.round(data.capacity.casual_hours);
   const cards = [
@@ -223,84 +287,17 @@ export function DemandCapacityPanel({ data, loading, error, onRetry, onNavigate 
     { title: "Requested support", value: formatNumber(data.waitlist.hours) + " h", detail: "Weekly hours requested by the waiting list", action: "Review support requests", path: "/onboard-participant", icon: Timer },
     { title: "Available this week", value: formatNumber(reliable + casual) + " h", detail: reliable + " h permanent staff / " + casual + " h casual staff", action: "Review staff availability", path: "/coordinator/rostering", icon: Zap },
   ];
-  return <section aria-label="Demand and capacity" className="space-y-3">
-    <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-lg font-semibold text-cc-text">Plan your next move</h2><span className="text-xs text-cc-muted">Enquiries and this week's capacity</span></div>
-    <div className="grid gap-4 md:grid-cols-3">
-      {cards.map(({ title, value, detail, action, path, icon: Icon }) => <button key={title} type="button" onClick={() => onNavigate(path)} className="group flex min-w-0 flex-col rounded-2xl bg-cc-surface p-5 text-left transition-colors hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum">
-        <div className="flex w-full items-center justify-between gap-2"><span className="text-sm font-medium text-cc-muted">{title}</span><Icon size={16} className="shrink-0 text-cc-muted" /></div>
-        <p className="mt-4 text-3xl font-semibold tracking-tight text-cc-text">{value}</p>
-        <p className="mb-4 mt-2 text-xs leading-relaxed text-cc-muted">{detail}</p>
-        <span className="mt-auto flex w-full items-center justify-between gap-2 border-t border-cc-border pt-3 text-xs font-semibold text-cc-text">{action}<ArrowRight size={14} className="shrink-0 transition-transform group-hover:translate-x-1" /></span>
+  return <section aria-label="Demand and capacity">
+    <div className="grid divide-y divide-cc-border md:grid-cols-3 md:divide-x md:divide-y-0">
+      {cards.map(({ title, value, detail, action, path, icon: Icon }) => <button key={title} type="button" onClick={() => onNavigate(path)} className="group flex min-w-0 flex-col px-5 py-5 text-left transition-colors hover:bg-cc-soft/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum">
+        <span className="flex items-center gap-2 text-sm text-cc-muted"><Icon size={15} className="shrink-0" aria-hidden />{title}</span>
+        <span className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-cc-text sm:text-3xl">{value}</span>
+        <span className="mt-1 hidden text-xs leading-relaxed text-cc-muted sm:block">{detail}</span>
+        <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-cc-text group-hover:underline">{action}<ArrowRight size={13} className="shrink-0 transition-transform group-hover:translate-x-0.5" /></span>
       </button>)}
     </div>
-    <p className="text-xs leading-relaxed text-cc-muted">Available hours are based on recorded availability and rostered work. Confirm worker suitability and casual availability before offering support.{data.capacity.workers_without_availability > 0 && " " + data.capacity.workers_without_availability + " workers have no availability recorded and are excluded."}</p>
+    <p className="border-t border-cc-border px-5 py-3 text-xs leading-relaxed text-cc-muted">Available hours are based on recorded availability and rostered work. Confirm worker suitability and casual availability before offering support.{data.capacity.workers_without_availability > 0 && " " + data.capacity.workers_without_availability + " workers have no availability recorded and are excluded."}</p>
   </section>;
-}
-
-function ParticipantOverviewCard({
-  total,
-  bySex,
-  byPlanStatus,
-  onNavigate,
-}: {
-  total: number;
-  bySex: MDData["participants_by_sex"] | null | undefined;
-  byPlanStatus: MDData["participants_by_plan_status"] | null | undefined;
-  onNavigate: () => void;
-}) {
-  const sex = bySex ?? { male: 0, female: 0, unspecified: 0 };
-  const planStatus = byPlanStatus ?? { pending: 0, review: 0, expired: 0 };
-
-  return (
-    <section aria-label="Participant overview" className="flex min-w-0 flex-col rounded-2xl bg-cc-surface" style={{ borderColor: BORDER, background: SURFACE }}>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b px-5 py-3" style={{ borderColor: BORDER }}>
-        <div>
-          <h3 className="text-sm font-semibold" style={{ color: TEXT }}>Participant overview</h3>
-          <p className="mt-1 text-xs" style={{ color: MUTED }}>Caseload composition and plan status</p>
-        </div>
-        <button onClick={onNavigate} className="flex min-h-11 items-center gap-1 text-[11px] font-bold" style={{ color: PLUM }}>
-          View participants <ArrowRight size={12} />
-        </button>
-      </div>
-
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-8 gap-y-6 p-5">
-        <div className="flex flex-wrap items-center gap-5">
-          <div><p className="text-[32px] font-semibold leading-none tracking-tight tabular-nums" style={{ color: PLUM }}>{formatNumber(total)}</p>
-          <p className="mt-1 text-[11px]" style={{ color: MUTED }}>Total participants</p></div>
-          <div className="flex items-center gap-5">
-            <ParticipantStat label="Male" value={sex.male} />
-            <ParticipantStat label="Female" value={sex.female} />
-            {sex.unspecified > 0 && <ParticipantStat label="Unspecified" value={sex.unspecified} />}
-          </div>
-        </div>
-
-        <span className="hidden h-12 w-px sm:block" style={{ background: BORDER }} />
-
-        <div>
-          <div className="mb-3 flex items-center gap-1.5">
-            <p className="text-xs font-semibold" style={{ color: MUTED }}>Plan status</p>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button type="button" aria-label="What does plan status mean?" className="flex h-3.5 w-3.5 items-center justify-center rounded-full hover:opacity-70" style={{ color: MUTED }}>
-                  <Info size={12} />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent side="top" align="start" className="w-[280px] space-y-2.5 p-3.5 text-[11px] leading-relaxed">
-                <p><strong>Pending</strong> — waiting on NDIA or the plan manager to confirm the plan. Services shouldn't be billed against it until it's confirmed.</p>
-                <p><strong>Review</strong> — the participant's plan is being reassessed. Budget and goals may change once it's finalized.</p>
-                <p><strong>Expired</strong> — the plan's end date has passed with no new plan on file. Services delivered now may not be billable — follow up before continuing support.</p>
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div className="flex items-center gap-6">
-            <ParticipantStat label="Pending" value={planStatus.pending} color={planStatus.pending > 0 ? AMBER : undefined} />
-            <ParticipantStat label="Review" value={planStatus.review} color={planStatus.review > 0 ? AMBER : undefined} />
-            <ParticipantStat label="Expired" value={planStatus.expired} color={planStatus.expired > 0 ? RED : undefined} />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -475,8 +472,8 @@ export function DocumentationInsights({ data, onNavigate }: { data: Pick<MDData,
     { label: "Priority review (below 60%)", count: summary.priority_review, color: RED },
     { label: "Not scored", count: summary.unscored, color: MUTED },
   ] : [];
-  return <section aria-label="Documentation quality and follow-up" className="overflow-hidden rounded-2xl bg-cc-surface">
-    <header className="border-b border-cc-border p-5"><h2 className="text-base font-semibold text-cc-text">Documentation quality: where to focus</h2><p className="mt-1 text-sm text-cc-muted">Based on the latest available session records, up to 400. Scores describe documentation checks, not overall regulatory compliance.</p></header>
+  return <section aria-label="Documentation quality and follow-up" >
+    <header className="px-5 pt-5"><h3 className="text-sm font-semibold text-cc-text">Where to focus</h3><p className="mt-1 text-xs leading-relaxed text-cc-muted">Based on the latest available session records, up to 400. Scores describe documentation checks, not overall regulatory compliance.</p></header>
     <div className="grid gap-6 p-5 lg:grid-cols-2">
       <div>
         <p className="text-sm font-semibold text-cc-text">{summary?.scored ? (gap > 0 ? gap + " percentage points below the " + data.compliance_target + "% target" : "Average score meets the " + data.compliance_target + "% target") : "Scored documentation is not yet available"}</p>
@@ -520,28 +517,16 @@ function ComplianceTrend({
     }));
 
   if (chartData.filter(item => item.score !== null).length < 2) {
-    return <p className="rounded-2xl bg-cc-surface p-4 text-sm text-cc-muted">A trend will appear once at least two weeks have scored documentation.</p>;
+    return <p className="border-t border-cc-border p-5 text-sm text-cc-muted">A trend will appear once at least two weeks have scored documentation.</p>;
   }
 
   return (
-    <section
-      className="rounded-2xl bg-cc-surface"
-      style={{
-        borderColor: BORDER,
-        background: SURFACE,
-      }}
-    >
-      <div
-        className="flex items-center justify-between gap-3 border-b px-5 py-4 sm:px-6"
-        style={{ borderColor: BORDER }}
-      >
+    <section className="border-t border-cc-border">
+      <div className="flex items-center justify-between gap-3 px-5 pt-5">
         <div>
-          <h2
-            className="text-[14px] font-semibold"
-            style={{ color: TEXT }}
-          >
-            Documentation quality over time
-          </h2>
+          <h3 className="text-sm font-semibold text-cc-text">
+            Over time
+          </h3>
 
           <p
             className="mt-1 text-[11px]"
@@ -693,7 +678,7 @@ function RevenueUnavailable({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function RevenueChart() {
+function RevenueChart({ onOpenReport }: { onOpenReport: () => void }) {
   const revenue = useRevenueReport();
   const report = revenue.data ?? null;
   const [period, setPeriod] = useState<RevenuePeriod>("monthly");
@@ -707,17 +692,17 @@ function RevenueChart() {
   const invoiceCount = report?.invoice_count ?? 0;
 
   return (
-    <section className="flex h-full flex-col rounded-2xl bg-cc-surface" style={{ borderColor: BORDER, background: SURFACE }}>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 sm:px-6" style={{ borderColor: BORDER }}>
+    <section className="flex h-full flex-col">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5">
         <div>
-          <h2 className="text-[14px] font-semibold" style={{ color: TEXT }}>Revenue</h2>
-          <p className="mt-1 text-[11px]" style={{ color: MUTED }}>Billed vs. paid, {REVENUE_PERIOD_META[period].window}</p>
+          <h3 className="text-sm font-semibold text-cc-text">Billed and paid</h3>
+          <p className="mt-1 text-xs text-cc-muted">{REVENUE_PERIOD_META[period].window}</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="hidden items-center gap-3 text-[11px] font-bold sm:flex" style={{ color: MUTED }}>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: BLUE }} /> Billed</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: GREEN }} /> Paid</span>
-          </div>
+          <button type="button" onClick={onOpenReport} className="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-cc-text hover:underline">
+            Financial governance
+            <ArrowRight size={13} aria-hidden />
+          </button>
           <Select value={period} onValueChange={(v) => setPeriod(v as RevenuePeriod)}>
             <SelectTrigger className="h-8 w-[120px] rounded-full border text-[11px] font-bold" style={{ borderColor: BORDER, color: TEXT }}>
               <SelectValue />
@@ -738,7 +723,7 @@ function RevenueChart() {
       {/* Current-to-the-day totals — always the live report totals, not
           re-bucketed by the period selector above (that only reshapes the
           chart below). */}
-      <div className="grid grid-cols-2 gap-4 border-b px-5 py-4 sm:grid-cols-4 sm:px-6" style={{ borderColor: BORDER }}>
+      <div className="mt-4 grid grid-cols-2 gap-4 border-y border-cc-border px-5 py-4 sm:grid-cols-4">
         <BillingStat label="Billed" value={`$${formatNumber(totalBilled)}`} />
         <BillingStat label="Paid" value={`$${formatNumber(totalPaid)}`} color={GREEN} />
         <BillingStat label="Outstanding" value={`$${formatNumber(totalOutstanding)}`} color={totalOutstanding > 0 ? AMBER : undefined} />
@@ -778,172 +763,67 @@ function RevenueChart() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Financial summary                                                         */
+/* Page pieces                                                                */
 /* -------------------------------------------------------------------------- */
 
-function FinancialSummary({
-  onNavigate,
-}: {
-  onNavigate: () => void;
+function SectionHeading({ id, title, aside, link }: {
+  id: string;
+  title: string;
+  aside?: string;
+  link?: { label: string; onClick: () => void };
 }) {
-  const revenue = useRevenueReport();
-  const rev = revenue.data ?? null;
-
-  const totalRevenue =
-    (rev?.total_billed_cents ?? 0) / 100;
-
-  const totalPaid =
-    (rev?.total_paid_cents ?? 0) / 100;
-
-  const invoices = rev?.invoice_count ?? 0;
-
-  const collectionRate =
-    totalRevenue > 0
-      ? Math.round((totalPaid / totalRevenue) * 100)
-      : 0;
-
-  // Baseline comparison: the two most recent months from the same report,
-  // so "collection rate" reads against a prior period instead of standing
-  // alone as a bare percentage.
-  const monthly = rev?.monthly ?? [];
-  const thisMonth = monthly[0];
-  const lastMonth = monthly[1];
-  const lastMonthRate =
-    lastMonth && lastMonth.billed > 0
-      ? Math.round((lastMonth.paid / lastMonth.billed) * 100)
-      : null;
-  const thisMonthRate =
-    thisMonth && thisMonth.billed > 0
-      ? Math.round((thisMonth.paid / thisMonth.billed) * 100)
-      : null;
-  const collectionDelta =
-    thisMonthRate !== null && lastMonthRate !== null
-      ? thisMonthRate - lastMonthRate
-      : null;
-
   return (
-    <section
-      className="rounded-2xl bg-cc-surface"
-      style={{
-        borderColor: BORDER,
-        background: SURFACE,
-      }}
-    >
-      <div
-        className="flex items-center justify-between border-b px-5 py-4"
-        style={{ borderColor: BORDER }}
-      >
-        <div>
-          <div className="flex items-center gap-2">
-            <DollarSign
-              size={15}
-              strokeWidth={2}
-              style={{ color: BLUE }}
-            />
-
-            <h2
-              className="text-[14px] font-semibold"
-              style={{ color: TEXT }}
-            >
-              Financial snapshot
-            </h2>
-          </div>
-
-          <p
-            className="mt-1 text-[11px]"
-            style={{ color: MUTED }}
-          >
-            Current billing activity
-          </p>
-        </div>
-
-        <button
-          onClick={onNavigate}
-          className="flex items-center gap-1 text-[11px] font-bold"
-          style={{ color: PLUM }}
-        >
-          Full report
-          <ArrowRight size={12} />
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      <h2 id={id} className="text-base font-semibold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>{title}</h2>
+      {aside ? <p className="text-xs font-medium text-cc-muted">{aside}</p> : null}
+      {link ? (
+        <button type="button" onClick={link.onClick} className="inline-flex items-center gap-1 text-xs font-semibold text-cc-text hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum">
+          {link.label}
+          <ArrowRight size={13} aria-hidden />
         </button>
-      </div>
-
-      {revenue.isError ? (
-        <RevenueUnavailable onRetry={() => void revenue.refetch()} />
-      ) : (
-      <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-        <FinancialMetric
-          label="Billed"
-          value={`$${totalRevenue.toLocaleString("en-AU", {
-            maximumFractionDigits: 0,
-          })}`}
-        />
-
-        <FinancialMetric
-          label="Paid"
-          value={`$${totalPaid.toLocaleString("en-AU", {
-            maximumFractionDigits: 0,
-          })}`}
-        />
-
-        <FinancialMetric
-          label="Collection"
-          value={totalRevenue > 0 ? `${collectionRate}%` : "—"}
-          detail={
-            collectionDelta === null
-              ? `${formatNumber(invoices)} invoices`
-              : `${collectionDelta >= 0 ? "+" : ""}${collectionDelta} pts vs last month`
-          }
-          warning={totalRevenue > 0 && collectionRate < 90}
-          trend={collectionDelta}
-        />
-      </div>
-      )}
-    </section>
+      ) : null}
+    </div>
   );
 }
 
-function FinancialMetric({
-  label,
-  value,
-  detail,
-  warning,
-  trend,
-}: {
-  label: string;
-  value: string;
-  detail?: string;
-  warning?: boolean;
-  trend?: number | null;
-}) {
+type DetailTab = { id: string; label: string; panel: React.ReactNode };
+
+/** One surface with an underline tab row; only the open tab is drawn. */
+function DetailTabs({ tabs }: { tabs: DetailTab[] }) {
+  const [open, setOpen] = useState(tabs[0]?.id);
+  const current = tabs.find((t) => t.id === open) ?? tabs[0];
+  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const i = tabs.findIndex((t) => t.id === current.id);
+    const next = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+    setOpen(next.id);
+    document.getElementById(`hub-tab-${next.id}`)?.focus();
+  }
   return (
-    <div className="px-5 py-4">
-      <p
-        className="text-xs font-semibold"
-        style={{ color: MUTED }}
-      >
-        {label}
-      </p>
-
-      <p
-        className="mt-1 text-[21px] font-semibold"
-        style={{
-          color: warning ? RED : TEXT,
-        }}
-      >
-        {value}
-      </p>
-
-      {detail && (
-        <p
-          className="mt-0.5 flex items-center gap-1 text-[11px]"
-          style={{ color: trend !== undefined && trend !== null ? (trend >= 0 ? GREEN : RED) : MUTED }}
-        >
-          {trend !== undefined && trend !== null ? (
-            trend >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />
-          ) : null}
-          {detail}
-        </p>
-      )}
+    <div className="overflow-hidden rounded-xl border border-cc-border bg-cc-surface">
+      <div role="tablist" aria-label="The numbers behind it" onKeyDown={onKeyDown} className="flex gap-6 overflow-x-auto overflow-y-hidden border-b border-cc-border px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {tabs.map((t) => {
+          const selected = t.id === current.id;
+          return (
+            <button
+              key={t.id}
+              id={`hub-tab-${t.id}`}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-controls={`hub-panel-${t.id}`}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => setOpen(t.id)}
+              className={`-mb-px shrink-0 border-b-2 py-3 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum ${selected ? "border-cc-text font-semibold text-cc-text" : "border-transparent font-medium text-cc-muted hover:text-cc-text"}`}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+      <div role="tabpanel" id={`hub-panel-${current.id}`} aria-labelledby={`hub-tab-${current.id}`}>
+        {current.panel}
+      </div>
     </div>
   );
 }
@@ -1071,33 +951,60 @@ export function MDHubView() {
   /* Dashboard                                                                */
   /* ------------------------------------------------------------------------ */
 
-  // Outcomes (where things stand) and actions (what to do about it), from
-  // the data above. The charts and breakdowns stay, behind "Show the detail".
+  // The briefing: one sentence, then what needs doing beside where each
+  // area stands, then the numbers behind them in tabs.
   const alerts = alertsQuery.data ?? [];
   const outcomes = buildOutcomes(data, alerts, demandQuery.data);
   const actions = buildActions(data, alerts, demandQuery.data, (a) => attentionRoute(a));
+  const briefing = briefingLine(outcomes, actions);
+  const updated = overviewQuery.dataUpdatedAt
+    ? new Date(overviewQuery.dataUpdatedAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
+    : null;
 
   return (
-    <div className="space-y-phi-6 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-cc-plum">
-      <div className="-mt-2 flex flex-wrap items-center justify-end gap-3">
-        <p role="status" className="text-xs" style={{ color: error ? "var(--cc-danger-text)" : "var(--cc-muted)" }}>
-          {error ? "Refresh failed. Showing the last available overview." : overviewQuery.isFetching ? "Updating overview…" : ""}
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-2">
+        <p className="max-w-3xl text-[15px] leading-relaxed text-cc-text sm:text-base" aria-live="polite">
+          {alertsQuery.isLoading ? (
+            <span className="text-cc-muted">Putting your briefing together…</span>
+          ) : (
+            <>
+              <span className="font-semibold">{briefing.lead}</span>{" "}
+              <span className="text-cc-muted">{briefing.rest}</span>
+            </>
+          )}
         </p>
-        <button
-          type="button"
-          disabled={overviewQuery.isFetching}
-          onClick={() => {
-            void overviewQuery.refetch();
-            void alertsQuery.refetch();
-            void demandQuery.refetch();
-          }}
-          aria-label={overviewQuery.isFetching ? "Refreshing…" : "Refresh overview"}
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-cc-muted hover:bg-cc-soft hover:text-cc-text disabled:opacity-60"
-        >
-          <RefreshCw size={14} aria-hidden="true" className={overviewQuery.isFetching ? "animate-spin motion-reduce:animate-none" : ""} />
-          {overviewQuery.isFetching ? "Refreshing…" : "Refresh"}
-        </button>
+        <div className="flex shrink-0 items-center gap-2 text-xs text-cc-muted">
+          <p role="status" style={error ? { color: "var(--cc-danger-text)" } : undefined}>
+            {error
+              ? "Refresh failed. Showing the last available overview."
+              : overviewQuery.isFetching
+                ? "Updating overview…"
+                : updated
+                  ? `Updated ${updated}`
+                  : ""}
+          </p>
+          <button
+            type="button"
+            disabled={overviewQuery.isFetching}
+            onClick={() => {
+              void overviewQuery.refetch();
+              void alertsQuery.refetch();
+              void demandQuery.refetch();
+            }}
+            aria-label={overviewQuery.isFetching ? "Refreshing…" : "Refresh overview"}
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 font-medium text-cc-muted hover:bg-cc-soft hover:text-cc-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum disabled:opacity-60"
+          >
+            <RefreshCw size={13} aria-hidden="true" className={overviewQuery.isFetching ? "animate-spin motion-reduce:animate-none" : ""} />
+            {overviewQuery.isFetching ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
       </div>
+
+      <section aria-labelledby="hub-outcomes" className="-mt-3">
+        <h2 id="hub-outcomes" className="sr-only">How we're doing</h2>
+        <OutcomeStrip outcomes={outcomes} onNavigate={navigate} />
+      </section>
 
       <OrgSetupChecklist
         staffCount={(data.support_workers ?? 0) + (data.coordinators ?? 0)}
@@ -1105,67 +1012,55 @@ export function MDHubView() {
         onNavigate={navigate}
       />
 
-      <section aria-labelledby="hub-outcomes" className="space-y-phi-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="hub-outcomes" className="text-lg font-semibold text-cc-text">How we're doing</h2>
-        </div>
-        <OutcomeList outcomes={outcomes} onNavigate={navigate} />
-      </section>
+      {/* Full-width sections under the figures: nothing sits side by side,
+          so no column is ever left short. */}
+      <div className="space-y-8">
+        <section aria-labelledby="hub-actions" className="min-w-0 space-y-3">
+          <SectionHeading id="hub-actions" title="What needs doing" />
+          <ActionList
+            actions={actions}
+            loading={alertsQuery.isLoading}
+            failed={alertsQuery.isError}
+            onRetry={() => void alertsQuery.refetch()}
+            onNavigate={navigate}
+          />
+        </section>
 
-      <section aria-labelledby="hub-actions" className="space-y-phi-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="hub-actions" className="text-lg font-semibold text-cc-text">What needs doing</h2>
-          {!alertsQuery.isLoading ? <p className="text-sm font-medium text-cc-muted">{actionCountLine(actions)}</p> : null}
-        </div>
-        <ActionList
-          actions={actions}
-          loading={alertsQuery.isLoading}
-          failed={alertsQuery.isError}
-          onRetry={() => void alertsQuery.refetch()}
-          onNavigate={navigate}
+
+        <section aria-labelledby="hub-detail" className="min-w-0 space-y-3">
+        <SectionHeading id="hub-detail" title="The numbers behind it" />
+        <DetailTabs
+          tabs={[
+            {
+              id: "capacity",
+              label: "Capacity",
+              panel: <DemandCapacityPanel data={demandQuery.data} loading={demandQuery.isLoading} error={demandQuery.isError} onRetry={() => { void demandQuery.refetch(); }} onNavigate={navigate} />,
+            },
+            { id: "people", label: "People", panel: <PeoplePanel data={data} onNavigate={navigate} /> },
+            {
+              id: "notes",
+              label: "Shift notes",
+              panel: (
+                <>
+                  <DocumentationInsights data={data} onNavigate={navigate} />
+                  {trendQuery.isError ? (
+                    <div role="alert" className="border-t border-cc-border p-5 text-sm">
+                      Documentation trend could not be loaded.{" "}
+                      <button type="button" className="font-semibold text-cc-plum" onClick={() => void trendQuery.refetch()}>Try again</button>
+                    </div>
+                  ) : trendQuery.isLoading ? (
+                    <p role="status" className="border-t border-cc-border p-5 text-sm text-cc-muted">Loading documentation trend...</p>
+                  ) : (
+                    <ComplianceTrend trend={trendQuery.data?.trend ?? []} target={data.compliance_target} />
+                  )}
+                </>
+              ),
+            },
+            { id: "money", label: "Money", panel: <RevenueChart onOpenReport={() => navigate("/md/financial")} /> },
+          ]}
         />
-      </section>
-
-      <details className="group rounded-2xl border border-cc-border bg-cc-surface">
-        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-sm font-semibold text-cc-text hover:bg-cc-soft [&::-webkit-details-marker]:hidden">
-          Show the detail behind these
-          <span className="text-xs font-normal text-cc-muted group-open:hidden">Capacity, people, documentation, trends and money</span>
-        </summary>
-        <div className="space-y-4 border-t border-cc-border p-4">
-          <DemandCapacityPanel data={demandQuery.data} loading={demandQuery.isLoading} error={demandQuery.isError} onRetry={() => { void demandQuery.refetch(); }} onNavigate={navigate} />
-          <div className="grid min-w-0 gap-4 lg:grid-golden">
-            <ParticipantOverviewCard
-              total={data.active_participants}
-              bySex={data.participants_by_sex}
-              byPlanStatus={data.participants_by_plan_status}
-              onNavigate={() => navigate("/onboard-participant/active")}
-            />
-            <ActiveStaffCard
-              total={data.active_staff}
-              retentionRate={data.staff_retention_rate}
-              supportWorkers={data.support_workers}
-              coordinators={data.coordinators}
-              onClick={() => navigate("/md/staff")}
-            />
-          </div>
-          <DocumentationInsights data={data} onNavigate={navigate} />
-          {trendQuery.isError ? (
-            <div role="alert" className="rounded-2xl bg-cc-surface p-4 text-sm">
-              Documentation trend could not be loaded.{" "}
-              <button type="button" className="font-semibold text-cc-plum" onClick={() => void trendQuery.refetch()}>Try again</button>
-            </div>
-          ) : trendQuery.isLoading ? (
-            <p role="status" className="text-sm text-cc-muted">Loading documentation trend...</p>
-          ) : (
-            <ComplianceTrend trend={trendQuery.data?.trend ?? []} target={data.compliance_target} />
-          )}
-          <FinancialSummary onNavigate={() => navigate("/md/financial")} />
-          <button type="button" onClick={() => navigate("/md/executive")} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border border-cc-border px-5 py-3 text-left text-sm font-semibold text-cc-text hover:bg-cc-soft">
-            Review outcomes against targets over time
-            <ArrowRight size={16} />
-          </button>
-        </div>
-      </details>
+        </section>
+      </div>
     </div>
   );
 }

@@ -415,31 +415,31 @@ export default function MDExecutivePage() {
             description={`Workers whose shift notes score under ${WORKER_THRESHOLD}%, lowest first. Open one to see their notes and help them.`}
             action={<Link href="/md/staff" className={ghostClass}>Open staff <ArrowRight size={14} /></Link>}
           >
-            <ul className="grid gap-phi-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {workersBelow.map((worker) => {
-                return (
-                  <li key={worker.id}>
-                    <Link
-                      href={`/md/staff?workerId=${encodeURIComponent(worker.id)}`}
-                      className="flex h-full flex-col rounded-2xl border border-cc-border bg-cc-surface p-phi-5 text-left transition hover:border-cc-text/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
-                    >
-                      <span className="flex items-center gap-2.5">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cc-soft text-xs font-semibold" style={{ color: TEXT }} aria-hidden>
-                          {worker.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold" style={{ color: TEXT }}>{worker.full_name}</span>
-                          <span className="block text-xs" style={{ color: MUTED }}>{worker.sessions} scored {worker.sessions === 1 ? "shift" : "shifts"}</span>
-                        </span>
+            {/* One ruled list, lowest score first: name, score against the
+                threshold, and where to help. */}
+            <ul className="divide-y divide-cc-border overflow-hidden rounded-xl border border-cc-border bg-cc-surface">
+              {workersBelow.map((worker) => (
+                <li key={worker.id}>
+                  <Link
+                    href={`/md/staff?workerId=${encodeURIComponent(worker.id)}`}
+                    className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-2 px-5 py-3.5 transition-colors hover:bg-cc-soft/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum md:grid-cols-[minmax(12rem,16rem)_minmax(10rem,1fr)_auto]"
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cc-soft text-xs font-semibold" style={{ color: TEXT }} aria-hidden>
+                        {worker.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
                       </span>
-                      <ScoreMeter className="mt-phi-3" size="sm" value={worker.compliance_score} good={WORKER_THRESHOLD} ariaLabel={`${worker.full_name}'s shift note score`} />
-                      <span className="mt-phi-3 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: TEXT }}>
-                        Review their notes <ArrowRight size={13} />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold group-hover:underline" style={{ color: TEXT }}>{worker.full_name}</span>
+                        <span className="block text-xs" style={{ color: MUTED }}>{worker.sessions} scored {worker.sessions === 1 ? "shift" : "shifts"}</span>
                       </span>
-                    </Link>
-                  </li>
-                );
-              })}
+                    </span>
+                    <ScoreMeter className="col-span-2 md:col-span-1 md:max-w-md" size="sm" value={worker.compliance_score} good={WORKER_THRESHOLD} ariaLabel={`${worker.full_name}'s shift note score`} />
+                    <span className="hidden items-center gap-1 whitespace-nowrap text-xs font-semibold md:inline-flex" style={{ color: TEXT }}>
+                      Review their notes <ArrowRight size={13} />
+                    </span>
+                  </Link>
+                </li>
+              ))}
             </ul>
           </Section>
         )}
