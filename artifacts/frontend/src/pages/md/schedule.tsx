@@ -592,7 +592,7 @@ export default function MDSchedulePage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search worker or participant..."
-                className="h-10 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
+                className="h-10 md:h-8 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
                 style={{ color: TEXT }}
               />
               {search && (
@@ -617,7 +617,7 @@ export default function MDSchedulePage() {
                         : startKey,
                     )
                   }
-                  className="inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft"
+                  className="inline-flex h-10 md:h-8 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft"
                   style={{ color: TEXT }}
                 >
                   <Download size={15} />

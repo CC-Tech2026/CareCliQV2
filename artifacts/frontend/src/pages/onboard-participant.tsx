@@ -173,7 +173,7 @@ function PillChoice({ selected, onSelect, children }: { selected: boolean; onSel
       role="radio"
       aria-checked={selected}
       onClick={onSelect}
-      className="inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+      className="inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
       style={{
         borderColor: selected ? "var(--cc-brand-purple)" : BORDER,
         background: selected ? "var(--cc-brand-purple-soft)" : undefined,
@@ -684,7 +684,7 @@ export function ActiveParticipantsPage({
   const pillStyle = (selected: boolean) =>
     selected ? { background: TEXT, color: "var(--cc-bg)" } : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` };
   const pillClass =
-    "inline-flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum";
+    "inline-flex min-h-10 md:min-h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum";
 
   return (
     <div className="space-y-4 pb-10">
@@ -698,7 +698,7 @@ export function ActiveParticipantsPage({
             <ArrowLeft size={15} /> Participant onboarding
           </button>
           <h1
-            className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
+            className="flex items-center gap-2 text-xl font-semibold tracking-tight"
             style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
           >
             Participants
@@ -708,7 +708,7 @@ export function ActiveParticipantsPage({
 
         <button
           onClick={onOpenComplaints}
-          className="inline-flex min-h-10 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-4 text-sm font-medium transition hover:bg-cc-soft"
+          className="inline-flex min-h-10 md:min-h-8 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-4 text-sm font-medium transition hover:bg-cc-soft"
           style={{ color: TEXT }}
         >
           <Mail size={16} /> <span className="sm:hidden">Complaints</span><span className="hidden sm:inline">Participant complaints</span>
@@ -746,7 +746,7 @@ export function ActiveParticipantsPage({
               </SelectContent>
             </Select>
           )}
-          <LabelFilter target="participants" value={labelFilter} onChange={setLabelFilter} className="w-full sm:w-[180px] [&_button]:h-11 [&_button]:rounded-full [&_button]:px-4 [&_button]:text-sm" />
+          <LabelFilter target="participants" value={labelFilter} onChange={setLabelFilter} className="w-full sm:w-[180px] [&_button]:h-11 md:[&_button]:h-9 [&_button]:rounded-full [&_button]:px-4 [&_button]:text-sm" />
           <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
             <SelectTrigger aria-label="Service category" className="h-11 md:h-9 w-full rounded-full border-cc-border bg-cc-surface px-4 text-sm shadow-none sm:w-[170px]" style={{ color: TEXT }}>
               <SelectValue placeholder="All categories" />
@@ -1409,12 +1409,12 @@ function ParticipantProfilePage({
     <div className="space-y-5 pb-10">
       <button
         onClick={onBack}
-        className="-ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-full px-2 text-sm font-medium transition-colors hover:bg-cc-soft"
+        className="-ml-2 inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full px-2 text-sm font-medium transition-colors hover:bg-cc-soft"
         style={{ color: MUTED }}
       >
         <ArrowLeft size={15} /> Participants
       </button>
-      <h1 className="text-3xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{intake.full_name}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{intake.full_name}</h1>
       {intakeForm}
     </div>
   );
@@ -1755,7 +1755,7 @@ export default function ParticipantOnboardingBoard() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:ml-auto">
             <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
-              <SelectTrigger className="h-10 w-full rounded-full bg-cc-surface px-4 text-sm sm:w-[170px]">
+              <SelectTrigger className="h-10 md:h-8 w-full rounded-full bg-cc-surface px-4 text-sm sm:w-[170px]">
                 <Users size={14} className="mr-1.5" /><SelectValue placeholder="All categories" />
               </SelectTrigger>
               <SelectContent>
@@ -1765,7 +1765,7 @@ export default function ParticipantOnboardingBoard() {
               </SelectContent>
             </Select>
             <Select value={stageFilter} onValueChange={(v) => setStageFilter(v as "all" | BoardColumnId)}>
-              <SelectTrigger className="h-10 w-full rounded-full bg-cc-surface px-4 text-sm sm:w-[170px]">
+              <SelectTrigger className="h-10 md:h-8 w-full rounded-full bg-cc-surface px-4 text-sm sm:w-[170px]">
                 <SlidersHorizontal size={14} className="mr-1.5" /><SelectValue placeholder="All stages" />
               </SelectTrigger>
               <SelectContent>
@@ -2522,7 +2522,7 @@ function IntakeDetail({
       <header className="flex flex-wrap items-center gap-4">
         <Avatar name={intake.full_name} size={52} color={STATUS_META[intake.status].color} />
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
+          <h1 className="truncate text-xl font-semibold tracking-tight sm:text-3xl" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
             {intake.full_name}
           </h1>
           <p className="mt-1 text-sm" style={{ color: MUTED }}>

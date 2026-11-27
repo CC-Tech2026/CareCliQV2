@@ -359,7 +359,7 @@ export function GovernanceTriage({
         <button
           onClick={() => setFloatingOpen((v) => !v)}
           aria-expanded={floatingOpen}
-          className="flex items-center gap-2 rounded-full border px-4 py-2.5 text-[12px] font-black transition-all hover:-translate-y-0.5"
+          className="flex items-center gap-2 rounded-full border px-4 py-2.5 md:py-1.5 text-[12px] font-black transition-all hover:-translate-y-0.5"
           style={{ borderColor: BORDER, background: SURFACE, color: TEXT }}
         >
           <HeaderIcon

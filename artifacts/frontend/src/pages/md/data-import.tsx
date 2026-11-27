@@ -414,7 +414,7 @@ export function DataImportFlow({ target }: { target: ImportTarget }) {
                       aria-label={`Column for ${field.label}`}
                       value={header}
                       onChange={(e) => setMapping((m) => ({ ...m, [field.key]: e.target.value }))}
-                      className="h-10 w-full rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text"
+                      className="h-10 md:h-8 w-full rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text"
                     >
                       <option value="">Not in my file</option>
                       {parsed.headers.map((h) => (

@@ -73,7 +73,7 @@ export default function AdminMessageDetailPage() {
           <>
             <header className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <h1 className="break-words text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>{msg.subject}</h1>
+                <h1 className="break-words text-xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>{msg.subject}</h1>
                 <p className="mt-1 text-sm text-cc-muted">
                   {msg.category === "news" ? "News" : "Service notice"} · {formatDate(msg.created_at)} · {audienceLabel(msg)}
                 </p>

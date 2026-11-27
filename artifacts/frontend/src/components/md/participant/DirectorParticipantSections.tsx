@@ -115,7 +115,7 @@ export function LinkButton({ children, onClick, icon: Icon = ArrowRight }: { chi
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
+      className="inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
       style={{ color: PLUM }}
     >
       {children}
@@ -393,7 +393,7 @@ export function DocumentsSection({
           <button
             type="button"
             onClick={onExport}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium transition hover:bg-cc-soft"
+            className="inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium transition hover:bg-cc-soft"
             style={{ color: TEXT }}
           >
             <Download size={14} aria-hidden /> Export
@@ -401,7 +401,7 @@ export function DocumentsSection({
           <button
             type="button"
             onClick={onUpload}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-4 text-sm font-medium text-white transition hover:opacity-90"
+            className="inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full px-4 text-sm font-medium text-white transition hover:opacity-90"
             style={{ background: "var(--cc-cta)" }}
           >
             <Upload size={14} aria-hidden /> Import a document
@@ -444,7 +444,7 @@ export function DocumentsSection({
                 type="button"
                 onClick={() => open(doc)}
                 aria-label={`Open ${doc.title}`}
-                className="inline-flex min-h-10 items-center gap-1 rounded-full px-3 text-sm font-medium transition hover:bg-cc-soft"
+                className="inline-flex min-h-10 md:min-h-8 items-center gap-1 rounded-full px-3 text-sm font-medium transition hover:bg-cc-soft"
                 style={{ color: PLUM }}
               >
                 Open <ExternalLink size={13} aria-hidden />
@@ -453,7 +453,7 @@ export function DocumentsSection({
                 <button
                   type="button"
                   onClick={() => onArchive(doc)}
-                  className="hidden min-h-10 rounded-full px-3 text-sm transition hover:bg-cc-soft sm:inline-flex sm:items-center"
+                  className="hidden min-h-10 md:min-h-8 rounded-full px-3 text-sm transition hover:bg-cc-soft sm:inline-flex sm:items-center"
                   style={{ color: MUTED }}
                 >
                   Archive

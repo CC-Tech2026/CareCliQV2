@@ -61,7 +61,7 @@ export function ParticipantSessionsTab({ sessions, isLoading }: ParticipantSessi
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Worker, date or words in a note"
-              className="min-h-10 w-full rounded-full border border-cc-border bg-cc-surface pl-9 pr-4 text-sm text-cc-text placeholder:text-cc-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-cc-plum/40"
+              className="min-h-10 md:min-h-8 w-full rounded-full border border-cc-border bg-cc-surface pl-9 pr-4 text-sm text-cc-text placeholder:text-cc-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-cc-plum/40"
             />
           </label>
         )}

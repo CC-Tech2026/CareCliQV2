@@ -160,7 +160,7 @@ export default function ParticipantNew() {
   }
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-4  pb-10">
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-[13px]">

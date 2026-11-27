@@ -61,7 +61,7 @@ export default function AccountSecure() {
           {complete ? (
             <div className="text-center">
               <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
-              <h1 className="mt-4 text-2xl font-black" style={{ color: "var(--cc-text)" }}>
+              <h1 className="mt-4 text-xl font-black" style={{ color: "var(--cc-text)" }}>
                 {translate("accountSecure.successTitle")}
               </h1>
               <p className="mt-2 text-sm text-[#6A6A77]">

@@ -105,10 +105,10 @@ export default function AdminSystemPage() {
 
   return (
     <AdminShell>
-      <div className="space-y-6 pb-12">
+      <div className="space-y-4  pb-12">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>System</h1>
+            <h1 className="text-xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>System</h1>
             <p className="mt-1 text-sm text-cc-muted">How this server is running, and the notice shown across the app.</p>
           </div>
           <button type="button" onClick={loadStatus} className={outlineClass}><RefreshCw size={15} /> Check again</button>

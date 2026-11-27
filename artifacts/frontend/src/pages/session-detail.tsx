@@ -651,7 +651,7 @@ export default function SessionDetail({ id }: { id?: string }) {
   if (!session) return <div className="p-8 text-slate-500 text-center font-medium">Session record not found.</div>;
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4  pb-12">
 
       {/* Back — this page has no single fixed parent (reachable from a
           participant's Shift History, the Compliance tab, a worker's own

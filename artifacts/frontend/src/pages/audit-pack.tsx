@@ -144,7 +144,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
       <div className={embedded ? "flex justify-end" : "flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"}>
         {!embedded && (
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>{translate("auditPack.eyebrow")}</p>
+            <p className="sr-only" style={{ color: "var(--cc-coral)" }}>{translate("auditPack.eyebrow")}</p>
             <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: TEXT }}>
               {translate("auditPack.title")}
               <SectionInfo text="Everything an NDIS auditor would ask for, bundled and exportable: session records, signatures, and evidence." />
@@ -153,7 +153,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
         )}
         <Button
           onClick={handleExport}
-          className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white"
+          className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 md:py-1.5 text-sm font-black text-white"
           style={{ background: "var(--cc-cta)" }}
         >
           <Download size={15} /> {translate("auditPack.export")}
@@ -169,15 +169,15 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
 
       {/* Compliance status strip */}
       {compliance.data && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           {[
             { label: translate("auditPack.compliant"), count: compliance.data.compliant, tone: "success" as const },
             { label: translate("auditPack.atRisk"), count: compliance.data.at_risk, tone: "warning" as const },
             { label: translate("auditPack.nonCompliant"), count: compliance.data.non_compliant, tone: "danger" as const },
           ].map(({ label, count, tone }) => (
-            <Card key={label} className="rounded-2xl border-0 shadow-sm p-4 text-center" style={{ background: kpiTint(tone) }}>
-              <p className="text-2xl font-black" style={{ color: toneColour[tone] }}>{count}</p>
-              <p className="text-xs font-bold mt-0.5" style={{ color: toneColour[tone] }}>{label}</p>
+            <Card key={label} className="flex items-baseline justify-center gap-2 rounded-xl border-0 shadow-sm px-3 py-2" style={{ background: kpiTint(tone) }}>
+              <p className="text-lg font-black" style={{ color: toneColour[tone] }}>{count}</p>
+              <p className="text-xs font-bold" style={{ color: toneColour[tone] }}>{label}</p>
             </Card>
           ))}
         </div>

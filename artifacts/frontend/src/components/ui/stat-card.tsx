@@ -176,14 +176,14 @@ export interface KpiCardProps {
 const KpiCard = React.forwardRef<HTMLDivElement, KpiCardProps>(
   ({ className, icon, label, value, sub, tone = "neutral", flat = false, href, onClick, ...props }, ref) => (
     <Interactive href={href} onClick={onClick} label={interactiveLabel(label, value)} className="h-full">
-    <Card ref={ref} className={cn("rounded-2xl border-0 shadow-sm px-4 py-3", (href || onClick) && "h-full cursor-pointer", className)} {...props}>
+    <Card ref={ref} className={cn("rounded-xl border-0 shadow-sm px-3.5 py-2.5", (href || onClick) && "h-full cursor-pointer", className)} {...props}>
       {flat ? (
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-wider leading-tight" style={{ color: "var(--cc-muted)" }}>
             {label}
           </p>
           <p
-            className="mt-1 text-xl leading-none font-extrabold truncate"
+            className="mt-1 text-lg leading-none font-extrabold truncate"
             style={{ color: toneColour[tone], fontFamily: "var(--app-font-stat)" }}
           >
             {value}
@@ -198,7 +198,7 @@ const KpiCard = React.forwardRef<HTMLDivElement, KpiCardProps>(
         <div className="flex items-center gap-3">
           {icon && (
             <span
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg [&_svg]:h-3.5 [&_svg]:w-3.5"
               style={{ background: kpiTint(tone), color: toneColour[tone] }}
             >
               {React.cloneElement(icon, { size: icon.props.size ?? 16 })}
@@ -209,7 +209,7 @@ const KpiCard = React.forwardRef<HTMLDivElement, KpiCardProps>(
               {label}
             </p>
             <p
-              className="mt-1 text-xl leading-none font-extrabold truncate"
+              className="mt-1 text-lg leading-none font-extrabold truncate"
               style={{ color: toneColour[tone], fontFamily: "var(--app-font-stat)" }}
             >
               {value}
@@ -231,7 +231,7 @@ KpiCard.displayName = "KpiCard"
 /** Responsive grid wrapper for KpiCard — 1 col on mobile, 2 on sm, 4 on lg. */
 const KpiGrid = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4", className)} {...props} />
+    <div ref={ref} className={cn("grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3", className)} {...props} />
   ),
 )
 KpiGrid.displayName = "KpiGrid"

@@ -664,7 +664,7 @@ function EditParticipantPanel({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text hover:bg-cc-soft"
+        className="inline-flex min-h-10 md:min-h-8 shrink-0 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text hover:bg-cc-soft"
       >
         <Edit className="h-3.5 w-3.5 shrink-0" aria-hidden />
         <span>Edit details</span>
@@ -822,7 +822,7 @@ function SetupPlanPanel({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text hover:bg-cc-soft"
+        className="inline-flex min-h-10 md:min-h-8 shrink-0 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text hover:bg-cc-soft"
       >
         {hasPlan ? <Edit className="h-3.5 w-3.5 shrink-0" aria-hidden /> : <PlusCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />}
         {hasPlan ? "Edit plan" : "Set up plan"}
@@ -2370,13 +2370,13 @@ export function ParticipantDetail({
                 <div className="flex flex-wrap gap-2 shrink-0">
                   <button type="button"
                     onClick={() => { setCreateMode("goal"); setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalSupportCategory(""); setEditingGoal(null); setGoalDescriptionAiApplied(false); setGoalAiSuggestions(null); setGoalAiLoading(false); }}
-                    className="inline-flex h-10 items-center gap-1.5 rounded-full border border-cc-border bg-cc-surface px-4 text-sm font-medium text-cc-text hover:bg-cc-soft">
+                    className="inline-flex h-10 md:h-8 items-center gap-1.5 rounded-full border border-cc-border bg-cc-surface px-4 text-sm font-medium text-cc-text hover:bg-cc-soft">
                     <Plus size={14} aria-hidden /> Add a goal
                   </button>
                   {/* Embedded in the director's profile, its header has Add a shift. */}
                   {!bare && (
                     <button type="button" onClick={() => setShiftModalOpen(true)}
-                      className="inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-medium text-white hover:opacity-90"
+                      className="inline-flex h-10 md:h-8 items-center gap-1.5 rounded-full px-4 text-sm font-medium text-white hover:opacity-90"
                       style={{ background: "var(--cc-cta)" }}>
                       <CalendarClock size={14} aria-hidden /> Add a shift
                     </button>

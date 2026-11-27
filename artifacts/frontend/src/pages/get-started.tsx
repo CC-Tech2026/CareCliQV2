@@ -85,7 +85,7 @@ export default function GetStarted() {
             <MailCheck size={22} style={{ color: SIGNATURE }} />
           </div>
           <h1
-            className="mt-5 text-2xl font-black"
+            className="mt-5 text-xl font-black"
             style={{ color: "var(--cc-text)", fontFamily: DISPLAY_FONT }}
           >
             Check your email

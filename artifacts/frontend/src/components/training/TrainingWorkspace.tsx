@@ -25,7 +25,7 @@ export function TrainingWorkspace({
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-10 items-center gap-2 rounded-xl border bg-card px-4 text-sm font-semibold text-muted-foreground hover:text-foreground"
+          className="inline-flex h-10 md:h-8 items-center gap-2 rounded-xl border bg-card px-4 text-sm font-semibold text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft size={16} />
           Back to modules

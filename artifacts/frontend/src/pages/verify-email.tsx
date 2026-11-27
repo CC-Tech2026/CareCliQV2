@@ -42,7 +42,7 @@ export default function VerifyEmail() {
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#ECECEC] text-[#E8457A]">
           <Mail className="h-8 w-8" />
         </div>
-        <h1 className="mt-5 text-3xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
+        <h1 className="mt-5 text-2xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>
           {translate("verifyEmail.title")}
         </h1>
         <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[#6A6A77]">

@@ -10,7 +10,7 @@ import {
   RowList,
   SkeletonBlocks,
   StatusText,
-  SummaryStrip,
+  SummaryLine,
   Surface,
   ctaClass,
   ghostClass,
@@ -202,6 +202,16 @@ export function IncidentRegisterPanel() {
   return (
     <div className="space-y-5 pb-12">
       <PageHeader
+        summary={<SummaryLine
+          loading={isLoading}
+          items={[
+            { value: kpis.open, label: translate("incidents.register.kpiOpen"), tone: kpis.open ? "danger" : "good", onClick: () => showTab("open"), active: subTab === "open" && typeFilter === "all" },
+            { value: kpis.rp, label: translate("incidents.register.kpiRp"), tone: kpis.rp ? "danger" : undefined, onClick: () => showTab("rp"), active: subTab === "rp" && typeFilter === "all" },
+            { value: kpis.review, label: translate("incidents.register.kpiReview"), tone: kpis.review ? "warning" : undefined, onClick: () => showTab("review"), active: subTab === "review" && typeFilter === "all" },
+            { value: kpis.resolvedMonth, label: translate("incidents.register.kpiResolved"), tone: "good", onClick: () => showTab("resolved"), active: subTab === "resolved" && typeFilter === "all" },
+            { value: kpis.auto, label: translate("incidents.register.kpiAuto"), onClick: () => showTab("all", "auto"), active: subTab === "all" && typeFilter === "auto" },
+          ]}
+        />}
         eyebrow={translate("incidents.new.standard")}
         title={
           <span className="inline-flex items-center gap-2">
@@ -232,16 +242,6 @@ export function IncidentRegisterPanel() {
         }
       />
 
-      <SummaryStrip
-        loading={isLoading}
-        items={[
-          { value: kpis.open, label: translate("incidents.register.kpiOpen"), tone: kpis.open ? "danger" : "good", onClick: () => showTab("open"), active: subTab === "open" && typeFilter === "all" },
-          { value: kpis.rp, label: translate("incidents.register.kpiRp"), tone: kpis.rp ? "danger" : undefined, onClick: () => showTab("rp"), active: subTab === "rp" && typeFilter === "all" },
-          { value: kpis.review, label: translate("incidents.register.kpiReview"), tone: kpis.review ? "warning" : undefined, onClick: () => showTab("review"), active: subTab === "review" && typeFilter === "all" },
-          { value: kpis.resolvedMonth, label: translate("incidents.register.kpiResolved"), tone: "good", onClick: () => showTab("resolved"), active: subTab === "resolved" && typeFilter === "all" },
-          { value: kpis.auto, label: translate("incidents.register.kpiAuto"), onClick: () => showTab("all", "auto"), active: subTab === "all" && typeFilter === "auto" },
-        ]}
-      />
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <PillTabs<SubTab> label={translate("incidents.register.title")} value={subTab} onChange={setSubTab} options={subTabs} />
@@ -250,7 +250,7 @@ export function IncidentRegisterPanel() {
             aria-label={translate("incidents.register.filterBy")}
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-            className="min-h-10 rounded-full border bg-cc-surface px-4 text-sm outline-none focus:ring-2 focus:ring-cc-plum"
+            className="min-h-10 md:min-h-8 rounded-full border bg-cc-surface px-4 text-sm outline-none focus:ring-2 focus:ring-cc-plum"
             style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
           >
             {typeFilters.map((f) => (

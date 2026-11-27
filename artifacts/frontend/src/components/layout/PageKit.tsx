@@ -24,7 +24,7 @@ export const ghostClass = `inline-flex min-h-11 md:min-h-9 items-center justify-
 export const outlineClass = `inline-flex min-h-10 md:min-h-8 items-center justify-center gap-2 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text transition hover:bg-cc-soft disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 /** Row inside a Surface list. */
 export const rowClass =
-  "flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum sm:px-5";
+  "flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum sm:px-5";
 
 export function PageHeader({
   eyebrow,
@@ -32,11 +32,14 @@ export function PageHeader({
   description,
   actions,
   back,
+  summary,
 }: {
   eyebrow: string;
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
+  /** A short line of figures shown beside the title, e.g. "11 people · 96% note score". */
+  summary?: ReactNode;
   /** A small link above the header, e.g. back to a parent list. */
   back?: ReactNode;
 }) {
@@ -45,14 +48,17 @@ export function PageHeader({
   // behind the info button beside the title (or the title's own one).
   const ownInfo = typeof title !== "string";
   return (
-    <header className="flex flex-wrap items-center justify-between gap-x-phi-5 gap-y-phi-3">
+    <header className="flex flex-wrap items-center justify-between gap-x-phi-5 gap-y-phi-2">
       <div className="min-w-0">
         {back && <div className="mb-1">{back}</div>}
         <p className="sr-only">{eyebrow}</p>
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
         <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
           {title}
           {description && !ownInfo && <SectionInfo text={description} />}
         </h1>
+        {summary && <div className="text-sm" style={{ color: MUTED }}>{summary}</div>}
+        </div>
         {description && ownInfo && <p className="sr-only">{description}</p>}
       </div>
       {actions && <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:gap-2">{actions}</div>}
@@ -123,6 +129,42 @@ export function SummaryStrip({ items, loading }: { items: SummaryItem[]; loading
   );
 }
 
+/** Key figures as one quiet line of text, for the header's summary slot:
+ * "212 notes · 14 this week · 92% average score". */
+export function SummaryLine({ items, loading }: { items: SummaryItem[]; loading?: boolean }) {
+  return (
+    <p role="status" className="flex flex-wrap items-baseline gap-x-1.5 text-sm" style={{ color: MUTED }}>
+      {items.map((item, index) => {
+        const text = (
+          <>
+            <span className="font-semibold tabular-nums" style={{ color: item.tone ? toneColor(item.tone) : TEXT }}>
+              {loading ? "…" : item.value}
+            </span>{" "}
+            {item.label}
+          </>
+        );
+        return (
+          <span key={item.label} className="whitespace-nowrap">
+            {index > 0 && <span aria-hidden className="mr-1.5">·</span>}
+            {item.onClick ? (
+              <button
+                type="button"
+                onClick={item.onClick}
+                aria-pressed={item.active}
+                className={`rounded underline-offset-4 hover:underline ${item.active ? "underline decoration-2" : ""} ${focusRing}`}
+              >
+                {text}
+              </button>
+            ) : (
+              text
+            )}
+          </span>
+        );
+      })}
+    </p>
+  );
+}
+
 export interface PillOption<K extends string> {
   key: K;
   label: string;
@@ -177,6 +219,30 @@ export function PillTabs<K extends string>({
   );
 }
 
+/** The one row under the header: search on the left, filter chips in the
+ * middle, dropdowns and view switches on the right. Stacks on small screens. */
+export function Toolbar({
+  search,
+  children,
+  end,
+  className = "",
+}: {
+  search?: ReactNode;
+  /** Filter chips or tabs, they take the middle and wrap if they must. */
+  children?: ReactNode;
+  /** Dropdowns, sort and view switches, pushed to the right. */
+  end?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`flex flex-col gap-2 xl:flex-row xl:items-center ${className}`}>
+      {search && <div className="w-full min-w-0 xl:w-72 xl:shrink-0 [&>div]:sm:max-w-none">{search}</div>}
+      {children && <div className="min-w-0 flex-1">{children}</div>}
+      {end && <div className="flex flex-wrap items-center gap-2 xl:ml-auto xl:shrink-0">{end}</div>}
+    </div>
+  );
+}
+
 export function SearchField({
   value,
   onChange,
@@ -192,14 +258,14 @@ export function SearchField({
 }) {
   return (
     <div className={`relative w-full sm:max-w-sm ${className}`}>
-      <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
+      <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
       <input
         aria-label={label}
         type="search"
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-11 md:h-9 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
+        className="h-11 md:h-9 w-full rounded-full border bg-cc-surface pl-10 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
         style={{ borderColor: BORDER, color: TEXT }}
       />
     </div>
@@ -279,7 +345,7 @@ export function LoadError({ children, onRetry }: { children: ReactNode; onRetry?
     <div role="alert" className="flex flex-wrap items-center gap-phi-3 rounded-2xl bg-cc-surface px-phi-5 py-phi-4 text-sm" style={{ color: TEXT }}>
       {children}
       {onRetry && (
-        <button type="button" onClick={onRetry} className="min-h-10 rounded-full border px-4 font-semibold" style={{ borderColor: BORDER }}>
+        <button type="button" onClick={onRetry} className="min-h-10 md:min-h-8 rounded-full border px-4 font-semibold" style={{ borderColor: BORDER }}>
           Try again
         </button>
       )}

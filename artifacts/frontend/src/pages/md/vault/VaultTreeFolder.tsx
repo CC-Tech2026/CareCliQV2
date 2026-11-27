@@ -267,7 +267,7 @@ export default function VaultTreeFolderPage({
 
   return (
     <HubLayout>
-      <div className="space-y-6 pb-12">
+      <div className="space-y-4  pb-12">
         <div className="flex flex-wrap items-center gap-2">
           <nav aria-label="Folder path" className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold" style={{ color: MUTED }}>
             {crumbs.map((c, i) => (
@@ -297,7 +297,7 @@ export default function VaultTreeFolderPage({
 
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{title}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>{title}</h1>
             {personSub && <StatePill state={personSub.state} />}
             {canGenerateReport && (
               <button

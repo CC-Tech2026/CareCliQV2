@@ -448,7 +448,7 @@ export default function IncidentDetail({ id }: { id: string }) {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 pb-10">
+      <div className="space-y-4  pb-10">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-40 w-full rounded-2xl" />
         <Skeleton className="h-48 w-full rounded-2xl" />
@@ -522,7 +522,7 @@ export default function IncidentDetail({ id }: { id: string }) {
   ];
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4  pb-12">
       {modal}
       <PageHeader
         back={
@@ -876,7 +876,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                       placeholder={translate("incidents.detail.selectInvestigator")}
                       searchPlaceholder={STAFF_SEARCH}
                       emptyText={translate("incidents.detail.investigatorNoOptions")}
-                      triggerClassName="h-10 rounded-full px-4"
+                      triggerClassName="h-10 md:h-8 rounded-full px-4"
                     />
                   </div>
                   <button
@@ -1238,7 +1238,7 @@ function PillGroup({
             role="radio"
             aria-checked={selected}
             onClick={() => onChange(option.value)}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+            className="inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
             style={{
               borderColor: selected ? PURPLE : BORDER,
               background: selected ? PURPLE_SOFT : undefined,

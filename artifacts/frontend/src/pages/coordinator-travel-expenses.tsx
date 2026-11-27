@@ -120,7 +120,7 @@ export default function CoordinatorTravelExpenses() {
               placeholder="0.88"
               value={rateDraft}
               onChange={(e) => setRateDraft(e.target.value)}
-              className="mt-1 h-10 rounded-full px-4"
+              className="mt-1 h-10 md:h-8 rounded-full px-4"
             />
           </div>
           <button
@@ -158,7 +158,7 @@ export default function CoordinatorTravelExpenses() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                      className="inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
                       disabled={actionMut.isPending}
                       onClick={() => actionMut.mutate({ id: sub.id, approve: true })}
                     >

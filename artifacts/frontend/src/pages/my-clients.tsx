@@ -218,46 +218,26 @@ export default function MyClients() {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
           <h1 className="flex items-center gap-2 text-[20px] font-black tracking-tight" style={{ color: TEXT }}>
             {translate("clients.title")}
             <SectionInfo text="Everyone you're currently supporting: their plans, goals, and how their sessions are tracking." />
           </h1>
-          <p className="text-[13px] font-medium mt-0.5" style={{ color: MUTED }}>
-            {translateParams(data.length === 1 ? "clients.assignedCountOne" : "clients.assignedCountMany", { count: String(data.length) })}
-          </p>
-        </div>
-      </div>
-
-      {/* Summary strip */}
-      {!isLoading && data.length > 0 && (
-        <div
-          className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border px-4 py-3"
-          style={{ background: "var(--cc-bg)", borderColor: BORDER }}
-        >
-          <div className="flex items-center gap-2">
-            <Users size={14} style={{ color: MUTED }} />
-            <span className="text-[13px] font-black" style={{ color: TEXT }}>{data.length}</span>
-            <span className="text-[13px] font-medium" style={{ color: MUTED }}>{translate("clients.assigned")}</span>
-          </div>
-          <div className="h-3.5 w-px" style={{ background: BORDER }} />
-          <div className="flex items-center gap-2">
-            <ShieldCheck size={14} className="text-emerald-500" />
-            <span className="text-[13px] font-black text-emerald-700">{compliantCount}</span>
-            <span className="text-[13px] font-medium" style={{ color: MUTED }}>{translate("clients.compliant")}</span>
-          </div>
-          {needsReviewCount > 0 && (
-            <>
-              <div className="h-3.5 w-px" style={{ background: BORDER }} />
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={14} style={{ color: CORAL }} />
-                <span className="text-[13px] font-black" style={{ color: CORAL }}>{needsReviewCount}</span>
-                <span className="text-[13px] font-medium" style={{ color: MUTED }}>{translate("clients.needsReview")}</span>
-              </div>
-            </>
+          {isLoading || data.length === 0 ? (
+            <p className="text-[13px] font-medium" style={{ color: MUTED }}>
+              {translateParams(data.length === 1 ? "clients.assignedCountOne" : "clients.assignedCountMany", { count: String(data.length) })}
+            </p>
+          ) : (
+            <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]" style={{ color: MUTED }}>
+              <span className="inline-flex items-center gap-1.5"><Users size={13} /><span className="font-black" style={{ color: TEXT }}>{data.length}</span> {translate("clients.assigned")}</span>
+              <span className="inline-flex items-center gap-1.5"><ShieldCheck size={13} className="text-emerald-500" /><span className="font-black text-emerald-700">{compliantCount}</span> {translate("clients.compliant")}</span>
+              {needsReviewCount > 0 && (
+                <span className="inline-flex items-center gap-1.5"><AlertTriangle size={13} style={{ color: CORAL }} /><span className="font-black" style={{ color: CORAL }}>{needsReviewCount}</span> {translate("clients.needsReview")}</span>
+              )}
+            </p>
           )}
         </div>
-      )}
+      </div>
 
       {/* Search */}
       {data.length > 0 && (

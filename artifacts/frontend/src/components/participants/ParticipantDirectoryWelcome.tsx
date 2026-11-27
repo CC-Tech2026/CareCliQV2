@@ -12,7 +12,7 @@ export function ParticipantDirectoryWelcome({ participants, onSelect, loading, e
   return <div className="space-y-6 overflow-y-auto p-5 sm:p-7">
     <header>
       <p className="text-xs font-medium uppercase tracking-wider text-cc-muted">Participant workspace</p>
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight text-cc-text">People, plans and support</h1>
+      <h1 className="mt-2 text-xl font-semibold tracking-tight text-cc-text">People, plans and support</h1>
       <p className="mt-3 max-w-xl text-sm leading-6 text-cc-muted">Choose a participant to review their care information, plan, goals and delivered support. Search by name or NDIS number in the directory.</p>
     </header>
     <dl className="grid gap-3 sm:grid-cols-3">

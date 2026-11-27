@@ -166,7 +166,7 @@ export default function AdminMessageNewPage() {
           <ArrowLeft size={14} /> Messages
         </button>
         <header>
-          <h1 className="text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>New message</h1>
+          <h1 className="text-xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>New message</h1>
           <p className="mt-1 text-sm text-cc-muted">Write once; each person gets it addressed to them and their organisation.</p>
         </header>
 

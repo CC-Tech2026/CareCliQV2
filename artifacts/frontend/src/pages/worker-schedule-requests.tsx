@@ -265,8 +265,8 @@ export default function WorkerScheduleRequests() {
   return (
     <div className="w-full space-y-5 pb-10">
       <header>
-        <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>{translate("common.supportWorker")}</p>
-        <h1 className="mt-1 flex items-center gap-2 text-2xl font-black" style={{ color: TEXT }}>
+        <p className="sr-only" style={{ color: CORAL }}>{translate("common.supportWorker")}</p>
+        <h1 className="mt-1 flex items-center gap-2 text-xl font-black" style={{ color: TEXT }}>
           {translate("scheduleRequests.title")}
           <SectionInfo text="Ask for time off or a schedule change, and track the status of requests you've already sent." />
         </h1>

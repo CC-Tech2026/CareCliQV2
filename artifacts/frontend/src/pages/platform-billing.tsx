@@ -126,7 +126,7 @@ export default function PlatformBilling() {
     <HubLayout>
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
       <div>
-        <h1 className="text-2xl font-black" style={{ color: TEXT }}>Subscription &amp; billing</h1>
+        <h1 className="text-xl font-black" style={{ color: TEXT }}>Subscription &amp; billing</h1>
         <p className="text-sm mt-1" style={{ color: MUTED }}>
           Manage CareCliQ's platform subscription for your organisation.
         </p>
@@ -159,7 +159,7 @@ export default function PlatformBilling() {
             type="button"
             onClick={() => void handlePortal()}
             disabled={busy !== null}
-            className="h-10 px-4 rounded-xl border font-bold text-[13px] flex items-center gap-2 transition-all hover:bg-[var(--cc-soft)] disabled:opacity-40"
+            className="h-10 md:h-8 px-4 rounded-xl border font-bold text-[13px] flex items-center gap-2 transition-all hover:bg-[var(--cc-soft)] disabled:opacity-40"
             style={{ borderColor: BORDER, color: PLUM }}
           >
             {busy === "portal" ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}

@@ -480,7 +480,7 @@ function ShiftDetailPanel({ shiftId, onClose }: { shiftId: string; onClose: () =
           type="button"
           onClick={() => exportMut.mutate()}
           disabled={exportMut.isPending}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white shadow-sm"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 py-2.5 md:py-1.5 text-sm font-black text-white shadow-sm"
           style={{ background: PLUM }}
         >
           <Download size={16} />
@@ -489,7 +489,7 @@ function ShiftDetailPanel({ shiftId, onClose }: { shiftId: string; onClose: () =
         <button
           type="button"
           onClick={() => setShareOpen(true)}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-black shadow-sm"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full border px-4 py-2.5 md:py-1.5 text-sm font-black shadow-sm"
           style={{ borderColor: BORDER, color: PLUM }}
         >
           <Share2 size={16} />
@@ -592,12 +592,12 @@ export default function WorkerShiftHistoryPage() {
   }
 
   return (
-    <div className="w-full space-y-6 pb-12 text-safe">
+    <div className="w-full space-y-4  pb-12 text-safe">
       <header>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+        <p className="sr-only" style={{ color: CORAL }}>
           {translate("nav.performance")}
         </p>
-        <h1 className="mt-1 flex items-center gap-2 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
+        <h1 className="mt-1 flex items-center gap-2 text-2xl font-black tracking-tight" style={{ color: TEXT }}>
           {translate("shiftHistory.title")}
           <SectionInfo text={translate("shiftHistory.subtitle")} />
         </h1>

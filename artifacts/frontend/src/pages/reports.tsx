@@ -234,7 +234,7 @@ function ClinicalReportGenerator() {
               title="Report type"
               value={reportType}
               onChange={(event) => setReportType(event.target.value)}
-              className="h-10 w-full rounded-xl border px-3 text-sm"
+              className="h-10 md:h-8 w-full rounded-xl border px-3 text-sm"
               style={{ borderColor: BORDER, color: T1, background: SURFACE }}
             >
               <option value="functional_capacity_assessment">Functional Capacity Assessment</option>
@@ -1206,11 +1206,11 @@ export default function Reports() {
   const activeTab_ = TABS.find(t => t.id === activeTab)!;
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-4  pb-10">
 
         {/* Page header */}
         <div className="mb-6">
-          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--cc-coral)" }}>
+          <p className="sr-only" style={{ color: "var(--cc-coral)" }}>
             Reports &amp; Documentation
           </p>
           <h1 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight" style={{ color: "var(--cc-text)" }}>

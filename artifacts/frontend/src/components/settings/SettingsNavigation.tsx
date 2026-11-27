@@ -46,7 +46,7 @@ export function SettingsNavigation<T extends string>({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Find a setting"
-            className="h-10 w-full rounded-lg border border-cc-border bg-cc-surface pl-9 pr-3 text-sm text-cc-text transition focus-visible:border-[var(--cc-brand-purple)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-brand-purple-ring)]"
+            className="h-10 md:h-8 w-full rounded-lg border border-cc-border bg-cc-surface pl-9 pr-3 text-sm text-cc-text transition focus-visible:border-[var(--cc-brand-purple)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-brand-purple-ring)]"
           />
         </div>
       <div
@@ -96,7 +96,7 @@ export function SettingsNavigation<T extends string>({
                     type="button"
                     aria-current={active === id ? "page" : undefined}
                     onClick={() => onChange(id)}
-                    className={"group relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--cc-brand-purple)] " + (active === id ? "font-semibold" : "font-medium hover:bg-cc-soft")}
+                    className={"group relative flex min-h-10 md:min-h-8 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--cc-brand-purple)] " + (active === id ? "font-semibold" : "font-medium hover:bg-cc-soft")}
                     style={{
                       // CareCliQ Purple marks where you are, as in the app's sidebar.
                       background: active === id ? "var(--cc-brand-purple-soft)" : undefined,

@@ -512,7 +512,7 @@ export function LiveProgressNotePanel({
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
             disabled={ended}
-            className="h-10 w-full rounded-full border border-cc-border bg-cc-soft px-4 text-sm font-bold outline-none sm:w-auto sm:min-w-[160px]"
+            className="h-10 md:h-8 w-full rounded-full border border-cc-border bg-cc-soft px-4 text-sm font-bold outline-none sm:w-auto sm:min-w-[160px]"
             style={{ color: TEXT }}
           >
             {INPUT_LANGUAGE_KEYS.map((item) => (

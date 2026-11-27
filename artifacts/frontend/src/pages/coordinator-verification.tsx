@@ -135,7 +135,7 @@ export default function CoordinatorVerificationPage() {
     <div className="space-y-5 pb-8">
       <header>
         <h1
-          className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-cc-text"
+          className="flex items-center gap-2 text-xl font-semibold tracking-tight text-cc-text"
           style={{ fontFamily: "var(--app-font-display)" }}
         >
           {translate("schedule.verification")}
@@ -160,7 +160,7 @@ export default function CoordinatorVerificationPage() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as "review" | "all" | "verified")}
-                  className="min-h-10 w-full rounded-lg border border-cc-border bg-cc-surface px-2 text-sm font-semibold text-cc-text"
+                  className="min-h-10 md:min-h-8 w-full rounded-lg border border-cc-border bg-cc-surface px-2 text-sm font-semibold text-cc-text"
                 >
                   <option value="review">{translate("schedule.status.review")}</option>
                   <option value="all">{translate("schedule.allShifts")}</option>
@@ -172,7 +172,7 @@ export default function CoordinatorVerificationPage() {
                 <select
                   value={workerFilter}
                   onChange={(e) => setWorkerFilter(e.target.value)}
-                  className="min-h-10 w-full rounded-lg border border-cc-border bg-cc-surface px-2 text-sm font-semibold text-cc-text"
+                  className="min-h-10 md:min-h-8 w-full rounded-lg border border-cc-border bg-cc-surface px-2 text-sm font-semibold text-cc-text"
                 >
                   <option value="all">{translate("schedule.allWorkersFilter")}</option>
                   {workers.map(([id, name]) => (

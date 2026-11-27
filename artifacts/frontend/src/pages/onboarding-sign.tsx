@@ -154,11 +154,11 @@ export default function OnboardingSignPage() {
             </div>
           ) : needsVerification ? (
             <>
-              <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: PLUM }}>Step 1 of {STEPS.length}</p>
+              <p className="sr-only" style={{ color: PLUM }}>Step 1 of {STEPS.length}</p>
               <div className="mx-auto mt-3 h-12 w-12 rounded-full flex items-center justify-center" style={{ background: "var(--cc-soft)" }}>
                 <Mail size={20} style={{ color: PLUM }} />
               </div>
-              <h1 className="text-2xl font-black mt-3 text-center" style={{ color: TEXT }}>Verify it's you</h1>
+              <h1 className="text-xl font-black mt-3 text-center" style={{ color: TEXT }}>Verify it's you</h1>
               <p className="text-sm mt-2 text-center" style={{ color: MUTED }}>
                 This offer contains sensitive documents, so before you can view or sign them we need to confirm
                 it's really you. Enter the 6-digit code we sent to <strong style={{ color: TEXT }}>{hire.email}</strong>.
@@ -201,8 +201,8 @@ export default function OnboardingSignPage() {
             </>
           ) : (
             <>
-              <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: PLUM }}>Step {currentStep + 1} of {STEPS.length}</p>
-              <h1 className="text-2xl font-black mt-1" style={{ color: TEXT }}>Review &amp; sign your offer</h1>
+              <p className="sr-only" style={{ color: PLUM }}>Step {currentStep + 1} of {STEPS.length}</p>
+              <h1 className="text-xl font-black mt-1" style={{ color: TEXT }}>Review &amp; sign your offer</h1>
               <p className="text-sm mt-2" style={{ color: MUTED }}>
                 Hi {hire.full_name}, please review the document{hire.documents.length !== 1 ? "s" : ""} below before signing.
               </p>

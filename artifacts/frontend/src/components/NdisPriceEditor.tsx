@@ -212,7 +212,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
           <div className="flex gap-3 pt-4 border-t" style={{ borderColor: BORDER }}>
             <button
               onClick={onClose}
-              className="flex-1 rounded-full px-4 py-2.5 text-sm font-bold border transition hover:bg-gray-50"
+              className="flex-1 rounded-full px-4 py-2.5 md:py-1.5 text-sm font-bold border transition hover:bg-gray-50"
               style={{ borderColor: BORDER, color: MUTED }}
             >
               Cancel
@@ -220,7 +220,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
             <button
               onClick={handleSavePrice}
               disabled={loading || !itemCode.trim() || !priceNational || !reason.trim()}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 md:py-1.5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
               style={{ background: CORAL }}
             >
               {loading ? (

@@ -550,7 +550,7 @@ export function AuditSheet({ open, onOpenChange, participantId }: { open: boolea
             type="button"
             aria-pressed={show === value}
             onClick={() => setShow(value)}
-            className="min-h-10 rounded-full px-4 text-sm font-medium transition"
+            className="min-h-10 md:min-h-8 rounded-full px-4 text-sm font-medium transition"
             style={show === value ? { background: TEXT, color: "var(--cc-bg)" } : { color: TEXT, boxShadow: "inset 0 0 0 1px var(--cc-border)" }}
           >
             {label}

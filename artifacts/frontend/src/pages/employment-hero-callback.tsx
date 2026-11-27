@@ -62,7 +62,7 @@ export default function EmploymentHeroCallbackPage() {
             <p className="mt-2 text-sm text-cc-muted">{problem}</p>
             <Link
               href={INTEGRATIONS}
-              className="mt-5 inline-flex h-10 items-center rounded-lg px-4 text-sm font-semibold text-white"
+              className="mt-5 inline-flex h-10 md:h-8 items-center rounded-lg px-4 text-sm font-semibold text-white"
               style={{ background: "var(--cc-cta)" }}
             >
               Back to Integrations

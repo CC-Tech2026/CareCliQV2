@@ -391,10 +391,10 @@ export function RegularSchedulesPanel({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Participant, worker or staff ID"
               aria-label="Find a regular schedule"
-              className="h-10 min-w-0 flex-1 rounded-full border bg-transparent px-4 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
+              className="h-10 md:h-8 min-w-0 flex-1 rounded-full border bg-transparent px-4 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
               style={{ borderColor: BORDER }}
             />
-            <Button onClick={onNew} className="h-10 shrink-0 rounded-full px-4 text-white" style={{ background: "var(--cc-cta)" }}>
+            <Button onClick={onNew} className="h-10 md:h-8 shrink-0 rounded-full px-4 text-white" style={{ background: "var(--cc-cta)" }}>
               <Plus size={14} className="mr-1" /> New
             </Button>
           </div>

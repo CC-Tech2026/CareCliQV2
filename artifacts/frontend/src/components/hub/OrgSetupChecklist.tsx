@@ -195,7 +195,7 @@ export function OrgSetupChecklist({
                     <button
                       type="button"
                       onClick={() => onNavigate(step.importHref!)}
-                      className="min-h-10 rounded-lg px-2.5 text-[12px] font-bold text-[#6D28D9] hover:bg-[rgba(124,58,237,0.08)]"
+                      className="min-h-10 md:min-h-8 rounded-lg px-2.5 text-[12px] font-bold text-[#6D28D9] hover:bg-[rgba(124,58,237,0.08)]"
                     >
                       Import a list
                     </button>
@@ -203,7 +203,7 @@ export function OrgSetupChecklist({
                   <button
                     type="button"
                     onClick={() => onNavigate(step.href)}
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-[var(--cc-cta)] px-3 text-[12px] font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cc-cta)]"
+                    className="inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-lg bg-[var(--cc-cta)] px-3 text-[12px] font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cc-cta)]"
                   >
                     {step.action}
                     <ArrowRight size={14} aria-hidden="true" />
@@ -219,7 +219,7 @@ export function OrgSetupChecklist({
         <button
           type="button"
           onClick={hide}
-          className="min-h-10 rounded-lg px-3 text-[12px] font-semibold text-cc-muted hover:bg-cc-soft hover:text-cc-text"
+          className="min-h-10 md:min-h-8 rounded-lg px-3 text-[12px] font-semibold text-cc-muted hover:bg-cc-soft hover:text-cc-text"
         >
           Hide for now
         </button>

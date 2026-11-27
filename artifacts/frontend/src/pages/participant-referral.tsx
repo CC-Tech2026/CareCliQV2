@@ -192,7 +192,7 @@ export default function ParticipantReferralPage() {
           <CareCliQLogoWithText size={40} />
         </div>
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-black tracking-tight" style={{ color: TEXT }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: TEXT }}>
             {provider.name ? `Refer someone to ${provider.name}` : "Refer someone to our team"}
           </h1>
           <p className="text-sm mt-1.5" style={{ color: MUTED }}>Takes about 3 minutes. We'll be in touch within 2 business days.</p>

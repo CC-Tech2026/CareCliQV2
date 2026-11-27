@@ -303,7 +303,7 @@ function Checklist({
       );
   }, [items, filters]);
 
-  const selectClass = "min-h-10 max-w-full rounded-full border bg-cc-surface px-4 text-sm outline-none focus:ring-2 focus:ring-cc-plum";
+  const selectClass = "min-h-10 md:min-h-8 max-w-full rounded-full border bg-cc-surface px-4 text-sm outline-none focus:ring-2 focus:ring-cc-plum";
   const selectStyle = { borderColor: BORDER, color: TEXT };
   const criticalOnly = filters.critical === "1";
   const anyFilter = FILTER_KEYS.some((key) => filters[key]);
@@ -343,7 +343,7 @@ function Checklist({
             type="button"
             aria-pressed={criticalOnly}
             onClick={() => setFilter("critical", criticalOnly ? "" : "1")}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+            className="inline-flex min-h-10 md:min-h-8 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
             style={criticalOnly ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` }}
           >
             <ShieldAlert size={15} />
@@ -849,7 +849,7 @@ function SetupSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open
                     type="button"
                     onClick={() => setAuditType(t.value)}
                     aria-pressed={auditType === t.value}
-                    className="min-h-10 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft"
+                    className="min-h-10 md:min-h-8 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft"
                     style={
                       auditType === t.value
                         ? { background: "var(--cc-text)", color: "var(--cc-bg)" }
@@ -1066,25 +1066,35 @@ export default function AuditReadinessPage({ embedded = false }: { embedded?: bo
 
   return (
     <Layout>
-      <div className="space-y-6 pb-12">
+      <div className="space-y-4 pb-12">
         {!embedded && (
           <PageHeader
             eyebrow="Oversight & Risk"
             title={view === "checklist" ? "Evidence checklist" : view === "packs" ? "Prepare an audit pack" : "Evidence overview"}
+            description="What evidence you have, what's missing and what needs review."
+            summary="Tracks evidence readiness. It doesn't determine compliance or guarantee an audit outcome."
+            actions={
+              <button type="button" className={`${outlineClass} shrink-0`} onClick={() => setSetupOpen(true)}>
+                <Settings2 size={15} />
+                Audit profile
+              </button>
+            }
           />
         )}
         {!embedded && <PillTabs label="Audit readiness views" value={view} onChange={setView} options={VIEWS} />}
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-2xl text-sm leading-6" style={{ color: MUTED }}>
-            What evidence you have, what's missing and what needs review. This tracks evidence readiness. It
-            doesn't determine compliance or guarantee an audit outcome.
-          </p>
-          <button type="button" className={`${outlineClass} shrink-0`} onClick={() => setSetupOpen(true)}>
-            <Settings2 size={15} />
-            Audit profile
-          </button>
-        </div>
+        {embedded && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="max-w-2xl text-sm leading-6" style={{ color: MUTED }}>
+              What evidence you have, what's missing and what needs review. This tracks evidence readiness. It
+              doesn't determine compliance or guarantee an audit outcome.
+            </p>
+            <button type="button" className={`${outlineClass} shrink-0`} onClick={() => setSetupOpen(true)}>
+              <Settings2 size={15} />
+              Audit profile
+            </button>
+          </div>
+        )}
 
         {checklist.isError ? (
           <LoadError onRetry={() => checklist.refetch()}>

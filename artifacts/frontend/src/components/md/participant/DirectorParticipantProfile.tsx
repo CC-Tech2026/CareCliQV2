@@ -142,7 +142,7 @@ function Decisions({ decisions, firstName, onAct }: { decisions: Decision[]; fir
             <button
               type="button"
               onClick={() => onAct(d)}
-              className="ml-6 inline-flex min-h-10 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium transition hover:bg-cc-soft sm:ml-0"
+              className="ml-6 inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full border border-cc-border px-4 text-sm font-medium transition hover:bg-cc-soft sm:ml-0"
               style={{ color: TEXT }}
             >
               {ACTION_LABEL[d.action]} <ArrowRight size={14} aria-hidden />
@@ -189,7 +189,7 @@ function StatusBanner({ overview, onResume }: { overview: DirectorOverview; onRe
 }
 
 const outlineButton =
-  "inline-flex min-h-10 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum";
+  "inline-flex min-h-10 md:min-h-8 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum";
 
 export function DirectorParticipantProfile({
   participantId,
@@ -254,7 +254,7 @@ export function DirectorParticipantProfile({
     <button
       type="button"
       onClick={onBack}
-      className="-ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-full px-2 text-sm font-medium transition-colors hover:bg-cc-soft"
+      className="-ml-2 inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full px-2 text-sm font-medium transition-colors hover:bg-cc-soft"
       style={{ color: MUTED }}
     >
       <ArrowLeft size={15} aria-hidden /> Participants
@@ -338,7 +338,7 @@ export function DirectorParticipantProfile({
         <AddShiftMenu participant={{ id: participantId, full_name: p.full_name }}>
           <button
             type="button"
-            className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+            className="inline-flex min-h-10 md:min-h-8 items-center gap-2 rounded-full px-4 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
             style={{ background: "var(--cc-cta)" }}
           >
             <CalendarPlus size={16} aria-hidden /> Add a shift

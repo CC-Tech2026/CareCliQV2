@@ -15,7 +15,7 @@ import {
   RowList,
   SkeletonBlocks,
   StatusText,
-  SummaryStrip,
+  SummaryLine,
   Surface,
   ctaClass,
   outlineClass,
@@ -175,6 +175,15 @@ export default function FeedbackReports() {
   return (
     <div className="space-y-5 pb-12">
       <PageHeader
+        summary={canResolve ? <SummaryLine
+        loading={feedbackQuery.isLoading}
+        items={[
+          { value: allReports.length, label: "reports", onClick: () => setStatusFilter("all"), active: statusFilter === "all" },
+          { value: countOf("open"), label: "open", tone: countOf("open") ? "danger" : "good", onClick: () => setStatusFilter("open"), active: statusFilter === "open" },
+          { value: countOf("in_review"), label: "in review", tone: countOf("in_review") ? "warning" : undefined, onClick: () => setStatusFilter("in_review"), active: statusFilter === "in_review" },
+          { value: countOf("resolved"), label: "resolved", tone: "good", onClick: () => setStatusFilter("resolved"), active: statusFilter === "resolved" },
+        ]}
+      /> : undefined}
         eyebrow="Oversight & Risk"
         title={
           <span className="inline-flex items-center gap-2">
@@ -189,18 +198,6 @@ export default function FeedbackReports() {
           </button>
         }
       />
-
-      {canResolve && (
-        <SummaryStrip
-          loading={feedbackQuery.isLoading}
-          items={[
-            { value: allReports.length, label: "reports", onClick: () => setStatusFilter("all"), active: statusFilter === "all" },
-            { value: countOf("open"), label: "open", tone: countOf("open") ? "danger" : "good", onClick: () => setStatusFilter("open"), active: statusFilter === "open" },
-            { value: countOf("in_review"), label: "in review", tone: countOf("in_review") ? "warning" : undefined, onClick: () => setStatusFilter("in_review"), active: statusFilter === "in_review" },
-            { value: countOf("resolved"), label: "resolved", tone: "good", onClick: () => setStatusFilter("resolved"), active: statusFilter === "resolved" },
-          ]}
-        />
-      )}
 
       {feedbackQuery.isLoading ? (
         <SkeletonBlocks count={3} />

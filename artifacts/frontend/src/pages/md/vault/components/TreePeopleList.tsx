@@ -67,7 +67,7 @@ export function TreePeopleList({
       ? { background: TEXT, color: "var(--cc-bg)" }
       : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` };
   const pillClass =
-    "inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum";
+    "inline-flex min-h-10 md:min-h-8 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum";
 
   return (
     <div className="space-y-4">

@@ -917,7 +917,7 @@ export default function CoordinatorRosteringPage() {
                   onChange={(e) => setAvailSearch(e.target.value)}
                   placeholder="Find by name, staff ID or suburb"
                   aria-label="Find a worker"
-                  className="h-10 w-full rounded-xl border bg-cc-surface px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
+                  className="h-10 md:h-8 w-full rounded-xl border bg-cc-surface px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-cc-plum"
                   style={{ borderColor: BORDER }}
                 />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

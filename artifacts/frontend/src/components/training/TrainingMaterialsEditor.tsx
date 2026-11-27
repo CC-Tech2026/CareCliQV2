@@ -242,7 +242,7 @@ export function TrainingMaterialsEditor({
             type="button"
             disabled={busy || !title.trim() || !safeMaterialUrl(url)}
             onClick={() => void save()}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground disabled:opacity-50"
+            className="inline-flex h-10 md:h-8 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground disabled:opacity-50"
           >
             <Plus size={13} />
             {busy ? "Saving…" : editing ? "Save material" : "Add material"}
@@ -250,7 +250,7 @@ export function TrainingMaterialsEditor({
           {(editing || dirty) && (
             <button
               type="button"
-              className="inline-flex h-10 items-center justify-center rounded-xl border px-4 text-xs font-semibold"
+              className="inline-flex h-10 md:h-8 items-center justify-center rounded-xl border px-4 text-xs font-semibold"
               onClick={() => {
                 if (canDiscard()) reset();
               }}

@@ -299,7 +299,7 @@ export default function WorkerTrainingPage() {
             {translate("performance.eyebrow")}
           </p>
           <h1
-            className="mt-1 flex items-center gap-2 text-3xl font-black tracking-tight"
+            className="mt-1 flex items-center gap-2 text-2xl font-black tracking-tight"
             style={{ color: TEXT }}
           >
             {translate("training.title")}
@@ -309,7 +309,7 @@ export default function WorkerTrainingPage() {
         <button
           type="button"
           onClick={() => setRequestOpen(true)}
-          className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white shadow-sm"
+          className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 md:py-1.5 text-sm font-black text-white shadow-sm"
           style={{ background: PLUM }}
         >
           <Plus size={16} />
@@ -952,7 +952,7 @@ function TrainingModuleDetail({
             />
           </div>
         }
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--cc-plum)]">
+        <p className="sr-only">
           CareCliQ learning
         </p>
         <h1

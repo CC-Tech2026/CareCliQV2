@@ -140,7 +140,7 @@ export default function MDServiceDeliveryPage() {
   }
   return (
     <HubLayout>
-      <div className="min-w-0 space-y-8 pb-12">
+      <div className="min-w-0 space-y-5 pb-12">
         <PageHeader
           eyebrow="Operations & Care"
           title="Delivery Quality"
@@ -213,7 +213,7 @@ export default function MDServiceDeliveryPage() {
                 <select
                   value={priority}
                   onChange={(event) => setPriority(event.target.value)}
-                  className="min-h-10 rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text"
+                  className="min-h-10 md:min-h-8 rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text"
                 >
                   <option value="all">All priorities</option>
                   <option value="urgent">Urgent or high priority</option>

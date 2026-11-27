@@ -90,7 +90,7 @@ export function ModuleCoverPicker({
           <button
             type="button"
             onClick={() => input.current?.click()}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-bold"
+            className="inline-flex h-10 md:h-8 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-bold"
           >
             <ImagePlus size={16} />
             Upload photo
@@ -99,7 +99,7 @@ export function ModuleCoverPicker({
             <button
               type="button"
               onClick={onRemove}
-              className="h-10 rounded-xl px-3 text-xs font-semibold text-muted-foreground"
+              className="h-10 md:h-8 rounded-xl px-3 text-xs font-semibold text-muted-foreground"
             >
               Remove photo
             </button>

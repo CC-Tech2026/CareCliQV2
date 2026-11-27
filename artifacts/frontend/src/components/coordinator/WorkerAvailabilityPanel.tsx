@@ -240,7 +240,7 @@ export function WorkerAvailabilityPanel({
               key={t}
               onClick={() => setTab(t)}
               aria-pressed={tab === t}
-              className="min-h-10 rounded-lg px-3 py-1 text-sm font-bold capitalize transition-colors"
+              className="min-h-10 md:min-h-8 rounded-lg px-3 py-1 text-sm font-bold capitalize transition-colors"
               style={{
                 background: tab === t ? CORAL : "transparent",
                 color: tab === t ? "white" : MUTED,
@@ -269,7 +269,7 @@ export function WorkerAvailabilityPanel({
             <button
               type="button"
               onClick={() => void refetchAvail()}
-              className="min-h-10 rounded-lg border px-3 text-sm"
+              className="min-h-10 md:min-h-8 rounded-lg border px-3 text-sm"
               style={{ borderColor: BORDER }}
             >
               Retry availability

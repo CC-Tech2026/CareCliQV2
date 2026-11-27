@@ -685,7 +685,7 @@ export default function VaultHome() {
           <div className="min-w-0">
             <p className="sr-only">Documents & Audit Vault</p>
             <h1
-              className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
+              className="flex items-center gap-2 text-xl font-semibold tracking-tight"
               style={{ color: "var(--cc-text)", fontFamily: "var(--app-font-display)" }}
             >
               Vault
@@ -717,7 +717,7 @@ export default function VaultHome() {
               key={item.label}
               type="button"
               onClick={item.onClick}
-              className="inline-flex min-h-10 items-center rounded-full px-3.5 transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+              className="inline-flex min-h-10 md:min-h-8 items-center rounded-full px-3.5 transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
               style={{ boxShadow: "inset 0 0 0 1px var(--cc-border)" }}
             >
               <span className="flex items-baseline gap-1.5 whitespace-nowrap">
@@ -751,7 +751,7 @@ export default function VaultHome() {
               type="button"
               aria-pressed={flaggedOnly}
               onClick={() => setFlaggedOnly((v) => !v)}
-              className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+              className="inline-flex min-h-10 md:min-h-8 items-center gap-2 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
               style={flaggedOnly ? { background: "var(--cc-text)", color: "var(--cc-bg)" } : { color: "var(--cc-text)", boxShadow: "inset 0 0 0 1px var(--cc-border)" }}
             >
               <AlertTriangle size={15} />
@@ -778,7 +778,7 @@ export default function VaultHome() {
         {loadError && (
           <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl bg-cc-surface px-5 py-4 text-sm" style={{ color: "var(--cc-text)" }}>
             The vault couldn't be loaded.
-            <button type="button" onClick={() => void refresh()} className="min-h-10 rounded-full border px-4 font-semibold" style={{ borderColor: "var(--cc-border)" }}>
+            <button type="button" onClick={() => void refresh()} className="min-h-10 md:min-h-8 rounded-full border px-4 font-semibold" style={{ borderColor: "var(--cc-border)" }}>
               Try again
             </button>
           </div>

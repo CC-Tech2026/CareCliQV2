@@ -84,7 +84,7 @@ export function ShiftTimeEditor({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="flex h-10 min-w-[170px] items-center gap-2 rounded-lg border border-cc-border bg-cc-surface px-3 text-left text-sm text-cc-text hover:bg-cc-soft"
+                className="flex h-10 md:h-8 min-w-[170px] items-center gap-2 rounded-lg border border-cc-border bg-cc-surface px-3 text-left text-sm text-cc-text hover:bg-cc-soft"
               >
                 <CalendarIcon className="size-4 shrink-0 text-cc-muted" aria-hidden />
                 {format(dayDate(day), "EEE d MMM yyyy")}
@@ -103,10 +103,10 @@ export function ShiftTimeEditor({
               />
             </PopoverContent>
           </Popover>
-          <button type="button" onClick={() => setDay(addDaysToKey(day, 1))} className="h-10 rounded-full border border-cc-border px-3 text-xs font-semibold text-cc-text hover:bg-cc-soft">
+          <button type="button" onClick={() => setDay(addDaysToKey(day, 1))} className="h-10 md:h-8 rounded-full border border-cc-border px-3 text-xs font-semibold text-cc-text hover:bg-cc-soft">
             Day after
           </button>
-          <button type="button" onClick={() => setDay(addDaysToKey(day, 7))} className="h-10 rounded-full border border-cc-border px-3 text-xs font-semibold text-cc-text hover:bg-cc-soft">
+          <button type="button" onClick={() => setDay(addDaysToKey(day, 7))} className="h-10 md:h-8 rounded-full border border-cc-border px-3 text-xs font-semibold text-cc-text hover:bg-cc-soft">
             A week later
           </button>
         </div>

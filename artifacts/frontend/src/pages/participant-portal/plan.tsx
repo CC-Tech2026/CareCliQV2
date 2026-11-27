@@ -71,7 +71,7 @@ export default function ParticipantPlanPage() {
           <ArrowLeft size={14} /> Documents
         </Link>
         <div>
-          <h1 className="text-2xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>NDIS Plan</h1>
+          <h1 className="text-xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>NDIS Plan</h1>
           <p className="mt-1 text-[14px]" style={{ color: MUTED }}>Your current plan, funding and goals.</p>
         </div>
 

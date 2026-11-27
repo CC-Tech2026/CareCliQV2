@@ -302,7 +302,7 @@ export default function VaultFolderPage({ category }: { category: string }) {
           <div className="flex items-center gap-4">
             <FolderIcon size={56} />
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight" style={{ color: "var(--cc-text)", fontFamily: "var(--app-font-display)" }}>
+              <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--cc-text)", fontFamily: "var(--app-font-display)" }}>
                 {label}
               </h1>
               <p className="mt-1 text-sm" style={{ color: "var(--cc-muted)" }}>

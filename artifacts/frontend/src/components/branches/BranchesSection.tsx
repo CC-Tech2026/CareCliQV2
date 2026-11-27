@@ -47,7 +47,7 @@ export function BranchStateSelect({
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      className="h-10 w-full rounded-lg border bg-white px-3 text-sm"
+      className="h-10 md:h-8 w-full rounded-lg border bg-white px-3 text-sm"
       style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
     >
       <option value="">Select state…</option>

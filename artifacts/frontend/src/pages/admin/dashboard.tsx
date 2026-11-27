@@ -57,7 +57,7 @@ export default function AdminDashboardPage() {
       <div className="space-y-6">
         <header>
           <p className="text-xs font-semibold text-cc-muted">{TODAY_LABEL}</p>
-          <h1 className="mt-0.5 text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>
+          <h1 className="mt-0.5 text-xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>
             {firstName ? `Hello, ${firstName}` : "Hello"}
           </h1>
           <p className="mt-1 text-sm text-cc-muted">
@@ -73,7 +73,7 @@ export default function AdminDashboardPage() {
           <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl px-5 py-4" style={{ background: "var(--cc-status-warning-bg)" }}>
             <AlertTriangle size={16} style={{ color: "var(--cc-status-warning)" }} />
             <p className="flex-1 text-sm font-semibold text-cc-text">Couldn't load providers: {loadError}</p>
-            <button type="button" onClick={load} className="min-h-10 rounded-full border border-cc-border px-4 text-sm font-semibold">Try again</button>
+            <button type="button" onClick={load} className="min-h-10 md:min-h-8 rounded-full border border-cc-border px-4 text-sm font-semibold">Try again</button>
           </div>
         )}
 

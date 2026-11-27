@@ -36,7 +36,7 @@ export default function MDOnboardingPage() {
 
   return (
     <HubLayout>
-      <div className="space-y-6 pb-10">
+      <div className="space-y-4  pb-10">
         <div className="flex items-center gap-4">
           <div>
             <h1 className="flex items-center gap-2 text-xl font-black" style={{ color: TEXT }}>

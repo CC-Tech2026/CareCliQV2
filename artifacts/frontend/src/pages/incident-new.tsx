@@ -198,7 +198,7 @@ function ChoicePills({
             role="radio"
             aria-checked={selected}
             onClick={() => onChange(option.value)}
-            className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft ${focusRing}`}
+            className={`inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft ${focusRing}`}
             style={{
               borderColor: selected ? PURPLE : invalid ? DANGER : BORDER,
               background: selected ? PURPLE_SOFT : undefined,
@@ -433,7 +433,7 @@ export default function IncidentNew() {
     list.map((o) => ({ value: o.value, label: translate(o.labelKey) }));
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-4  pb-10">
       <PageHeader
         eyebrow={translate("incidents.new.breadcrumbParent")}
         title={translate("incidents.new.pageTitle")}

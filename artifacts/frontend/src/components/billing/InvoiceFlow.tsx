@@ -74,7 +74,7 @@ export function InvoiceFlowSteps({
                 type="button"
                 aria-current={on ? "step" : undefined}
                 onClick={() => onChange(step)}
-                className={`group flex min-h-[72px] w-full min-w-0 items-center gap-3 rounded-2xl px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-plum)] ${on ? "bg-cc-surface" : "hover:bg-cc-surface"}`}
+                className={`group flex min-h-[56px] w-full min-w-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-plum)] ${on ? "bg-cc-surface" : "hover:bg-cc-surface"}`}
                 style={{
                   // The open step is marked like an active tab: a pink rule
                   // along the bottom, not a heavy outline.
@@ -83,7 +83,7 @@ export function InvoiceFlowSteps({
               >
                 <span
                   aria-hidden="true"
-                  className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                  className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg [&>svg]:h-3.5 [&>svg]:w-3.5"
                   style={
                     on
                       ? { background: "var(--cc-plum-soft)", color: "var(--cc-plum)" }
@@ -144,7 +144,7 @@ export function StepDone({
         <button
           type="button"
           onClick={onNext}
-          className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text transition hover:bg-cc-soft"
+          className="mt-5 inline-flex min-h-10 md:min-h-8 items-center gap-2 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text transition hover:bg-cc-soft"
         >
           Next: {FLOW_STEP_COPY[next].title.toLowerCase()} ({nextCount})
           <ArrowRight size={14} />

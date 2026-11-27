@@ -43,7 +43,7 @@ export default function AdminActivityPage() {
     <AdminShell>
       <div className="space-y-5">
         <header>
-          <h1 className="text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>Activity</h1>
+          <h1 className="text-xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>Activity</h1>
           <p className="mt-1 text-sm text-cc-muted">Every change CareCliQ staff make to provider accounts, messages and banners.</p>
         </header>
         <div className="relative max-w-md">

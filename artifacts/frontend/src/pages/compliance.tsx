@@ -333,21 +333,21 @@ export default function Compliance() {
   const urgentCount = headerOverview?.urgent_actions.length ?? 0;
 
   return (
-    <div className="flex flex-col gap-5 pb-10">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+    <div className="flex flex-col gap-4 pb-10">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-[20px] font-black tracking-tight" style={{ color: TEXT }}>
             {translate("compliance.page.title")}
             <SectionInfo text={translate("compliance.centre.subtitle")} />
           </h1>
         </div>
-        <div className="flex items-start gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
         {(overallScore != null || urgentCount > 0) && (
-          <Card className="hidden sm:flex items-center gap-5 shrink-0 rounded-2xl border border-[var(--cc-border)] shadow-sm px-5 py-3">
+          <div className="hidden sm:flex items-center gap-4 shrink-0 pr-1">
             {urgentCount > 0 && (
               <div className="flex items-center gap-1.5">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "var(--cc-status-danger-bg)" }}>
-                  <ShieldAlert size={15} style={{ color: CRITICAL }} />
+                <span className="flex h-6 w-6 items-center justify-center rounded-full" style={{ background: "var(--cc-status-danger-bg)" }}>
+                  <ShieldAlert size={13} style={{ color: CRITICAL }} />
                 </span>
                 <span className="text-[12px] font-bold" style={{ color: CRITICAL }}>
                   {translateParams(
@@ -366,7 +366,7 @@ export default function Compliance() {
                 bandLabels={bandNames}
               />
             )}
-          </Card>
+          </div>
         )}
           <ComplianceActionsMenu overview={headerOverview} />
         </div>
@@ -403,7 +403,7 @@ export default function Compliance() {
                   const next = e.key === "ArrowRight" ? (idx + 1) % SUB_TABS.length : (idx - 1 + SUB_TABS.length) % SUB_TABS.length;
                   setActiveTab(SUB_TABS[next]);
                 }}
-                className="relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-[13px] font-bold transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[13px] font-bold transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={{
                   borderRadius: active ? "12px 12px 0 0" : "0",
                   background: active ? SURFACE : "transparent",

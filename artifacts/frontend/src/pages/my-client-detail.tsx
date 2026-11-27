@@ -750,7 +750,7 @@ function InlineSessionComposer({
                 title={translate("client.session.inputLanguage")}
                 value={language}
                 onChange={(event) => onLanguageChange(event.target.value)}
-                className="h-10 rounded-full border px-4 text-sm font-bold outline-none"
+                className="h-10 md:h-8 rounded-full border px-4 text-sm font-bold outline-none"
                 style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-surface)" }}
               >
                 {INPUT_LANGUAGE_OPTIONS.map((item) => (
@@ -1084,7 +1084,7 @@ function InlineSessionComposer({
                   type="button"
                   onClick={onSave}
                   disabled={!canSave}
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-black text-white transition disabled:opacity-50"
+                  className="inline-flex min-h-10 md:min-h-8 items-center justify-center gap-2 rounded-full px-5 text-sm font-black text-white transition disabled:opacity-50"
                   style={{ background: PLUM }}
                 >
                   {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
@@ -1141,7 +1141,7 @@ function InlineSessionComposer({
                 type="button"
                 onClick={onSave}
                 disabled={!canSave}
-                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-5 text-sm font-black text-white transition disabled:opacity-50"
+                className="inline-flex min-h-10 md:min-h-8 items-center justify-center gap-2 rounded-xl px-5 text-sm font-black text-white transition disabled:opacity-50"
                 style={{ background: PLUM }}
               >
                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
@@ -1343,7 +1343,7 @@ function IncidentReportModal({
                 title={translate("client.incident.typeTitle")}
                 value={form.incident_type}
                 onChange={(event) => setField("incident_type", event.target.value)}
-                className="h-10 w-full rounded-xl border px-3 text-sm font-bold outline-none"
+                className="h-10 md:h-8 w-full rounded-xl border px-3 text-sm font-bold outline-none"
                 style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-surface)" }}
               >
                 {INCIDENT_TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{translate(t.labelKey)}</option>)}
@@ -1355,7 +1355,7 @@ function IncidentReportModal({
                 title={translate("client.incident.severityTitle")}
                 value={form.severity}
                 onChange={(event) => setField("severity", event.target.value)}
-                className="h-10 w-full rounded-xl border px-3 text-sm font-bold outline-none"
+                className="h-10 md:h-8 w-full rounded-xl border px-3 text-sm font-bold outline-none"
                 style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-surface)" }}
               >
                 {INCIDENT_SEVERITY_OPTIONS.map((s) => <option key={s.value} value={s.value}>{translate(s.labelKey)}</option>)}
@@ -1369,7 +1369,7 @@ function IncidentReportModal({
               value={form.title}
               onChange={(event) => setField("title", event.target.value)}
               placeholder={translate("client.incident.titlePlaceholder")}
-              className="h-10 w-full rounded-xl border px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
+              className="h-10 md:h-8 w-full rounded-xl border px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
               style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }}
             />
           </div>
@@ -1495,7 +1495,7 @@ function IncidentReportModal({
                 value={form.location}
                 onChange={(event) => setField("location", event.target.value)}
                 placeholder={translate("client.incident.locationPlaceholder")}
-                className="h-10 w-full rounded-xl border px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
+                className="h-10 md:h-8 w-full rounded-xl border px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
                 style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }}
               />
             </div>
@@ -1505,7 +1505,7 @@ function IncidentReportModal({
                 value={form.worker_actions}
                 onChange={(event) => setField("worker_actions", event.target.value)}
                 placeholder={translate("client.incident.immediateActionsPlaceholder")}
-                className="h-10 w-full rounded-xl border px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
+                className="h-10 md:h-8 w-full rounded-xl border px-3 text-sm font-medium outline-none focus:border-[#E8457A]"
                 style={{ borderColor: BORDER, color: TEXT, background: "var(--cc-bg)" }}
               />
             </div>
@@ -1516,7 +1516,7 @@ function IncidentReportModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border px-5 py-2.5 text-sm font-black transition hover:bg-[#F8F6FE]"
+            className="rounded-full border px-5 py-2.5 md:py-1.5 text-sm font-black transition hover:bg-[#F8F6FE]"
             style={{ borderColor: BORDER, color: MUTED }}
           >
             {translate("common.cancel")}
@@ -1525,7 +1525,7 @@ function IncidentReportModal({
             type="button"
             onClick={handleSubmit}
             disabled={saving}
-            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-black text-white disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 md:py-1.5 text-sm font-black text-white disabled:opacity-60"
             style={{ background: PLUM }}
           >
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Siren size={15} />}
@@ -2018,7 +2018,7 @@ export default function MyClientDetail({ id }: { id: string }) {
           <button
             onClick={openSessionComposer}
             disabled={saveSessionDraft.isPending}
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 md:py-1.5 text-sm font-black text-white disabled:opacity-60"
             style={{ background: PLUM }}
           >
             {saveSessionDraft.isPending ? <Loader2 size={15} className="animate-spin" /> : <Mic size={15} />}
@@ -2026,7 +2026,7 @@ export default function MyClientDetail({ id }: { id: string }) {
           </button>
           <button
             onClick={() => setActiveTab("notes")}
-            className="inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-sm font-black transition hover:bg-[#ECECEC]"
+            className="inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2.5 md:py-1.5 text-sm font-black transition hover:bg-[#ECECEC]"
             style={{ borderColor: BORDER, color: PLUM }}
           >
             <Plus size={15} />
@@ -2034,7 +2034,7 @@ export default function MyClientDetail({ id }: { id: string }) {
           </button>
           <button
             onClick={() => setIncidentModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-sm font-black transition hover:bg-red-50"
+            className="inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2.5 md:py-1.5 text-sm font-black transition hover:bg-red-50"
             style={{ borderColor: "#FECACA", color: "#DC2626" }}
           >
             <Siren size={15} />
@@ -2211,7 +2211,7 @@ export default function MyClientDetail({ id }: { id: string }) {
             <button
               disabled={!noteText.trim() || createNote.isPending}
               onClick={() => createNote.mutate()}
-              className="mt-4 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white disabled:opacity-60"
+              className="mt-4 inline-flex items-center gap-2 rounded-full px-5 py-3 md:py-1.5 text-sm font-black text-white disabled:opacity-60"
               style={{ background: PLUM }}
             >
               {createNote.isPending && <Loader2 size={16} className="animate-spin" />}

@@ -61,12 +61,12 @@ export default function WorkerSyncStatusPage() {
   }
 
   return (
-    <div className="w-full space-y-6 pb-10 text-safe">
+    <div className="w-full space-y-4  pb-10 text-safe">
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: PLUM }}>
+        <p className="sr-only" style={{ color: PLUM }}>
           {translate("sync.page.eyebrow")}
         </p>
-        <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>
+        <h1 className="mt-1 text-xl font-black" style={{ color: TEXT }}>
           {translate("sync.page.title")}
         </h1>
         <p className="mt-2 text-sm" style={{ color: MUTED }}>

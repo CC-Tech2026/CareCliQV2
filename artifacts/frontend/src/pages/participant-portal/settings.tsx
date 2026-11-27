@@ -107,7 +107,7 @@ export default function ParticipantSettingsPage() {
     <ParticipantPortalShell>
       <div className="mx-auto w-full min-w-0 max-w-3xl space-y-5 pb-8">
         <header>
-          <h1 className="text-2xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Settings</h1>
+          <h1 className="text-xl font-black" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>Settings</h1>
           <p className="mt-2 text-sm" style={{ color: MUTED }}>Choose how CareCliQ looks and keep your sign-in details secure.</p>
         </header>
         <nav aria-label="Settings sections" className="grid grid-cols-2 gap-2 rounded-xl border border-cc-border bg-cc-surface p-2">

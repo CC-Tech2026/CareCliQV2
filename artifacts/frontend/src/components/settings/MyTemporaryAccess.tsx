@@ -47,7 +47,7 @@ export function MyTemporaryAccess() {
                 {info && (
                   <Link
                     href={info.where.href}
-                    className="inline-flex min-h-10 items-center gap-1 rounded-full px-3 text-sm font-medium text-cc-plum transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+                    className="inline-flex min-h-10 md:min-h-8 items-center gap-1 rounded-full px-3 text-sm font-medium text-cc-plum transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
                   >
                     Go to {info.where.label}
                     <ChevronRight className="h-4 w-4" aria-hidden />

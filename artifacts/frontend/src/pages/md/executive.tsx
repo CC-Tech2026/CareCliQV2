@@ -390,7 +390,7 @@ export default function MDExecutivePage() {
             <select
               value={branchId}
               onChange={(e) => setBranchId(e.target.value)}
-              className="min-h-10 rounded-full border border-cc-border bg-cc-surface px-4 text-sm"
+              className="min-h-10 md:min-h-8 rounded-full border border-cc-border bg-cc-surface px-4 text-sm"
               style={{ color: TEXT }}
               aria-label="Filter by branch"
             >

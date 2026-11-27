@@ -810,7 +810,7 @@ export function WorkerDetail({
             <button
               type="button"
               onClick={onToggleFullScreen}
-              className="hidden lg:flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors hover:bg-cc-soft"
+              className="hidden lg:flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors hover:bg-cc-soft"
               style={{ borderColor: BORDER, color: TEXT }}
             >
               {fullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
@@ -823,7 +823,7 @@ export function WorkerDetail({
             <Button
               type="button"
               onClick={onAssignShift}
-              className="min-h-10 gap-1.5 rounded-full px-5 font-semibold text-white hover:opacity-90"
+              className="min-h-10 md:min-h-8 gap-1.5 rounded-full px-5 font-semibold text-white hover:opacity-90"
               style={{ background: "var(--cc-cta)" }}
             >
               <Clock size={14} /> {translate("team.assignShift")}
@@ -1067,7 +1067,7 @@ export function WorkerDetail({
                   type="button"
                   aria-current={active ? "page" : undefined}
                   onClick={() => selectProfileTab(t)}
-                  className={`relative flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${active ? "" : "hover:bg-cc-soft"}`}
+                  className={`relative flex min-h-10 md:min-h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${active ? "" : "hover:bg-cc-soft"}`}
                   style={
                     active
                       ? { background: TEXT, color: "var(--cc-bg)", outlineColor: PLUM }

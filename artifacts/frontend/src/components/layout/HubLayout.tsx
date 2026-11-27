@@ -683,7 +683,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                       aria-expanded={open}
                       aria-controls={"management-group-" + group.label.replaceAll(" ", "-")}
                       onClick={() => setActiveGroupHover(open ? null : group.label)}
-                      className={`flex min-h-10 items-center gap-1 whitespace-nowrap rounded-full px-3 text-sm font-semibold transition-colors 2xl:gap-1.5 2xl:px-3.5 ${
+                      className={`flex min-h-10 md:min-h-8 items-center gap-1 whitespace-nowrap rounded-full px-3 text-sm font-semibold transition-colors 2xl:gap-1.5 2xl:px-3.5 ${
                         hasActiveRoute ? "" : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"
                       }`}
                       style={{
@@ -855,7 +855,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                   <Link
                     href="/settings"
                     onClick={() => setProfileOpen(false)}
-                    className="flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--cc-soft)] transition-colors"
+                    className="flex min-h-10 md:min-h-8 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--cc-soft)] transition-colors"
                   >
                     <Settings size={15} />
                     <span>Settings</span>
@@ -866,7 +866,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                       setProfileOpen(false);
                       logout();
                     }}
-                    className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors hover:bg-[var(--cc-status-danger-bg)]"
+                    className="flex min-h-10 md:min-h-8 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors hover:bg-[var(--cc-status-danger-bg)]"
                     style={{ color: "var(--cc-status-danger)" }}
                   >
                     <LogOut size={15} />
@@ -922,7 +922,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         ["--nav-hover-bg" as string]: navHoverBg,
                         ["--nav-text-hover" as string]: navTextHover,
                       }}
-                      className={`flex min-h-11 md:min-h-9 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
+                      className={`flex min-h-11 md:min-h-9 items-center gap-2 rounded-full px-5 py-2.5 md:py-1.5 text-sm font-semibold transition-all ${
                         hasActiveRoute
                           ? "shadow-md"
                           : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"
@@ -1023,7 +1023,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         ["--nav-hover-bg" as string]: navHoverBg,
                         ["--nav-text-hover" as string]: navTextHover,
                       }}
-                      className={`flex min-h-11 md:min-h-9 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
+                      className={`flex min-h-11 md:min-h-9 items-center gap-2 rounded-full px-5 py-2.5 md:py-1.5 text-sm font-semibold transition-all ${
                         hasActiveRoute
                           ? "shadow-md"
                           : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"

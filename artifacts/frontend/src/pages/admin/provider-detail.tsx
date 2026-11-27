@@ -300,7 +300,7 @@ export default function AdminProviderDetailPage() {
   // ---- Page ----------------------------------------------------------------
   return (
     <AdminShell>
-      <div className="space-y-6 pb-12">
+      <div className="space-y-4  pb-12">
         <button type="button" onClick={() => navigate("/admin/organizations")} className="inline-flex items-center gap-1.5 text-sm font-semibold text-cc-muted">
           <ArrowLeft size={14} /> All providers
         </button>
@@ -322,7 +322,7 @@ export default function AdminProviderDetailPage() {
             <header className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>{org.display_name}</h1>
+                  <h1 className="text-xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>{org.display_name}</h1>
                   <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: STATUS_CHIP[org.status].bg, color: STATUS_CHIP[org.status].color }}>
                     {STATUS_CHIP[org.status].label}
                   </span>

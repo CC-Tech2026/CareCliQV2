@@ -82,7 +82,7 @@ export function SubscriptionBanner() {
           <button
             type="button"
             onClick={() => navigate("/settings?section=billing")}
-            className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg bg-[var(--cc-cta)] px-4 text-[13px] font-bold text-white hover:opacity-90"
+            className="inline-flex min-h-10 md:min-h-8 shrink-0 items-center gap-1.5 rounded-lg bg-[var(--cc-cta)] px-4 text-[13px] font-bold text-white hover:opacity-90"
           >
             Choose a plan
             <ArrowRight size={14} aria-hidden="true" />

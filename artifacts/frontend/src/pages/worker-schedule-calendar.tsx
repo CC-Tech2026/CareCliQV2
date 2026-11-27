@@ -460,10 +460,10 @@ export default function WorkerScheduleCalendar() {
     <div className="w-full space-y-5 pb-12">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+          <p className="sr-only" style={{ color: CORAL }}>
             {translate("common.supportWorker")}
           </p>
-          <h1 className="mt-1 flex items-center gap-2 text-3xl font-black tracking-tight" style={{ color: TEXT }}>
+          <h1 className="mt-1 flex items-center gap-2 text-2xl font-black tracking-tight" style={{ color: TEXT }}>
             {translate("calendar.title")}
             <SectionInfo text={translate("calendar.subtitle")} />
           </h1>

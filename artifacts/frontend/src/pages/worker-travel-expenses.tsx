@@ -236,12 +236,12 @@ export default function WorkerTravelExpenses() {
     type === "mileage" ? translate("travel.mileage") : type === "transit" ? translate("travel.transit") : type;
 
   return (
-    <div className="w-full space-y-6 pb-24 text-safe">
+    <div className="w-full space-y-4  pb-24 text-safe">
       <header>
         <p className="text-xs font-black uppercase tracking-wider" style={{ color: PLUM }}>
           {translate("travel.eyebrow")}
         </p>
-        <h1 className="mt-1 flex items-center gap-2 text-2xl font-black" style={{ color: TEXT }}>
+        <h1 className="mt-1 flex items-center gap-2 text-xl font-black" style={{ color: TEXT }}>
           {translate("travel.title")}
           <SectionInfo text={translate("travel.subtitle")} />
         </h1>

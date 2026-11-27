@@ -742,7 +742,7 @@ export default function MDStaffPage() {
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
             <p className="sr-only">Staff directory</p>
             <h1
-              className="flex items-center gap-2 text-2xl font-semibold tracking-tight"
+              className="flex items-center gap-2 text-xl font-semibold tracking-tight"
               style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
             >
               Your team
@@ -880,7 +880,7 @@ export default function MDStaffPage() {
                     </Select>
                   )}
 
-                  <LabelFilter target="workers" value={labelFilter} onChange={setLabelFilter} className="w-full sm:w-[170px] [&_button]:h-11 [&_button]:rounded-full [&_button]:px-4 [&_button]:text-sm" />
+                  <LabelFilter target="workers" value={labelFilter} onChange={setLabelFilter} className="w-full sm:w-[170px] [&_button]:h-11 md:[&_button]:h-9 [&_button]:rounded-full [&_button]:px-4 [&_button]:text-sm" />
                   <label className="sr-only" htmlFor="staff-sort">Sort staff</label>
                   <div className="flex h-11 md:h-9 min-w-0 items-center rounded-full border bg-cc-surface pl-4 focus-within:ring-2 focus-within:ring-cc-plum lg:hidden" style={{ borderColor: BORDER }}>
                     <select

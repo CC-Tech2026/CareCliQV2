@@ -71,7 +71,7 @@ function toPerson(a: MeetingAttendee): Person {
 
 // Matches the shared Input, for fields that carry an icon.
 const FIELD_BOX =
-  "flex h-10 items-center gap-2 rounded-md border border-cc-border bg-cc-surface px-3 shadow-sm focus-within:ring-1 focus-within:ring-ring";
+  "flex h-10 md:h-8 items-center gap-2 rounded-md border border-cc-border bg-cc-surface px-3 shadow-sm focus-within:ring-1 focus-within:ring-ring";
 
 function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string | null; children: React.ReactNode }) {
   return (
@@ -363,7 +363,7 @@ export function MeetingBookingSheet({
 
           {withParticipant && intake && (
             <Field label="Participant" hint={intake.participantId ? undefined : "In onboarding. The meeting moves to their participant record when they're activated."}>
-              <p className="flex h-10 items-center rounded-md border border-cc-border bg-cc-soft px-3 text-sm font-medium" style={{ color: TEXT }}>
+              <p className="flex h-10 md:h-8 items-center rounded-md border border-cc-border bg-cc-soft px-3 text-sm font-medium" style={{ color: TEXT }}>
                 {intake.name}
               </p>
             </Field>

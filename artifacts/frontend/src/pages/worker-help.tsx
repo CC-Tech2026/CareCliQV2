@@ -137,12 +137,12 @@ export default function WorkerHelp() {
   );
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-12 text-safe">
+    <div className="mx-auto max-w-4xl space-y-4  pb-12 text-safe">
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: PLUM }}>
+        <p className="sr-only" style={{ color: PLUM }}>
           {translate("nav.help")}
         </p>
-        <h1 className="mt-1 flex items-center gap-2 text-3xl font-black" style={{ color: TEXT }}>
+        <h1 className="mt-1 flex items-center gap-2 text-2xl font-black" style={{ color: TEXT }}>
           {translate("help.title")}
           <SectionInfo text={translate("help.subtitle")} />
         </h1>

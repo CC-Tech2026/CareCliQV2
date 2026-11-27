@@ -100,7 +100,7 @@ function NavLink({ item, active, iconOnly, onNavigate }: { item: NavItem; active
       className={
         iconOnly
           ? "flex h-10 w-10 items-center justify-center rounded-xl transition-colors hover:bg-white/10"
-          : "flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors hover:bg-white/10"
+          : "flex min-h-10 md:min-h-8 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors hover:bg-white/10"
       }
       style={{ background: active ? ACTIVE_BG : undefined, color: active ? "#FFFFFF" : SIDEBAR_MUTED }}
     >
@@ -143,7 +143,7 @@ function NavBody({
         <button
           type="button"
           onClick={() => setSettingsOpen((v) => !v)}
-          className="flex min-h-10 w-full items-center justify-between gap-3 rounded-xl px-3 text-sm font-semibold transition-colors hover:bg-white/10"
+          className="flex min-h-10 md:min-h-8 w-full items-center justify-between gap-3 rounded-xl px-3 text-sm font-semibold transition-colors hover:bg-white/10"
           style={{ color: SIDEBAR_MUTED }}
           aria-expanded={settingsOpen || onSettingsRoute}
         >
@@ -160,7 +160,7 @@ function NavBody({
         <button
           type="button"
           onClick={logout}
-          className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors hover:bg-white/10"
+          className="flex min-h-10 md:min-h-8 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors hover:bg-white/10"
           style={{ color: SIDEBAR_MUTED }}
         >
           <LogOut size={17} /> Log out

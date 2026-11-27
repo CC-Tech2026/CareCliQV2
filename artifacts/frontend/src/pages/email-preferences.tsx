@@ -49,7 +49,7 @@ export default function EmailPreferencesPage() {
     <main className="flex min-h-[100dvh] items-center justify-center bg-cc-bg px-4 py-10">
       <div className="w-full max-w-md rounded-3xl bg-cc-surface p-6 shadow-[var(--cc-shadow-md)] sm:p-8">
         <CareCliQLogo size={64} />
-        <h1 className="mt-5 text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>Email preferences</h1>
+        <h1 className="mt-5 text-xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>Email preferences</h1>
         {error ? (
           <p role="alert" className="mt-3 text-sm text-cc-muted">{error}</p>
         ) : !state ? (

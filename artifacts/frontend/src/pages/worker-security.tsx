@@ -262,7 +262,7 @@ export default function WorkerSecurity() {
   }
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-4  pb-10">
       {modal}
 
       <div>
