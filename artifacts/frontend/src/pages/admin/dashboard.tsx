@@ -1,152 +1,151 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { AlertTriangle, Building2, Users, ShieldAlert, ArrowRight, Clock } from "lucide-react";
+import { AlertTriangle, ArrowRight, Building2, CheckCircle2 } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { SEVERITY, timeAgo } from "@/components/admin/adminFormat";
 import { useAuth } from "@/contexts/AuthContext";
-import { listAdminOrganizations, type AdminOrgSummary } from "@/services/adminService";
+import { listAdminOrganizations, type AdminOrgSummary, type AttentionItem } from "@/services/adminService";
 
-const TEXT = "var(--cc-text)";
-const MUTED = "var(--cc-muted)";
-const BORDER = "var(--cc-border)";
-const SURFACE = "var(--cc-surface)";
-const PLUM = "var(--cc-plum)";
-const GREEN = "#0F7B57";
-const AMBER = "#9A5B0A";
-const AMBER_SOFT = "#FBF2E6";
+const TODAY_LABEL = new Date().toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
 
-function StatTile({ label, value, color }: { label: string; value: string | number; color?: string }) {
-  return (
-    <div className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: SURFACE }}>
-      <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</p>
-      <p className="mt-1 text-2xl font-black" style={{ color: color ?? TEXT }}>{value}</p>
-    </div>
-  );
-}
-
-const TODAY_LABEL = new Date().toLocaleDateString("en-AU", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-});
+type Flagged = AttentionItem & { org: AdminOrgSummary };
 
 export default function AdminDashboardPage() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const [orgs, setOrgs] = useState<AdminOrgSummary[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const firstName = (user?.full_name || "Admin").trim().split(/\s+/)[0];
+  const firstName = (user?.full_name || "").trim().split(/\s+/)[0];
 
-  // No dummy-data fallback — a real fetch failure needs to read as a real
-  // failure, not silently show fabricated providers that could be
-  // mistaken for actual customers.
-  useEffect(() => {
-    let cancelled = false;
+  // No dummy-data fallback: a failed fetch must read as a failure, never as
+  // made-up providers that could be mistaken for real customers.
+  function load() {
+    setLoadError(null);
     listAdminOrganizations()
-      .then((data) => { if (!cancelled) setOrgs(data); })
+      .then(setOrgs)
       .catch((e) => {
-        if (cancelled) return;
         setLoadError(e instanceof Error ? e.message : "Could not load providers.");
         setOrgs([]);
       });
-    return () => { cancelled = true; };
-  }, []);
+  }
+  useEffect(load, []);
 
-  const totalProviders = orgs?.length ?? 0;
-  const activeCount = orgs?.filter((o) => o.status === "active").length ?? 0;
-  const suspended = orgs?.filter((o) => o.status === "suspended") ?? [];
-  const totalUsers = orgs?.reduce((sum, o) => sum + o.user_count, 0) ?? 0;
+  const flagged = useMemo<Flagged[]>(() => {
+    const items = (orgs ?? []).flatMap((org) => (org.attention ?? []).map((a) => ({ ...a, org })));
+    return items.sort((a, b) => SEVERITY[a.severity].rank - SEVERITY[b.severity].rank);
+  }, [orgs]);
 
-  const recent = [...(orgs ?? [])]
-    .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
-    .slice(0, 5);
+  const orgsNeedingUs = new Set(flagged.map((f) => f.org.organization_id)).size;
+  const people = (orgs ?? []).reduce((sum, o) => sum + (o.active_user_count ?? o.user_count), 0);
+  const recent = useMemo(
+    () => [...(orgs ?? [])].sort((a, b) => (b.last_sign_in_at || "").localeCompare(a.last_sign_in_at || "")).slice(0, 8),
+    [orgs],
+  );
 
   return (
     <AdminShell>
       <div className="space-y-6">
-        <div className="rounded-2xl p-5" style={{ background: "var(--cc-plum-soft)" }}>
-          <p className="text-[11px] font-semibold" style={{ color: MUTED }}>{TODAY_LABEL}</p>
-          <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>Hello, {firstName}! 👋</h1>
-          <p className="mt-1 text-[12px] font-medium" style={{ color: MUTED }}>Overview across every provider on CareCliQ.</p>
-        </div>
+        <header>
+          <p className="text-xs font-semibold text-cc-muted">{TODAY_LABEL}</p>
+          <h1 className="mt-0.5 text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>
+            {firstName ? `Hello, ${firstName}` : "Hello"}
+          </h1>
+          <p className="mt-1 text-sm text-cc-muted">
+            {orgs === null
+              ? "Loading providers"
+              : `${orgs.length} ${orgs.length === 1 ? "provider" : "providers"} · ${people} active accounts · ${
+                  orgsNeedingUs === 0 ? "nothing needs you right now" : `${orgsNeedingUs} ${orgsNeedingUs === 1 ? "needs" : "need"} a look`
+                }`}
+          </p>
+        </header>
 
         {loadError && (
-          <div className="flex items-center gap-2 rounded-2xl border p-4" style={{ borderColor: AMBER, background: AMBER_SOFT }}>
-            <AlertTriangle size={15} style={{ color: AMBER }} className="shrink-0" />
-            <p className="text-[12px] font-bold" style={{ color: AMBER }}>Couldn't load providers: {loadError}</p>
+          <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl px-5 py-4" style={{ background: "var(--cc-status-warning-bg)" }}>
+            <AlertTriangle size={16} style={{ color: "var(--cc-status-warning)" }} />
+            <p className="flex-1 text-sm font-semibold text-cc-text">Couldn't load providers: {loadError}</p>
+            <button type="button" onClick={load} className="min-h-10 rounded-full border border-cc-border px-4 text-sm font-semibold">Try again</button>
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label="Total providers" value={orgs === null ? "—" : totalProviders} />
-          <StatTile label="Active" value={orgs === null ? "—" : activeCount} color={GREEN} />
-          <StatTile label="Suspended" value={orgs === null ? "—" : suspended.length} color={suspended.length > 0 ? AMBER : TEXT} />
-          <StatTile label="Total staff accounts" value={orgs === null ? "—" : totalUsers} />
-        </div>
-
-        {suspended.length > 0 && (
-          <div className="rounded-2xl border p-4" style={{ borderColor: AMBER, background: AMBER_SOFT }}>
-            <div className="flex items-center gap-1.5">
-              <ShieldAlert size={15} style={{ color: AMBER }} />
-              <p className="text-[12px] font-black" style={{ color: AMBER }}>Needs attention</p>
+        <section aria-label="Needs attention" className="space-y-3">
+          <h2 className="text-lg font-semibold text-cc-text">Needs attention</h2>
+          {orgs === null ? (
+            <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-2xl bg-cc-surface" />)}</div>
+          ) : flagged.length === 0 && !loadError ? (
+            <div className="flex items-center gap-3 rounded-2xl bg-cc-surface px-5 py-4">
+              <CheckCircle2 size={18} style={{ color: "var(--cc-status-success)" }} />
+              <p className="text-sm text-cc-text">Every provider is set up, paying or trialling, and signing in.</p>
             </div>
-            <div className="mt-2 space-y-1.5">
-              {suspended.map((o) => (
-                <button
-                  key={o.organization_id}
-                  onClick={() => navigate(`/admin/organizations/${o.organization_id}`)}
-                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] font-bold transition-colors hover:bg-white/50"
-                  style={{ color: TEXT }}
-                >
-                  {o.display_name} — suspended
-                  <ArrowRight size={13} style={{ color: AMBER }} />
-                </button>
+          ) : (
+            <ul className="divide-y divide-cc-border overflow-hidden rounded-2xl bg-cc-surface shadow-[var(--cc-shadow-sm)]">
+              {flagged.map((f) => (
+                <li key={`${f.org.organization_id}-${f.code}`}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/admin/organizations/${f.org.organization_id}`)}
+                    className="flex w-full items-start gap-3 px-4 py-3.5 text-left sm:px-5 transition-colors hover:bg-cc-soft"
+                  >
+                    <span
+                      className="mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold"
+                      style={{ background: SEVERITY[f.severity].bg, color: SEVERITY[f.severity].color }}
+                    >
+                      {SEVERITY[f.severity].label}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-cc-text">
+                        {f.org.display_name} <span className="font-normal text-cc-muted">· {f.title}</span>
+                      </span>
+                      <span className="block text-sm text-cc-muted">{f.detail} <span className="text-cc-text">{f.action}.</span></span>
+                    </span>
+                    <ArrowRight size={15} className="mt-1 shrink-0 text-cc-muted" aria-hidden="true" />
+                  </button>
+                </li>
               ))}
-            </div>
-          </div>
-        )}
+            </ul>
+          )}
+        </section>
 
-        <div className="rounded-2xl border" style={{ borderColor: BORDER, background: SURFACE }}>
-          <div className="flex items-center justify-between border-b px-5 py-3.5" style={{ borderColor: BORDER }}>
-            <div className="flex items-center gap-1.5">
-              <Clock size={13} style={{ color: MUTED }} />
-              <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: MUTED }}>Recently added providers</p>
-            </div>
-            <button onClick={() => navigate("/admin/organizations")} className="flex items-center gap-1 text-[11px] font-bold" style={{ color: PLUM }}>
-              View all <ArrowRight size={12} />
+        <section aria-label="Recently active providers" className="space-y-3">
+          <div className="flex items-end justify-between gap-3">
+            <h2 className="text-lg font-semibold text-cc-text">Recently active</h2>
+            <button type="button" onClick={() => navigate("/admin/organizations")} className="inline-flex items-center gap-1 text-sm font-semibold text-cc-plum">
+              All providers <ArrowRight size={14} />
             </button>
           </div>
-          <div className="divide-y" style={{ borderColor: BORDER }}>
-            {orgs === null ? (
-              <div className="p-5">
-                <div className="h-10 animate-pulse rounded-lg" style={{ background: "var(--cc-soft)" }} />
-              </div>
-            ) : recent.length === 0 ? (
-              <p className="p-5 text-center text-[12px] font-medium" style={{ color: MUTED }}>No providers yet.</p>
-            ) : (
-              recent.map((o) => (
-                <button
-                  key={o.organization_id}
-                  onClick={() => navigate(`/admin/organizations/${o.organization_id}`)}
-                  className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-cc-soft"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--cc-plum-soft)" }}>
-                      <Building2 size={13} style={{ color: PLUM }} />
+          {orgs !== null && recent.length === 0 ? (
+            <p className="rounded-2xl bg-cc-surface px-5 py-4 text-sm text-cc-muted">No providers yet.</p>
+          ) : (
+            <ul className="divide-y divide-cc-border overflow-hidden rounded-2xl bg-cc-surface shadow-[var(--cc-shadow-sm)]">
+              {recent.map((o) => (
+                <li key={o.organization_id}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/admin/organizations/${o.organization_id}`)}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left sm:px-5 transition-colors hover:bg-cc-soft"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cc-brand-purple-soft)] text-[var(--cc-brand-purple)]">
+                      <Building2 size={15} aria-hidden="true" />
                     </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-[12px] font-bold" style={{ color: TEXT }}>{o.display_name}</p>
-                      <p className="text-[10px]" style={{ color: MUTED }}>{o.provider_type || "Provider"} · {o.plan_tier || "Trial"}</p>
-                    </div>
-                  </div>
-                  <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold" style={{ color: MUTED }}>
-                    <Users size={11} /> {o.user_count}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-cc-text">{o.display_name}</span>
+                      <span className="block truncate text-xs text-cc-muted">
+                        {o.billing_label ?? "Unknown"} · {o.active_user_count ?? o.user_count} people · last sign-in {timeAgo(o.last_sign_in_at)}
+                      </span>
+                    </span>
+                    {(o.attention?.length ?? 0) > 0 && (
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold"
+                        style={{ background: SEVERITY[o.attention![0].severity].bg, color: SEVERITY[o.attention![0].severity].color }}
+                      >
+                        {o.attention!.length} to check
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </AdminShell>
   );

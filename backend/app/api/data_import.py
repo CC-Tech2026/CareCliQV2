@@ -98,3 +98,44 @@ async def import_staff(body: RecordsBody, request: Request, current_user: dict =
         after_state={"invited": result["imported"], "skipped": result["skipped"], "source_system": body.source_system},
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Staff CareCliQ imported for this organisation, held until the MD sends them
+# ---------------------------------------------------------------------------
+
+class HeldStaffBody(BaseModel):
+    ids: list[str] | None = None  # None = all of them
+
+
+@router.get("/held-staff")
+async def list_held_staff(current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    return {"held": svc.list_held_staff(org_id)}
+
+
+@router.post("/held-staff/send")
+async def send_held_staff(body: HeldStaffBody, request: Request, current_user: dict = Depends(get_current_user)):
+    """Emails the invitations CareCliQ prepared. Same recent-password check
+    as sending any invitation."""
+    org_id = _require_md(current_user)
+    require_recent_reauth(request, current_user)
+    user_id = current_user.get("sub")
+    result = svc.send_held_staff(org_id, user_id, body.ids)
+    await log_action(
+        action_type="data_import.held_staff_sent", entity_type="organization", entity_id=org_id,
+        user_id=user_id, organization_id=org_id, after_state=result,
+    )
+    return result
+
+
+@router.post("/held-staff/discard")
+async def discard_held_staff(body: HeldStaffBody, current_user: dict = Depends(get_current_user)):
+    org_id = _require_md(current_user)
+    user_id = current_user.get("sub")
+    removed = svc.discard_held_staff(org_id, body.ids)
+    await log_action(
+        action_type="data_import.held_staff_discarded", entity_type="organization", entity_id=org_id,
+        user_id=user_id, organization_id=org_id, after_state={"discarded": removed},
+    )
+    return {"discarded": removed}

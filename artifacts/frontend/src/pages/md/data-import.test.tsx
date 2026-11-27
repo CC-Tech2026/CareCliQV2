@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import DataImportPage from "./data-import";
+import DataImportPage, { DataImportFlow } from "./data-import";
 
 const { apiFetch, requireReAuth } = vi.hoisted(() => ({ apiFetch: vi.fn(), requireReAuth: vi.fn() }));
 vi.mock("@/lib/api-fetch", () => ({ apiFetch }));
@@ -79,4 +79,43 @@ it("asks for the password before emailing staff invitations", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Send 1 invitation" }));
   await waitFor(() => expect(requireReAuth).toHaveBeenCalledOnce());
   expect(await screen.findByText("1 invitation was sent")).toBeTruthy();
+});
+
+it("lets CareCliQ import a provider's staff without emailing anyone", async () => {
+  const urls: string[] = [];
+  apiFetch.mockImplementation((url: string) => {
+    urls.push(url);
+    const base = "/api/admin/organizations/org-9/import";
+    if (url === `${base}/parse`) return json({ headers: ["Email"], rows: [["ava@example.com"]], suggested_mapping: { email: "Email" } });
+    if (url === `${base}/staff/preview`) return json({ results: [{ row: 1, status: "ready", errors: [], warnings: [], record: { email: "ava@example.com", role: "support_worker" } }] });
+    if (url === `${base}/staff`) return json({ imported: 1, results: [] });
+    throw new Error(`unexpected ${url}`);
+  });
+  const onFinished = vi.fn();
+  render(<DataImportFlow target={{ kind: "admin", organizationId: "org-9", organizationName: "Care Plus", onFinished }} />);
+  fireEvent.click(screen.getByRole("tab", { name: /Staff/ }));
+  expect(screen.getByText(/Nobody is emailed yet/)).toBeTruthy();
+  upload();
+  fireEvent.click(await screen.findByRole("button", { name: /Check 1 row/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Prepare 1 invitation" }));
+  expect(await screen.findByText("1 invitation is waiting for the managing director to send")).toBeTruthy();
+  expect(requireReAuth).not.toHaveBeenCalled();
+  expect(urls.every((u) => u.startsWith("/api/admin/organizations/org-9/import"))).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: /Back to Care Plus/ }));
+  expect(onFinished).toHaveBeenCalledOnce();
+});
+
+it("shows the MD the invitations CareCliQ prepared and sends them after the password check", async () => {
+  apiFetch.mockImplementation((url: string) => {
+    if (url === "/api/data-import/held-staff") {
+      return json({ held: [{ id: "h1", email: "ava@example.com", full_name: "Ava Lee", role: "support_coordinator" }] });
+    }
+    if (url === "/api/data-import/held-staff/send") return json({ sent: 1, skipped: 0 });
+    throw new Error(`unexpected ${url}`);
+  });
+  render(<DataImportPage />);
+  expect(await screen.findByText("CareCliQ prepared 1 invitation for your team")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Send 1 invitation" }));
+  await waitFor(() => expect(requireReAuth).toHaveBeenCalledOnce());
+  await waitFor(() => expect(screen.queryByText("CareCliQ prepared 1 invitation for your team")).toBeNull());
 });

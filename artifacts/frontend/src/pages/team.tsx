@@ -50,6 +50,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useReAuth } from "@/hooks/useReAuth";
 import { PersonPhoto } from "@/components/ui/person-photo";
+import { HeldStaffNotice } from "@/components/data-import/HeldStaffNotice";
 
 const PLUM  = "var(--cc-plum)";
 const TEXT  = "var(--cc-text)";
@@ -657,6 +658,10 @@ export default function Team() {
 
       {!isMD && delegatedGrantFor("staff_invitations") && (
         <TemporaryAccessBanner grant={delegatedGrantFor("staff_invitations")!} label="Send a staff invitation" />
+      )}
+
+      {isMD && (
+        <HeldStaffNotice onSent={() => qc.invalidateQueries({ queryKey: [orgId, "pending-invites"] })} />
       )}
 
       {stats.isLoading && (

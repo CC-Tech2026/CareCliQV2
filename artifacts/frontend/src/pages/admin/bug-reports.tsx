@@ -161,7 +161,7 @@ export default function AdminBugReportsPage() {
     <AdminShell>
       <div className="space-y-5">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-3xl font-black" style={{ color: TEXT }}>Bug Management</h1>
+          <h1 className="text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>Bug reports</h1>
           <Button className="gap-1.5" onClick={() => setReportPanelOpen(true)}>
             <Plus size={15} /> Report Bug
           </Button>

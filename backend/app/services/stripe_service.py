@@ -228,6 +228,17 @@ def create_portal_session(*, organization_id: str, return_url: str) -> str:
     return session.url
 
 
+def extend_trial(subscription_id: str, trial_end: datetime) -> None:
+    """Moves a trialling subscription's trial end (super admin console).
+    No proration: nothing is charged or credited, the first invoice just
+    moves. The customer.subscription.updated webhook then syncs the date."""
+    stripe.Subscription.modify(
+        subscription_id,
+        trial_end=int(trial_end.timestamp()),
+        proration_behavior="none",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Webhook
 # ---------------------------------------------------------------------------

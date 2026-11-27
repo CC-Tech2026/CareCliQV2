@@ -64,46 +64,32 @@ def test_organization_type_rejects_invalid_value():
 
 
 @pytest.mark.asyncio
-async def test_list_organizations_degrades_gracefully_when_org_type_column_missing():
-    """CARECLIQV2-353 — the list must still work before
-    189_organization_org_type.sql has actually run against this database,
-    same reasoning as bug_report_service.py's severity-column handling.
-    The first select (including org_type) fails with a missing-column
-    error; the retry without it must succeed, with org_type coming back
-    as None rather than the row missing the key entirely."""
+async def test_list_organizations_works_without_later_columns():
+    """CARECLIQV2-353: the list must still work before optional columns
+    (org_type 189, access_override_until 273) exist on a database. It
+    selects every column, so a missing one is simply absent from the row
+    and org_type comes back as None."""
     supabase = MagicMock()
-    # supabase.table("organizations") is called twice — once for the
-    # initial select (which fails) and once for the retry (which
-    # succeeds) — and since _table below builds a fresh mock per call,
-    # a call counter is what distinguishes which invocation this is.
-    org_table_calls = {"count": 0}
 
     def _table(name: str):
         table = MagicMock()
         if name == "organizations":
-            org_table_calls["count"] += 1
-            if org_table_calls["count"] == 1:
-                table.select.return_value.order.return_value.execute.side_effect = Exception(
-                    '{"message": "column organizations.org_type does not exist", "code": "42703"}'
-                )
-            else:
-                table.select.return_value.order.return_value.execute.return_value = MagicMock(
-                    data=[{"organization_id": "org-1", "organization_name": "Sunshine", "status": "active"}]
-                )
-        elif name == "users":
-            table.select.return_value.in_.return_value.execute.return_value = MagicMock(data=[])
+            table.select.return_value.order.return_value.execute.return_value = MagicMock(
+                data=[{"organization_id": "org-1", "organization_name": "Sunshine", "status": "active"}]
+            )
         else:
-            raise AssertionError(f"Unexpected table requested: {name}")
+            table.select.return_value.in_.return_value.execute.return_value = MagicMock(data=[])
         return table
 
     supabase.table.side_effect = _table
 
-    with patch("backend.app.api.admin.get_supabase_admin", return_value=supabase):
+    with patch("backend.app.api.admin.get_supabase_admin", return_value=supabase),          patch("backend.app.services.admin_console_service.get_supabase_admin", return_value=supabase):
         result = await admin.list_organizations(current_user={"id": "admin-1", "role": "super_admin"})
 
     assert len(result) == 1
     assert result[0]["organization_id"] == "org-1"
     assert result[0]["org_type"] is None
+    assert result[0]["user_count"] == 0 and result[0]["attention"] == []
 
 
 @pytest.mark.asyncio

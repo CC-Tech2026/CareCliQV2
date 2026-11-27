@@ -38,6 +38,29 @@ export type AdminOrgSummary = {
   user_count: number;
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
+  // Account health (admin_console_service.snapshots)
+  subscription_status?: string | null;
+  trial_ends_at?: string | null;
+  subscription_lapsed_at?: string | null;
+  access_override_until?: string | null;
+  access_override_reason?: string | null;
+  access?: { state: "full" | "grace" | "read_only"; grace_ends_at?: string | null };
+  billing_label?: string;
+  active_user_count?: number;
+  last_sign_in_at?: string | null;
+  md_signed_in?: boolean;
+  participant_count?: number;
+  held_staff_count?: number;
+  attention?: AttentionItem[];
+};
+
+export type AttentionSeverity = "urgent" | "soon" | "info";
+export type AttentionItem = {
+  code: string;
+  severity: AttentionSeverity;
+  title: string;
+  detail: string;
+  action: string;
 };
 
 export type AdminOrgUser = {
@@ -46,13 +69,63 @@ export type AdminOrgUser = {
   email: string;
   role: string;
   is_active: boolean;
+  deactivation_reason?: string | null;
   created_at?: string | null;
   last_login?: string | null;
 };
 
+export type AdminPendingInvite = { id: string; email: string; role: string; created_at: string; expires_at: string };
+export type HeldStaff = { id: string; email: string; full_name: string | null; role: string; source_system: string | null; created_at: string };
+export type AdminActivity = {
+  action_type: string;
+  actor_name: string;
+  after_state: Record<string, unknown> | null;
+  details: { reason?: string } | null;
+  created_at: string;
+};
+
 export type AdminOrgDetail = AdminOrgSummary & {
   users: AdminOrgUser[];
+  pending_invitations: AdminPendingInvite[];
+  held_staff: HeldStaff[];
+  admin_activity: AdminActivity[];
 };
+
+const json = (body: unknown) => ({
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+export type SubscriptionChange = {
+  plan_tier?: "small" | "medium";
+  /** ISO date; "" ends free access now. */
+  access_override_until?: string;
+  access_override_reason?: string;
+  reason: string;
+};
+
+export const updateAdminSubscription = (orgId: string, change: SubscriptionChange) =>
+  jsonFetch<{ ok: boolean }>(`/api/admin/organizations/${orgId}/subscription`, { method: "PATCH", ...json(change) });
+
+export const extendAdminTrial = (orgId: string, days: number, reason: string) =>
+  jsonFetch<{ ok: boolean; trial_ends_at: string }>(`/api/admin/organizations/${orgId}/extend-trial`, {
+    method: "POST", ...json({ days, reason }),
+  });
+
+export const deactivateAdminUser = (orgId: string, userId: string, reason: string) =>
+  jsonFetch<{ ok: boolean }>(`/api/admin/organizations/${orgId}/users/${userId}/deactivate`, { method: "POST", ...json({ reason }) });
+
+export const reactivateAdminUser = (orgId: string, userId: string, reason: string) =>
+  jsonFetch<{ ok: boolean }>(`/api/admin/organizations/${orgId}/users/${userId}/reactivate`, { method: "POST", ...json({ reason }) });
+
+export const sendAdminPasswordReset = (orgId: string, userId: string) =>
+  jsonFetch<{ ok: boolean }>(`/api/admin/organizations/${orgId}/users/${userId}/password-reset`, { method: "POST" });
+
+export const changeAdminUserRole = (orgId: string, userId: string, role: "support_worker" | "support_coordinator", reason: string) =>
+  jsonFetch<{ ok: boolean }>(`/api/admin/organizations/${orgId}/users/${userId}/role`, { method: "PATCH", ...json({ role, reason }) });
+
+export const discardAdminHeldStaff = (orgId: string) =>
+  jsonFetch<{ discarded: number }>(`/api/admin/organizations/${orgId}/held-staff/discard`, { method: "POST" });
 
 export function listAdminOrganizations() {
   return jsonFetch<AdminOrgSummary[]>("/api/admin/organizations");
