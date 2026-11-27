@@ -174,8 +174,8 @@ export function planRings(plan: WorkforcePlan, today: string): Outcome[] {
     action: { label: "See demand and staff time", href: "#plan-demand" },
     ring: {
       value: String(hiring.needed ? hiring.workers : 0),
-      label: "To hire",
-      caption: hiring.needed && hiring.hire_by ? (hireNow ? "hire now" : `by ${dayLabel(hiring.hire_by)}`) : "none needed",
+      label: "Recruitment",
+      caption: hiring.needed && hiring.hire_by ? (hireNow ? "hire now" : `by ${dayLabel(hiring.hire_by)}`) : "not required",
     },
   });
 
@@ -196,8 +196,8 @@ export function planRings(plan: WorkforcePlan, today: string): Outcome[] {
     meter: u == null ? undefined : { pct: u, target, label: "Share of offered hours worked" },
     ring: {
       value: u == null ? "N/A" : `${Math.round(u)}%`,
-      label: "Hours used",
-      caption: u == null ? "not known" : u < 50 ? "room to grow" : u > target ? "over target" : "on target",
+      label: "Utilisation",
+      caption: u == null ? "not known" : u < 50 ? "capacity available" : u > target ? "over target" : "on target",
       pct: u ?? 0,
     },
   });
@@ -206,12 +206,12 @@ export function planRings(plan: WorkforcePlan, today: string): Outcome[] {
   const room = perParticipant && perParticipant > 0 ? Math.floor(hiring.spare_hours / perParticipant) : null;
   out.push({
     id: "spare",
-    area: "Spare time",
+    area: "Available capacity",
     status: hiring.spare_hours > 0 ? "on_track" : "attention",
     headline: `${hours(hiring.spare_hours)} a week to spare`,
     detail: room ? `Room for about ${room} more ${plural(room, "participant")} at the hours your enquiries ask for.` : "Hours your team can still cover at the target share.",
     action: { label: "See demand and staff time", href: "#plan-demand" },
-    ring: { value: `${Math.round(hiring.spare_hours)}h`, label: "Spare a week", caption: room ? `${room} more ${plural(room, "participant")}` : "at target" },
+    ring: { value: `${Math.round(hiring.spare_hours)}h`, label: "Available hours a week", caption: room ? `about ${room} more ${plural(room, "participant")}` : "at target" },
   });
 
   const fundedPct = funding.weekly_hours != null && demand.current_weekly_hours > 0
@@ -230,8 +230,8 @@ export function planRings(plan: WorkforcePlan, today: string): Outcome[] {
     action: { label: "See earnings and costs", href: "#plan-money" },
     ring: {
       value: funding.weekly_hours == null ? "N/A" : `${Math.round(funding.weekly_hours)}h`,
-      label: "Funded a week",
-      caption: fundedPct == null ? "not known" : fundedPct >= 100 ? "enough" : "running short",
+      label: "Funded hours a week",
+      caption: fundedPct == null ? "not known" : fundedPct >= 100 ? "sufficient" : "insufficient",
       pct: fundedPct == null ? 0 : Math.min(100, fundedPct),
     },
   });
@@ -265,7 +265,7 @@ export function planRings(plan: WorkforcePlan, today: string): Outcome[] {
     ring: {
       value: `${Math.round(capacity.annual_attrition_pct)}%`,
       label: "Turnover",
-      caption: leavers ? `${leavers} may leave` : "a year",
+      caption: leavers ? `${leavers} expected to leave` : "annual",
       pct: Math.min(100, capacity.annual_attrition_pct),
     },
   });

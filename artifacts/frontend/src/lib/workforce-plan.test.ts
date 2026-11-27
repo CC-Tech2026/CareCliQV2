@@ -69,10 +69,10 @@ describe("workforce plan summary", () => {
 describe("workforce plan rings", () => {
   it("gives each area a short figure and a few words", () => {
     const rings = Object.fromEntries(planRings(plan(), "2026-11-18").map((o) => [o.id, o]));
-    expect(rings.hiring.ring).toMatchObject({ value: "2", label: "To hire", caption: "by 7 Dec" });
+    expect(rings.hiring.ring).toMatchObject({ value: "2", label: "Recruitment", caption: "by 7 Dec" });
     expect(rings.hiring.status).toBe("attention");
     expect(rings.busy.ring).toMatchObject({ value: "73%", caption: "on target" });
-    expect(rings.funding.ring).toMatchObject({ value: "40h", caption: "enough" });
+    expect(rings.funding.ring).toMatchObject({ value: "40h", caption: "sufficient" });
     expect(rings.margin.ring).toMatchObject({ value: "18%", caption: "$12.50 an hour" });
     expect(rings.turnover.status).toBe("on_track");
   });

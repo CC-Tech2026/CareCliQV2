@@ -79,26 +79,26 @@ const plural = (n: number, one: string, many = `${one}s`) => (n === 1 ? one : ma
 function goalsOutcome(md: OutcomeInputs): Outcome {
   const active = md.goals_active ?? 0;
   const supported = Math.min(md.active_goals_supported_30d ?? 0, active);
-  const action = { label: "Review participants", href: "/onboard-participant/active" };
+  const action = { label: "Review participant goals", href: "/onboard-participant/active" };
   if (!active) {
     return {
-      id: "goals", area: "Participants' goals", status: "no_data",
-      headline: "No active participant goals are recorded yet",
-      detail: "Goals are what support is measured against. Add them in each participant's NDIS plan.",
+      id: "goals", area: "Participant goals", status: "no_data",
+      headline: "No active participant goals recorded",
+      detail: "Record each participant's goals from their NDIS plan so supports can be measured against them.",
       action,
     };
   }
   const pct = (supported / active) * 100;
   const missing = active - supported;
   return {
-    id: "goals", area: "Participants' goals",
+    id: "goals", area: "Participant goals",
     status: pct >= 80 ? "on_track" : pct >= 50 ? "attention" : "off_track",
-    headline: `${supported} of ${active} active ${plural(active, "goal")} ${active === 1 ? "was" : "were"} worked on in the last 30 days`,
+    headline: `${supported} of ${active} active ${plural(active, "goal")} had supports delivered in the last 30 days`,
     detail: missing
-      ? `${missing} ${plural(missing, "goal has", "goals have")} no shift notes against ${missing === 1 ? "it" : "them"}.`
-      : "Every active goal had support recorded against it.",
+      ? `${missing} ${plural(missing, "goal has", "goals have")} no progress notes recorded in this period.`
+      : "Supports were delivered against every active goal.",
     action,
-    meter: { pct, target: 80, label: "Goals worked on" },
+    meter: { pct, target: 80, label: "Goals with supports delivered" },
   };
 }
 
@@ -107,53 +107,53 @@ function qualityOutcome(md: OutcomeInputs): Outcome {
   const scored = md.documentation_summary?.scored ?? 0;
   const score = md.compliance_score;
   const behind = md.workers_at_risk?.length ?? 0;
-  const action = { label: "Review shift notes", href: "/sessions" };
+  const action = { label: "Review progress notes", href: "/sessions" };
   if (!scored || score == null) {
     return {
-      id: "quality", area: "Quality of support", status: "no_data",
-      headline: "No shift notes have been scored yet",
-      detail: `Notes are checked as workers finish shifts. The target is ${target}%.`,
+      id: "quality", area: "Documentation quality", status: "no_data",
+      headline: "No progress notes have been assessed yet",
+      detail: `Progress notes are assessed as each shift is completed. The target is ${target}%.`,
       action,
     };
   }
   const gap = target - score;
   return {
-    id: "quality", area: "Quality of support",
+    id: "quality", area: "Documentation quality",
     status: gap <= 0 ? "on_track" : gap <= 10 ? "attention" : "off_track",
-    headline: `${Math.round(score)}% of shift notes meet the documentation standard`,
+    headline: `${Math.round(score)}% of progress notes meet the documentation standard`,
     detail: [
-      gap > 0 ? `${Math.round(gap)} points below the ${target}% target` : `At or above the ${target}% target`,
-      behind ? `${behind} ${plural(behind, "worker needs", "workers need")} support` : null,
+      gap > 0 ? `${Math.round(gap)} percentage points below the ${target}% target` : `At or above the ${target}% target`,
+      behind ? `${behind} ${plural(behind, "worker requires", "workers require")} documentation support` : null,
     ].filter(Boolean).join(". ") + ".",
     action,
-    meter: { pct: score, target, label: "Notes meeting the standard" },
+    meter: { pct: score, target, label: "Progress notes meeting the standard" },
   };
 }
 
 function safetyOutcome(md: OutcomeInputs, alerts: HubComplianceAlert[]): Outcome {
   const urgent = alerts.filter((a) => a.source === "incidents" && a.severity === "critical");
   const thisMonth = md.incidents_this_month ?? 0;
-  const action = { label: "Open the incident register", href: "/incidents" };
+  const action = { label: "Open incident register", href: "/incidents" };
   if (urgent.length) {
     return {
-      id: "safety", area: "Safety", status: "off_track",
-      headline: `${urgent.length} ${plural(urgent.length, "incident needs", "incidents need")} action now`,
+      id: "safety", area: "Incident management", status: "off_track",
+      headline: `${urgent.length} ${plural(urgent.length, "incident is", "incidents are")} overdue for action`,
       detail: urgent[0].title + (urgent.length > 1 ? `, and ${urgent.length - 1} more.` : "."),
       action,
     };
   }
   if (thisMonth) {
     return {
-      id: "safety", area: "Safety", status: "attention",
-      headline: `${thisMonth} ${plural(thisMonth, "incident")} recorded this month`,
-      detail: "None is overdue. Check each one has its follow-up done.",
+      id: "safety", area: "Incident management", status: "attention",
+      headline: `${thisMonth} ${plural(thisMonth, "incident")} reported this month`,
+      detail: "No actions are overdue. Confirm follow-up actions are recorded for each incident.",
       action,
     };
   }
   return {
-    id: "safety", area: "Safety", status: "on_track",
-    headline: "No incidents recorded this month",
-    detail: "Nothing is waiting on an NDIS notification.",
+    id: "safety", area: "Incident management", status: "on_track",
+    headline: "No incidents reported this month",
+    detail: "No reportable incidents are awaiting notification to the NDIS Commission.",
     action,
   };
 }
@@ -165,27 +165,27 @@ function workforceOutcome(md: OutcomeInputs, alerts: HubComplianceAlert[]): Outc
   const retention = md.staff_retention_rate;
   const staff = md.active_staff ?? 0;
   const retentionText = retention != null ? `Staff retention ${Math.round(retention)}%` : null;
-  const action = { label: "Open staff", href: "/md/staff" };
+  const action = { label: "Open worker records", href: "/md/staff" };
   if (expired) {
     return {
-      id: "workforce", area: "Workforce", status: "off_track",
-      headline: `${expired} staff ${plural(expired, "credential has", "credentials have")} expired`,
-      detail: [soon ? `${soon} more ${soon === 1 ? "expires" : "expire"} soon` : null, retentionText].filter(Boolean).join(". ") + ".",
+      id: "workforce", area: "Worker compliance", status: "off_track",
+      headline: `${expired} worker ${plural(expired, "credential has", "credentials have")} expired`,
+      detail: [soon ? `${soon} more ${soon === 1 ? "is" : "are"} due to expire` : null, retentionText].filter(Boolean).join(". ") + ".",
       action,
     };
   }
   if (soon) {
     return {
-      id: "workforce", area: "Workforce", status: "attention",
-      headline: `${soon} staff ${plural(soon, "credential expires", "credentials expire")} soon`,
-      detail: [`None has expired yet`, retentionText].filter(Boolean).join(". ") + ".",
+      id: "workforce", area: "Worker compliance", status: "attention",
+      headline: `${soon} worker ${plural(soon, "credential is", "credentials are")} due to expire`,
+      detail: [`None has expired`, retentionText].filter(Boolean).join(". ") + ".",
       action,
     };
   }
   return {
-    id: "workforce", area: "Workforce", status: "on_track",
-    headline: "Every staff credential is current",
-    detail: [retentionText, `${staff} active ${plural(staff, "staff member", "staff")}`].filter(Boolean).join(". ") + ".",
+    id: "workforce", area: "Worker compliance", status: "on_track",
+    headline: "All worker credentials are current",
+    detail: [retentionText, `${staff} active ${plural(staff, "staff member")}`].filter(Boolean).join(". ") + ".",
     action,
   };
 }
@@ -195,22 +195,22 @@ function demandOutcome(demand: MdDemandCapacity | null | undefined): Outcome | n
   const waiting = demand.waitlist.count;
   const wanted = Math.round(demand.waitlist.hours);
   const free = Math.round(demand.capacity.reliable_hours + demand.capacity.casual_hours);
-  const action = { label: "Review enquiries", href: "/onboard-participant" };
+  const action = { label: "Review referrals", href: "/onboard-participant" };
   if (!waiting) {
     return {
-      id: "demand", area: "Growth", status: "on_track",
-      headline: "No enquiries are waiting",
-      detail: `${free} hours of staff time are free this week for new participants.`,
+      id: "demand", area: "Capacity and referrals", status: "on_track",
+      headline: "No referrals awaiting assessment",
+      detail: `${free} hours of worker availability this week for new participants.`,
       action,
     };
   }
   const fits = free >= wanted;
   return {
-    id: "demand", area: "Growth", status: fits ? "attention" : "off_track",
-    headline: `${waiting} ${plural(waiting, "enquiry is", "enquiries are")} waiting, asking for ${wanted} hours a week`,
+    id: "demand", area: "Capacity and referrals", status: fits ? "attention" : "off_track",
+    headline: `${waiting} ${plural(waiting, "referral", "referrals")} awaiting assessment, requesting ${wanted} hours of support a week`,
     detail: fits
-      ? `${free} hours of staff time are free this week, enough to take ${waiting === 1 ? "it" : "them"} on.`
-      : `Only ${free} hours of staff time are free this week. Recruit or rebalance before accepting.`,
+      ? `${free} hours of worker availability this week, sufficient to accept ${waiting === 1 ? "it" : "them"}.`
+      : `Only ${free} hours of worker availability this week. Recruit or reallocate rostered hours before accepting.`,
     action,
   };
 }
@@ -244,26 +244,26 @@ export function hubRings(md: OutcomeInputs, alerts: HubComplianceAlert[], demand
   const retention = md.staff_retention_rate;
   const out: Record<string, Outcome["ring"]> = {
     goals: active
-      ? { value: `${supported}/${active}`, label: "Goals", caption: "worked on, 30 days", pct: (supported / active) * 100 }
-      : { value: "None", label: "Goals", caption: "none set yet", pct: 0 },
+      ? { value: `${supported}/${active}`, label: "Participant goals", caption: "supported in 30 days", pct: (supported / active) * 100 }
+      : { value: "None", label: "Participant goals", caption: "none recorded", pct: 0 },
     quality: scored && score != null
-      ? { value: `${Math.round(score)}%`, label: "Shift notes", caption: score >= target ? "on target" : `${Math.round(target - score)} pts below`, pct: score }
-      : { value: "N/A", label: "Shift notes", caption: "none scored yet", pct: 0 },
+      ? { value: `${Math.round(score)}%`, label: "Progress notes", caption: score >= target ? "meets target" : `${Math.round(target - score)}% below target`, pct: score }
+      : { value: "N/A", label: "Progress notes", caption: "not yet assessed", pct: 0 },
     safety: urgent
-      ? { value: String(urgent), label: "Safety", caption: urgent === 1 ? "incident overdue" : "incidents overdue" }
+      ? { value: String(urgent), label: "Incidents", caption: "overdue for action" }
       : thisMonth
-        ? { value: String(thisMonth), label: "Safety", caption: "incidents this month" }
-        : { value: "0", label: "Safety", caption: "no incidents" },
+        ? { value: String(thisMonth), label: "Incidents", caption: "reported this month" }
+        : { value: "0", label: "Incidents", caption: "none this month" },
     workforce: expired
-      ? { value: String(expired), label: "Staff", caption: "credentials expired" }
+      ? { value: String(expired), label: "Workforce", caption: "credentials expired" }
       : soon
-        ? { value: String(soon), label: "Staff", caption: "expiring soon" }
-        : { value: retention != null ? `${Math.round(retention)}%` : "OK", label: "Staff", caption: "retention", pct: retention ?? undefined },
+        ? { value: String(soon), label: "Workforce", caption: "credentials due to expire" }
+        : { value: retention != null ? `${Math.round(retention)}%` : "Current", label: "Workforce", caption: "staff retention", pct: retention ?? undefined },
   };
   if (demand) {
     const free = Math.round(demand.capacity.reliable_hours + demand.capacity.casual_hours);
     const waiting = demand.waitlist.count;
-    out.demand = { value: `${free}h`, label: "Spare time", caption: waiting ? `${waiting} ${waiting === 1 ? "enquiry" : "enquiries"} waiting` : "free this week" };
+    out.demand = { value: `${free}h`, label: "Capacity", caption: waiting ? `${waiting} ${waiting === 1 ? "referral" : "referrals"} pending` : "available this week" };
   }
   return out;
 }
@@ -273,32 +273,26 @@ function joinNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
-/** The briefing in two short sentences: what needs the director, then
- *  which areas are behind. "2 things need you now and 3 this week. Safety
- *  and staff are off track." */
+/** The overview in two short sentences: the outstanding actions, then
+ *  which areas are below target. "2 items require immediate action, and 3
+ *  are due this week. Action required: Incidents and Workforce." */
 export function briefingLine(outcomes: Outcome[], actions: ActionItem[]): { lead: string; rest: string } {
   const now = actions.filter((a) => a.group === "now").length;
   const week = actions.filter((a) => a.group === "week").length;
   let lead: string;
-  if (now) lead = `${now} ${now === 1 ? "thing needs" : "things need"} you now${week ? ` and ${week} this week` : ""}.`;
-  else if (week) lead = `Nothing is urgent. ${week} ${week === 1 ? "thing needs" : "things need"} you this week.`;
-  else lead = "Nothing needs you right now.";
+  if (now) lead = `${now} ${now === 1 ? "item requires" : "items require"} immediate action${week ? `, and ${week} ${week === 1 ? "is" : "are"} due this week` : ""}.`;
+  else if (week) lead = `No items require immediate action. ${week} ${week === 1 ? "item is" : "items are"} due this week.`;
+  else lead = "No actions are outstanding.";
 
-  const name = (o: Outcome, i: number) => {
-    const label = o.ring?.label ?? o.area;
-    return i === 0 ? label : label.charAt(0).toLowerCase() + label.slice(1);
-  };
+  const name = (o: Outcome) => o.ring?.label ?? o.area;
   const off = outcomes.filter((o) => o.status === "off_track");
   const look = outcomes.filter((o) => o.status === "attention");
   const parts: string[] = [];
-  if (off.length) parts.push(`${joinNames(off.map(name))} ${off.length === 1 ? "is" : "are"} off track`);
-  if (look.length) {
-    const names = look.map((o, i) => name(o, off.length ? 1 : i));
-    parts.push(`${joinNames(names)} ${look.length === 1 ? "needs" : "need"} a look`);
-  }
+  if (off.length) parts.push(`Action required: ${joinNames(off.map(name))}.`);
+  if (look.length) parts.push(`Review recommended: ${joinNames(look.map(name))}.`);
   const rest = parts.length
-    ? `${parts.join(", and ")}.`
-    : outcomes.some((o) => o.status === "on_track") ? "Every area is on track." : "";
+    ? parts.join(" ")
+    : outcomes.some((o) => o.status === "on_track") ? "All areas meet their targets." : "";
   return { lead, rest };
 }
 
@@ -315,7 +309,7 @@ const GROUP_BY_SEVERITY: Record<string, ActionGroup | null> = {
  * their notes, enquiries to screen and goals nobody is working on, grouped
  * by when they need doing. `routeFor` gives each attention item its page.
  */
-/** "Tom Walsh: First Aid" as something to do: "Renew Tom Walsh's First Aid". */
+/** "Tom Walsh: First Aid" as a register entry: "First Aid expired: Tom Walsh". */
 export function credentialTitle(title: string, expired: boolean): string {
   const m = title.match(/^([^:]{2,80}):\s*(.+)$/);
   if (!m) return title;
@@ -324,8 +318,7 @@ export function credentialTitle(title: string, expired: boolean): string {
   const credential = raw.includes("_")
     ? raw.trim().split("_").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
     : raw;
-  const owner = person.trim().endsWith("s") ? `${person.trim()}'` : `${person.trim()}'s`;
-  return expired ? `Renew ${owner} ${credential.trim()}` : `Follow up ${owner} ${credential.trim()} renewal`;
+  return expired ? `${credential.trim()} expired: ${person.trim()}` : `${credential.trim()} due for renewal: ${person.trim()}`;
 }
 
 export function buildActions(
@@ -354,9 +347,9 @@ export function buildActions(
     items.push({
       id: `worker-${w.id}`,
       group: w.compliance_score < 70 ? "now" : "week",
-      title: `Help ${w.full_name} with their shift notes`,
-      detail: `${Math.round(w.compliance_score)}% across ${w.sessions} scored ${plural(w.sessions, "shift")}, below the 85% threshold.`,
-      actionLabel: "Review their notes",
+      title: `Progress notes below standard: ${w.full_name}`,
+      detail: `Average documentation score ${Math.round(w.compliance_score)}% across ${w.sessions} assessed ${plural(w.sessions, "shift")}, below the 85% threshold.`,
+      actionLabel: "Review progress notes",
       href: `/md/staff?workerId=${encodeURIComponent(w.id)}&tab=shifts`,
     });
   }
@@ -365,9 +358,9 @@ export function buildActions(
     items.push({
       id: "enquiries",
       group: "week",
-      title: `Screen ${waiting} new ${plural(waiting, "enquiry", "enquiries")}`,
-      detail: `${Math.round(demand!.waitlist.hours)} hours a week requested by people waiting for support.`,
-      actionLabel: "Review enquiries",
+      title: `Assess ${waiting} new ${plural(waiting, "referral", "referrals")}`,
+      detail: `${Math.round(demand!.waitlist.hours)} hours of support a week requested by people on the waitlist.`,
+      actionLabel: "Review referrals",
       href: "/onboard-participant",
     });
   }
@@ -376,9 +369,9 @@ export function buildActions(
     items.push({
       id: "goals",
       group: "week",
-      title: `${unsupported} participant ${plural(unsupported, "goal has", "goals have")} had no support in 30 days`,
-      detail: "Plan shifts around them, or update the goals if they've changed.",
-      actionLabel: "Review participants",
+      title: `${unsupported} participant ${plural(unsupported, "goal has", "goals have")} had no supports delivered in 30 days`,
+      detail: "Schedule supports against these goals, or review them with the participant if their needs have changed.",
+      actionLabel: "Review participant goals",
       href: "/onboard-participant/active",
     });
   }

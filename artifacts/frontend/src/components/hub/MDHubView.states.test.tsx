@@ -44,7 +44,7 @@ it("preserves cached metrics after a failed background refresh", () => {
   render(<MDHubView />);
   expect(screen.getByText("Refresh failed. Showing the last available overview.")).toBeTruthy();
   // The outcomes, built from the cached overview, stay on screen.
-  expect(screen.getByText("Quality of support")).toBeTruthy();
+  expect(screen.getByText("Documentation quality")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Refresh overview" }));
   expect(retry).toHaveBeenCalledOnce();
 });

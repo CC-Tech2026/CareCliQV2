@@ -271,14 +271,14 @@ export default function MDExecutivePage() {
       id: "notes",
       area: "Documentation compliance",
       status: TONE_STATUS[complianceTone],
-      headline: data.compliance_score >= target ? "Shift notes are on target" : `${Math.round(gap)} pts below target`,
-      detail: `Shift notes average ${percent(data.compliance_score)} against a ${target}% target.`,
-      action: { label: "Review shift notes", href: "/sessions" },
-      meter: { pct: data.compliance_score, target, label: "Average shift note score" },
+      headline: data.compliance_score >= target ? "Progress notes meet the target" : `${Math.round(gap)} percentage points below target`,
+      detail: `Progress notes average ${percent(data.compliance_score)} against a ${target}% target.`,
+      action: { label: "Review progress notes", href: "/sessions" },
+      meter: { pct: data.compliance_score, target, label: "Average progress note score" },
       ring: {
         value: `${Math.round(data.compliance_score)}%`,
-        label: "Shift notes",
-        caption: data.compliance_score >= target ? "on target" : `${Math.round(gap)} pts below`,
+        label: "Progress notes",
+        caption: data.compliance_score >= target ? "meets target" : `${Math.round(gap)}% below target`,
         pct: data.compliance_score,
       },
     },
@@ -286,22 +286,22 @@ export default function MDExecutivePage() {
       id: "coaching",
       area: "Workers below the documentation threshold",
       status: workersBelowCount ? "attention" : "on_track",
-      headline: workersBelowCount ? `${workersBelowCount} ${workersBelowCount === 1 ? "worker needs" : "workers need"} support` : "Everyone on target",
-      detail: `Workers whose shift notes score under ${WORKER_THRESHOLD}%.`,
-      action: { label: "Open staff", href: "/md/staff" },
-      ring: { value: String(workersBelowCount), label: "To coach", caption: `under ${WORKER_THRESHOLD}%` },
+      headline: workersBelowCount ? `${workersBelowCount} ${workersBelowCount === 1 ? "worker requires" : "workers require"} documentation support` : "All workers meet the threshold",
+      detail: `Workers whose progress notes average under ${WORKER_THRESHOLD}%.`,
+      action: { label: "Open worker records", href: "/md/staff" },
+      ring: { value: String(workersBelowCount), label: "Workers below threshold", caption: `under ${WORKER_THRESHOLD}%` },
     },
     {
       id: "goals-met",
       area: "Participant goals achieved",
       status: !data.goals_total ? "no_data" : (data.goal_outcome_rate ?? 0) >= 25 ? "on_track" : "attention",
       headline: data.goals_total ? `${data.goals_achieved} of ${data.goals_total} goals` : "No goals recorded",
-      detail: data.goals_total ? "Goals marked completed by coordinators." : "Add goals to participant plans.",
+      detail: data.goals_total ? "Goals marked as achieved by support coordinators." : "Record goals from each participant's NDIS plan.",
       action: { label: "View participants", href: "/onboard-participant/active" },
       ring: {
         value: data.goal_outcome_rate == null ? "N/A" : `${Math.round(data.goal_outcome_rate)}%`,
-        label: "Goals met",
-        caption: data.goals_total ? `${data.goals_achieved} of ${data.goals_total}` : "none yet",
+        label: "Goals achieved",
+        caption: data.goals_total ? `${data.goals_achieved} of ${data.goals_total}` : "none recorded",
         pct: data.goal_outcome_rate ?? 0,
       },
     },
@@ -317,20 +317,20 @@ export default function MDExecutivePage() {
             ? "Every goal has support recorded."
             : `${unsupportedGoals} with no shift notes against them`,
       action: { label: "View participants", href: "/onboard-participant/active" },
-      meter: supportedPct == null ? undefined : { pct: supportedPct, target: 80, label: "Goals with a shift note in 30 days" },
+      meter: supportedPct == null ? undefined : { pct: supportedPct, target: 80, label: "Goals with supports delivered in 30 days" },
       ring: { value: supportedPct == null ? "N/A" : `${supportedPct}%`, label: "Goals supported", caption: supportCaption, pct: supportedPct ?? 0 },
     },
     {
       id: "retention",
       area: "Staff retention",
       status: data.staff_retention_rate >= 85 ? "on_track" : data.staff_retention_rate >= 70 ? "attention" : "off_track",
-      headline: data.staff_retention_rate >= 85 ? "Staffing is stable" : "Watch turnover",
+      headline: data.staff_retention_rate >= 85 ? "Workforce is stable" : "Staff turnover requires review",
       detail: `${percent(data.staff_retention_rate)} retention across ${data.active_staff} active staff.`,
-      action: { label: "Staff directory", href: "/md/staff" },
+      action: { label: "Open worker records", href: "/md/staff" },
       ring: {
         value: `${Math.round(data.staff_retention_rate)}%`,
         label: "Retention",
-        caption: data.staff_retention_rate >= 85 ? "stable" : "watch turnover",
+        caption: data.staff_retention_rate >= 85 ? "stable" : "review turnover",
         pct: data.staff_retention_rate,
       },
     },
@@ -340,7 +340,7 @@ export default function MDExecutivePage() {
           area: "Incidents needing action now",
           status: "off_track",
           headline: "Notification or follow-up overdue",
-          detail: `${overdueIncidents} overdue. ${data.incidents_this_month} recorded this month.`,
+          detail: `${overdueIncidents} overdue. ${data.incidents_this_month} reported this month.`,
           action: { label: "Incident register", href: "/incidents" },
           ring: { value: String(overdueIncidents), label: "Incidents", caption: "overdue" },
         }
@@ -348,8 +348,8 @@ export default function MDExecutivePage() {
           id: "incidents",
           area: "Incidents this month",
           status: data.incidents_this_month ? "attention" : "on_track",
-          headline: data.incidents_this_month ? "Follow up" : "None recorded",
-          detail: `${data.incidents_this_month} recorded since the 1st.`,
+          headline: data.incidents_this_month ? "Follow-up required" : "None reported",
+          detail: `${data.incidents_this_month} reported since the 1st of the month.`,
           action: { label: "Incident register", href: "/incidents" },
           ring: { value: String(data.incidents_this_month), label: "Incidents", caption: "this month" },
         },
@@ -405,15 +405,15 @@ export default function MDExecutivePage() {
           </label>
         )}
 
-        <Section title="Outcomes against targets" description="Where each area stands against its target, and where to deal with it.">
+        <Section title="Outcomes against targets" description="Each area measured against its target, with the action to take.">
           <OutcomeList outcomes={scorecard} onNavigate={navigate} />
         </Section>
 
         {workersBelow.length > 0 && (
           <Section
-            title="Who to follow up"
-            description={`Workers whose shift notes score under ${WORKER_THRESHOLD}%, lowest first. Open one to see their notes and help them.`}
-            action={<Link href="/md/staff" className={ghostClass}>Open staff <ArrowRight size={14} /></Link>}
+            title="Workers requiring documentation support"
+            description={`Workers whose progress notes average under ${WORKER_THRESHOLD}%, lowest first. Open a worker to review their progress notes.`}
+            action={<Link href="/md/staff" className={ghostClass}>Open worker records <ArrowRight size={14} /></Link>}
           >
             {/* One ruled list, lowest score first: name, score against the
                 threshold, and where to help. */}
@@ -435,7 +435,7 @@ export default function MDExecutivePage() {
                     </span>
                     <ScoreMeter className="col-span-2 md:col-span-1 md:max-w-md" size="sm" value={worker.compliance_score} good={WORKER_THRESHOLD} ariaLabel={`${worker.full_name}'s shift note score`} />
                     <span className="hidden items-center gap-1 whitespace-nowrap text-xs font-semibold md:inline-flex" style={{ color: TEXT }}>
-                      Review their notes <ArrowRight size={13} />
+                      Review progress notes <ArrowRight size={13} />
                     </span>
                   </Link>
                 </li>
@@ -455,7 +455,7 @@ export default function MDExecutivePage() {
         <div className="grid gap-8 xl:grid-golden">
           <Section
             title="Documentation compliance over time"
-            description="Weekly average score of shift notes. Bars show how many shifts each week is based on."
+            description="Weekly average progress note score. Bars show the number of shifts assessed each week."
             className="flex flex-col"
           >
             <Surface className="flex-1 p-5">

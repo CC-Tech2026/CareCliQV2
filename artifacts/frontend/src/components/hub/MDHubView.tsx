@@ -193,7 +193,7 @@ function PeoplePanel({ data, onNavigate }: { data: MDData; onNavigate: (path: st
         </div>
         <div className="mt-5 border-t border-cc-border pt-4">
           <div className="mb-2 flex items-center gap-1.5">
-            <p className="text-xs font-semibold text-cc-muted">NDIS plans to follow up</p>
+            <p className="text-xs font-semibold text-cc-muted">NDIS plan status</p>
             <Popover>
               <PopoverTrigger asChild>
                 <button type="button" aria-label="What does plan status mean?" className="flex h-4 w-4 items-center justify-center rounded-full text-cc-muted hover:opacity-70">
@@ -222,7 +222,7 @@ function PeoplePanel({ data, onNavigate }: { data: MDData; onNavigate: (path: st
         </div>
       </section>
       <section aria-label="Staff" className="p-5">
-        <PanelHeading title="Staff" link="Open staff directory" onClick={() => onNavigate("/md/staff")} />
+        <PanelHeading title="Workforce" link="Open worker records" onClick={() => onNavigate("/md/staff")} />
         <p className="mt-3 flex items-baseline gap-2">
           <span className="text-3xl font-semibold tabular-nums tracking-tight text-cc-text">{formatNumber(data.active_staff)}</span>
           <span className="text-sm text-cc-muted">active</span>
@@ -240,15 +240,15 @@ function PeoplePanel({ data, onNavigate }: { data: MDData; onNavigate: (path: st
         </div>
         <dl className="mt-5 grid grid-cols-3 gap-4 border-t border-cc-border pt-4">
           <div>
-            <dt className="text-xs text-cc-muted">Retention</dt>
+            <dt className="text-xs text-cc-muted">Staff retention</dt>
             <dd className="text-xl font-semibold tabular-nums text-cc-text">{data.staff_retention_rate}%</dd>
           </div>
           <div>
-            <dt className="text-xs text-cc-muted">Shifts this week</dt>
+            <dt className="text-xs text-cc-muted">Shifts delivered this week</dt>
             <dd className="text-xl font-semibold tabular-nums text-cc-text">{formatNumber(data.sessions_this_week)}</dd>
           </div>
           <div>
-            <dt className="text-xs text-cc-muted">Incidents this month</dt>
+            <dt className="text-xs text-cc-muted">Incidents reported this month</dt>
             <dd className="text-xl font-semibold tabular-nums text-cc-text">{formatNumber(data.incidents_this_month)}</dd>
           </div>
         </dl>
@@ -283,9 +283,9 @@ export function DemandCapacityPanel({ data, loading, error, onRetry, onNavigate 
   const reliable = Math.round(data.capacity.reliable_hours);
   const casual = Math.round(data.capacity.casual_hours);
   const cards = [
-    { title: "Enquiries to review", value: formatNumber(data.waitlist.count), detail: data.waitlist.count > 0 ? "Awaiting initial screening" : "No enquiries awaiting screening", action: "Review participant intake", path: "/onboard-participant", icon: Clock },
-    { title: "Requested support", value: formatNumber(data.waitlist.hours) + " h", detail: "Weekly hours requested by the waiting list", action: "Review support requests", path: "/onboard-participant", icon: Timer },
-    { title: "Available this week", value: formatNumber(reliable + casual) + " h", detail: reliable + " h permanent staff / " + casual + " h casual staff", action: "Review staff availability", path: "/coordinator/rostering", icon: Zap },
+    { title: "Referrals awaiting assessment", value: formatNumber(data.waitlist.count), detail: data.waitlist.count > 0 ? "Pending intake assessment" : "No referrals pending intake", action: "Review participant intake", path: "/onboard-participant", icon: Clock },
+    { title: "Support hours requested", value: formatNumber(data.waitlist.hours) + " h", detail: "Per week, across the waitlist", action: "Review support requests", path: "/onboard-participant", icon: Timer },
+    { title: "Worker availability this week", value: formatNumber(reliable + casual) + " h", detail: reliable + " h permanent staff, " + casual + " h casual staff", action: "Review staff availability", path: "/coordinator/rostering", icon: Zap },
   ];
   return <section aria-label="Demand and capacity">
     <div className="grid divide-y divide-cc-border md:grid-cols-3 md:divide-x md:divide-y-0">
@@ -473,7 +473,7 @@ export function DocumentationInsights({ data, onNavigate }: { data: Pick<MDData,
     { label: "Not scored", count: summary.unscored, color: MUTED },
   ] : [];
   return <section aria-label="Documentation quality and follow-up" >
-    <header className="px-5 pt-5"><h3 className="text-sm font-semibold text-cc-text">Where to focus</h3><p className="mt-1 text-xs leading-relaxed text-cc-muted">Based on the latest available session records, up to 400. Scores describe documentation checks, not overall regulatory compliance.</p></header>
+    <header className="px-5 pt-5"><h3 className="text-sm font-semibold text-cc-text">Documentation quality</h3><p className="mt-1 text-xs leading-relaxed text-cc-muted">Based on the latest available session records, up to 400. Scores describe documentation checks, not overall regulatory compliance.</p></header>
     <div className="grid gap-6 p-5 lg:grid-cols-2">
       <div>
         <p className="text-sm font-semibold text-cc-text">{summary?.scored ? (gap > 0 ? gap + " percentage points below the " + data.compliance_target + "% target" : "Average score meets the " + data.compliance_target + "% target") : "Scored documentation is not yet available"}</p>
@@ -482,14 +482,14 @@ export function DocumentationInsights({ data, onNavigate }: { data: Pick<MDData,
           <div role="img" aria-label={bands.map(band => band.label + ": " + band.count).join("; ")} className="mt-4 flex h-5 overflow-hidden rounded bg-cc-soft">{bands.map(band => <span key={band.label} style={{ background: band.color, width: (summary.sample_size ? band.count / summary.sample_size * 100 : 0) + "%" }} />)}</div>
           <dl className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">{bands.map(band => <div key={band.label} className="flex items-center justify-between gap-2 text-xs"><dt className="flex items-center gap-2 text-cc-muted"><span className="h-2 w-2 rounded-full" style={{ background: band.color }} />{band.label}</dt><dd className="font-semibold text-cc-text">{band.count}</dd></div>)}</dl>
         </>}
-        <h3 className="mt-6 text-sm font-semibold text-cc-text">Follow up with staff</h3>
-        <div className="mt-2 divide-y divide-cc-border">{(data.workers_at_risk ?? []).slice(0, 4).map(worker => <button type="button" key={worker.id} onClick={() => onNavigate("/md/staff?workerId=" + encodeURIComponent(worker.id) + "&tab=shifts")} className="flex min-h-12 w-full items-center justify-between gap-3 py-3 text-left text-sm"><span><span className="font-semibold text-cc-text">{worker.full_name}</span><span className="mt-1 block text-xs text-cc-muted">{worker.compliance_score}% across {worker.sessions} sessions. Review shift documentation.</span></span><ArrowRight size={16} className="shrink-0 text-cc-muted" /></button>)}</div>
-        {!data.workers_at_risk?.length && <p className="mt-2 text-xs text-cc-muted">No staff follow-up items returned in this snapshot.</p>}
+        <h3 className="mt-6 text-sm font-semibold text-cc-text">Workers requiring documentation support</h3>
+        <div className="mt-2 divide-y divide-cc-border">{(data.workers_at_risk ?? []).slice(0, 4).map(worker => <button type="button" key={worker.id} onClick={() => onNavigate("/md/staff?workerId=" + encodeURIComponent(worker.id) + "&tab=shifts")} className="flex min-h-12 w-full items-center justify-between gap-3 py-3 text-left text-sm"><span><span className="font-semibold text-cc-text">{worker.full_name}</span><span className="mt-1 block text-xs text-cc-muted">{worker.compliance_score}% across {worker.sessions} sessions. Review progress notes.</span></span><ArrowRight size={16} className="shrink-0 text-cc-muted" /></button>)}</div>
+        {!data.workers_at_risk?.length && <p className="mt-2 text-xs text-cc-muted">No workers require documentation support.</p>}
       </div>
       <div><h3 className="text-sm font-semibold text-cc-text">Most frequently recorded issues</h3><p className="mt-1 text-xs leading-relaxed text-cc-muted">Mentions in rule flags, recommendations and compliance notes. One session may contribute more than once; these are not confirmed root causes.</p>
         <div className="mt-4 space-y-4">{issues.map(issue => <div key={issue.issue}><div className="mb-1.5 flex justify-between gap-3 text-xs"><span className="text-cc-text">{issue.issue}</span><span className="shrink-0 font-semibold text-cc-muted">{issue.count} mentions</span></div><div className="h-2 rounded bg-cc-soft"><div className="h-full rounded bg-cc-plum" style={{ width: issue.count / maxCount * 100 + "%" }} /></div></div>)}</div>
         {!issues.length && <p className="mt-4 text-sm text-cc-muted">No recurring issues were returned. Review individual records before drawing conclusions.</p>}
-        <button type="button" onClick={() => onNavigate("/md/service-delivery")} className="mt-5 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-cc-plum">Investigate delivery quality<ArrowRight size={14} /></button>
+        <button type="button" onClick={() => onNavigate("/md/service-delivery")} className="mt-5 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-cc-plum">Open service delivery quality<ArrowRight size={14} /></button>
       </div>
     </div>
   </section>;
@@ -525,7 +525,7 @@ function ComplianceTrend({
       <div className="flex items-center justify-between gap-3 px-5 pt-5">
         <div>
           <h3 className="text-sm font-semibold text-cc-text">
-            Over time
+            Documentation quality trend
           </h3>
 
           <p
@@ -695,12 +695,12 @@ function RevenueChart({ onOpenReport }: { onOpenReport: () => void }) {
     <section className="flex h-full flex-col">
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5">
         <div>
-          <h3 className="text-sm font-semibold text-cc-text">Billed and paid</h3>
+          <h3 className="text-sm font-semibold text-cc-text">Invoiced and paid</h3>
           <p className="mt-1 text-xs text-cc-muted">{REVENUE_PERIOD_META[period].window}</p>
         </div>
         <div className="flex items-center gap-3">
           <button type="button" onClick={onOpenReport} className="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-cc-text hover:underline">
-            Financial governance
+            Open financial governance
             <ArrowRight size={13} aria-hidden />
           </button>
           <Select value={period} onValueChange={(v) => setPeriod(v as RevenuePeriod)}>
@@ -801,7 +801,7 @@ function DetailTabs({ tabs }: { tabs: DetailTab[] }) {
   }
   return (
     <div className="overflow-hidden rounded-xl border border-cc-border bg-cc-surface">
-      <div role="tablist" aria-label="The numbers behind it" onKeyDown={onKeyDown} className="flex gap-6 overflow-x-auto overflow-y-hidden border-b border-cc-border px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div role="tablist" aria-label="Supporting data" onKeyDown={onKeyDown} className="flex gap-6 overflow-x-auto overflow-y-hidden border-b border-cc-border px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((t) => {
           const selected = t.id === current.id;
           return (
@@ -966,7 +966,7 @@ export function MDHubView() {
       <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-2">
         <p className="max-w-3xl text-[15px] leading-relaxed text-cc-text sm:text-base" aria-live="polite">
           {alertsQuery.isLoading ? (
-            <span className="text-cc-muted">Putting your briefing together…</span>
+            <span className="text-cc-muted">Loading the governance overview…</span>
           ) : (
             <>
               <span className="font-semibold">{briefing.lead}</span>{" "}
@@ -981,7 +981,7 @@ export function MDHubView() {
               : overviewQuery.isFetching
                 ? "Updating overview…"
                 : updated
-                  ? `Updated ${updated}`
+                  ? `Last updated ${updated}`
                   : ""}
           </p>
           <button
@@ -1002,7 +1002,7 @@ export function MDHubView() {
       </div>
 
       <section aria-labelledby="hub-outcomes" className="-mt-3">
-        <h2 id="hub-outcomes" className="sr-only">How we're doing</h2>
+        <h2 id="hub-outcomes" className="sr-only">Performance against targets</h2>
         <OutcomeStrip outcomes={outcomes} onNavigate={navigate} />
       </section>
 
@@ -1016,7 +1016,7 @@ export function MDHubView() {
           so no column is ever left short. */}
       <div className="space-y-8">
         <section aria-labelledby="hub-actions" className="min-w-0 space-y-3">
-          <SectionHeading id="hub-actions" title="What needs doing" />
+          <SectionHeading id="hub-actions" title="Actions required" />
           <ActionList
             actions={actions}
             loading={alertsQuery.isLoading}
@@ -1028,7 +1028,7 @@ export function MDHubView() {
 
 
         <section aria-labelledby="hub-detail" className="min-w-0 space-y-3">
-        <SectionHeading id="hub-detail" title="The numbers behind it" />
+        <SectionHeading id="hub-detail" title="Supporting data" />
         <DetailTabs
           tabs={[
             {
@@ -1036,10 +1036,10 @@ export function MDHubView() {
               label: "Capacity",
               panel: <DemandCapacityPanel data={demandQuery.data} loading={demandQuery.isLoading} error={demandQuery.isError} onRetry={() => { void demandQuery.refetch(); }} onNavigate={navigate} />,
             },
-            { id: "people", label: "People", panel: <PeoplePanel data={data} onNavigate={navigate} /> },
+            { id: "people", label: "Participants and workforce", panel: <PeoplePanel data={data} onNavigate={navigate} /> },
             {
               id: "notes",
-              label: "Shift notes",
+              label: "Progress notes",
               panel: (
                 <>
                   <DocumentationInsights data={data} onNavigate={navigate} />
@@ -1056,7 +1056,7 @@ export function MDHubView() {
                 </>
               ),
             },
-            { id: "money", label: "Money", panel: <RevenueChart onOpenReport={() => navigate("/md/financial")} /> },
+            { id: "money", label: "Finance", panel: <RevenueChart onOpenReport={() => navigate("/md/financial")} /> },
           ]}
         />
         </section>
