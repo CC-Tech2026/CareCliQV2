@@ -268,6 +268,40 @@ export function hubRings(md: OutcomeInputs, alerts: HubComplianceAlert[], demand
   return out;
 }
 
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** The briefing in two short sentences: what needs the director, then
+ *  which areas are behind. "2 things need you now and 3 this week. Safety
+ *  and staff are off track." */
+export function briefingLine(outcomes: Outcome[], actions: ActionItem[]): { lead: string; rest: string } {
+  const now = actions.filter((a) => a.group === "now").length;
+  const week = actions.filter((a) => a.group === "week").length;
+  let lead: string;
+  if (now) lead = `${now} ${now === 1 ? "thing needs" : "things need"} you now${week ? ` and ${week} this week` : ""}.`;
+  else if (week) lead = `Nothing is urgent. ${week} ${week === 1 ? "thing needs" : "things need"} you this week.`;
+  else lead = "Nothing needs you right now.";
+
+  const name = (o: Outcome, i: number) => {
+    const label = o.ring?.label ?? o.area;
+    return i === 0 ? label : label.charAt(0).toLowerCase() + label.slice(1);
+  };
+  const off = outcomes.filter((o) => o.status === "off_track");
+  const look = outcomes.filter((o) => o.status === "attention");
+  const parts: string[] = [];
+  if (off.length) parts.push(`${joinNames(off.map(name))} ${off.length === 1 ? "is" : "are"} off track`);
+  if (look.length) {
+    const names = look.map((o, i) => name(o, off.length ? 1 : i));
+    parts.push(`${joinNames(names)} ${look.length === 1 ? "needs" : "need"} a look`);
+  }
+  const rest = parts.length
+    ? `${parts.join(", and ")}.`
+    : outcomes.some((o) => o.status === "on_track") ? "Every area is on track." : "";
+  return { lead, rest };
+}
+
 const GROUP_BY_SEVERITY: Record<string, ActionGroup | null> = {
   critical: "now",
   high: "week",
@@ -285,7 +319,11 @@ const GROUP_BY_SEVERITY: Record<string, ActionGroup | null> = {
 export function credentialTitle(title: string, expired: boolean): string {
   const m = title.match(/^([^:]{2,80}):\s*(.+)$/);
   if (!m) return title;
-  const [, person, credential] = m;
+  const [, person, raw] = m;
+  // Some credential names arrive as keys ("first_aid"): show them as words.
+  const credential = raw.includes("_")
+    ? raw.trim().split("_").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+    : raw;
   const owner = person.trim().endsWith("s") ? `${person.trim()}'` : `${person.trim()}'s`;
   return expired ? `Renew ${owner} ${credential.trim()}` : `Follow up ${owner} ${credential.trim()} renewal`;
 }
