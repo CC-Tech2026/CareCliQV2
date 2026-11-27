@@ -197,7 +197,7 @@ export function WorkerAvailabilityPanel({
 
   return (
     <div
-      className="rounded-2xl border bg-white shadow-sm overflow-hidden"
+      className="rounded-2xl border bg-white overflow-hidden"
       style={{ borderColor: BORDER }}
     >
       {/* Header — only shown when this panel is used standalone (rostering modal), since

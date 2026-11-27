@@ -3013,7 +3013,7 @@ function RevenueReportPanel({ ledgerStatus = "all" }: { ledgerStatus?: RevenueLe
   }
 
   return (
-    <section className="rounded-lg border border-cc-border bg-white shadow-sm">
+    <section className="rounded-lg border border-cc-border bg-white">
       <div className="px-6 py-4 border-b border-cc-border flex items-center justify-between gap-4">
         <h2 className="text-lg font-semibold text-cc-text">
           {translate("billing.revenueReport")}

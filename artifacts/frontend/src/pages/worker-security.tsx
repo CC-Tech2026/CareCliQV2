@@ -425,11 +425,11 @@ export default function WorkerSecurity() {
         {trustedDevices.length === 0 ? (
           <p className="text-sm text-[#6A6A77]">{translate("security.noTrustedDevices")}</p>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
             {trustedDevices.map((device) => (
               <div
                 key={device.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
                 style={{ borderColor: BORDER }}
               >
                 <div>
@@ -489,11 +489,11 @@ export default function WorkerSecurity() {
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
           {sessions.map((session) => (
             <div
               key={session.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3"
+              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
               style={{ borderColor: BORDER }}
             >
               <div>
@@ -566,11 +566,11 @@ export default function WorkerSecurity() {
         {loginHistory.length === 0 ? (
           <p className="text-sm text-[#6A6A77]">{translate("security.noSignInHistory")}</p>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
             {loginHistory.map((entry) => (
               <div
                 key={entry.id}
-                className="rounded-2xl border px-4 py-3"
+                className="px-4 py-3"
                 style={{ borderColor: entry.is_suspicious ? "rgba(190,24,93,0.35)" : BORDER }}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">

@@ -4361,11 +4361,11 @@ export function ShiftAuditPanel({
                   No incidents reported for this shift.
                 </p>
               ) : (
-                <div className="space-y-2">
+                <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                   {incidents.map((inc) => (
                     <div
                       key={inc.id}
-                      className="rounded-xl border p-3"
+                      className="p-3"
                       style={{
                         borderColor: "var(--cc-status-danger)",
                         background: "var(--cc-status-danger-bg)",

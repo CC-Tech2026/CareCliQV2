@@ -1361,7 +1361,7 @@ function DevConsolePasswordGate({ onUnlock }: { onUnlock: () => void }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{ background: APP_BG }}>
-      <div className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="w-full max-w-md rounded-2xl border bg-white p-8" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: ACTIVE, color: PLUM }}>
             <Lock className="h-6 w-6" />

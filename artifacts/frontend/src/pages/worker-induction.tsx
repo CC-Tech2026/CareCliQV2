@@ -139,7 +139,7 @@ function InductionItemDetail({
         <X size={14} /> Back to induction
       </button>
 
-      <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-card p-5" style={{ borderColor: BORDER }}>
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--cc-soft)" }}>
             <ClipboardList size={17} style={{ color: PLUM }} />

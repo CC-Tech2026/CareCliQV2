@@ -124,11 +124,11 @@ export function TrainingMaterialsEditor({
           video, PDF or website that workers can access.
         </p>
       </div>
-      <ol className="space-y-2">
+      <ol className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
         {resources.map((r, i) => (
           <li
             key={r.id}
-            className="flex flex-wrap items-center gap-2 rounded-xl border bg-background p-3 sm:p-4"
+            className="flex flex-wrap items-center gap-2 bg-background p-3 sm:p-4"
           >
             <span className="text-xs text-muted-foreground">{i + 1}.</span>
             <div className="min-w-0 flex-1">

@@ -474,7 +474,7 @@ function AcknowledgementContentCard() {
   if (isLoading) return null;
 
   return (
-    <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
+    <Card className="rounded-2xl border border-[var(--cc-border)] p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[13px] font-bold" style={{ color: TEXT }}>Clock-in acknowledgement</p>
@@ -546,7 +546,7 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
       <AcknowledgementContentCard />
 
       {(data?.urgent_actions.length ?? 0) > 0 && (
-        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "var(--cc-status-danger-bg)" }}>
+        <Card className="rounded-2xl border border-[var(--cc-border)] p-4 flex items-start gap-3" style={{ background: "var(--cc-status-danger-bg)" }}>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--cc-status-danger-bg)" }}>
             <AlertTriangle size={17} style={{ color: CRITICAL }} />
           </span>
@@ -579,7 +579,7 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
+        <Card className="rounded-2xl border border-[var(--cc-border)] p-5">
           <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("compliance.centre.overview.bandsTitle")}</p>
           <p className="text-[11px] mb-4" style={{ color: MUTED }}>{translate("compliance.centre.overview.bandsSubtitle")}</p>
           <div className="space-y-5">
@@ -592,7 +592,7 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
           </div>
         </Card>
 
-        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
+        <Card className="rounded-2xl border border-[var(--cc-border)] p-5">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: SOFT }}>
               <ListChecks size={14} style={{ color: MUTED }} />
@@ -625,7 +625,7 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
+        <Card className="rounded-2xl border border-[var(--cc-border)] p-5">
           <div className="flex items-center gap-2 mb-3">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: SOFT }}>
               <Users size={14} style={{ color: MUTED }} />
@@ -656,7 +656,7 @@ function OverviewPanel({ onNavigateTab }: { onNavigateTab: (tab: SubTab) => void
           </button>
         </Card>
 
-        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
+        <Card className="rounded-2xl border border-[var(--cc-border)] p-5">
           <div className="flex items-center gap-2 mb-3">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: SOFT }}>
               <HeartHandshake size={14} style={{ color: MUTED }} />
@@ -715,7 +715,7 @@ function AiPatternsSection() {
   const patterns = data?.patterns ?? [];
 
   return (
-    <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-5">
+    <Card className="rounded-2xl border border-[var(--cc-border)] p-5">
       <div className="flex items-center gap-2 mb-1">
         <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: "var(--cc-plum-soft)" }}>
           <Sparkles size={14} style={{ color: PLUM }} />
@@ -837,7 +837,7 @@ function StaffPanel() {
         </div>
       </div>
 
-      <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm overflow-hidden">
+      <Card className="rounded-2xl border border-[var(--cc-border)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full table-fixed border-collapse text-[13px]" style={{ minWidth: `${192 + Object.keys(credLabels).length * 84 + 76 + 96}px` }}>
             <thead>
@@ -899,7 +899,7 @@ function StaffPanel() {
       </Card>
 
       {expiringSoon && (
-        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "var(--cc-status-warning-bg)" }}>
+        <Card className="rounded-2xl border border-[var(--cc-border)] p-4 flex items-start gap-3" style={{ background: "var(--cc-status-warning-bg)" }}>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--cc-status-warning-bg)" }}>
             <Info size={16} style={{ color: WARNING }} />
           </span>
@@ -988,7 +988,7 @@ function ParticipantsPanel() {
         </button>
       </div>
 
-      <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm overflow-hidden">
+      <Card className="rounded-2xl border border-[var(--cc-border)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-[13px]">
             <thead>
@@ -1061,7 +1061,7 @@ function ParticipantsPanel() {
       </Card>
 
       {unsignedExample && (
-        <Card className="rounded-2xl border border-[var(--cc-border)] shadow-sm p-4 flex items-start gap-3" style={{ background: "var(--cc-status-danger-bg)" }}>
+        <Card className="rounded-2xl border border-[var(--cc-border)] p-4 flex items-start gap-3" style={{ background: "var(--cc-status-danger-bg)" }}>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--cc-status-danger-bg)" }}>
             <ShieldAlert size={16} style={{ color: CRITICAL }} />
           </span>

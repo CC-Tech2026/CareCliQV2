@@ -64,7 +64,7 @@ function BannerItem({
 
   return (
     <article
-      className="overflow-hidden rounded-2xl border shadow-sm"
+      className="overflow-hidden rounded-2xl border"
       style={{
         background: style.bg,
         borderColor: style.border,
@@ -192,7 +192,7 @@ function GroupedBannerItem({
 
   return (
     <article
-      className="overflow-hidden rounded-2xl border shadow-sm"
+      className="overflow-hidden rounded-2xl border"
       style={{
         background: style.bg,
         borderColor: style.border,

@@ -258,7 +258,7 @@ function BriefingCard({
   children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-cc-border bg-card shadow-sm">
+    <section className="overflow-hidden rounded-2xl border border-cc-border bg-card">
       <div
         className={cn(
           "flex items-center gap-2.5 border-b border-cc-border px-4 py-3",
@@ -295,7 +295,7 @@ function CriticalAlertsCard({
 
   return (
     <section
-      className="overflow-hidden rounded-2xl border cc-status-critical shadow-sm"
+      className="overflow-hidden rounded-2xl border cc-status-critical"
       aria-label={translate("shift.briefing.criticalAlerts")}
     >
       <div className="flex items-center gap-2 border-b px-4 py-2.5">

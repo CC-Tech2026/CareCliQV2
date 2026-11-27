@@ -123,9 +123,9 @@ export default function WorkerPrivacy({ showHeader = true, onManageSubscription 
         <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-cc-text">
           <Shield className="h-5 w-5 text-cc-plum" /> {translate("privacy.dataHeld")}
         </h2>
-        <div className="space-y-3">
+        <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
           {(overview?.data_categories ?? []).map((cat) => (
-            <div key={cat.id} className="rounded-xl border px-4 py-3" style={{ borderColor: BORDER }}>
+            <div key={cat.id} className="px-4 py-3" style={{ borderColor: BORDER }}>
               <p className="font-bold text-cc-text">{cat.title}</p>
               <p className="mt-1 text-sm text-cc-muted">{cat.description}</p>
               <p className="mt-2 text-xs font-semibold text-cc-plum">

@@ -85,7 +85,7 @@ export function CoordinatorShiftFeedbackForm({ shiftId, onSuccess, onCancel }: P
   ];
 
   return (
-    <div className="space-y-4 rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="space-y-4 rounded-2xl border bg-cc-surface p-5" style={{ borderColor: BORDER }}>
       <h3 className="text-sm font-black" style={{ color: TEXT }}>{translate("coordinator.feedback.title")}</h3>
       <p className="text-xs font-medium" style={{ color: MUTED }}>
         {translate("coordinator.feedback.hint")}

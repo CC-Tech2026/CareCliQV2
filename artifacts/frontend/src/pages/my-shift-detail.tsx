@@ -1879,7 +1879,7 @@ function ShiftWorkflow({
       <section
         id="shift-task-checklist"
         data-tutorial="shift-task-checklist"
-        className="overflow-hidden rounded-2xl border border-cc-border bg-card shadow-sm"
+        className="overflow-hidden rounded-2xl border border-cc-border bg-card"
       >
         {sessionFocus ? (
           <div className="flex w-full items-center justify-between bg-cc-soft px-4 py-3.5">

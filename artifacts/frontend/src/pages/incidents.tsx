@@ -181,7 +181,7 @@ function WorkerIncidentsList() {
         </Select>
       </div>
 
-      <section className="rounded-lg border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-lg border bg-white" style={{ borderColor: BORDER }}>
         {isLoading ? (
           <div className="flex items-center justify-center py-16" style={{ color: MUTED }}>
             <Loader2 size={24} className="animate-spin" />

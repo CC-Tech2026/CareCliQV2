@@ -96,7 +96,7 @@ export function AccessibilityPanel({ showHeader = true }: { showHeader?: boolean
 
       <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-2 lg:items-start">
       <section
-        className="rounded-2xl border bg-card p-5 shadow-sm"
+        className="rounded-2xl border bg-card p-5"
         style={{ borderColor: BORDER }}
         aria-labelledby="font-size-heading"
       >
@@ -125,7 +125,7 @@ export function AccessibilityPanel({ showHeader = true }: { showHeader?: boolean
       </section>
 
       <section
-        className="flex h-full flex-col rounded-2xl border bg-card p-5 shadow-sm"
+        className="flex h-full flex-col rounded-2xl border bg-card p-5"
         style={{ borderColor: BORDER }}
         aria-labelledby="theme-heading"
       >
@@ -165,7 +165,7 @@ export function AccessibilityPanel({ showHeader = true }: { showHeader?: boolean
       </section>
 
       <section
-        className="flex h-full flex-col rounded-2xl border bg-card p-5 shadow-sm"
+        className="flex h-full flex-col rounded-2xl border bg-card p-5"
         style={{ borderColor: BORDER }}
         aria-labelledby="display-heading"
       >
@@ -212,7 +212,7 @@ export function AccessibilityPanel({ showHeader = true }: { showHeader?: boolean
       </section>
 
       <section
-        className="rounded-2xl border bg-card p-5 shadow-sm"
+        className="rounded-2xl border bg-card p-5"
         style={{ borderColor: BORDER }}
         aria-labelledby="language-heading"
       >

@@ -486,7 +486,7 @@ function ParticipantListView({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="overflow-hidden rounded-2xl border bg-white" style={{ borderColor: BORDER }}>
       <div className="grid grid-cols-[1fr_120px_140px_1fr_40px] gap-3 border-b px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.1em]" style={{ borderColor: BORDER, color: MUTED }}>
         <SortHeader label="Participant" k="name" />
         <span className="hidden sm:inline">Category</span>

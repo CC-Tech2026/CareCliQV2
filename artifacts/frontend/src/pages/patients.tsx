@@ -911,11 +911,11 @@ function SetupPlanPanel({
                   </p>
 
                   {existingBudgets.length > 0 && (
-                    <div className="space-y-2 mb-3">
+                    <div className="mb-3 divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                       {existingBudgets.map((b) => (
                         <div
                           key={b.category}
-                          className="flex items-center justify-between gap-2 rounded-xl border border-purple-100/60 bg-white p-2.5"
+                          className="flex items-center justify-between gap-2 border-purple-100/60 p-2.5"
                         >
                           <div className="min-w-0">
                             <p className="text-[12px] font-bold text-[#1A1A2E] truncate">{b.category_label || b.category}</p>
@@ -1849,10 +1849,10 @@ export function ParticipantDetail({
                     {goalAiSuggestions.descriptions.length > 0 && (
                       <div className="space-y-1.5">
                         <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Descriptions, tap to use</p>
-                        <div className="space-y-1.5">
+                        <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                           {goalAiSuggestions.descriptions.map((desc, i) => (
                             <div key={i}
-                              className="group p-2.5 rounded-lg bg-white border border-violet-100 hover:border-violet-300 hover:shadow-sm cursor-pointer transition-all flex items-start gap-2"
+                              className="group p-2.5 border-violet-100 hover:border-violet-300 hover:shadow-sm cursor-pointer flex items-start gap-2"
                               onClick={() => {
                                 const html = desc.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
                                 if (goalDescriptionRef.current) goalDescriptionRef.current.innerHTML = html;
@@ -1874,10 +1874,10 @@ export function ParticipantDetail({
                     {goalAiSuggestions.success_criteria.length > 0 && (
                       <div className="space-y-1.5">
                         <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Success criteria, tap to use</p>
-                        <div className="space-y-1.5">
+                        <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                           {goalAiSuggestions.success_criteria.map((crit, i) => (
                             <div key={i}
-                              className="group p-2.5 rounded-lg bg-white border border-violet-100 hover:border-violet-300 hover:shadow-sm cursor-pointer transition-all flex items-start gap-2"
+                              className="group p-2.5 border-violet-100 hover:border-violet-300 hover:shadow-sm cursor-pointer flex items-start gap-2"
                               onClick={() => setGoalSuccessCriteria(crit)}
                             >
                               <p className="text-[11px] leading-relaxed flex-1" style={{ color: "var(--cc-text)" }}>{crit}</p>
@@ -2102,10 +2102,10 @@ export function ParticipantDetail({
                     {taskAiSuggestions.instructions.length > 0 && (
                       <div className="space-y-1.5">
                         <p className="text-[10px] font-bold text-violet-700 uppercase tracking-wide">Worker instructions, tap to use</p>
-                        <div className="space-y-1.5">
+                        <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                           {taskAiSuggestions.instructions.map((instr, i) => (
                             <div key={i}
-                              className="group p-2.5 rounded-lg bg-white border border-violet-100 hover:border-violet-300 hover:shadow-sm cursor-pointer transition-all flex items-start gap-2"
+                              className="group p-2.5 border-violet-100 hover:border-violet-300 hover:shadow-sm cursor-pointer flex items-start gap-2"
                               onClick={() => { setTaskInstructions(instr); setTaskInstructionsAiApplied(true); }}
                             >
                               <p className="text-[11px] leading-relaxed flex-1" style={{ color: "var(--cc-text)" }}>{instr}</p>

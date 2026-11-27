@@ -126,7 +126,7 @@ export default function MyCompliance() {
         </>
       )}
 
-      <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-lg border bg-white p-5" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-black" style={{ color: TEXT }}>{translate("compliance.records")}</h2>
           <span className={`rounded-full border px-3 py-1 text-xs font-bold capitalize ${badgeClass(data?.status)}`}>

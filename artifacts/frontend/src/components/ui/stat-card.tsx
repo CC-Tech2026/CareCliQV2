@@ -176,7 +176,7 @@ export interface KpiCardProps {
 const KpiCard = React.forwardRef<HTMLDivElement, KpiCardProps>(
   ({ className, icon, label, value, sub, tone = "neutral", flat = false, href, onClick, ...props }, ref) => (
     <Interactive href={href} onClick={onClick} label={interactiveLabel(label, value)} className="h-full">
-    <Card ref={ref} className={cn("rounded-xl border-0 shadow-sm px-3.5 py-2.5", (href || onClick) && "h-full cursor-pointer", className)} {...props}>
+    <Card ref={ref} className={cn("rounded-xl border border-cc-border px-3.5 py-2.5", (href || onClick) && "h-full cursor-pointer", className)} {...props}>
       {flat ? (
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-wider leading-tight" style={{ color: "var(--cc-muted)" }}>

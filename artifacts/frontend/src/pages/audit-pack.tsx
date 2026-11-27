@@ -175,7 +175,7 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
             { label: translate("auditPack.atRisk"), count: compliance.data.at_risk, tone: "warning" as const },
             { label: translate("auditPack.nonCompliant"), count: compliance.data.non_compliant, tone: "danger" as const },
           ].map(({ label, count, tone }) => (
-            <Card key={label} className="flex items-baseline justify-center gap-2 rounded-xl border-0 shadow-sm px-3 py-2" style={{ background: kpiTint(tone) }}>
+            <Card key={label} className="flex items-baseline justify-center gap-2 rounded-xl border-0 px-3 py-2" style={{ background: kpiTint(tone) }}>
               <p className="text-lg font-black" style={{ color: toneColour[tone] }}>{count}</p>
               <p className="text-xs font-bold" style={{ color: toneColour[tone] }}>{label}</p>
             </Card>
@@ -209,9 +209,9 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
           {(flags.data || []).length === 0 ? (
             <p className="text-sm font-medium" style={{ color: MUTED }}>{translate("auditPack.noRpFlags")}</p>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
               {(flags.data || []).map((flag, index) => (
-                <div key={`${flag.session_id}-${index}`} className="rounded-xl border p-4 space-y-1" style={{ borderColor: BORDER }}>
+                <div key={`${flag.session_id}-${index}`} className="p-4 space-y-1" style={{ borderColor: BORDER }}>
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-black" style={{ color: TEXT }}>{flag.participant_name || translate("common.participant")}</p>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 capitalize">
@@ -263,9 +263,9 @@ export function AuditPackPanel({ embedded = false }: { embedded?: boolean } = {}
                 <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>
                   Section 3a: Long shift engagement log
                 </h2>
-                <div className="mt-3 space-y-2">
+                <div className="mt-3 divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                   {engagement.data.long_shift_engagement_log.map((row) => (
-                    <div key={row.session_id} className="rounded-xl border p-3 text-xs" style={{ borderColor: BORDER }}>
+                    <div key={row.session_id} className="p-3 text-xs" style={{ borderColor: BORDER }}>
                       <p className="font-bold" style={{ color: TEXT }}>
                         {row.participant_name || "Participant"} · {row.worker_name || "Worker"}
                       </p>

@@ -905,8 +905,9 @@ function SetupSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open
                 Switch off anything that isn't part of how you operate, and set your own review cycles — for example
                 how often you recheck police checks.
               </p>
+              <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
               {(requirementsQuery.data ?? []).map((req) => (
-                <div key={req.code} className="rounded-2xl border p-3.5" style={{ borderColor: BORDER, opacity: req.applies ? 1 : 0.6 }}>
+                <div key={req.code} className="p-3.5" style={{ opacity: req.applies ? 1 : 0.6 }}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-semibold" style={{ color: TEXT }}>{req.title}</p>
@@ -938,6 +939,7 @@ function SetupSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open
                   </label>
                 </div>
               ))}
+              </div>
             </section>
           </div>
         )}

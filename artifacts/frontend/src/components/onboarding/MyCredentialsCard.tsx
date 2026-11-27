@@ -262,9 +262,9 @@ export function MyCredentialsCard() {
           <p className="mt-1 text-xs" style={{ color: "#1A1A2E" }}>
             These have to be on file and verified before you can be rostered with a participant. The rest can be completed after you start.
           </p>
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
             {missingMandatory.map((meta) => (
-              <div key={meta.type} className="rounded-xl border bg-white p-3" style={{ borderColor: BORDER }}>
+              <div key={meta.type} className="p-3" style={{ borderColor: BORDER }}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <p className="text-sm font-black" style={{ color: "#1A1A2E" }}>{meta.label}</p>
                   <Button size="sm" variant="ghost" className="h-7 gap-1 rounded-lg px-2.5 text-xs font-bold text-[#E8457A]" onClick={() => startAdding(meta.type)}>

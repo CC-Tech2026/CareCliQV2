@@ -337,9 +337,9 @@ export function UnassignedShiftPanel({ shift, open, onOpenChange, workers, onAss
               {(availableWorkersQuery.error as Error)?.message || translate("common.error")}
             </p>
           )}
-          <div className="space-y-2">
+          <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
             {(availableWorkersQuery.data ?? []).map((w) => (
-              <div key={w.id} className="flex items-center justify-between gap-3 rounded-xl border border-cc-border p-3">
+              <div key={w.id} className="flex items-center justify-between gap-3 p-3">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold" style={{ color: TEXT }}>{w.full_name}</p>
                   {detailIfShared(w, sameWorkerNames) && (

@@ -85,7 +85,7 @@ export function ParticipantContextPanel({
   const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id;
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-card shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="overflow-hidden rounded-2xl border bg-card" style={{ borderColor: BORDER }}>
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"
@@ -173,10 +173,10 @@ export function ParticipantContextPanel({
             )}
 
             {activeTab === "behaviour" && (
-              <div className="space-y-2">
+              <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                 {hasBehaviour ? (
                   context!.behavioural_notes!.map((note, i) => (
-                    <div key={i} className="rounded-xl border border-cc-border bg-cc-soft px-3 py-3">
+                    <div key={i} className="bg-cc-soft px-3 py-3">
                       <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                         {note.title}
                       </p>

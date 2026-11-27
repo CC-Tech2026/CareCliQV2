@@ -1523,10 +1523,10 @@ export default function SessionDetail({ id }: { id?: string }) {
 
                       {/* Per-rule suggestions */}
                       {improveNoteMutation.data.rule_suggestions?.length > 0 && (
-                        <div className="space-y-2">
+                        <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-400">Per-Rule Fixes</p>
                           {improveNoteMutation.data.rule_suggestions.map((s, i) => (
-                            <div key={i} className="bg-white/80 border border-purple-100/60 rounded-lg p-2.5 space-y-1.5">
+                            <div key={i} className="bg-white/80 border-purple-100/60 p-2.5 space-y-1.5">
                               <p className="font-semibold text-purple-800 capitalize">{s.rule.replace(/_/g, " ")}</p>
                               <p className="text-slate-500 text-[11px]">{s.issue}</p>
                               <div className="flex items-start gap-2">
@@ -1623,9 +1623,9 @@ export default function SessionDetail({ id }: { id?: string }) {
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1"><Target className="h-3 w-3" /> Linked Goals</p>
                   {Array.isArray(session.goals_addressed) && session.goals_addressed.length > 0 ? (
-                    <div className="space-y-1.5">
+                    <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                       {session.goals_addressed.map((goal: string, index: number) => (
-                        <div key={index} className="text-xs bg-indigo-50/50 border border-indigo-100/40 text-indigo-900 px-2.5 py-1.5 rounded-lg font-medium leading-normal">
+                        <div key={index} className="text-xs bg-indigo-50/50 border-indigo-100/40 text-indigo-900 px-2.5 py-1.5 font-medium leading-normal">
                           {goal}
                         </div>
                       ))}

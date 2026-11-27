@@ -256,15 +256,16 @@ function DayPanel({
           </Button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto max-h-[max(560px,calc(100dvh-22rem))] px-3 py-3 space-y-2">
+      <div className="flex-1 overflow-y-auto max-h-[max(560px,calc(100dvh-22rem))]">
         {dayShifts.length === 0 ? (
-          <div className="py-14 text-center">
+          <div className="px-3 py-14 text-center">
             <CalendarDays className="mx-auto mb-2" size={22} style={{ color: MUTED }} />
             <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("coordinator.rostering.noShiftsDay")}</p>
             <p className="mt-1 text-[11px]" style={{ color: MUTED }}>{translate("coordinator.rostering.noShiftsDayHint")}</p>
           </div>
         ) : (
-          dayShifts.map((shift) => {
+          <ul className="divide-y divide-cc-border">
+          {dayShifts.map((shift) => {
             const cfg   = statusCfg(shift.status, translate);
             const start = parseStart(shift);
             const end   = shift.scheduled_end ? zonedDate(shift.scheduled_end, shift.timezone) : null;
@@ -274,7 +275,7 @@ function DayPanel({
               : null;
             const durH  = durMs != null ? (durMs / 3600000).toFixed(1) : null;
             return (
-              <div key={shift.id} className="rounded-xl border p-3.5" style={{ borderColor: BORDER, borderLeftWidth: 3, borderLeftColor: cfg.color }}>
+              <li key={shift.id} className="px-4 py-3" style={{ boxShadow: `inset 3px 0 0 ${cfg.color}` }}>
                 <div className="flex items-center justify-between mb-2 gap-2">
                   <span className="rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase" style={{ background: cfg.bg, color: cfg.color }}>
                     {cfg.label}
@@ -303,9 +304,10 @@ function DayPanel({
                     </span>
                   )}
                 </div>
-              </div>
+              </li>
             );
-          })
+          })}
+          </ul>
         )}
       </div>
     </div>

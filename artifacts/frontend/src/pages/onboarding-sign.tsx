@@ -207,12 +207,12 @@ export default function OnboardingSignPage() {
                 Hi {hire.full_name}, please review the document{hire.documents.length !== 1 ? "s" : ""} below before signing.
               </p>
 
-              <div className="mt-6 space-y-2">
+              <div className="mt-6 divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                 {hire.documents.map((d) => {
                   const meta = DOC_TYPE_META[d.document_type] ?? DOC_TYPE_META.other;
                   const Icon = meta.icon;
                   return (
-                    <div key={d.id} className="flex items-center justify-between gap-3 rounded-lg border p-3.5" style={{ borderColor: BORDER }}>
+                    <div key={d.id} className="flex items-center justify-between gap-3 p-3.5" style={{ borderColor: BORDER }}>
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="h-9 w-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: "var(--cc-soft)", color: PLUM }}>
                           <Icon size={16} />

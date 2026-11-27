@@ -40,7 +40,7 @@ export default function WorkerNdisPlan() {
           <SectionInfo text="NDIS plan details for the participants you support: funding goals and plan status." />
         </h1>
       </div>
-      <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-lg border bg-white p-5" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-2">
           <ClipboardList size={18} style={{ color: PLUM }} />
           <h2 className="text-lg font-black" style={{ color: TEXT }}>{translate("ndisPlan.assigned")}</h2>

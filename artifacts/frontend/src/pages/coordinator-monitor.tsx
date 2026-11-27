@@ -33,7 +33,7 @@ function ShiftCard({ shift }: { shift: LiveLongShift }) {
   const colours = statusColour(shift.status);
   const gapMins = Math.floor((shift.current_gap_secs ?? 0) / 60);
   return (
-    <Card className="rounded-2xl border-0 shadow-sm p-4">
+    <Card className="rounded-2xl border-0 p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-black" style={{ color: PLUM }}>
@@ -143,7 +143,7 @@ export default function CoordinatorMonitorPage({ embedded = false }: { embedded?
       )}
 
       {heatmap.data && (
-        <Card className="rounded-2xl border-0 shadow-sm p-4">
+        <Card className="rounded-2xl border-0 p-4">
           <div className="mb-2 flex items-center gap-2">
             <Activity size={18} style={{ color: PLUM }} />
             <h2 className="text-sm font-black" style={{ color: PLUM }}>Engagement heatmap</h2>

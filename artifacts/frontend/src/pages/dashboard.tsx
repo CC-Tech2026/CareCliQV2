@@ -189,10 +189,10 @@ function SessionListCard({ title, sessions }: { title: string; sessions: Dashboa
       }}
     >
       <h2 className="mb-3 text-sm font-black" style={{ color: TEXT }}>{title}</h2>
-      <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-2">
+      <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 divide-y divide-cc-border rounded-2xl border border-cc-border bg-cc-surface">
         {sessions.length === 0 && <p className="text-xs font-medium" style={{ color: MUTED }}>No records need attention.</p>}
         {sessions.map((session) => (
-          <div key={session.id} className="rounded-lg border p-2.5" style={{ borderColor: "#EDE3FC" }}>
+          <div key={session.id} className="p-2.5" style={{ borderColor: "#EDE3FC" }}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-xs font-bold" style={{ color: TEXT }}>
@@ -891,7 +891,7 @@ function WorkerStatCard({
         : "var(--cc-plum)";
   return (
     <div
-      className="rounded-2xl border bg-cc-surface px-4 py-4 text-center shadow-sm transition-shadow hover:shadow-md"
+      className="rounded-2xl border bg-cc-surface px-4 py-4 text-center transition-shadow hover:shadow-md"
       style={{ borderColor: "var(--cc-border)" }}
     >
       <p className="text-2xl font-black" style={{ color: valueColor }}>{value}</p>

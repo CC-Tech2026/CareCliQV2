@@ -98,7 +98,7 @@ export function SupportInstructionsAccordion({ instructions, open = true, onTogg
   return (
     <section
       id={sectionId}
-      className="overflow-hidden rounded-2xl border bg-card shadow-sm"
+      className="overflow-hidden rounded-2xl border bg-card"
       style={{ borderColor: BORDER }}
     >
       <button

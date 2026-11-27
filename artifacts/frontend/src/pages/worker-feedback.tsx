@@ -88,11 +88,11 @@ export default function WorkerFeedbackPage() {
         </div>
       </header>
 
-      <div className="space-y-4">
+      <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
         {sections.map((section) => (
           <section
             key={section.title}
-            className="rounded-2xl border p-5 shadow-sm"
+            className="p-5"
             style={{ borderColor: BORDER, background: section.bg }}
           >
             <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: section.accent }}>

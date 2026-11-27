@@ -53,7 +53,7 @@ export default function MDOnboardingPage() {
               <button
                 key={area.href}
                 onClick={() => navigate(area.href)}
-                className="text-left rounded-2xl border p-5 shadow-sm transition-colors hover:bg-black/[0.02]"
+                className="text-left rounded-2xl border p-5 transition-colors hover:bg-black/[0.02]"
                 style={{ background: SURFACE, borderColor: BORDER }}
               >
                 <div className="flex items-start justify-between gap-3">

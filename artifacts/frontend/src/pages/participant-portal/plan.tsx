@@ -105,11 +105,11 @@ export default function ParticipantPlanPage() {
             {plan.budgets.length > 0 && (
               <section className="space-y-3">
                 <h2 className="text-[16px] font-black" style={{ color: TEXT }}>Budget by category</h2>
-                <ul className="space-y-3">
+                <ul className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                   {plan.budgets.map((b) => {
                     const pct = b.allocated > 0 ? Math.min(100, Math.round((b.used / b.allocated) * 100)) : 0;
                     return (
-                      <li key={b.category} className="rounded-2xl border p-4" style={{ borderColor: BORDER, background: SURFACE }}>
+                      <li key={b.category} className="p-4" style={{ borderColor: BORDER, background: SURFACE }}>
                         <div className="flex flex-wrap items-baseline justify-between gap-2">
                           <p className="text-[14px] font-bold" style={{ color: TEXT }}>{b.category}</p>
                           <p className="text-[13px]" style={{ color: MUTED }}>

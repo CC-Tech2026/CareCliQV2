@@ -452,7 +452,7 @@ export function LiveProgressNotePanel({
 
   return (
     <aside
-      className="flex h-full flex-col overflow-hidden rounded-lg border border-cc-border bg-card shadow-sm"
+      className="flex h-full flex-col overflow-hidden rounded-lg border border-cc-border bg-card"
       data-tutorial="live-progress-note"
     >
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-cc-border px-5 py-3">

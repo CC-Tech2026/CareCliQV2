@@ -76,7 +76,7 @@ export function NextShiftCard({ shift }: Props) {
 
   if (!shift) {
     return (
-      <section className="rounded-2xl border border-cc-border bg-cc-surface p-5 shadow-sm">
+      <section className="rounded-2xl border border-cc-border bg-cc-surface p-5">
         <h2 className="text-lg font-black" style={{ color: TEXT }}>
           {translate("dashboard.nextShift.title")}
         </h2>
@@ -94,7 +94,7 @@ export function NextShiftCard({ shift }: Props) {
       : null);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface shadow-sm">
+    <section className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
       <div className="border-b border-cc-border px-5 py-4" style={{ background: SOFT }}>
         <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: PLUM }}>
           {translate("dashboard.nextShift.title")}

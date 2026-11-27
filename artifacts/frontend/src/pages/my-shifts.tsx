@@ -44,7 +44,7 @@ function formatHours(mins: number): string {
 
 function ShiftSkeleton() {
   return (
-    <div className="flex animate-pulse overflow-hidden rounded-2xl border-0 bg-card p-5 shadow-sm">
+    <div className="flex animate-pulse overflow-hidden rounded-2xl border-0 bg-card p-5">
       <div className="size-[3.25rem] shrink-0 rounded-full bg-cc-soft" />
       <div className="ml-3.5 flex-1 space-y-2.5 pt-1">
         <div className="h-4 w-2/3 rounded-lg bg-cc-soft" />
@@ -225,7 +225,7 @@ export default function MyShifts() {
       )}
 
       {!listQuery.isLoading && sortedShifts.length === 0 && (
-        <section className="rounded-2xl border-0 bg-card px-6 py-14 text-center shadow-sm">
+        <section className="rounded-2xl border-0 bg-card px-6 py-14 text-center">
           <div className="cc-plum-panel mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
             <CalendarDays size={28} className="text-cc-plum" />
           </div>

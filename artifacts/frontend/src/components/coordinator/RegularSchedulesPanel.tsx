@@ -423,11 +423,12 @@ export function RegularSchedulesPanel({
           {groups.map(([participant, items]) => (
             <section key={participant} aria-label={participant} className="space-y-2">
               <h3 className="pt-2 text-[12px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{participant}</h3>
+              <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
               {items.map((s) => {
                 const w = s.worker_id ? byId.get(s.worker_id) : undefined;
                 const detail = w ? detailIfShared(w, shared) : null;
                 return (
-                  <article key={s.id} className="rounded-xl border p-3" style={{ borderColor: BORDER }}>
+                  <article key={s.id} className="p-3" style={{ borderColor: BORDER }}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-[13px] font-semibold" style={{ color: TEXT }}>{s.summary}</p>
@@ -458,6 +459,7 @@ export function RegularSchedulesPanel({
                   </article>
                 );
               })}
+              </div>
             </section>
           ))}
         </div>

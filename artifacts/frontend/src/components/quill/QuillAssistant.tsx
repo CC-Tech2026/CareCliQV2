@@ -1097,7 +1097,7 @@ function Composer({
         }}
       >
         <div
-          className="flex items-end gap-2 rounded-2xl border px-3 py-2.5 shadow-sm transition-shadow focus-within:ring-2"
+          className="flex items-end gap-2 rounded-2xl border px-3 py-2.5 transition-shadow focus-within:ring-2"
           style={{ borderColor: BORDER, background: SURFACE, ["--tw-ring-color" as string]: "var(--cc-plum-ring)" }}
         >
           <textarea

@@ -171,9 +171,9 @@ export function ComplianceResultPanel({
             {rpOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </button>
           {rpOpen && (
-            <div className="px-4 pb-3 space-y-2">
+            <div className="px-4 pb-3 divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
               {rpFlags!.map((flag, i) => (
-                <div key={i} className="bg-red-100 border border-red-200 rounded-lg p-2.5 text-xs space-y-1">
+                <div key={i} className="bg-red-100 border-red-200 p-2.5 text-xs space-y-1">
                   <span className="font-semibold text-red-800 block">
                     {RP_CATEGORY_LABELS[flag.category] ?? flag.category}
                   </span>

@@ -104,19 +104,19 @@ export function OrgSetupChecklist({
   return (
     <section
       aria-labelledby="org-setup-title"
-      className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm"
+      className="overflow-hidden rounded-2xl border bg-cc-surface"
       style={{ borderColor: "rgba(124,58,237,0.2)" }}
     >
-      <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
+      <div className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
         <div className="flex min-w-0 items-start gap-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#7C3AED] text-white shadow-sm" aria-hidden="true">
-            <Building2 size={21} />
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#7C3AED] text-white" aria-hidden="true">
+            <Building2 size={18} />
           </span>
           <div className="min-w-0">
             <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#6D28D9]">Your launch checklist</p>
             <h2
               id="org-setup-title"
-              className="mt-1 text-xl font-bold leading-tight tracking-tight text-cc-text"
+              className="mt-0.5 text-lg font-bold leading-tight tracking-tight text-cc-text"
               style={{ fontFamily: "var(--app-font-display)" }}
             >
               Get your organisation ready
@@ -145,7 +145,7 @@ export function OrgSetupChecklist({
         </div>
       </div>
 
-      <ol className="grid gap-3 border-t border-cc-border bg-[color-mix(in_srgb,var(--cc-soft)_35%,transparent)] p-4 sm:p-5 lg:grid-cols-3">
+      <ol className="divide-y divide-cc-border border-t border-cc-border">
         {steps.map((step, index) => {
           const Icon = step.icon;
           const isNext = !step.done && step.id === nextStepId;
@@ -153,44 +153,34 @@ export function OrgSetupChecklist({
             <li
               key={step.id}
               aria-current={isNext ? "step" : undefined}
-              className="flex min-w-0 flex-col rounded-xl border bg-cc-surface p-4"
-              style={{
-                borderColor: isNext ? "rgba(124,58,237,0.42)" : "var(--cc-border)",
-                boxShadow: isNext ? "0 2px 8px rgba(80,35,150,0.08)" : undefined,
-              }}
+              className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3"
+              style={{ background: isNext ? "rgba(124,58,237,0.04)" : undefined }}
             >
-              <div className="flex items-center gap-3">
-                <span
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                  style={{
-                    background: step.done ? "var(--cc-status-success-bg)" : isNext ? "rgba(124,58,237,0.1)" : "var(--cc-soft)",
-                    color: step.done ? "var(--cc-status-success)" : isNext ? "#6D28D9" : "var(--cc-muted)",
-                  }}
-                  aria-hidden="true"
-                >
-                  {step.done ? <Check size={17} strokeWidth={3} /> : <Icon size={17} />}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-cc-muted">Step {index + 1}</p>
-                  {isNext && <p className="text-[11px] font-bold text-[#6D28D9]">Next up</p>}
-                </div>
-                {step.done && (
-                  <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-bold" style={{ color: "var(--cc-status-success)" }}>
-                    <Check size={13} aria-hidden="true" /> Done
-                  </span>
-                )}
-              </div>
-
-              <div className="mt-3 min-w-0 flex-1">
-                <p className="text-[14px] font-bold leading-snug text-cc-text">
-                  {step.title}
+              <span
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                style={{
+                  background: step.done ? "var(--cc-status-success-bg)" : isNext ? "rgba(124,58,237,0.1)" : "var(--cc-soft)",
+                  color: step.done ? "var(--cc-status-success)" : isNext ? "#6D28D9" : "var(--cc-muted)",
+                }}
+                aria-hidden="true"
+              >
+                {step.done ? <Check size={15} strokeWidth={3} /> : <Icon size={15} />}
+              </span>
+              <div className="min-w-0 flex-1 basis-64">
+                <p className="text-[14px] font-semibold leading-snug text-cc-text">
+                  <span className="mr-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-cc-muted">Step {index + 1}</span>
+                  <span>{step.title}</span>
                   {step.done ? <span className="sr-only"> (done)</span> : null}
+                  {isNext && <span className="ml-2 text-[11px] font-bold text-[#6D28D9]">Next up</span>}
                 </p>
-                <p className="mt-1.5 text-[12px] leading-relaxed text-cc-muted">{step.body}</p>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-cc-muted">{step.body}</p>
               </div>
-
-              {!step.done && (
-                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-cc-border pt-3">
+              {step.done ? (
+                <span className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold" style={{ color: "var(--cc-status-success)" }}>
+                  <Check size={13} aria-hidden="true" /> Done
+                </span>
+              ) : (
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   {step.importHref ? (
                     <button
                       type="button"
@@ -203,7 +193,7 @@ export function OrgSetupChecklist({
                   <button
                     type="button"
                     onClick={() => onNavigate(step.href)}
-                    className="inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-lg bg-[var(--cc-cta)] px-3 text-[12px] font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cc-cta)]"
+                    className="inline-flex min-h-10 md:min-h-8 items-center gap-1.5 rounded-lg bg-[var(--cc-cta)] px-3 text-[12px] font-bold text-white transition-opacity hover:opacity-90"
                   >
                     {step.action}
                     <ArrowRight size={14} aria-hidden="true" />

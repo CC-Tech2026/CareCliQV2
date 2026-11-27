@@ -667,7 +667,7 @@ function InlineSessionComposer({
   ];
   return (
     <section
-      className="flex flex-col overflow-hidden rounded-lg border bg-white shadow-sm"
+      className="flex flex-col overflow-hidden rounded-lg border bg-white"
       style={{
         borderColor: BORDER,
         height: "clamp(520px, calc(100vh - 250px), 720px)",
@@ -1549,7 +1549,7 @@ function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<strin
   const [, navigate] = useLocation();
   const recent = incidents.slice(0, 3);
   return (
-    <section className="rounded-xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-xl border bg-white" style={{ borderColor: BORDER }}>
       <div className="flex shrink-0 items-center justify-between border-b px-5 py-3.5" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
           <Siren size={14} className="text-red-600" />

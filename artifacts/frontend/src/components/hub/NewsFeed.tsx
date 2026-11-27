@@ -169,7 +169,7 @@ export function NewsFeed() {
   }
 
   return (
-    <section className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-cc-surface" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div
         className="flex items-center justify-between gap-3 px-6 py-4"
