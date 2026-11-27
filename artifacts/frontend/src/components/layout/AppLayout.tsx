@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { PlatformBanner } from "@/components/PlatformBanner";
 import { PageErrorBoundary } from "@/components/ErrorBoundary";
 import { useState, useEffect, useMemo } from "react";
 import {
@@ -988,6 +989,7 @@ export function AppLayout({ children, rightRail }: { children: React.ReactNode; 
               <AutoBreadcrumb />
             </div>
             <PaymentIssueBanner isMD={userRole === "managing_director"} />
+            <PlatformBanner />
             <PageErrorBoundary>{children}</PageErrorBoundary>
           </main>
 

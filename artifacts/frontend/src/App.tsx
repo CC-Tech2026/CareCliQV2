@@ -81,6 +81,12 @@ import AdminDashboardPage from "@/pages/admin/dashboard";
 import AdminProvidersPage from "@/pages/admin/providers";
 import AdminProviderDetailPage from "@/pages/admin/provider-detail";
 import AdminProviderImportPage from "@/pages/admin/provider-import";
+import AdminMessagesPage from "@/pages/admin/messages";
+import AdminMessageNewPage from "@/pages/admin/message-new";
+import AdminMessageDetailPage from "@/pages/admin/message-detail";
+import AdminActivityPage from "@/pages/admin/activity";
+import AdminSystemPage from "@/pages/admin/system";
+import EmailPreferencesPage from "@/pages/email-preferences";
 import AdminOnboardingPage from "@/pages/admin/onboarding";
 import AdminFeedbackPage from "@/pages/admin/feedback";
 import AdminBugReportsPage from "@/pages/admin/bug-reports";
@@ -205,6 +211,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/email-preferences" component={EmailPreferencesPage} />
       <Route path="/signup" component={Signup} />
       <Route path="/get-started" component={GetStarted} />
       <Route path="/accept-invite" component={AcceptInvite} />
@@ -264,6 +271,36 @@ function Router() {
       <Route path="/admin/dashboard">
         <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
           <AdminDashboardPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/messages/new">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminMessageNewPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/messages/:messageId">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminMessageDetailPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/messages">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminMessagesPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/activity">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminActivityPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/system">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminSystemPage />
         </ProtectedRoute>
       </Route>
 

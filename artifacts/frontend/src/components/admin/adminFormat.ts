@@ -70,6 +70,10 @@ export function activityLabel(a: AdminActivity) {
     case "admin.import.participants": return `Imported ${after.imported} participants`;
     case "admin.import.staff": return `Prepared ${after.imported} staff invitations for the managing director`;
     case "admin.held_staff.discarded": return `Removed ${after.discarded} prepared invitations`;
+    case "admin.message.sent":
+      return `Sent ${after.category === "news" ? "news" : "a service notice"}: "${String(after.subject ?? "")}"`;
+    case "platform.banner.created": return `Put up a site banner: "${String(after.message ?? "")}"`;
+    case "platform.banner.ended": return "Took down a site banner";
     case "admin.organization.suspended": return "Suspended the organisation";
     case "admin.organization.reactivated": return "Reactivated the organisation";
     default: return a.action_type.replace(/^admin\./, "").replace(/[._]/g, " ");

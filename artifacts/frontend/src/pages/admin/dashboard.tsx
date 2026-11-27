@@ -5,6 +5,7 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { SEVERITY, timeAgo } from "@/components/admin/adminFormat";
 import { useAuth } from "@/contexts/AuthContext";
 import { listAdminOrganizations, type AdminOrgSummary, type AttentionItem } from "@/services/adminService";
+import { getSystemStatus, type SystemStatus } from "@/services/adminMessagesService";
 
 const TODAY_LABEL = new Date().toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
 
@@ -15,6 +16,7 @@ export default function AdminDashboardPage() {
   const { user } = useAuth();
   const [orgs, setOrgs] = useState<AdminOrgSummary[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [system, setSystem] = useState<SystemStatus | null>(null);
   const firstName = (user?.full_name || "").trim().split(/\s+/)[0];
 
   // No dummy-data fallback: a failed fetch must read as a failure, never as
@@ -29,6 +31,14 @@ export default function AdminDashboardPage() {
       });
   }
   useEffect(load, []);
+  useEffect(() => { getSystemStatus().then(setSystem).catch(() => {}); }, []);
+
+  // Problems with the platform itself, ahead of any one provider's.
+  const platformIssues: string[] = [];
+  if (system && system.email.status !== "queued") platformIssues.push(`Email isn't sending: ${system.email.message}`);
+  if (system?.database.checked && system.database.up_to_date === false) {
+    platformIssues.push("The database is missing a migration. Deploy the API to apply it.");
+  }
 
   const flagged = useMemo<Flagged[]>(() => {
     const items = (orgs ?? []).flatMap((org) => (org.attention ?? []).map((a) => ({ ...a, org })));
@@ -69,6 +79,19 @@ export default function AdminDashboardPage() {
 
         <section aria-label="Needs attention" className="space-y-3">
           <h2 className="text-lg font-semibold text-cc-text">Needs attention</h2>
+          {platformIssues.map((issue) => (
+            <button
+              key={issue}
+              type="button"
+              onClick={() => navigate("/admin/system")}
+              className="flex w-full items-start gap-3 rounded-2xl px-4 py-3.5 text-left sm:px-5"
+              style={{ background: "var(--cc-status-danger-bg)" }}
+            >
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" style={{ color: "var(--cc-status-danger)" }} />
+              <span className="min-w-0 flex-1 text-sm text-cc-text"><span className="font-semibold">CareCliQ platform</span> · {issue}</span>
+              <ArrowRight size={15} className="mt-1 shrink-0 text-cc-muted" />
+            </button>
+          ))}
           {orgs === null ? (
             <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-2xl bg-cc-surface" />)}</div>
           ) : flagged.length === 0 && !loadError ? (

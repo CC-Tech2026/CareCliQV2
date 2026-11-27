@@ -64,6 +64,9 @@ _PUBLIC_PREFIXES: tuple[str, ...] = (
     "/api/client-errors",
     # Public participant referral form (no login; org comes from the link).
     "/api/participant-intakes/public/",
+    # Unsubscribe from CareCliQ news emails: opened from the email, signed
+    # out. The link's own signed token says whose preference it is.
+    "/api/email-preferences",
     "/api/admin",
     # Jira calls this one directly (Automation "Send web request"), with no
     # JWT at all — it authenticates with its own shared-secret header
