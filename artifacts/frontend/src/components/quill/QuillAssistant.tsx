@@ -19,7 +19,8 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import type { ThreadSummary } from "@/services/chatboxService";
+import type { QuillCredits, ThreadSummary } from "@/services/chatboxService";
+import { CreditsLine, OutOfCredits } from "./QuillCredits";
 import { QuillBlocks, tableAsText, type QuillSize } from "./QuillBlocks";
 import { QuillText, plainText } from "./QuillText";
 import { QuillWordmark } from "./QuillWordmark";
@@ -48,15 +49,15 @@ const PANEL_H = 680;
 const DIRECTOR_STARTERS = [
   "How are we tracking financially this month?",
   "What needs my attention this week?",
-  "Which credentials expire in the next 30 days?",
-  "Who's on shift right now?",
+  "Write a monthly report for the board",
+  "Which invoices are overdue?",
 ];
 
 const COORDINATOR_STARTERS = [
   "Who's on shift right now?",
-  "Which credentials expire in the next 30 days?",
-  "How many incidents are open?",
-  "What shifts are on tomorrow?",
+  "Which shifts have no worker yet?",
+  "Whose plan review is coming up?",
+  "Make a shift handover template",
 ];
 
 type Mode = "closed" | "panel" | "full";
@@ -137,10 +138,33 @@ export function QuillAssistant() {
     });
   }, []);
 
-  const { loadThreads, threadsState } = chat;
+  const { loadThreads, threadsState, refreshCredits } = chat;
   useEffect(() => {
     if (view !== "closed" && threadsState === "idle") void loadThreads();
   }, [view, threadsState, loadThreads]);
+
+  const [creditsAdded, setCreditsAdded] = useState(false);
+  useEffect(() => {
+    if (view !== "closed") void refreshCredits();
+  }, [view, refreshCredits]);
+
+  // Back from Stripe Checkout: open Quill on the credits, and drop the marker
+  // from the address so a reload doesn't show it again.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("quill_credits");
+    if (!result) return undefined;
+    params.delete("quill_credits");
+    const rest = params.toString();
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`);
+    setMode(readLastFullScreen() ? "full" : "panel");
+    setSettingsOpen(true);
+    if (result !== "added") return undefined;
+    setCreditsAdded(true);
+    // The webhook usually lands within seconds; look again shortly after.
+    const timer = window.setTimeout(() => void refreshCredits(), 4000);
+    return () => window.clearTimeout(timer);
+  }, [refreshCredits]);
 
   const focusInput = useCallback(() => {
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -288,6 +312,7 @@ export function QuillAssistant() {
       starters={starters}
       large={large}
       followUps={settings.followUps}
+      credits={chat.credits}
       onAsk={submit}
       onRetry={chat.retry}
     />
@@ -305,6 +330,11 @@ export function QuillAssistant() {
       size={size}
       large={large}
       enterSends={settings.enterSends}
+      credits={chat.credits}
+      onOpenCredits={() => {
+        setSettingsOpen(true);
+        setHistoryOpen(false);
+      }}
     />
   );
 
@@ -315,6 +345,9 @@ export function QuillAssistant() {
       onDeleteAll={clearAll}
       hasConversations={chat.threads.length > 0}
       full={size === "full"}
+      credits={chat.credits}
+      isDirector={isDirector}
+      creditsAdded={creditsAdded}
     />
   );
 
@@ -709,6 +742,7 @@ function Conversation({
   starters,
   large,
   followUps,
+  credits,
   onAsk,
   onRetry,
 }: {
@@ -721,6 +755,7 @@ function Conversation({
   starters: string[];
   large: boolean;
   followUps: boolean;
+  credits: QuillCredits | null;
   onAsk: (text: string) => void;
   onRetry: (id: string) => void;
 }) {
@@ -791,6 +826,7 @@ function Conversation({
                 fontSize={fonts.body}
                 showFollowUps={followUps && m === lastAssistant && !pending}
                 canRegenerate={m === messages.at(-1) && !pending}
+                credits={credits}
                 onAsk={onAsk}
                 onRetry={onRetry}
               />
@@ -870,6 +906,7 @@ function AnswerView({
   fontSize,
   showFollowUps,
   canRegenerate,
+  credits,
   onAsk,
   onRetry,
 }: {
@@ -879,13 +916,16 @@ function AnswerView({
   fontSize: number;
   showFollowUps: boolean;
   canRegenerate: boolean;
+  credits: QuillCredits | null;
   onAsk: (text: string) => void;
   onRetry: (id: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    const tables = (message.blocks ?? []).flatMap((b) => (b.type === "table" ? [tableAsText(b)] : []));
+    const tables = (message.blocks ?? []).flatMap((b) =>
+      b.type === "table" ? [tableAsText(b)] : b.type === "document" ? [b.content] : [],
+    );
     try {
       await navigator.clipboard.writeText([plainText(message.text), ...tables].join("\n\n"));
       setCopied(true);
@@ -906,14 +946,16 @@ function AnswerView({
           <span className="rounded border px-1.5 py-0.5 text-[10px] leading-none" style={{ borderColor: BORDER }}>AI assistant</span>
           {message.createdAt && !Number.isNaN(Date.parse(message.createdAt)) && <time dateTime={message.createdAt} className="ml-auto" title={new Date(message.createdAt).toLocaleString()}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time>}
         </div>
-        <div className={`leading-[1.75] ${message.status === "error" ? "rounded-xl border border-[var(--cc-border)] bg-[var(--cc-soft)] p-3" : ""}`} style={{ color: message.status === "stopped" ? MUTED : TEXT, fontSize }}>
+        <div className={`leading-[1.75] ${message.status === "error" || message.status === "credits" ? "rounded-xl border border-[var(--cc-border)] bg-[var(--cc-soft)] p-3" : ""}`} style={{ color: message.status === "stopped" ? MUTED : TEXT, fontSize }}>
           <QuillText text={message.text} />
         </div>
+
+        {message.status === "credits" && <OutOfCredits credits={credits} />}
 
         {message.blocks && message.blocks.length > 0 && <QuillBlocks blocks={message.blocks} size={size} />}
 
         <div className="flex flex-wrap items-center gap-2" style={{ color: MUTED }}>
-          {message.status && message.question ? (
+          {message.status && message.status !== "credits" && message.question ? (
             <button
               type="button"
               onClick={() => onRetry(message.id)}
@@ -1018,6 +1060,8 @@ function Composer({
   size,
   large,
   enterSends,
+  credits,
+  onOpenCredits,
 }: {
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
@@ -1029,6 +1073,8 @@ function Composer({
   size: QuillSize;
   large: boolean;
   enterSends: boolean;
+  credits: QuillCredits | null;
+  onOpenCredits: () => void;
 }) {
   const full = size === "full";
   const fonts = textSizes(full, large);
@@ -1096,10 +1142,13 @@ function Composer({
             </button>
           )}
         </div>
-        <p className="mt-1.5 text-center text-[11px]" style={{ color: MUTED }}>
-          {full
-            ? `${enterSends ? "Enter to send, Shift + Enter for a new line." : "Ctrl + Enter to send."} Quill can make mistakes, so check important figures where they come from.`
-            : "Quill can make mistakes. Check important figures where they come from."}
+        <p className="mt-1.5 flex flex-wrap items-center justify-center gap-x-2 text-center text-[11px]" style={{ color: MUTED }}>
+          <span>
+            {full
+              ? `${enterSends ? "Enter to send, Shift + Enter for a new line." : "Ctrl + Enter to send."} Quill can make mistakes, so check important figures.`
+              : "Quill can make mistakes. Check important figures."}
+          </span>
+          <CreditsLine credits={credits} onOpenDetails={onOpenCredits} />
         </p>
       </form>
     </div>

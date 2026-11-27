@@ -19,6 +19,7 @@ after that mark so it never breaks the cache.
 """
 
 import logging
+import re
 from datetime import datetime
 
 from langchain_core.messages import SystemMessage, ToolMessage
@@ -55,8 +56,10 @@ _INSTRUCTIONS_TEMPLATE = """\
 You are Quill, the assistant built into CareCliQ, the software an NDIS \
 provider uses to run its services. You answer questions about this \
 organisation's own live data (participants, shifts and the roster, workers, \
-compliance, credentials, incidents, funding and finances) by looking it up \
-with your tools. You can read data but you cannot change any records.
+compliance, credentials, incidents, complaints, plan reviews, invoices, \
+funding and finances) by looking it up with your tools. You also write \
+documents: reports, templates, letters, checklists and summaries. You can \
+read data but you cannot change any records.
 
 {role}
 
@@ -78,6 +81,21 @@ date given at the end of these instructions, never from your own sense of the \
 date, which is not reliable and will be wrong. Weeks run Monday to Sunday.
 - Money is in Australian dollars.
 
+Writing documents:
+- When asked for a report, template, letter, form, checklist, summary or \
+any other document, write it with the draft_document tool, not in the reply.
+- For a report about this organisation, first look up every figure it needs \
+with the other tools, then draft it from those figures only. Where a figure \
+isn't available, write "[not available]" rather than inventing one.
+- A template has blanks in square brackets, such as [Participant name] and \
+[Date], and follows NDIS practice: plain language, the person's own words \
+and choices, dates and times, who was there, and what happens next.
+- Write documents in Markdown: "# " for the title, "## " for sections, "- " \
+for lists, and tables with | where they help. Keep them as long as the \
+purpose needs and no longer.
+- After drafting, reply with one sentence saying what you wrote and what \
+the person should check or fill in. Don't repeat the document in the reply.
+
 How to answer:
 - Always start with the answer itself in one sentence, as a headline, before \
 any list: the overall position, with the one figure that matters most. No \
@@ -89,7 +107,7 @@ for example: "- **Credentials:** Tom Walsh has three expired, including \
 First Aid." Put a step the person could take next in the item it belongs to.
 - If there is only one thing to say, answer in one or two sentences with no \
 list.
-- Cards, tables and charts with the detail appear under your reply, grouped \
+- Tables and figures with the detail appear under your reply, grouped \
 by topic. Name only the figures that matter for the point you are making; \
 don't list every figure or row the cards already show.
 - Stop after the last list item: no closing summary or sign-off sentence. \
@@ -152,12 +170,37 @@ def prompt_text(prompt) -> str:
     return str(prompt)
 
 
-def _build_agent(provider: str, tools, current_user: dict | None = None, answer_style: str | None = None):
+def _build_agent(
+    provider: str, tools, current_user: dict | None = None, answer_style: str | None = None,
+    usage_sink: list | None = None,
+):
     return create_react_agent(
-        model=get_chat_model(provider),
+        model=get_chat_model(provider, usage_sink),
         tools=tools,
         prompt=_system_prompt(provider, current_user, answer_style),
     )
+
+
+_DOC_HEADING = re.compile(r"^\s*#{1,3}\s+(.+)$", re.MULTILINE)
+
+
+def document_from_reply(reply: str, blocks: list[dict]) -> tuple[str, list[dict]]:
+    """gpt-4o-mini sometimes writes a requested report straight into its
+    reply instead of calling draft_document. A reply shaped like a document
+    (a title heading or several section headings, and some length) that
+    came with no document block becomes one, so it still gets the page view
+    and the Word and PDF downloads, and the reply is cut to one line."""
+    if any(b.get("type") == "document" for b in blocks):
+        return reply, blocks
+    headings = _DOC_HEADING.findall(reply)
+    starts_with_title = bool(re.match(r"^\s*#\s+", reply))
+    if len(reply) < 600 or not (starts_with_title or len(headings) >= 2):
+        return reply, blocks
+    title = headings[0].replace("**", "").strip()[:140] if headings else "Document"
+    doc = {"type": "document", "title": title or "Document", "document_type": "report",
+           "content": reply.strip(), "section": "Document"}
+    summary = f"I've written {title or 'the document'} below. Check the figures and fill in anything marked [not available]."
+    return summary, [*blocks, doc]
 
 
 def _reply_text(message) -> str:
@@ -174,13 +217,18 @@ def _reply_text(message) -> str:
 
 async def ask_quill(
     current_user: dict, message: str, thread_id: str, answer_style: str | None = None,
+    meter: dict | None = None,
 ) -> tuple[str, list[dict], list[str]]:
     """Returns (reply_text, blocks, follow_up_questions). Blocks are built
     deterministically from each tool call's raw artifact, not parsed from the
     model's prose; follow-ups are picked by code from the tools that ran.
 
     Tries the preferred provider first, then the other one if that call
-    fails — see module docstring."""
+    fails — see module docstring.
+
+    ``meter``, when given, is filled with each model step's token use
+    ("usage", including steps of a provider that failed: those are billed
+    to CareCliQ too) and the provider that answered, for the credit charge."""
     tools = build_tools_for_user(current_user, thread_id)
 
     prior_turns = (await load_history(current_user, thread_id))[-MAX_HISTORY_TURNS:]
@@ -198,7 +246,11 @@ async def ask_quill(
     last_exc: Exception | None = None
     for i, provider in enumerate(providers_to_try):
         try:
-            agent = _build_agent(provider, tools, current_user, answer_style)
+            extra = {}
+            if meter is not None:
+                extra["usage_sink"] = meter.setdefault("usage", [])
+                meter["provider"] = provider
+            agent = _build_agent(provider, tools, current_user, answer_style, **extra)
             result = await agent.ainvoke({"messages": messages})
             reply_text = _reply_text(result["messages"][-1]).strip()
             if not reply_text:
@@ -225,6 +277,8 @@ async def ask_quill(
             blocks.extend(build_blocks(m.name, m.artifact))
             if m.name not in tools_used:
                 tools_used.append(m.name)
+
+    reply_text, blocks = document_from_reply(reply_text, blocks)
 
     await save_turn(current_user, thread_id, "user", message)
     await save_turn(current_user, thread_id, "assistant", reply_text, blocks=blocks)

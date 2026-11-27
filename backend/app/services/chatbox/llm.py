@@ -19,6 +19,7 @@ from langchain_openai import ChatOpenAI
 
 from ...core.config import settings
 from ..ai_usage_guard import consume_ai_call
+from ..quill_credits import ModelUsage
 
 CHATBOX_MODEL = "claude-opus-5-5"
 
@@ -48,8 +49,31 @@ class MeterModelCalls(BaseCallbackHandler):
     raise_error = True  # let the limit stop the call instead of being logged
     run_inline = True   # run in the request's context, where the user is known
 
+    def __init__(self, usage_sink: list | None = None, model: str = ""):
+        super().__init__()
+        # Each model step's token use, for the answer's credit charge.
+        self.usage_sink = usage_sink
+        self.model = model
+
     def on_chat_model_start(self, serialized, messages, **kwargs):
         consume_ai_call("quill")
+
+    def on_llm_end(self, response, **kwargs):
+        if self.usage_sink is None:
+            return
+        for generations in getattr(response, "generations", None) or []:
+            for gen in generations:
+                usage = getattr(getattr(gen, "message", None), "usage_metadata", None) or {}
+                if not usage:
+                    continue
+                details = usage.get("input_token_details") or {}
+                self.usage_sink.append(ModelUsage(
+                    model=self.model,
+                    input_tokens=int(usage.get("input_tokens") or 0),
+                    cached_input_tokens=int(details.get("cache_read") or 0),
+                    cache_write_tokens=int(details.get("cache_creation") or 0),
+                    output_tokens=int(usage.get("output_tokens") or 0),
+                ))
 
 
 def chatbox_effort() -> str:
@@ -57,7 +81,7 @@ def chatbox_effort() -> str:
     return configured if configured in CHATBOX_EFFORT_LEVELS else DEFAULT_EFFORT
 
 
-def _get_anthropic_chat_model() -> ChatAnthropic:
+def _get_anthropic_chat_model(usage_sink: list | None = None) -> ChatAnthropic:
     base_url = os.environ.get("AI_INTEGRATIONS_ANTHROPIC_BASE_URL")
     integ_key = os.environ.get("AI_INTEGRATIONS_ANTHROPIC_API_KEY")
 
@@ -71,7 +95,7 @@ def _get_anthropic_chat_model() -> ChatAnthropic:
         # so the next step reads it back cheaply instead of paying for it
         # again. graph.py also marks the fixed instructions for caching.
         "model_kwargs": {"cache_control": {"type": "ephemeral"}},
-        "callbacks": [MeterModelCalls()],
+        "callbacks": [MeterModelCalls(usage_sink, CHATBOX_MODEL)],
     }
     if base_url and integ_key:
         kwargs["anthropic_api_key"] = integ_key
@@ -82,22 +106,26 @@ def _get_anthropic_chat_model() -> ChatAnthropic:
     return ChatAnthropic(**kwargs)
 
 
-def _get_openai_chat_model() -> ChatOpenAI:
+def _get_openai_chat_model(usage_sink: list | None = None) -> ChatOpenAI:
     return ChatOpenAI(
         model=CHATBOX_MODEL_OPENAI,
         api_key=settings.openai_api_key,
         temperature=0,
-        callbacks=[MeterModelCalls()],
+        # A drafted report is the longest thing Quill writes; this stops a
+        # runaway answer from costing more than a few credits.
+        max_tokens=4000,
+        stream_usage=True,
+        callbacks=[MeterModelCalls(usage_sink, CHATBOX_MODEL_OPENAI)],
     )
 
 
-def get_chat_model(provider: str | None = None):
+def get_chat_model(provider: str | None = None, usage_sink: list | None = None):
     """Builds a chat model for the given provider ("anthropic" or "openai"),
     defaulting to the configured preferred provider (CHATBOX_LLM_PROVIDER)."""
     resolved = provider or settings.chatbox_llm_provider
     if resolved == "openai":
-        return _get_openai_chat_model()
-    return _get_anthropic_chat_model()
+        return _get_openai_chat_model(usage_sink)
+    return _get_anthropic_chat_model(usage_sink)
 
 
 def fallback_provider(provider: str) -> str:

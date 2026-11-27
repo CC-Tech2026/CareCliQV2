@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Check, Copy, Download, FileDown } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AXIS_PROPS, BAR_PROPS, GRID_PROPS, SERIES, TOOLTIP_PROPS } from "@/components/charts/figures";
+import { SERIES } from "@/components/charts/figures";
 import type { BarChartBlock, ChatBlock, DownloadBlock, StatBlock, TableBlock } from "@/services/chatboxService";
+import { QuillDocument } from "./QuillDocument";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -11,9 +11,13 @@ const LINK = "var(--cc-plum)";
 
 export type QuillSize = "compact" | "full";
 
+/** The detail under an answer, laid out like the body of a short report:
+ * topic headings with a rule, a line of key figures, ruled tables and
+ * labelled bars. No boxed cards; only a drafted document sits on a page. */
+
 type Group = { kind: "stats"; stats: StatBlock[] } | { kind: "block"; block: ChatBlock };
 
-/** Consecutive figures read as one strip, not a grid of separate cards. */
+/** Consecutive figures read as one line. */
 function group(blocks: ChatBlock[]): Group[] {
   const out: Group[] = [];
   for (const block of blocks) {
@@ -27,8 +31,7 @@ function group(blocks: ChatBlock[]): Group[] {
 
 type Section = { name: string | null; blocks: ChatBlock[] };
 
-/** Blocks by topic, in the order each topic first appears. Two tools can
- * share a topic (revenue and the financial overview are both "Finances"). */
+/** Blocks by topic, in the order each topic first appears. */
 function sections(blocks: ChatBlock[]): Section[] {
   const out: Section[] = [];
   for (const block of blocks) {
@@ -43,24 +46,28 @@ function sections(blocks: ChatBlock[]): Section[] {
 export function QuillBlocks({ blocks, size }: { blocks: ChatBlock[]; size: QuillSize }) {
   if (!blocks.length) return null;
   const groups = sections(blocks);
-  // One topic needs no heading: the card titles already say what it is.
   const labelled = groups.length > 1;
   return (
-    <div className={labelled ? "space-y-5 pt-1" : "space-y-3"}>
+    <div className={labelled ? "space-y-6 pt-1" : "space-y-4"}>
       {groups.map((section, s) => (
         <section key={section.name ?? `s${s}`} aria-label={labelled ? (section.name ?? "Other details") : undefined}>
           {labelled && (
-            <h3 className="mb-2 text-[12px] font-semibold" style={{ color: MUTED }}>
-              {section.name ?? "Other details"}
+            <h3
+              className="mb-3 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.08em]"
+              style={{ color: MUTED }}
+            >
+              <span>{section.name ?? "Other details"}</span>
+              <span aria-hidden="true" className="h-px flex-1" style={{ background: BORDER }} />
             </h3>
           )}
-          <div className="space-y-2.5">
+          <div className="space-y-4">
             {group(section.blocks).map((g, i) => {
-              if (g.kind === "stats") return <StatStrip key={i} stats={g.stats} size={size} />;
+              if (g.kind === "stats") return <Figures key={i} stats={g.stats} size={size} />;
               const b = g.block;
               if (b.type === "table") return <TableView key={i} block={b} size={size} />;
-              if (b.type === "bar_chart") return <ChartView key={i} block={b} size={size} />;
+              if (b.type === "bar_chart") return <BarsView key={i} block={b} />;
               if (b.type === "download") return <DownloadView key={i} block={b} />;
+              if (b.type === "document") return <QuillDocument key={i} block={b} full={size === "full"} />;
               return null;
             })}
           </div>
@@ -72,43 +79,28 @@ export function QuillBlocks({ blocks, size }: { blocks: ChatBlock[]; size: Quill
 
 // ── Figures ──────────────────────────────────────────────────────────────────
 
-function StatStrip({ stats, size }: { stats: StatBlock[]; size: QuillSize }) {
-  const maxCols = size === "full" ? 4 : 2;
-  const cols = Math.min(stats.length, maxCols);
+function Figures({ stats, size }: { stats: StatBlock[]; size: QuillSize }) {
   return (
-    <div
-      className="grid overflow-hidden rounded-xl border"
-      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: 1, background: BORDER, borderColor: BORDER }}
-    >
-      {stats.map((s, i) => {
-        // A lone figure on the last row spans it, so no empty grey cell shows.
-        const spanRest = i === stats.length - 1 && stats.length % cols !== 0;
-        return (
-          <div
-            key={i}
-            className="min-w-0 px-3.5 py-2.5"
-            style={{ background: "var(--cc-surface)", gridColumn: spanRest ? `span ${cols - (stats.length % cols) + 1}` : undefined }}
+    <dl className={`flex flex-wrap gap-y-3 ${size === "full" ? "gap-x-8" : "gap-x-6"}`}>
+      {stats.map((s, i) => (
+        <div key={i} className="min-w-0 max-w-[14rem]">
+          <dd
+            className="text-[20px] font-semibold leading-tight tabular-nums"
+            style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
           >
-            <p className="line-clamp-2 text-[11px] font-medium leading-snug" style={{ color: MUTED }} title={s.label}>
-              {s.label}
-            </p>
-            <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5">
-              <span
-                className="text-[19px] font-semibold leading-tight tabular-nums"
-                style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
-              >
-                {s.value ?? "Not set"}
+            {s.value ?? "Not set"}
+            {s.target != null && (
+              <span className="ml-1.5 text-[11.5px] font-normal" style={{ color: MUTED, fontFamily: "inherit" }}>
+                {typeof s.target === "number" ? `of ${s.target} target` : s.target}
               </span>
-              {s.target != null && (
-                <span className="text-[11px]" style={{ color: MUTED }}>
-                  {typeof s.target === "number" ? `of ${s.target} target` : s.target}
-                </span>
-              )}
-            </p>
-          </div>
-        );
-      })}
-    </div>
+            )}
+          </dd>
+          <dt className="mt-0.5 text-[11.5px] leading-snug" style={{ color: MUTED }}>
+            {s.label}
+          </dt>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -136,7 +128,10 @@ function isNumericColumn(rows: Cell[][], col: number): boolean {
 function cellTone(cell: Cell): string | undefined {
   if (typeof cell !== "string") return undefined;
   const v = cell.trim().toLowerCase();
-  if (v === "urgent" || v === "expired" || v === "overdue" || /\bdays? ago$/.test(v) || v.includes("(overspent)")) {
+  if (
+    v === "urgent" || v === "expired" || v === "overdue" || v === "report owed" ||
+    /\bdays? ago$/.test(v) || v.includes("(overspent)")
+  ) {
     return "var(--cc-danger-text)";
   }
   if (v === "soon" || v === "today") return "var(--cc-amber)";
@@ -159,6 +154,8 @@ function TableView({ block, size }: { block: TableBlock; size: QuillSize }) {
   const [expanded, setExpanded] = useState(false);
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const [copied, setCopied] = useState(false);
+  // A two-column table with no headings is a list of label / value pairs.
+  const keyValue = block.columns.length === 2 && block.columns.every((c) => !c);
 
   const numeric = useMemo(() => block.columns.map((_, i) => isNumericColumn(block.rows, i)), [block]);
   const rows = useMemo(() => {
@@ -172,6 +169,7 @@ function TableView({ block, size }: { block: TableBlock; size: QuillSize }) {
     });
   }, [block.rows, sort]);
   const shown = expanded ? rows : rows.slice(0, limit);
+  const pad = size === "full" ? "px-2.5" : "px-1.5";
 
   function toggleSort(col: number) {
     setSort((s) => (s?.col === col ? (s.dir === 1 ? { col, dir: -1 } : null) : { col, dir: 1 }));
@@ -198,13 +196,15 @@ function TableView({ block, size }: { block: TableBlock; size: QuillSize }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border" style={{ borderColor: BORDER, background: "var(--cc-surface)" }}>
-      <div className="flex items-center gap-2 border-b px-3.5 py-2" style={{ borderColor: BORDER }}>
+    <div>
+      <div className="flex items-center gap-2 pb-1.5">
         <p className="min-w-0 flex-1 truncate text-[12.5px] font-semibold" style={{ color: TEXT }}>
           {block.title}
-          <span className="ml-2 font-normal" style={{ color: MUTED }}>
-            {block.rows.length} {block.rows.length === 1 ? "row" : "rows"}
-          </span>
+          {!keyValue && (
+            <span className="ml-2 font-normal" style={{ color: MUTED }}>
+              {block.rows.length} {block.rows.length === 1 ? "row" : "rows"}
+            </span>
+          )}
         </p>
         <IconAction label={copied ? "Copied" : "Copy table"} onClick={copy}>
           {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -215,47 +215,50 @@ function TableView({ block, size }: { block: TableBlock; size: QuillSize }) {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-[12.5px]" style={{ borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              {block.columns.map((c, i) => (
-                <th
-                  key={i}
-                  scope="col"
-                  aria-sort={sort?.col === i ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
-                  className={`whitespace-nowrap ${size === "full" ? "px-3.5" : "px-2.5"} py-2 font-medium ${numeric[i] ? "text-right" : "text-left"}`}
-                  style={{ color: MUTED, fontSize: 11.5 }}
-                >
-                  {c ? (
-                    <button
-                      type="button"
-                      onClick={() => toggleSort(i)}
-                      className="inline-flex items-center gap-1 rounded hover:underline focus-visible:outline-none focus-visible:ring-2"
-                      style={{ ["--tw-ring-color" as string]: LINK }}
-                    >
-                      {c}
-                      {sort?.col === i && (sort.dir === 1 ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
-                    </button>
-                  ) : (
-                    <span className="sr-only">Status</span>
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
+          {!keyValue && (
+            <thead>
+              <tr className="border-b" style={{ borderColor: TEXT }}>
+                {block.columns.map((c, i) => (
+                  <th
+                    key={i}
+                    scope="col"
+                    aria-sort={sort?.col === i ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
+                    className={`whitespace-nowrap ${pad} pb-1.5 pt-0 font-medium first:pl-0 ${numeric[i] ? "text-right" : "text-left"}`}
+                    style={{ color: MUTED, fontSize: 11.5 }}
+                  >
+                    {c ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(i)}
+                        className="inline-flex items-center gap-1 rounded hover:underline focus-visible:outline-none focus-visible:ring-2"
+                        style={{ ["--tw-ring-color" as string]: LINK }}
+                      >
+                        {c}
+                        {sort?.col === i && (sort.dir === 1 ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
+                      </button>
+                    ) : (
+                      <span className="sr-only">Status</span>
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+          )}
           <tbody>
             {shown.map((row, r) => (
-              <tr key={r} className="border-t" style={{ borderColor: BORDER }}>
+              <tr key={r} className="border-b" style={{ borderColor: BORDER }}>
                 {row.map((cell, c) => {
                   const tone = cellTone(cell);
-                  // In full screen, names, dates and "37 days ago" stay on
-                  // one line. The side panel is too narrow for that without
-                  // pushing the last column out of view, so there they wrap.
                   const short = size === "full" && cell != null && String(cell).length <= SHORT_CELL;
+                  const label = keyValue && c === 0;
                   return (
                     <td
                       key={c}
-                      className={`${size === "full" ? "px-3.5" : "px-2.5"} py-2 align-top ${numeric[c] ? "text-right tabular-nums whitespace-nowrap" : short ? "whitespace-nowrap" : ""}`}
-                      style={{ color: tone ?? TEXT, fontWeight: tone && tone !== MUTED ? 600 : undefined }}
+                      className={`${pad} py-2 align-top first:pl-0 ${numeric[c] && !keyValue ? "text-right tabular-nums whitespace-nowrap" : short ? "whitespace-nowrap" : ""} ${label ? "w-[38%]" : ""}`}
+                      style={{
+                        color: label ? MUTED : (tone ?? TEXT),
+                        fontWeight: tone && tone !== MUTED ? 600 : undefined,
+                      }}
                     >
                       {cell ?? "—"}
                     </td>
@@ -270,8 +273,8 @@ function TableView({ block, size }: { block: TableBlock; size: QuillSize }) {
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="w-full border-t px-3.5 py-2 text-left text-[12px] font-semibold hover:underline"
-          style={{ borderColor: BORDER, color: LINK }}
+          className="mt-1.5 text-left text-[12px] font-semibold hover:underline"
+          style={{ color: LINK }}
         >
           {expanded ? "Show fewer" : `Show all ${rows.length} rows`}
         </button>
@@ -295,7 +298,7 @@ function IconAction({ label, onClick, children }: { label: string; onClick: () =
   );
 }
 
-// ── Charts ───────────────────────────────────────────────────────────────────
+// ── Bars ─────────────────────────────────────────────────────────────────────
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -306,27 +309,25 @@ function monthLabel(value: unknown, spansYears: boolean): string {
   return spansYears ? `${name} ${m[1].slice(2)}` : name;
 }
 
-function money(value: unknown): string {
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return String(value);
-  return n.toLocaleString("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
+function compactMoney(value: number): string {
+  if (Math.abs(value) >= 1000) return `$${(Math.round(value / 100) / 10).toLocaleString("en-AU")}k`;
+  return `$${Math.round(value).toLocaleString("en-AU")}`;
 }
 
-function compactMoney(value: unknown): string {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return String(value);
-  if (Math.abs(n) >= 1000) return `$${Math.round(n / 100) / 10}k`;
-  return `$${Math.round(n)}`;
-}
-
-function ChartView({ block, size }: { block: BarChartBlock; size: QuillSize }) {
+/** One row per month (or category): its label, a bar per series scaled to
+ * the largest value in the block, and the figure at the end of each bar.
+ * Easier to read in a narrow panel than a column chart with an axis. */
+function BarsView({ block }: { block: BarChartBlock }) {
   const series = block.series.slice(0, SERIES.length);
   const isMoney = series.some((s) => s.key.endsWith("_aud"));
   const years = new Set(block.data.map((d) => String(d[block.x_key]).slice(0, 4)));
   const spansYears = years.size > 1;
+  const max = Math.max(1, ...block.data.flatMap((d) => series.map((s) => Math.abs(Number(d[s.key]) || 0))));
+  const fmt = (v: number) => (isMoney ? compactMoney(v) : v.toLocaleString("en-AU"));
+
   return (
-    <div className="rounded-xl border px-3.5 py-3" style={{ borderColor: BORDER, background: "var(--cc-surface)" }}>
-      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+    <div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pb-2">
         <p className="mr-auto text-[12.5px] font-semibold" style={{ color: TEXT }}>
           {block.title}
         </p>
@@ -338,34 +339,31 @@ function ChartView({ block, size }: { block: BarChartBlock; size: QuillSize }) {
             </span>
           ))}
       </div>
-      <div style={{ width: "100%", height: size === "full" ? 220 : 150 }}>
-        <ResponsiveContainer>
-          <BarChart data={block.data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-            <CartesianGrid {...GRID_PROPS} />
-            <XAxis
-              dataKey={block.x_key}
-              {...AXIS_PROPS}
-              tick={{ fontSize: 11, fill: MUTED }}
-              tickFormatter={(v) => monthLabel(v, spansYears)}
-            />
-            <YAxis
-              {...AXIS_PROPS}
-              width={isMoney ? 48 : 32}
-              tick={{ fontSize: 11, fill: MUTED }}
-              tickFormatter={(v) => (isMoney ? compactMoney(v) : String(v))}
-            />
-            <Tooltip
-              {...TOOLTIP_PROPS}
-              cursor={{ fill: "var(--cc-soft)" }}
-              labelFormatter={(v) => monthLabel(v, true)}
-              formatter={(value: unknown, name: unknown) => [isMoney ? money(value) : String(value), String(name)]}
-            />
-            {series.map((s, i) => (
-              <Bar key={s.key} dataKey={s.key} name={s.label ?? s.key} fill={SERIES[i]} {...BAR_PROPS} />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      <ul className="space-y-1.5">
+        {block.data.map((d, r) => (
+          <li key={r} className="grid grid-cols-[3.25rem_1fr] items-center gap-2 text-[11.5px]">
+            <span className="tabular-nums" style={{ color: MUTED }}>
+              {monthLabel(d[block.x_key], spansYears)}
+            </span>
+            <span className="space-y-0.5">
+              {series.map((s, i) => {
+                const value = Number(d[s.key]) || 0;
+                return (
+                  <span key={s.key} className="flex items-center gap-2" title={`${s.label}: ${fmt(value)}`}>
+                    <span
+                      className="h-2.5 rounded-sm"
+                      style={{ width: `${Math.max((Math.abs(value) / max) * 78, value ? 1.5 : 0)}%`, background: SERIES[i] }}
+                    />
+                    <span className="shrink-0 tabular-nums" style={{ color: TEXT }}>
+                      {fmt(value)}
+                    </span>
+                  </span>
+                );
+              })}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -378,21 +376,19 @@ function DownloadView({ block }: { block: DownloadBlock }) {
       href={block.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-3 rounded-xl border px-3.5 py-2.5 transition-colors hover:bg-[var(--cc-soft)]"
-      style={{ borderColor: BORDER, background: "var(--cc-surface)" }}
+      className="group flex items-center gap-2.5 border-b py-2 text-[12.5px]"
+      style={{ borderColor: BORDER }}
     >
-      <FileDown size={18} className="shrink-0" style={{ color: MUTED }} />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[12.5px] font-semibold" style={{ color: TEXT }}>
-          {block.title}
-        </span>
+      <FileDown size={16} className="shrink-0" style={{ color: MUTED }} />
+      <span className="min-w-0 flex-1 truncate font-semibold" style={{ color: TEXT }}>
+        {block.title}
         {block.count != null && (
-          <span className="block text-[11.5px]" style={{ color: MUTED }}>
+          <span className="ml-2 font-normal" style={{ color: MUTED }}>
             {block.count} {block.count === 1 ? "file" : "files"}
           </span>
         )}
       </span>
-      <span className="shrink-0 text-[12px] font-semibold" style={{ color: LINK }}>
+      <span className="shrink-0 text-[12px] font-semibold group-hover:underline" style={{ color: LINK }}>
         Download
       </span>
     </a>

@@ -47,6 +47,25 @@ _FOLLOW_UPS: dict[str, list[tuple[str, bool]]] = {
     "get_active_worker_list": [("Which credentials expire in the next 30 days?", False)],
     "get_session_activity": [("Who's on shift right now?", False)],
     "get_retention_rate": [("How many active workers do we have?", False)],
+    "get_open_incidents": [
+        ("Write an incident report template", False),
+        ("Any complaints waiting on a response?", False),
+    ],
+    "get_complaints": [("List the open incidents", False)],
+    "get_plan_reviews_due": [
+        ("Write a plan review checklist", False),
+        ("Which shifts have no worker yet?", False),
+    ],
+    "get_unpaid_invoices": [
+        ("Draft a friendly payment reminder letter", True),
+        ("Are we making a profit this month?", True),
+    ],
+    "get_unfilled_shifts": [("Who's on shift right now?", False)],
+    "get_worker_overview": [("Which credentials expire in the next 30 days?", False)],
+    "draft_document": [
+        ("Write a monthly report for the board", True),
+        ("Make a shift handover template", False),
+    ],
 }
 
 MAX_FOLLOW_UPS = 3
