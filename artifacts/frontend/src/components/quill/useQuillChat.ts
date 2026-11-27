@@ -3,9 +3,11 @@ import {
   clearChatHistory,
   deleteChatThread,
   getChatThreadMessages,
+  getQuillCredits,
   listChatThreads,
   sendChatMessage,
   type ChatBlock,
+  type QuillCredits,
   type ThreadSummary,
 } from "@/services/chatboxService";
 
@@ -16,8 +18,9 @@ export type QuillMessage = {
   blocks?: ChatBlock[];
   /** Follow-up questions offered under this answer. */
   suggestions?: string[];
-  /** "error": the request failed and can be tried again; "stopped": the user stopped it. */
-  status?: "error" | "stopped";
+  /** "error": the request failed and can be tried again; "stopped": the user
+   * stopped it; "credits": no credits left (the answer offers a top-up). */
+  status?: "error" | "stopped" | "credits";
   /** The question an error or stopped answer belongs to, for Try again. */
   question?: string;
   createdAt?: string;
@@ -25,6 +28,7 @@ export type QuillMessage = {
 };
 
 export const CHAT_ERROR_REPLY = "Sorry, I couldn't get that answer. Check your connection and try again.";
+export const OUT_OF_CREDITS_REPLY = "You've used this month's Quill credits. You can add more now.";
 export const HISTORY_ERROR_REPLY = "Sorry, I couldn't open that conversation. Try again in a moment.";
 
 let seq = 0;
@@ -42,6 +46,7 @@ export function useQuillChat(options: { answerStyle?: "brief" | "detailed" } = {
   const [threadsState, setThreadsState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [pending, setPending] = useState(false);
   const [openingThread, setOpeningThread] = useState(false);
+  const [credits, setCredits] = useState<QuillCredits | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const threadIdRef = useRef<string | undefined>(undefined);
   threadIdRef.current = threadId;
@@ -61,6 +66,14 @@ export function useQuillChat(options: { answerStyle?: "brief" | "detailed" } = {
     }
   }, []);
 
+  const refreshCredits = useCallback(async () => {
+    try {
+      setCredits(await getQuillCredits());
+    } catch {
+      /* the balance is a nicety; Quill still works without it */
+    }
+  }, []);
+
   const ask = useCallback(
     async (question: string) => {
       setPending(true);
@@ -75,14 +88,25 @@ export function useQuillChat(options: { answerStyle?: "brief" | "detailed" } = {
         // The person may have started a new chat or opened another one meanwhile.
         if (conversationRef.current !== conversation) return;
         setThreadId(res.thread_id);
+        if (res.credits) setCredits(res.credits);
         setMessages((prev) => [
           ...prev,
           { id: nextId("a"), role: "assistant", text: res.reply, blocks: res.blocks ?? [], suggestions: res.suggestions ?? [], question, createdAt: new Date().toISOString(), durationMs: performance.now() - startedAt },
         ]);
         void loadThreads();
-      } catch {
+      } catch (err) {
         if (conversationRef.current !== conversation) return;
         const stopped = controller.signal.aborted;
+        const failure = err as { status?: number; message?: string; payload?: { detail?: { credits?: QuillCredits } } };
+        if (!stopped && failure?.status === 402) {
+          const balance = failure.payload?.detail?.credits;
+          if (balance) setCredits(balance);
+          setMessages((prev) => [
+            ...prev,
+            { id: nextId("a"), role: "assistant", text: failure.message || OUT_OF_CREDITS_REPLY, status: "credits", question },
+          ]);
+          return;
+        }
         setMessages((prev) => [
           ...prev,
           stopped
@@ -198,6 +222,8 @@ export function useQuillChat(options: { answerStyle?: "brief" | "detailed" } = {
     threadsState,
     pending,
     openingThread,
+    credits,
+    refreshCredits,
     loadThreads,
     send,
     retry,

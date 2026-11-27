@@ -11,6 +11,7 @@ Block shapes (kept intentionally small — 4 types cover every tool today):
   {"type": "table", "title": str, "columns": [str, ...], "rows": [[cell, ...], ...]}
   {"type": "bar_chart", "title": str, "x_key": str, "series": [{"key": str, "label": str}], "data": [dict, ...]}
   {"type": "download", "title": str, "url": str, "count": int|None}
+  {"type": "document", "title": str, "document_type": str, "content": str (Markdown)}
 
 Every block also carries "section": the topic it belongs to (see _SECTIONS).
 """
@@ -361,6 +362,124 @@ def _blocks_for_participant_overview(a: dict) -> list[dict]:
     return blocks
 
 
+def _stat(label: str, value: Any, target: Any = None) -> dict:
+    return {"type": "stat", "label": label, "value": value, "target": target}
+
+
+def _blocks_for_open_incidents(a: dict) -> list[dict]:
+    blocks = [_stat("Open incidents", a.get("open_count", 0)),
+              _stat("NDIS reports owed", a.get("ndis_reports_owed", 0))]
+    rows = [[i.get("reference"), i.get("participant"), i.get("type"), i.get("severity"),
+             i.get("status"), i.get("date"),
+             "Report owed" if i.get("ndis_report_owed") else None]
+            for i in a.get("incidents") or []]
+    if rows:
+        blocks.append({"type": "table", "title": "Open incidents",
+                       "columns": ["Ref", "Participant", "Type", "Severity", "Status", "Date", "NDIS"],
+                       "rows": rows})
+    return blocks
+
+
+def _blocks_for_complaints(a: dict) -> list[dict]:
+    blocks = [_stat("Open complaints", a.get("open_count", 0)),
+              _stat("Resolved", a.get("resolved_count", 0))]
+    rows = []
+    for c in a.get("complaints") or []:
+        waiting = c.get("days_waiting")
+        rows.append([c.get("participant"), c.get("subject"), c.get("status"), c.get("filed"),
+                     f"{waiting} days" if waiting is not None else None])
+    if rows:
+        blocks.append({"type": "table", "title": "Complaints",
+                       "columns": ["Participant", "Subject", "Status", "Filed", "Waiting"],
+                       "rows": rows})
+    return blocks
+
+
+def _blocks_for_plan_reviews(a: dict) -> list[dict]:
+    due = a.get("due") or []
+    blocks = [_stat(f"Due in the next {a.get('days_ahead', 90)} days", len(due)),
+              _stat("Already passed", a.get("already_passed", 0))]
+    rows = []
+    for r in due:
+        left = r.get("days_left")
+        if left is None:
+            when = None
+        elif left < 0:
+            when = "Overdue"
+        elif left == 0:
+            when = "Today"
+        else:
+            when = f"In {left} days"
+        rows.append([r.get("participant"), r.get("what"), r.get("date"), when])
+    if rows:
+        blocks.append({"type": "table", "title": "Plan reviews and plan end dates",
+                       "columns": ["Participant", "What", "Date", "When"], "rows": rows})
+    return blocks
+
+
+def _money(value: Any) -> str:
+    try:
+        return f"${float(value):,.2f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _blocks_for_unpaid_invoices(a: dict) -> list[dict]:
+    blocks = [_stat("Owed to us", _money(a.get("total_owed_aud"))),
+              _stat("Overdue", _money(a.get("overdue_aud"))),
+              _stat("Unpaid invoices", a.get("unpaid_count", 0))]
+    rows = []
+    for i in a.get("invoices") or []:
+        late = i.get("days_overdue") or 0
+        rows.append([i.get("invoice"), i.get("participant"), _money(i.get("amount_aud")), i.get("due"),
+                     "Overdue" if late else "Not due", f"{late} days" if late else None])
+    if rows:
+        blocks.append({"type": "table", "title": "Unpaid invoices",
+                       "columns": ["Invoice", "Participant", "Amount", "Due", "Status", "Overdue by"],
+                       "rows": rows})
+    return blocks
+
+
+def _blocks_for_unfilled_shifts(a: dict) -> list[dict]:
+    blocks = [_stat(f"Unfilled, next {a.get('days_ahead', 14)} days", a.get("unfilled_count", 0)),
+              _stat("Starting within 48 hours", a.get("within_48_hours", 0))]
+    rows = [[s.get("participant"), s.get("starts"), s.get("support"),
+             "Urgent" if (s.get("hours_until_start") or 0) <= 48 else "Soon"]
+            for s in a.get("shifts") or []]
+    if rows:
+        blocks.append({"type": "table", "title": "Shifts with no worker",
+                       "columns": ["Participant", "Starts", "Support", ""], "rows": rows})
+    return blocks
+
+
+def _blocks_for_worker_overview(a: dict) -> list[dict]:
+    blocks = [
+        _stat("Compliance, last 30 days", a.get("compliance_30d"), a.get("compliance_band")),
+        _stat("Shifts in the next 14 days", a.get("next_14_days", 0)),
+        _stat("Shifts done, last 30 days", a.get("completed_last_30_days", 0)),
+    ]
+    rows = []
+    for label, key in (("Strengths", "strengths"), ("Focus areas", "focus_areas")):
+        items = [str(x) for x in a.get(key) or [] if x]
+        if items:
+            rows.append([label, ", ".join(items)])
+    if a.get("recommended_training"):
+        rows.append(["Recommended training", a["recommended_training"]])
+    if a.get("trend"):
+        rows.append(["Trend", str(a["trend"])])
+    if rows:
+        blocks.append({"type": "table", "title": a.get("worker") or "Worker",
+                       "columns": ["", ""], "rows": rows})
+    return blocks
+
+
+def _blocks_for_document(a: dict) -> list[dict]:
+    if not a.get("content"):
+        return []
+    return [{"type": "document", "title": a.get("title") or "Document",
+             "document_type": a.get("document_type") or "other", "content": a["content"]}]
+
+
 _BUILDERS = {
     "get_financial_overview": _blocks_for_financial_overview,
     "get_expiring_credentials": _blocks_for_expiring_credentials,
@@ -384,6 +503,13 @@ _BUILDERS = {
     "get_worker_progress_notes_zip": _blocks_for_download,
     "get_all_progress_notes_zip": _blocks_for_download,
     "get_session_activity": _blocks_for_session_activity,
+    "get_open_incidents": _blocks_for_open_incidents,
+    "get_complaints": _blocks_for_complaints,
+    "get_plan_reviews_due": _blocks_for_plan_reviews,
+    "get_unpaid_invoices": _blocks_for_unpaid_invoices,
+    "get_unfilled_shifts": _blocks_for_unfilled_shifts,
+    "get_worker_overview": _blocks_for_worker_overview,
+    "draft_document": _blocks_for_document,
 }
 
 
@@ -413,6 +539,13 @@ _SECTIONS = {
     "get_participant_progress_notes_zip": "Progress notes",
     "get_worker_progress_notes_zip": "Progress notes",
     "get_all_progress_notes_zip": "Progress notes",
+    "get_open_incidents": "Incidents",
+    "get_complaints": "Complaints",
+    "get_plan_reviews_due": "Plan reviews",
+    "get_unpaid_invoices": "Finances",
+    "get_unfilled_shifts": "Roster",
+    "get_worker_overview": "Staff",
+    "draft_document": "Document",
 }
 
 

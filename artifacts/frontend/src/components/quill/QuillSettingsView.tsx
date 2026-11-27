@@ -1,6 +1,8 @@
 import { useId } from "react";
 import { Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import type { QuillCredits } from "@/services/chatboxService";
+import { CreditsSection } from "./QuillCredits";
 import type { QuillSettings } from "./quillSettings";
 
 const TEXT = "var(--cc-text)";
@@ -17,12 +19,18 @@ export function QuillSettingsView({
   onDeleteAll,
   hasConversations,
   full,
+  credits = null,
+  isDirector = false,
+  creditsAdded = false,
 }: {
   settings: QuillSettings;
   onChange: <K extends keyof QuillSettings>(key: K, value: QuillSettings[K]) => void;
   onDeleteAll: () => void;
   hasConversations: boolean;
   full: boolean;
+  credits?: QuillCredits | null;
+  isDirector?: boolean;
+  creditsAdded?: boolean;
 }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -33,8 +41,12 @@ export function QuillSettingsView({
           </h2>
         )}
         <p className="text-[12.5px]" style={{ color: MUTED }}>
-          These are saved in this browser and only change Quill for you.
+          Your credits are kept with your account. The other settings are saved in this browser and only change Quill for you.
         </p>
+
+        <Section title="Credits">
+          <CreditsSection credits={credits} isDirector={isDirector} justAdded={creditsAdded} />
+        </Section>
 
         <Section title="Answers">
           <Row label="Answer length" hint="Brief gives the answer in a sentence or two. Detailed adds what's behind the figures.">

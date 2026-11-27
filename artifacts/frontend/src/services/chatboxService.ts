@@ -37,7 +37,45 @@ export interface DownloadBlock extends BlockBase {
   count?: number | null;
 }
 
-export type ChatBlock = StatBlock | TableBlock | BarChartBlock | DownloadBlock;
+/** A report, template or letter Quill wrote, in Markdown. */
+export interface DocumentBlock extends BlockBase {
+  type: "document";
+  title: string;
+  document_type: "report" | "template" | "letter" | "checklist" | "summary" | "other";
+  content: string;
+}
+
+export type ChatBlock = StatBlock | TableBlock | BarChartBlock | DownloadBlock | DocumentBlock;
+
+/** This person's Quill credits (GET /api/chatbox/credits). */
+export interface QuillCredits {
+  period_start: string;
+  renews_on: string;
+  allowance: number;
+  allowance_used: number;
+  allowance_left: number;
+  org_allowance: number;
+  org_used: number;
+  topup_balance: number;
+  remaining: number;
+  can_ask: boolean;
+  paused_reason: string | null;
+  pack: { credits: number; price_cents: number; currency: string; gst_added: boolean };
+  packs_left_this_month: number;
+}
+
+export function getQuillCredits() {
+  return jsonFetch<QuillCredits>("/api/chatbox/credits");
+}
+
+/** Starts Stripe Checkout for one credit pack; resolves to the Checkout URL. */
+export async function startQuillTopUp(returnPath: string) {
+  const res = await jsonFetch<{ checkout_url: string }>("/api/chatbox/credits/top-up", {
+    method: "POST",
+    body: JSON.stringify({ return_path: returnPath }),
+  });
+  return res.checkout_url;
+}
 
 export interface ChatResponse {
   reply: string;
@@ -45,6 +83,8 @@ export interface ChatResponse {
   blocks: ChatBlock[];
   /** Questions to offer next, chosen by the backend from the tools that answered. */
   suggestions?: string[];
+  /** The asker's balance after this answer. */
+  credits?: QuillCredits | null;
 }
 
 export function sendChatMessage(

@@ -29,8 +29,11 @@ export async function jsonFetch<T>(input: RequestInfo | URL, init: RequestInit =
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     const message = extractErrorMessage(payload) || `Request failed with ${response.status}`;
-    const error = new Error(message) as Error & { status?: number };
+    const error = new Error(message) as Error & { status?: number; payload?: unknown };
     error.status = response.status;
+    // The full body, for callers that need more than the message (Quill's
+    // out-of-credits answer carries the balance).
+    error.payload = payload;
     throw error;
   }
   if (response.status === 204) {

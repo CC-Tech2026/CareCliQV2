@@ -181,6 +181,47 @@ def create_checkout_session(
     return session.url
 
 
+def create_quill_topup_checkout(
+    *, organization_id: str, user_id: str, credits: int, price_cents: int,
+    success_url: str, cancel_url: str,
+) -> str:
+    """A one-off payment for a pack of Quill credits (services/quill_credits.py).
+    Charged to the organisation's Stripe customer; the credits go to the
+    person who bought them when the webhook sees the payment."""
+    customer_id = get_or_create_customer(organization_id)
+    session = stripe.checkout.Session.create(
+        mode="payment",
+        customer=customer_id,
+        line_items=[{
+            "quantity": 1,
+            "price_data": {
+                "currency": "aud",
+                "unit_amount": price_cents,
+                "tax_behavior": "exclusive",
+                "product_data": {
+                    "name": f"Quill credits ({credits})",
+                    "description": "Extra Quill answers for this month and the next 12. Used after your monthly allowance.",
+                },
+            },
+        }],
+        client_reference_id=organization_id,
+        automatic_tax={"enabled": True},
+        customer_update={"address": "auto"},
+        metadata={
+            "kind": "quill_topup",
+            "organization_id": organization_id,
+            "user_id": user_id,
+            "credits": str(credits),
+        },
+        payment_intent_data={"metadata": {"kind": "quill_topup", "organization_id": organization_id, "user_id": user_id}},
+        success_url=success_url,
+        cancel_url=cancel_url,
+    )
+    if not session.url:
+        raise RuntimeError("Stripe did not return a Checkout URL")
+    return session.url
+
+
 def create_portal_session(*, organization_id: str, return_url: str) -> str:
     customer_id = get_or_create_customer(organization_id)
     session = stripe.billing_portal.Session.create(customer=customer_id, return_url=return_url)
@@ -241,6 +282,11 @@ def handle_webhook_event(payload: bytes, sig_header: str) -> None:
 def _dispatch_event(event_type: str, data: dict[str, Any]) -> None:
     if event_type == "checkout.session.completed":
         _handle_checkout_completed(data)
+    elif event_type == "checkout.session.async_payment_succeeded":
+        # Delayed payment methods (e.g. BECS debit) complete as unpaid
+        # first; only credit packs act on the later "paid" event.
+        if (data.get("metadata") or {}).get("kind") == "quill_topup":
+            _handle_checkout_completed(data)
     elif event_type == "customer.subscription.updated":
         _sync_subscription(data)
     elif event_type == "customer.subscription.deleted":
@@ -252,6 +298,11 @@ def _dispatch_event(event_type: str, data: dict[str, Any]) -> None:
 
 
 def _handle_checkout_completed(session: dict[str, Any]) -> None:
+    if (session.get("metadata") or {}).get("kind") == "quill_topup":
+        from .quill_credits import apply_topup
+
+        apply_topup(session)
+        return
     is_signup = (session.get("metadata") or {}).get("signup") == "true"
     if is_signup:
         _create_org_from_signup(session)

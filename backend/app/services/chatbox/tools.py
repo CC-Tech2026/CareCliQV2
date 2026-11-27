@@ -50,6 +50,7 @@ from .. import (
     participant_service,
     rag_service,
     session_service,
+    quill_data_service,
     shift_pdf_export_service,
 )
 from ..credential_verification_service import canonical_credential_type
@@ -1185,6 +1186,281 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
             ],
         }
 
+    # ── Newer areas: incidents list, complaints, plan reviews, invoices,
+    # unfilled shifts, one worker, and documents. The service-role reads
+    # live in quill_data_service; scoping is decided here.
+
+    async def visible_participant_ids() -> Optional[set]:
+        """None for a managing director (everyone); a coordinator's team's
+        participants otherwise."""
+        scope_result = resolve_scope()
+        if scope_result is None or scope_result[1] is None:
+            return None
+        participants = _filter_participants_by_worker_ids(await participants_light(), scope_result[1])
+        return {str(p.get("id")) for p in participants if p.get("id")}
+
+    def _day(value) -> Optional[str]:
+        dt = _parse_iso(value)
+        if dt is None:
+            try:
+                return date.fromisoformat(str(value)[:10]).strftime("%d %b %Y")
+            except (TypeError, ValueError):
+                return None
+        return dt.astimezone(request_timezone()).strftime("%d %b %Y")
+
+    def _days_since(value) -> Optional[int]:
+        try:
+            d = date.fromisoformat(str(value)[:10])
+        except (TypeError, ValueError):
+            return None
+        return (app_today() - d).days
+
+    @tool
+    async def get_open_incidents() -> dict:
+        """List the incidents that are still open (reported or under
+        investigation), newest first: reference, participant, type,
+        severity, status, date, how many days open, and whether an NDIS
+        Commission report is still owed. Use this when the person wants the
+        incidents themselves, not just the counts (get_incident_summary
+        gives the counts)."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id or resolve_scope() is None:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+        allowed = await visible_participant_ids()
+        try:
+            rows = await asyncio.to_thread(quill_data_service.open_incidents, org_id, allowed)
+            names = await asyncio.to_thread(
+                quill_data_service.participant_names, org_id,
+                {str(r["participant_id"]) for r in rows if r.get("participant_id")},
+            )
+        except Exception:
+            return {"error": "Could not load incidents right now."}
+        incidents = []
+        for r in rows:
+            reportable = r.get("ndis_reportable_override")
+            if reportable is None:
+                reportable = r.get("ndis_reportable")
+            incidents.append({
+                "reference": r.get("reference_number") or str(r.get("id"))[:8],
+                "participant": names.get(str(r.get("participant_id")), "Not linked"),
+                "type": (r.get("incident_type") or "").replace("_", " ") or None,
+                "severity": r.get("severity"),
+                "status": (r.get("status") or "").replace("_", " "),
+                "date": _day(r.get("incident_date")),
+                "days_open": _days_since(r.get("incident_date")),
+                "ndis_report_owed": bool(reportable) and not r.get("ndis_reported_at"),
+                "follow_up_date": _day(r.get("follow_up_date")) if r.get("follow_up_required") else None,
+                "investigator_assigned": bool(r.get("assigned_investigator_id")),
+            })
+        return {
+            "scope": "organisation-wide" if allowed is None else "your team's participants",
+            "open_count": len(incidents),
+            "ndis_reports_owed": sum(1 for i in incidents if i["ndis_report_owed"]),
+            "incidents": incidents[:60],
+        }
+
+    @tool
+    async def get_complaints() -> dict:
+        """List participant complaints and where each is up to (open, in
+        review, resolved), with the date filed and days waiting for a
+        response. Use for any question about complaints or feedback from
+        participants and families."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id or resolve_scope() is None:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+        allowed = await visible_participant_ids()
+        rows = await asyncio.to_thread(quill_data_service.complaints, org_id, allowed)
+        items = [{
+            "participant": r.get("participant_name") or "Not linked",
+            "subject": r.get("subject"),
+            "raised_by": r.get("raised_by"),
+            "status": (r.get("status") or "").replace("_", " "),
+            "filed": _day(r.get("filed_at")),
+            "days_waiting": None if r.get("responded_at") or r.get("status") == "resolved" else _days_since(r.get("filed_at")),
+        } for r in rows]
+        open_items = [i for i in items if i["status"] != "resolved"]
+        return {
+            "open_count": len(open_items),
+            "resolved_count": len(items) - len(open_items),
+            "complaints": (open_items + [i for i in items if i["status"] == "resolved"])[:50],
+        }
+
+    @tool
+    async def get_plan_reviews_due(days_ahead: int = 90) -> dict:
+        """List participants whose NDIS plan ends, or whose plan review is
+        due, within the next `days_ahead` days (default 90), soonest first,
+        plus any that have already passed. Use for plan reviews,
+        reassessments and plans running out."""
+        scope_result = resolve_scope()
+        if scope_result is None:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+        days_ahead = max(1, min(int(days_ahead or 90), 365))
+        participants = await participants_light()
+        if scope_result[1] is not None:
+            participants = _filter_participants_by_worker_ids(participants, scope_result[1])
+        today = app_today()
+        horizon = today + timedelta(days=days_ahead)
+        due = []
+        for p in participants:
+            for kind, key in (("Plan ends", "plan_end_date"), ("Review due", "upcoming_review_date")):
+                try:
+                    d = date.fromisoformat(str(p.get(key))[:10])
+                except (TypeError, ValueError):
+                    continue
+                if d <= horizon:
+                    due.append({
+                        "participant": p.get("preferred_name") or p.get("full_name"),
+                        "what": kind,
+                        "date": d.strftime("%d %b %Y"),
+                        "days_left": (d - today).days,
+                        "plan_management": p.get("plan_management_type"),
+                    })
+        due.sort(key=lambda r: r["days_left"])
+        return {
+            "days_ahead": days_ahead,
+            "already_passed": sum(1 for r in due if r["days_left"] < 0),
+            "due": due[:80],
+        }
+
+    @tool
+    async def get_unpaid_invoices() -> dict:
+        """List invoices that have been issued but not paid, with amount,
+        due date and days overdue, and the total owed. Managing director
+        only. Use for debtors, money owed, overdue invoices or cash coming in."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id or not is_managing_director(current_user):
+            return {"error": "Only the managing director can see invoices."}
+        try:
+            rows = await asyncio.to_thread(quill_data_service.unpaid_invoices, org_id)
+            names = await asyncio.to_thread(
+                quill_data_service.participant_names, org_id,
+                {str(r["participant_id"]) for r in rows if r.get("participant_id")},
+            )
+        except Exception:
+            return {"error": "Could not load invoices right now."}
+        today = app_today()
+        items, total, overdue_total = [], 0, 0
+        for r in rows:
+            cents = r.get("xero_amount_due_cents")
+            cents = int(cents if cents is not None else (r.get("total_cents") or 0))
+            try:
+                due = date.fromisoformat(str(r.get("due_date"))[:10])
+            except (TypeError, ValueError):
+                due = None
+            overdue = (today - due).days if due and due < today else 0
+            total += cents
+            overdue_total += cents if overdue else 0
+            items.append({
+                "invoice": r.get("invoice_number"),
+                "participant": names.get(str(r.get("participant_id"))) or r.get("recipient_name"),
+                "amount_aud": round(cents / 100, 2),
+                "due": due.strftime("%d %b %Y") if due else None,
+                "days_overdue": overdue,
+                "status": r.get("status"),
+            })
+        items.sort(key=lambda i: -i["days_overdue"])
+        return {
+            "unpaid_count": len(items),
+            "total_owed_aud": round(total / 100, 2),
+            "overdue_aud": round(overdue_total / 100, 2),
+            "invoices": items[:60],
+        }
+
+    @tool
+    async def get_unfilled_shifts(days_ahead: int = 14) -> dict:
+        """List upcoming shifts with no support worker assigned, within the
+        next `days_ahead` days (default 14), soonest first. Organisation-wide
+        for both coordinators and managing directors. Use for gaps in the
+        roster, shifts that need cover, or unallocated shifts."""
+        org_id = get_user_organization_id(current_user)
+        if not org_id or resolve_scope() is None:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+        days_ahead = max(1, min(int(days_ahead or 14), 60))
+        now = datetime.now(timezone.utc)
+        try:
+            rows = await asyncio.to_thread(
+                quill_data_service.unfilled_shifts, org_id,
+                now.isoformat(), (now + timedelta(days=days_ahead)).isoformat(),
+            )
+        except Exception:
+            return {"error": "Could not load the roster right now."}
+        shifts = []
+        for r in rows:
+            start = _parse_iso(r.get("scheduled_start")) or now
+            shifts.append({
+                "participant": r.get("participant_name") or "Participant",
+                "starts": _format_local(r.get("scheduled_start")),
+                "ends": _format_local(r.get("scheduled_end")),
+                "support": r.get("support_category"),
+                "hours_until_start": round((start - now).total_seconds() / 3600),
+            })
+        return {
+            "days_ahead": days_ahead,
+            "unfilled_count": len(shifts),
+            "within_48_hours": sum(1 for s in shifts if s["hours_until_start"] <= 48),
+            "shifts": shifts[:60],
+        }
+
+    @tool
+    async def get_worker_overview(worker_name: str) -> dict:
+        """Get a brief on ONE staff member by name: their documentation
+        compliance over the last 30 days and its trend, strengths and focus
+        areas from shift reviews, recommended training, shifts in the next
+        14 days and shifts completed in the last 30. Coordinators only see
+        their own team. Use for "how is X going" about a worker."""
+        org_id = get_user_organization_id(current_user)
+        scope_result = resolve_scope()
+        if not org_id or scope_result is None:
+            return {"error": "This tool is only available to coordinators and managing directors."}
+        members = await team_members(org_id, scope_result[1])
+        candidates = _name_candidates(members, worker_name)
+        if len(candidates) > 1:
+            return {"error": f"More than one person matches '{worker_name}'.",
+                    "options": [m.get("full_name") for m in candidates[:8]]}
+        worker = candidates[0] if candidates else _match_by_name(members, worker_name)
+        if not worker:
+            return {"error": f"No staff member matching '{worker_name}' found in {scope_result[0]}."}
+        wid = str(worker.get("id"))
+        perf, counts = await asyncio.gather(
+            asyncio.to_thread(quill_data_service.worker_performance, org_id, wid),
+            asyncio.to_thread(quill_data_service.worker_shift_counts, org_id, wid),
+        )
+        training = perf.get("recommended_training")
+        return {
+            "worker": worker.get("full_name"),
+            "role": worker.get("role"),
+            "last_signed_in": _day(worker.get("last_login")),
+            "compliance_30d": perf.get("average_score_30d"),
+            "compliance_band": perf.get("compliance_band"),
+            "trend": perf.get("trend"),
+            "strengths": [t.get("label") if isinstance(t, dict) else t for t in perf.get("strengths") or []],
+            "focus_areas": [t.get("label") if isinstance(t, dict) else t for t in perf.get("focus_areas") or []],
+            "recommended_training": training.get("title") if isinstance(training, dict) else training,
+            **counts,
+        }
+
+    @tool
+    async def draft_document(title: str, document_type: str, content: str) -> dict:
+        """Deliver a document you have written: a report, template, letter,
+        form, checklist, policy draft, meeting agenda or summary. `title` is
+        its name, `document_type` is one of "report", "template", "letter",
+        "checklist", "summary" or "other", and `content` is the full
+        document in Markdown. It is shown to the person ready to copy or
+        download as Word or PDF. Look up any organisation figures with the
+        other tools first; never invent them."""
+        kind = (document_type or "other").strip().lower()
+        if kind not in ("report", "template", "letter", "checklist", "summary", "other"):
+            kind = "other"
+        body = (content or "").strip()
+        if not body:
+            return {"error": "The document was empty."}
+        return {
+            "title": (title or "Document").strip()[:140],
+            "document_type": kind,
+            "content": body[:40_000],
+            "words": len(body.split()),
+        }
+
     all_tools = [
         get_compliance_snapshot,
         get_incident_summary,
@@ -1208,6 +1484,13 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         get_expiring_credentials,
         get_financial_overview,
         get_participant_overview,
+        get_open_incidents,
+        get_complaints,
+        get_plan_reviews_due,
+        get_unpaid_invoices,
+        get_unfilled_shifts,
+        get_worker_overview,
+        draft_document,
     ]
     if not is_managing_director(current_user):
         # Not merely an error at call time: a coordinator's assistant
@@ -1217,6 +1500,7 @@ def build_tools_for_user(current_user: dict, thread_id: str) -> list:
         # The director's participant brief (director_participants.py is
         # MD-only too); coordinators work the record itself.
         all_tools.remove(get_participant_overview)
+        all_tools.remove(get_unpaid_invoices)
 
     for t in all_tools:
         original_coroutine = t.coroutine
