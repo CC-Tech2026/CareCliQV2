@@ -37,16 +37,16 @@ type Icon = ComponentType<LucideProps>;
  * colour, and the colours come from the chart tokens so dark mode holds. */
 
 const STATUS: Record<OutcomeStatus, { label: string; text: string; bar: string; icon: Icon }> = {
-  on_track: { label: "On track", text: "var(--viz-good-text)", bar: "var(--viz-good)", icon: CheckCircle2 },
-  attention: { label: "Needs a look", text: "var(--viz-warning-text)", bar: "var(--viz-warning)", icon: AlertTriangle },
-  off_track: { label: "Off track", text: "var(--viz-critical-text)", bar: "var(--viz-critical)", icon: AlertOctagon },
-  no_data: { label: "No data yet", text: "var(--cc-muted)", bar: "var(--cc-muted)", icon: CircleDashed },
+  on_track: { label: "Meets target", text: "var(--viz-good-text)", bar: "var(--viz-good)", icon: CheckCircle2 },
+  attention: { label: "Review recommended", text: "var(--viz-warning-text)", bar: "var(--viz-warning)", icon: AlertTriangle },
+  off_track: { label: "Action required", text: "var(--viz-critical-text)", bar: "var(--viz-critical)", icon: AlertOctagon },
+  no_data: { label: "No data recorded", text: "var(--cc-muted)", bar: "var(--cc-muted)", icon: CircleDashed },
 };
 
 const GROUPS: Record<ActionGroup, { title: string; color: string }> = {
-  now: { title: "Do now", color: "var(--viz-critical-text)" },
-  week: { title: "This week", color: "var(--viz-warning-text)" },
-  watch: { title: "Later", color: "var(--cc-muted)" },
+  now: { title: "Immediate action", color: "var(--viz-critical-text)" },
+  week: { title: "Due this week", color: "var(--viz-warning-text)" },
+  watch: { title: "Monitor", color: "var(--cc-muted)" },
 };
 
 const KIND_ICON: Record<ActionKind, Icon> = {
@@ -285,7 +285,7 @@ export function ActionList({
   if (loading) {
     return (
       <div role="status" className={`divide-y divide-cc-border ${SURFACE}`}>
-        <span className="sr-only">Loading what needs doing…</span>
+        <span className="sr-only">Loading actions…</span>
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="flex items-center gap-3.5 px-5 py-3.5">
             <div className="h-4 w-4 animate-pulse rounded bg-cc-soft motion-reduce:animate-none" />
@@ -299,7 +299,7 @@ export function ActionList({
     return (
       <div className={`flex items-center gap-3 px-5 py-4 text-sm text-cc-text ${SURFACE}`}>
         <CheckCircle2 size={18} style={{ color: "var(--viz-good-text)" }} aria-hidden />
-        Nothing needs you right now.
+        No actions are outstanding.
       </div>
     );
   }
@@ -307,7 +307,7 @@ export function ActionList({
     <div className={`divide-y divide-cc-border ${SURFACE}`}>
       {failed ? (
         <p role="alert" className="flex flex-wrap items-center gap-2 px-5 py-3 text-sm text-cc-text">
-          Some items couldn't be loaded.
+          Some actions could not be loaded.
           {onRetry ? <button type="button" onClick={onRetry} className="font-semibold text-cc-plum underline">Try again</button> : null}
         </p>
       ) : null}
@@ -318,9 +318,9 @@ export function ActionList({
   );
 }
 
-/** "7 things need you · 3 overdue", for the top of a page. */
+/** "7 actions outstanding · 3 require immediate action", for the top of a page. */
 export function actionCountLine(actions: ActionItem[]): string {
-  if (!actions.length) return "Nothing needs you right now";
-  const overdue = actions.filter((a) => a.group === "now").length;
-  return `${actions.length} ${actions.length === 1 ? "thing needs" : "things need"} you${overdue ? ` · ${overdue} to do now` : ""}`;
+  if (!actions.length) return "No actions are outstanding";
+  const now = actions.filter((a) => a.group === "now").length;
+  return `${actions.length} ${actions.length === 1 ? "action" : "actions"} outstanding${now ? ` · ${now} ${now === 1 ? "requires" : "require"} immediate action` : ""}`;
 }

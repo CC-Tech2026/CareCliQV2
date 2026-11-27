@@ -174,7 +174,7 @@ it("shows goal outcomes from the goals themselves", async () => {
   );
   render(<MDExecutivePage />);
   // Each tile is a name, a figure, how it stands and why, in one place.
-  expect(await screen.findByText("Goals met")).toBeTruthy();
+  expect(await screen.findByText("Goals achieved")).toBeTruthy();
   expect(screen.getByText("25%")).toBeTruthy();
   expect(screen.getByText(/2 of 8$/)).toBeTruthy();
   expect(screen.getByText("Goals supported")).toBeTruthy();

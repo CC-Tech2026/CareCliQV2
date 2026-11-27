@@ -73,7 +73,7 @@ export function HubHeader() {
     return (
       <PageHeader
         eyebrow={greeting}
-        title="Your executive briefing"
+        title="Governance overview"
         description={
           <>
             <span className="break-words">{orgName}</span>

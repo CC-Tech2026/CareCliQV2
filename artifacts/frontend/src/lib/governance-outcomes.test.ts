@@ -32,16 +32,16 @@ describe("governance outcomes", () => {
       alert({ id: "c2", source: "credentials", severity: "high", title: "Aisha Rahman: CPR" }),
     ];
     const byId = Object.fromEntries(buildOutcomes(md, alerts, demand).map((o) => [o.id, o]));
-    expect(byId.goals.headline).toBe("0 of 6 active goals were worked on in the last 30 days");
+    expect(byId.goals.headline).toBe("0 of 6 active goals had supports delivered in the last 30 days");
     expect(byId.goals.status).toBe("off_track");
-    expect(byId.quality.headline).toBe("76% of shift notes meet the documentation standard");
+    expect(byId.quality.headline).toBe("76% of progress notes meet the documentation standard");
     expect(byId.quality.status).toBe("off_track");
-    expect(byId.quality.detail).toBe("14 points below the 90% target. 1 worker needs support.");
+    expect(byId.quality.detail).toBe("14 percentage points below the 90% target. 1 worker requires documentation support.");
     expect(byId.safety.status).toBe("off_track");
     expect(byId.safety.detail).toContain("Fall on the front steps");
-    expect(byId.workforce.headline).toBe("1 staff credential has expired");
-    expect(byId.workforce.detail).toBe("1 more expires soon. Staff retention 100%.");
-    expect(byId.demand.headline).toBe("1 enquiry is waiting, asking for 6 hours a week");
+    expect(byId.workforce.headline).toBe("1 worker credential has expired");
+    expect(byId.workforce.detail).toBe("1 more is due to expire. Staff retention 100%.");
+    expect(byId.demand.headline).toBe("1 referral awaiting assessment, requesting 6 hours of support a week");
     expect(byId.demand.status).toBe("attention");
   });
 
@@ -70,9 +70,9 @@ describe("governance outcomes", () => {
     expect(actions.map((a) => a.group)).toEqual(["now", "week", "week", "week", "week", "watch"]);
     expect(actions[0].title).toContain("Working with Children");
     expect(actions[0].href).toBe("/route/c");
-    expect(actions.some((a) => a.title === "Help Tom Walsh with their shift notes")).toBe(true);
-    expect(actions.some((a) => a.title === "Screen 1 new enquiry")).toBe(true);
-    expect(actions.some((a) => a.title === "6 participant goals have had no support in 30 days")).toBe(true);
+    expect(actions.some((a) => a.title === "Progress notes below standard: Tom Walsh")).toBe(true);
+    expect(actions.some((a) => a.title === "Assess 1 new referral")).toBe(true);
+    expect(actions.some((a) => a.title === "6 participant goals have had no supports delivered in 30 days")).toBe(true);
     expect(actions.some((a) => a.title === "All clear")).toBe(false);
   });
 
@@ -89,8 +89,8 @@ describe("governance outcomes", () => {
     );
     expect(actions.map((a) => a.title)).toEqual([
       "Reportable incident: Fall on the front steps",
-      "Renew Tom Walsh's First Aid",
-      "Follow up James' CPR renewal",
+      "First Aid expired: Tom Walsh",
+      "CPR due for renewal: James",
     ]);
   });
 });
