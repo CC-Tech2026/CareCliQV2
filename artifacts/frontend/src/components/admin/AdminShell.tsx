@@ -11,7 +11,10 @@ import {
   LayoutPanelLeft,
   Lightbulb,
   LogOut,
+  Mail,
   Menu,
+  History,
+  Server,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
@@ -46,10 +49,21 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     ],
   },
   {
+    label: "Communication",
+    items: [{ href: "/admin/messages", label: "Messages", icon: Mail }],
+  },
+  {
     label: "Support",
     items: [
       { href: "/admin/feedback", label: "Feedback", icon: Lightbulb },
       { href: "/admin/bug-reports", label: "Bug reports", icon: Bug },
+    ],
+  },
+  {
+    label: "Platform",
+    items: [
+      { href: "/admin/activity", label: "Activity", icon: History },
+      { href: "/admin/system", label: "System", icon: Server },
     ],
   },
 ];

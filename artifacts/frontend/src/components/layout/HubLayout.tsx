@@ -1,4 +1,5 @@
 import { ManagementNavigationDrawer } from "./ManagementNavigationDrawer";
+import { PlatformBanner } from "@/components/PlatformBanner";
 import { FloatingAiAssistant } from "./FloatingAiAssistant";
 import { NotificationBell, NotificationInbox } from "@/components/notifications/NotificationInbox";
 import { NotificationRealtimeBridge } from "@/components/worker/NotificationRealtimeBridge";
@@ -1193,6 +1194,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               dockedSidebar ? "px-3 sm:px-4 xl:px-6" : "px-0"
             }`}
           >
+            <PlatformBanner />
             {workspace && <WorkspaceTabs item={workspace} location={location} />}
             <PageErrorBoundary>{children}</PageErrorBoundary>
           </main>
@@ -1201,7 +1203,8 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
         <main id="management-main" tabIndex={-1}
           className={`mx-auto ${isMD ? "w-full px-phi-4 py-phi-4 sm:px-phi-5" : location === "/billing" ? "w-full px-phi-4 py-phi-4 sm:px-phi-5" : "max-w-[1600px] px-phi-4 py-phi-5 sm:px-phi-5 lg:px-phi-6"} ${bottombarMode ? "xl:pb-32" : ""}`}
         >
-          {workspace && <WorkspaceTabs item={workspace} location={location} />}
+          <PlatformBanner />
+            {workspace && <WorkspaceTabs item={workspace} location={location} />}
           <PageErrorBoundary>{children}</PageErrorBoundary>
         </main>
       )}

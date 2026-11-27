@@ -303,6 +303,10 @@ from .api import improvement_feedback as improvement_feedback_api
 app.include_router(improvement_feedback_api.router, prefix="/api")
 from .api import admin as admin_api
 app.include_router(admin_api.router, prefix="/api")
+from .api import admin_messages as admin_messages_api
+app.include_router(admin_messages_api.router, prefix="/api")
+app.include_router(admin_messages_api.platform_router, prefix="/api")
+app.include_router(admin_messages_api.public_router, prefix="/api")
 from .api import jira_webhook as jira_webhook_api
 app.include_router(jira_webhook_api.router, prefix="/api")
 from .api import platform_billing as platform_billing_api

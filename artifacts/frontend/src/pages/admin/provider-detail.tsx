@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   AlertTriangle, ArrowLeft, CalendarPlus, Copy, CreditCard, ExternalLink, FileUp, Gift,
-  KeyRound, Loader2, MoreHorizontal, ShieldAlert, ShieldCheck, UserCog, UserX, UserCheck,
+  KeyRound, Loader2, Mail, MoreHorizontal, ShieldAlert, ShieldCheck, UserCog, UserX, UserCheck,
 } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { PLAN_LABEL, PLANS_ON_SALE, SEVERITY, activityLabel, formatDate, roleLabel, timeAgo } from "@/components/admin/adminFormat";
@@ -345,6 +345,9 @@ export default function AdminProviderDetailPage() {
                         <ExternalLink size={14} className="mr-2" /> Open in Stripe
                       </DropdownMenuItem>
                     )}
+                    <DropdownMenuItem onSelect={() => navigate(`/admin/messages/new?org=${organizationId}`)}>
+                      <Mail size={14} className="mr-2" /> Email this provider
+                    </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => { void navigator.clipboard?.writeText(organizationId); toast({ title: "Org ID copied" }); }}>
                       <Copy size={14} className="mr-2" /> Copy org ID
                     </DropdownMenuItem>
