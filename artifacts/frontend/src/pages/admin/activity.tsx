@@ -49,7 +49,7 @@ export default function AdminActivityPage() {
         <div className="relative max-w-md">
           <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-cc-muted" />
           <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by provider, person or reason" aria-label="Search activity"
-            className="h-11 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-4 text-sm text-cc-text outline-none focus:ring-2 focus:ring-cc-plum" />
+            className="h-11 md:h-9 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-4 text-sm text-cc-text outline-none focus:ring-2 focus:ring-cc-plum" />
         </div>
         {error && <p role="alert" className="text-sm" style={{ color: "var(--cc-status-danger)" }}>{error}</p>}
         {rows === null ? (

@@ -158,7 +158,7 @@ function NavDesignPreview({ hex }: { hex: string | null }) {
 
   return (
     <div
-      className="flex h-11 w-full items-center justify-center gap-1 rounded-full border px-2"
+      className="flex h-11 md:h-9 w-full items-center justify-center gap-1 rounded-full border px-2"
       style={{ background: bg, borderColor: "var(--cc-border)" }}
     >
       <span className="rounded-full px-2 py-1 text-[8px] font-bold whitespace-nowrap" style={{ background: activeBg, color: "#FFFFFF" }}>

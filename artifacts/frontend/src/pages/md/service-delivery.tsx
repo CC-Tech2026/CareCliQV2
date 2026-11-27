@@ -205,7 +205,7 @@ export default function MDServiceDeliveryPage() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Name, ID or concern"
-                  className="h-11 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-4 text-sm text-cc-text outline-none transition focus:ring-2 focus:ring-cc-plum"
+                  className="h-11 md:h-9 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-4 text-sm text-cc-text outline-none transition focus:ring-2 focus:ring-cc-plum"
                 />
               </label>
               <label className="text-sm text-cc-text sm:ml-auto">

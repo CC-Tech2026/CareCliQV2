@@ -355,7 +355,7 @@ export default function WorkerAvailabilityPage() {
                       aria-checked={selected}
                       onClick={() => setMaxShifts(n)}
                       className={cn(
-                        "min-h-11 rounded-xl border text-sm tabular-nums transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum",
+                        "min-h-11 md:min-h-9 rounded-xl border text-sm tabular-nums transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum",
                         selected ? "border-cc-plum bg-[var(--cc-plum-soft)] font-semibold text-cc-text" : "border-cc-border text-cc-text hover:bg-cc-soft",
                       )}
                     >
@@ -397,7 +397,7 @@ export default function WorkerAvailabilityPage() {
                     <input
                       type="date"
                       min={today}
-                      className="cc-field mt-1 min-h-11 px-3 text-sm text-cc-text"
+                      className="cc-field mt-1 min-h-11 md:min-h-9 px-3 text-sm text-cc-text"
                       value={newBlackout.start_date}
                       onChange={(e) =>
                         setNewBlackout((p) => ({
@@ -413,7 +413,7 @@ export default function WorkerAvailabilityPage() {
                     <input
                       type="date"
                       min={newBlackout.start_date || today}
-                      className="cc-field mt-1 min-h-11 px-3 text-sm text-cc-text"
+                      className="cc-field mt-1 min-h-11 md:min-h-9 px-3 text-sm text-cc-text"
                       value={newBlackout.end_date}
                       onChange={(e) => setNewBlackout((p) => ({ ...p, end_date: e.target.value }))}
                     />
@@ -423,7 +423,7 @@ export default function WorkerAvailabilityPage() {
                   type="text"
                   placeholder={translate("availability.noteOptional")}
                   aria-label={translate("availability.noteOptional")}
-                  className="cc-field min-h-11 px-3 text-sm text-cc-text"
+                  className="cc-field min-h-11 md:min-h-9 px-3 text-sm text-cc-text"
                   value={newBlackout.reason}
                   onChange={(e) => setNewBlackout((p) => ({ ...p, reason: e.target.value }))}
                 />
@@ -455,7 +455,7 @@ export default function WorkerAvailabilityPage() {
                     onClick={() => emergencyMut.mutate(date)}
                     disabled={emergencyMut.isPending || overrideDate === date}
                     aria-pressed={overrideDate === date}
-                    className="cc-btn-amber min-h-11 cursor-pointer rounded-full px-3 text-sm font-semibold disabled:cursor-default disabled:opacity-60"
+                    className="cc-btn-amber min-h-11 md:min-h-9 cursor-pointer rounded-full px-3 text-sm font-semibold disabled:cursor-default disabled:opacity-60"
                   >
                     {translate(key)}
                   </button>

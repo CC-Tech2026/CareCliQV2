@@ -207,7 +207,7 @@ function ShiftListCardContent({
           <Link href={notesHref}>
             <button
               type="button"
-              className="mt-3 flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black text-white sm:h-12"
+              className="mt-3 flex h-11 md:h-9 w-full items-center justify-center rounded-xl px-4 text-sm font-black text-white sm:h-12"
               style={{ background: CORAL }}
             >
               {translate("shifts.listCard.completeNotes")}

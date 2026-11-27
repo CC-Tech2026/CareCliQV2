@@ -404,7 +404,7 @@ function ReviewAndSign({
           </span>
         </label>
         {signError && <p role="alert" className="mt-3 text-xs font-bold" style={{ color: DANGER }}>{signError}</p>}
-        <Button variant="navy" className="mt-5 h-11 w-full gap-2 rounded-lg sm:w-auto sm:px-8" onClick={onSign} disabled={!canSign || signing}>
+        <Button variant="navy" className="mt-5 h-11 md:h-9 w-full gap-2 rounded-lg sm:w-auto sm:px-8" onClick={onSign} disabled={!canSign || signing}>
           {signing ? <Loader2 size={14} className="animate-spin" /> : null} Sign agreement
         </Button>
         <p className="mt-3 text-[11px]" style={{ color: MUTED }}>

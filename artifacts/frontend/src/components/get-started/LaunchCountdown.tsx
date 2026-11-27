@@ -245,13 +245,13 @@ export function LaunchCountdown({ onLaunch }: { onLaunch: () => void }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
-                className="h-11 flex-1 sm:w-64 rounded-full px-4 text-[13px] outline-none"
+                className="h-11 md:h-9 flex-1 sm:w-64 rounded-full px-4 text-[13px] outline-none"
                 style={{ background: "white", color: "var(--cc-text)" }}
               />
               <button
                 type="submit"
                 disabled={submitting}
-                className="h-11 px-6 rounded-full font-bold text-[13px] disabled:opacity-60 flex items-center justify-center gap-2"
+                className="h-11 md:h-9 px-6 rounded-full font-bold text-[13px] disabled:opacity-60 flex items-center justify-center gap-2"
                 style={{ background: "var(--cc-coral)", color: "white" }}
               >
                 {submitting && <Loader2 size={13} className="animate-spin" />}

@@ -210,7 +210,7 @@ export default function PlanningPage() {
                   <OutcomeList outcomes={rings} onNavigate={jump} />
                   <div className="grid gap-phi-4 lg:grid-golden">
                     <details className="group min-w-0 self-start rounded-xl border border-cc-border bg-cc-surface">
-                      <summary className="flex min-h-11 cursor-pointer list-none items-center px-phi-4 text-sm font-semibold text-cc-text hover:bg-cc-soft [&::-webkit-details-marker]:hidden">
+                      <summary className="flex min-h-11 md:min-h-9 cursor-pointer list-none items-center px-phi-4 text-sm font-semibold text-cc-text hover:bg-cc-soft [&::-webkit-details-marker]:hidden">
                         Why we say this
                       </summary>
                       <ul className="space-y-phi-3 border-t border-cc-border px-phi-4 py-phi-4 text-sm leading-6 text-cc-text">

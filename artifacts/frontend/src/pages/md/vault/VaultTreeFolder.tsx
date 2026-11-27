@@ -303,7 +303,7 @@ export default function VaultTreeFolderPage({
               <button
                 type="button"
                 onClick={() => setReportOpen(true)}
-                className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
+                className="ml-auto inline-flex min-h-11 md:min-h-9 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum"
                 style={{ background: "var(--cc-cta)" }}
               >
                 <FileText size={15} />

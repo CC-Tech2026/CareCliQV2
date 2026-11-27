@@ -423,7 +423,7 @@ export function ShareAuditorDialog({
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <Popover>
               <PopoverTrigger asChild>
-                <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft" style={fieldStyle}>
+                <button type="button" className="inline-flex min-h-11 md:min-h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft" style={fieldStyle}>
                   <Settings2 size={15} /> Pack options
                 </button>
               </PopoverTrigger>
@@ -452,7 +452,7 @@ export function ShareAuditorDialog({
 
             <Popover>
               <PopoverTrigger asChild>
-                <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft" style={fieldStyle}>
+                <button type="button" className="inline-flex min-h-11 md:min-h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium transition hover:bg-cc-soft" style={fieldStyle}>
                   <Mail size={15} /> Email
                 </button>
               </PopoverTrigger>

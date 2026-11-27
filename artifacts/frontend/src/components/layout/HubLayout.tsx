@@ -243,7 +243,7 @@ function WorkspaceTabs({ item, location }: { item: NavItem; location: string }) 
   return (
     <nav
       aria-label={`${item.label} pages`}
-      className="mb-5 flex gap-1 overflow-x-auto border-b border-[var(--cc-border)]"
+      className="mb-3 flex gap-1 overflow-x-auto border-b border-[var(--cc-border)]"
     >
       {item.tabs!.map((tab) => {
         const active = tab.href === location;
@@ -252,7 +252,7 @@ function WorkspaceTabs({ item, location }: { item: NavItem; location: string }) 
             key={tab.href}
             href={tab.href}
             aria-current={active ? "page" : undefined}
-            className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap border-b-2 px-3 text-sm font-semibold transition-colors ${
+            className={`inline-flex min-h-11 md:min-h-9 shrink-0 items-center whitespace-nowrap border-b-2 px-3 text-sm font-semibold transition-colors ${
               active
                 ? "border-[var(--cc-brand-purple)] text-[var(--cc-brand-purple)]"
                 : "border-transparent text-[var(--cc-muted)] hover:text-[var(--cc-text)]"
@@ -595,7 +595,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
             login/signup pages (their background wash) into the MD portal, so
             arriving here after signing in doesn't feel like a different app. */}
         <div className="h-[3px] w-full" style={{ background: "#7C3AED" }} />
-        <div className={`mx-auto flex h-[72px] items-center justify-between px-phi-4 sm:px-phi-5 ${isMD ? "w-full" : "max-w-[1600px]"}`}>
+        <div className={`mx-auto flex h-16 items-center justify-between px-phi-4 sm:px-phi-5 ${isMD ? "w-full" : "max-w-[1600px]"}`}>
           {/* Brand & Organization Badge */}
           <div className="flex min-w-0 items-center gap-3">
             <Link
@@ -713,7 +713,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                                 href={item.href}
                                 onClick={() => setActiveGroupHover(null)}
                                 aria-current={active ? "page" : undefined}
-                                className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+                                className={`flex min-h-11 md:min-h-9 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                                   active
                                     ? "bg-[var(--cc-brand-purple-soft)] text-[var(--cc-brand-purple)]"
                                     : "text-[var(--cc-text)] hover:bg-[var(--cc-soft)]"
@@ -885,7 +885,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       {/* Floating menu layout: the menu as its own rounded row under the header. */}
       {floatingMode && (
         <div
-          className={calendarWorkspace ? "relative z-30 hidden xl:block px-3 py-2" : `sticky top-[75px] z-30 hidden xl:block py-2 px-3 pointer-events-none transition-transform duration-300 ease-out ${navAutoHidden ? "-translate-y-[calc(100%+2rem)]" : "translate-y-0"}`}
+          className={calendarWorkspace ? "relative z-30 hidden xl:block px-3 py-2" : `sticky top-[calc(4rem+3px)] z-30 hidden xl:block py-2 px-3 pointer-events-none transition-transform duration-300 ease-out ${navAutoHidden ? "-translate-y-[calc(100%+2rem)]" : "translate-y-0"}`}
         >
           <div
             ref={navRef}
@@ -922,7 +922,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         ["--nav-hover-bg" as string]: navHoverBg,
                         ["--nav-text-hover" as string]: navTextHover,
                       }}
-                      className={`flex min-h-11 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
+                      className={`flex min-h-11 md:min-h-9 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
                         hasActiveRoute
                           ? "shadow-md"
                           : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"
@@ -956,7 +956,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                                 href={item.href}
                                 onClick={() => setActiveGroupHover(null)}
                                 aria-current={active ? "page" : undefined}
-                                className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+                                className={`flex min-h-11 md:min-h-9 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                                   active
                                     ? "bg-[var(--cc-brand-purple-soft)] text-[var(--cc-brand-purple)]"
                                     : "text-[var(--cc-text)] hover:bg-[var(--cc-soft)]"
@@ -1023,7 +1023,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                         ["--nav-hover-bg" as string]: navHoverBg,
                         ["--nav-text-hover" as string]: navTextHover,
                       }}
-                      className={`flex min-h-11 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
+                      className={`flex min-h-11 md:min-h-9 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
                         hasActiveRoute
                           ? "shadow-md"
                           : "hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text-hover)]"
@@ -1057,7 +1057,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                                 href={item.href}
                                 onClick={() => setActiveGroupHover(null)}
                                 aria-current={active ? "page" : undefined}
-                                className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+                                className={`flex min-h-11 md:min-h-9 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                                   active
                                     ? "bg-[var(--cc-brand-purple-soft)] text-[var(--cc-brand-purple)]"
                                     : "text-[var(--cc-text)] hover:bg-[var(--cc-soft)]"
@@ -1095,7 +1095,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               current page a solid purple pill. */}
           <aside
             className={`sticky hidden shrink-0 self-start xl:block ${
-              dockedSidebar ? "top-[75px] h-[calc(100dvh-75px)]" : "top-[87px] rounded-2xl"
+              dockedSidebar ? "top-[calc(4rem+3px)] h-[calc(100dvh-4rem-3px)]" : "top-[calc(4rem+15px)] rounded-2xl"
             } ${sidebarDragging ? "" : "transition-[width] duration-200"}`}
             style={{
               width: sidebarCollapsed ? 72 : sidebarWidth,

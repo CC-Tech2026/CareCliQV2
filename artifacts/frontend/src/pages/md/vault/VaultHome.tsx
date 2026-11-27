@@ -693,16 +693,16 @@ export default function VaultHome() {
             </h1>
           </div>
           <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:gap-2">
-            <button type="button" onClick={() => navigate("/md/staff")} className="min-h-11 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft" style={{ color: "var(--cc-text)" }}>
+            <button type="button" onClick={() => navigate("/md/staff")} className="min-h-11 md:min-h-9 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft" style={{ color: "var(--cc-text)" }}>
               Staff directory
             </button>
-            <button type="button" onClick={() => navigate("/billing")} className="min-h-11 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft" style={{ color: "var(--cc-text)" }}>
+            <button type="button" onClick={() => navigate("/billing")} className="min-h-11 md:min-h-9 rounded-full px-4 text-sm font-medium transition hover:bg-cc-soft" style={{ color: "var(--cc-text)" }}>
               NDIS invoices
             </button>
             <button
               type="button"
               onClick={() => setShareTarget({ folderKeys: [], description: "Choose the folders to include", documents: [] })}
-              className="order-first inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum sm:order-none sm:w-auto"
+              className="order-first inline-flex min-h-11 md:min-h-9 w-full items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum sm:order-none sm:w-auto"
               style={{ background: "var(--cc-cta)" }}
             >
               <Share2 size={15} />
@@ -742,7 +742,7 @@ export default function VaultHome() {
               placeholder="Search folders"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-11 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
+              className="h-11 md:h-9 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
               style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
             />
           </div>
@@ -789,7 +789,7 @@ export default function VaultHome() {
             <Folder size={26} className="mx-auto mb-3" style={{ color: "var(--cc-muted)" }} />
             <p className="text-base font-semibold" style={{ color: "var(--cc-text)" }}>No folders match</p>
             <p className="mt-1 text-sm" style={{ color: "var(--cc-muted)" }}>Try another name, or clear the filters.</p>
-            <button type="button" onClick={() => { setSearch(""); setFlaggedOnly(false); }} className="mt-4 min-h-11 rounded-full border px-5 text-sm font-semibold" style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}>
+            <button type="button" onClick={() => { setSearch(""); setFlaggedOnly(false); }} className="mt-4 min-h-11 md:min-h-9 rounded-full border px-5 text-sm font-semibold" style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}>
               Clear filters
             </button>
           </div>

@@ -123,7 +123,7 @@ export default function WorkerSyncStatusPage() {
       </div>
 
       <Button
-        className="w-full min-h-11 gap-2 rounded-xl"
+        className="w-full min-h-11 md:min-h-9 gap-2 rounded-xl"
         disabled={!online || syncing || queueItems.length === 0}
         onClick={() => void handleRetry()}
         style={{ background: PLUM }}

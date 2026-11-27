@@ -237,7 +237,7 @@ export function CategoryCard({
                     : (event.target.value as TagMatchingRole),
                 )
               }
-              className="min-h-11 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm text-cc-text disabled:opacity-60 sm:max-w-sm"
+              className="min-h-11 md:min-h-9 w-full rounded-lg border border-cc-border bg-cc-surface px-3 text-sm text-cc-text disabled:opacity-60 sm:max-w-sm"
             >
               <option value="none">Profile information only</option>
               <option value="interests">Interests</option>
@@ -313,7 +313,7 @@ export function CategoryCard({
             onChange={(event) => setNewTagLabel(event.target.value)}
             disabled={busy || !category.is_active}
             placeholder="Enter a tag name"
-            className="min-h-11 min-w-0 rounded-lg px-3"
+            className="min-h-11 md:min-h-9 min-w-0 rounded-lg px-3"
             aria-invalid={!!newTagLabel.trim() && !!duplicateTag}
             aria-describedby={
               duplicateTag ? "duplicate-" + category.id : undefined
@@ -541,7 +541,7 @@ export default function TagManagementPage() {
                   onChange={(event) => setNewCategoryName(event.target.value)}
                   disabled={addCategoryMutation.isPending}
                   placeholder="e.g. Communication preferences"
-                  className="min-h-11 rounded-full px-4"
+                  className="min-h-11 md:min-h-9 rounded-full px-4"
                   aria-invalid={!!newCategoryName.trim() && duplicateCategory}
                   aria-describedby={
                     duplicateCategory ? "category-duplicate" : undefined
@@ -566,7 +566,7 @@ export default function TagManagementPage() {
                         : (event.target.value as TagMatchingRole),
                     )
                   }
-                  className="min-h-11 w-full rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text"
+                  className="min-h-11 md:min-h-9 w-full rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text"
                 >
                   <option value="none">Profile information only</option>
                   <option value="interests">Interests</option>
@@ -623,7 +623,7 @@ export default function TagManagementPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search categories or tag names"
-              className="h-11 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-4 text-sm text-cc-text outline-none transition focus:ring-2 focus:ring-cc-plum"
+              className="h-11 md:h-9 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-4 text-sm text-cc-text outline-none transition focus:ring-2 focus:ring-cc-plum"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -704,7 +704,7 @@ export default function TagManagementPage() {
                     id="category-picker"
                     value={selected?.id ?? ""}
                     onChange={(event) => setSelectedId(event.target.value)}
-                    className="min-h-11 w-full rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text md:hidden"
+                    className="min-h-11 md:min-h-9 w-full rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text md:hidden"
                   >
                     {filtered.map((category) => (
                       <option key={category.id} value={category.id}>

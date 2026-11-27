@@ -610,7 +610,7 @@ export function LiveProgressNotePanel({
                 onKeyDown={handleInputKeyDown}
                 disabled={ended}
                 maxLength={SESSION_NOTE_MAX}
-                className="min-h-11 min-w-0 flex-1 bg-transparent px-3 text-base font-medium outline-none"
+                className="min-h-11 md:min-h-9 min-w-0 flex-1 bg-transparent px-3 text-base font-medium outline-none"
                 style={{ color: TEXT }}
                 placeholder={translate("shift.session.notePlaceholder")}
               />

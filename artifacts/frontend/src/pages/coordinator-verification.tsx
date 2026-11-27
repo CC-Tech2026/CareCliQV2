@@ -147,7 +147,7 @@ export default function CoordinatorVerificationPage() {
       ) : query.isError ? (
         <div role="alert" className="rounded-xl border border-red-200 bg-cc-surface p-4 text-sm">
           <p>{translate("schedule.loadFailed")}</p>
-          <button className="mt-2 min-h-11 font-semibold text-cc-plum" onClick={() => query.refetch()}>
+          <button className="mt-2 min-h-11 md:min-h-9 font-semibold text-cc-plum" onClick={() => query.refetch()}>
             {translate("coordinator.live.refresh")}
           </button>
         </div>
@@ -734,7 +734,7 @@ function ShiftReview({
                 </>
               )}
             </p>
-            <label className="mt-3 flex min-h-11 items-center gap-2 text-sm font-semibold text-cc-text">
+            <label className="mt-3 flex min-h-11 md:min-h-9 items-center gap-2 text-sm font-semibold text-cc-text">
               <input
                 type="checkbox"
                 checked={approveExtra}
@@ -843,7 +843,7 @@ function ShiftReview({
                 searchPlaceholder={translate("schedule.searchPriceItems")}
                 emptyText={translate("schedule.noPriceItemMatch")}
                 disabled={priceItems.isLoading || approve.isPending}
-                triggerClassName="min-h-11"
+                triggerClassName="min-h-11 md:min-h-9"
               />
             </div>
             {suggestedCode && priceItemCode === suggestedCode && (
@@ -904,12 +904,12 @@ function ShiftReview({
                   maxLength={2000}
                   aria-label={translateParams("schedule.conversationReply", { worker: item.worker_name || translate("common.worker") })}
                   placeholder={translateParams("schedule.conversationReply", { worker: item.worker_name || translate("common.worker") })}
-                  className="min-h-11 flex-1 rounded-lg border border-cc-border bg-cc-surface p-2 text-sm"
+                  className="min-h-11 md:min-h-9 flex-1 rounded-lg border border-cc-border bg-cc-surface p-2 text-sm"
                 />
                 <button
                   type="submit"
                   disabled={!replyText.trim() || reply.isPending}
-                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-cc-text px-4 text-sm font-bold text-cc-surface disabled:opacity-50"
+                  className="inline-flex min-h-11 md:min-h-9 items-center gap-1.5 rounded-full bg-cc-text px-4 text-sm font-bold text-cc-surface disabled:opacity-50"
                 >
                   {reply.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />}
                   {translate("schedule.conversationSend")}
@@ -934,7 +934,7 @@ function ShiftReview({
               <button
                 type="button"
                 onClick={() => setChangesOpen(false)}
-                className="min-h-11 rounded-full px-4 text-sm font-semibold text-cc-muted"
+                className="min-h-11 md:min-h-9 rounded-full px-4 text-sm font-semibold text-cc-muted"
               >
                 {translate("common.cancel")}
               </button>
@@ -942,7 +942,7 @@ function ShiftReview({
                 type="button"
                 disabled={!changesText.trim() || requestChanges.isPending}
                 onClick={() => requestChanges.mutate()}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-cc-text px-4 text-sm font-bold text-cc-surface disabled:opacity-50"
+                className="inline-flex min-h-11 md:min-h-9 items-center gap-1.5 rounded-full bg-cc-text px-4 text-sm font-bold text-cc-surface disabled:opacity-50"
               >
                 {requestChanges.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />}
                 {translate("schedule.requestChangesSend")}
@@ -954,7 +954,7 @@ function ShiftReview({
 
       <footer className="flex flex-wrap justify-end gap-2 border-t border-cc-border bg-cc-panel px-5 py-3">
         {approved ? (
-          <span className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-emerald-600 px-5 text-sm font-bold text-white">
+          <span className="inline-flex min-h-11 md:min-h-9 items-center gap-1.5 rounded-full bg-emerald-600 px-5 text-sm font-bold text-white">
             <CheckCircle2 size={16} aria-hidden /> {translate("schedule.status.approved")} · {money(approved.billed)}
           </span>
         ) : (
@@ -964,13 +964,13 @@ function ShiftReview({
                 type="button"
                 onClick={() => setChangesOpen(true)}
                 disabled={changesOpen}
-                className="min-h-11 rounded-full border border-cc-border bg-cc-surface px-5 text-sm font-semibold text-cc-text disabled:opacity-50"
+                className="min-h-11 md:min-h-9 rounded-full border border-cc-border bg-cc-surface px-5 text-sm font-semibold text-cc-text disabled:opacity-50"
               >
                 {translate("schedule.requestChanges")}
               </button>
             )}
             {needs.length > 0 && !approve.isPending && (
-              <p className="me-auto flex min-h-11 items-center text-sm text-cc-muted" aria-live="polite">
+              <p className="me-auto flex min-h-11 md:min-h-9 items-center text-sm text-cc-muted" aria-live="polite">
                 {translate("schedule.toApprove")} {needs.join("; ")}
               </p>
             )}
@@ -981,7 +981,7 @@ function ShiftReview({
                 !priceItemCode || approve.isPending || noteMissing || extraReasonMissing ||
                 agreementReasonMissing || overLimit || preview.isFetching
               }
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[var(--cc-cta)] px-5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+              className="inline-flex min-h-11 md:min-h-9 items-center gap-1.5 rounded-full bg-[var(--cc-cta)] px-5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {approve.isPending ? (
                 <Loader2 size={16} className="animate-spin" aria-hidden />
@@ -1076,7 +1076,7 @@ function VerifiedShift({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="min-h-11 rounded-full px-4 text-sm font-semibold text-cc-muted"
+                className="min-h-11 md:min-h-9 rounded-full px-4 text-sm font-semibold text-cc-muted"
               >
                 {translate("common.cancel")}
               </button>
@@ -1084,7 +1084,7 @@ function VerifiedShift({
                 type="button"
                 disabled={reason.trim().length < 5 || reverse.isPending}
                 onClick={() => reverse.mutate()}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-50"
+                className="inline-flex min-h-11 md:min-h-9 items-center gap-1.5 rounded-full bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-50"
               >
                 {reverse.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />}
                 {translate("schedule.reverseConfirm")}
@@ -1098,7 +1098,7 @@ function VerifiedShift({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="min-h-11 rounded-full border border-cc-border bg-cc-surface px-5 text-sm font-semibold text-cc-text"
+            className="min-h-11 md:min-h-9 rounded-full border border-cc-border bg-cc-surface px-5 text-sm font-semibold text-cc-text"
           >
             {translate("schedule.reverse")}
           </button>

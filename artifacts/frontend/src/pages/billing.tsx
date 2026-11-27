@@ -849,7 +849,7 @@ function InvoiceNextAction({
   if (invoice.status === "draft")
     return (
       <div className={footer}>
-        <label className="flex min-h-11 items-start gap-3 text-sm">
+        <label className="flex min-h-11 md:min-h-9 items-start gap-3 text-sm">
           <input
             type="checkbox"
             className="mt-1 h-5 w-5 shrink-0 accent-cc-plum"
@@ -2792,7 +2792,7 @@ export function NdisCatalogueBrowser() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by item code, name, or category"
-            className="min-h-11 rounded-xl pl-8 text-sm"
+            className="min-h-11 md:min-h-9 rounded-xl pl-8 text-sm"
           />
         </div>
         <Select
@@ -2801,7 +2801,7 @@ export function NdisCatalogueBrowser() {
         >
           <SelectTrigger
             aria-label="Filter rate source"
-            className="min-h-11 w-full rounded-xl text-sm sm:w-[170px]"
+            className="min-h-11 md:min-h-9 w-full rounded-xl text-sm sm:w-[170px]"
           >
             <SelectValue />
           </SelectTrigger>
@@ -3249,7 +3249,7 @@ export function RevenueInvoiceLedger({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search recipient, invoice number, email or ID"
-              className="min-h-11 rounded-xl pl-8 text-sm"
+              className="min-h-11 md:min-h-9 rounded-xl pl-8 text-sm"
             />
           </div>
           <Select
@@ -3260,7 +3260,7 @@ export function RevenueInvoiceLedger({
           >
             <SelectTrigger
               aria-label="Filter invoice history status"
-              className="min-h-11 w-full rounded-xl text-sm sm:w-[150px]"
+              className="min-h-11 md:min-h-9 w-full rounded-xl text-sm sm:w-[150px]"
             >
               <SelectValue />
             </SelectTrigger>
@@ -3277,7 +3277,7 @@ export function RevenueInvoiceLedger({
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="min-h-11 w-full min-w-0 rounded-xl text-sm"
+              className="min-h-11 md:min-h-9 w-full min-w-0 rounded-xl text-sm"
             />
             <Input
               aria-label="Invoice created to"
@@ -3285,7 +3285,7 @@ export function RevenueInvoiceLedger({
               min={dateFrom || undefined}
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="min-h-11 w-full min-w-0 rounded-xl text-sm"
+              className="min-h-11 md:min-h-9 w-full min-w-0 rounded-xl text-sm"
             />
           </div>
           {hasFilters && (

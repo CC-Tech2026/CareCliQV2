@@ -134,7 +134,7 @@ export default function AdminProvidersPage() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name or org ID"
               aria-label="Search providers"
-              className="h-11 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-10 text-sm text-cc-text outline-none focus:ring-2 focus:ring-cc-plum"
+              className="h-11 md:h-9 w-full rounded-full border border-cc-border bg-cc-surface pl-11 pr-10 text-sm text-cc-text outline-none focus:ring-2 focus:ring-cc-plum"
             />
             {search && (
               <button type="button" onClick={() => setSearch("")} className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full hover:bg-cc-soft" aria-label="Clear search">
@@ -171,7 +171,7 @@ export default function AdminProvidersPage() {
               <button
                 type="button"
                 onClick={() => { setSearch(""); setPlanFilter("all"); setStatusFilter("all"); setOrgTypeFilter("all"); }}
-                className="col-span-2 inline-flex h-11 items-center justify-center gap-1 rounded-full px-4 text-sm font-semibold text-cc-muted hover:bg-cc-soft sm:col-span-1"
+                className="col-span-2 inline-flex h-11 md:h-9 items-center justify-center gap-1 rounded-full px-4 text-sm font-semibold text-cc-muted hover:bg-cc-soft sm:col-span-1"
               >
                 <X size={14} /> Clear
               </button>

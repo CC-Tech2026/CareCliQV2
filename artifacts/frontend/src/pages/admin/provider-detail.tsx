@@ -34,7 +34,7 @@ const STATUS_CHIP = {
 };
 
 const inputClass =
-  "h-11 w-full rounded-xl border border-cc-border bg-cc-surface px-3.5 text-sm text-cc-text outline-none focus:ring-2 focus:ring-cc-plum";
+  "h-11 md:h-9 w-full rounded-xl border border-cc-border bg-cc-surface px-3.5 text-sm text-cc-text outline-none focus:ring-2 focus:ring-cc-plum";
 
 /** What the open side panel is doing. Every change asks for a reason, which
  *  goes in the account's activity log. */

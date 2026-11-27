@@ -312,7 +312,7 @@ export function GovernanceTriage({
         <button
           type="button"
           onClick={() => setRetryKey((key) => key + 1)}
-          className="min-h-11 rounded-lg border border-cc-border px-4 text-sm font-medium text-cc-plum hover:bg-cc-soft"
+          className="min-h-11 md:min-h-9 rounded-lg border border-cc-border px-4 text-sm font-medium text-cc-plum hover:bg-cc-soft"
         >
           Retry action items
         </button>

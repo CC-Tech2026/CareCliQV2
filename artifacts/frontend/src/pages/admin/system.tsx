@@ -33,7 +33,7 @@ function localInput(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const inputClass = "h-11 w-full rounded-xl border border-cc-border bg-cc-surface px-3.5 text-sm text-cc-text outline-none focus:ring-2 focus:ring-cc-plum";
+const inputClass = "h-11 md:h-9 w-full rounded-xl border border-cc-border bg-cc-surface px-3.5 text-sm text-cc-text outline-none focus:ring-2 focus:ring-cc-plum";
 
 export default function AdminSystemPage() {
   const { toast } = useToast();

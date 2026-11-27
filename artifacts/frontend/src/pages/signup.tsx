@@ -127,7 +127,7 @@ function StyledInput({
         autoComplete={autoComplete}
         required={required}
         spellCheck={false}
-        className={`w-full h-11 px-4 rounded-xl text-[16px] md:text-[14px] font-medium outline-none transition-all duration-200${isPassword ? " pr-11" : ""}`}
+        className={`w-full h-11 md:h-9 px-4 rounded-xl text-[16px] md:text-[14px] font-medium outline-none transition-all duration-200${isPassword ? " pr-11" : ""}`}
         style={{
           background: BG,
           border: `1.5px solid ${error ? "#EF4444" : focused ? CORAL : BORDER}`,
@@ -179,7 +179,7 @@ function StyledSelect({
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
       required={required}
-      className="w-full h-11 px-4 rounded-xl text-[16px] md:text-[14px] font-medium outline-none transition-all duration-200"
+      className="w-full h-11 md:h-9 px-4 rounded-xl text-[16px] md:text-[14px] font-medium outline-none transition-all duration-200"
       style={{
         background: BG,
         border: `1.5px solid ${focused ? CORAL : BORDER}`,
@@ -1148,7 +1148,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
+                    className="h-11 md:h-9 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1287,7 +1287,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setStep(2)}
-                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
+                    className="h-11 md:h-9 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1362,7 +1362,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setStep(3)}
-                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
+                    className="h-11 md:h-9 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1503,7 +1503,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => navigate("/login")}
-                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
+                    className="h-11 md:h-9 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}
@@ -1543,7 +1543,7 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="h-11 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
+                    className="h-11 md:h-9 px-5 rounded-xl border font-black transition-all hover:bg-[var(--cc-soft)] active:scale-[0.97]"
                     style={{ borderColor: BORDER, color: PLUM }}
                   >
                     {t("auth.signup.back")}

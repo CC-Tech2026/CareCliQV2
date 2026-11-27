@@ -707,7 +707,7 @@ export default function Team() {
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 placeholder={translate("team.search.placeholder")}
                 aria-label={translate("team.search.placeholder")}
-                className="h-11 rounded-full border-cc-border bg-cc-surface pl-11 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-cc-plum"
+                className="h-11 md:h-9 rounded-full border-cc-border bg-cc-surface pl-11 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-cc-plum"
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">

@@ -45,7 +45,7 @@ function Choice({ checked, onChange, type = "radio", title, detail }: {
 }) {
   return (
     <label
-      className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-2.5 transition-colors"
+      className="flex min-h-11 md:min-h-9 cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-2.5 transition-colors"
       style={{ borderColor: checked ? "var(--cc-plum)" : "var(--cc-border)", background: checked ? "var(--cc-plum-subtle, var(--cc-soft))" : undefined }}
     >
       <input type={type} checked={checked} onChange={onChange} className="mt-1 h-4 w-4 accent-cc-plum" />
@@ -258,7 +258,7 @@ export default function AdminMessageNewPage() {
                   <ul className="max-h-64 divide-y divide-cc-border overflow-y-auto rounded-xl border border-cc-border">
                     {shownOrgs.map((o) => (
                       <li key={o.organization_id}>
-                        <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3.5 py-2">
+                        <label className="flex min-h-11 md:min-h-9 cursor-pointer items-center gap-3 px-3.5 py-2">
                           <input type="checkbox" className="h-4 w-4 accent-cc-plum" checked={audience.org_ids.includes(o.organization_id)}
                             onChange={() => setAudience({ ...audience, org_ids: toggle(audience.org_ids, o.organization_id) })} />
                           <span className="min-w-0 flex-1 truncate text-sm text-cc-text">{o.display_name}</span>

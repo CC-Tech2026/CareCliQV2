@@ -415,7 +415,7 @@ export default function WorkerProfile() {
                   title={translate("profile.preferredContact")}
                   value={draftPreferredContact}
                   onChange={(e) => setDraftPreferredContact(e.target.value as PreferredContactMethod)}
-                  className="mt-1 h-11 w-full rounded-xl border bg-white px-3 text-sm"
+                  className="mt-1 h-11 md:h-9 w-full rounded-xl border bg-white px-3 text-sm"
                   style={{ borderColor: BORDER }}
                 >
                   {CONTACT_METHODS.map((value) => (

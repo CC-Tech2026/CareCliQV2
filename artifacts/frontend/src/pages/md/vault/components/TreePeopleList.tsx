@@ -86,7 +86,7 @@ export function TreePeopleList({
             placeholder={`Search by name or ${personNoun === "participant" ? "NDIS number" : "employee ID"}`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="h-11 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
+            className="h-11 md:h-9 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
             style={{ borderColor: BORDER, color: TEXT }}
           />
         </div>

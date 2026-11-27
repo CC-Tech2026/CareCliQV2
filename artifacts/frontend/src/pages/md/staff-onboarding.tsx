@@ -527,7 +527,7 @@ function HireDetail({
               </div>
 
               {hire.status === "draft" && (
-                <Button variant="navy" className="min-h-11 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending || documents.length === 0}>
+                <Button variant="navy" className="min-h-11 md:min-h-9 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending || documents.length === 0}>
                   {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send for signature
                 </Button>
               )}
@@ -557,7 +557,7 @@ function HireDetail({
                         <Copy size={13} style={{ color: MUTED }} />
                       </button>
                     </div>
-                    <Button variant="outline" className="min-h-11 w-full gap-2 rounded-full" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
+                    <Button variant="outline" className="min-h-11 md:min-h-9 w-full gap-2 rounded-full" onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
                       {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={13} />} Resend offer email
                     </Button>
                   </div>
@@ -572,14 +572,14 @@ function HireDetail({
                       The offer link expired after {OFFER_LINK_TTL_DAYS} days without a signature. Resend to issue a fresh link.
                     </p>
                   </div>
-                  <Button variant="navy" className="min-h-11 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
+                  <Button variant="navy" className="min-h-11 md:min-h-9 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendSignatureMut.mutate()} disabled={sendSignatureMut.isPending}>
                     {sendSignatureMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Resend offer
                   </Button>
                 </div>
               )}
 
               {hire.status === "signed" && (
-                <Button variant="navy" className="min-h-11 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendInviteMut.mutate()} disabled={sendInviteMut.isPending}>
+                <Button variant="navy" className="min-h-11 md:min-h-9 w-full gap-2 rounded-full text-white" style={{ background: "var(--cc-cta)" }} onClick={() => sendInviteMut.mutate()} disabled={sendInviteMut.isPending}>
                   {sendInviteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send login invite
                 </Button>
               )}
@@ -605,7 +605,7 @@ function HireDetail({
                     </div>
                     <Button
                       variant={inviteExpiry?.expired ? "navy" : "outline"}
-                      className="min-h-11 w-full gap-2 rounded-full"
+                      className="min-h-11 md:min-h-9 w-full gap-2 rounded-full"
                       onClick={() => sendInviteMut.mutate()}
                       disabled={sendInviteMut.isPending}
                     >
@@ -1794,7 +1794,7 @@ export default function StaffOnboardingBoard() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="relative min-w-0 flex-1 sm:max-w-sm">
                 <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
-                <Input aria-label="Search candidates" value={search} onChange={(e) => { setSearch(e.target.value); setActiveKpi(null); }} placeholder="Search candidates" className="h-11 rounded-full bg-cc-surface pl-11 pr-9 text-sm" />
+                <Input aria-label="Search candidates" value={search} onChange={(e) => { setSearch(e.target.value); setActiveKpi(null); }} placeholder="Search candidates" className="h-11 md:h-9 rounded-full bg-cc-surface pl-11 pr-9 text-sm" />
                 {search && <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5"><X size={13} style={{ color: MUTED }} /></button>}
               </div>
               <Select value={stageFilter} onValueChange={(value) => { setStageFilter(value); setActiveKpi(null); }}>

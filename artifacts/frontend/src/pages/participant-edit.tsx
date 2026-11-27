@@ -390,7 +390,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
             <button
               type="button"
               onClick={() => navigate("/patients")}
-              className="h-11 sm:h-10 px-5 rounded-xl text-[13px] font-semibold border transition-colors hover:bg-[#F6F4FB] text-center"
+              className="h-11 md:h-9 sm:h-10 px-5 rounded-xl text-[13px] font-semibold border transition-colors hover:bg-[#F6F4FB] text-center"
               style={{ borderColor: BORDER, color: T2 }}
             >
               {translate("common.cancel")}
@@ -398,7 +398,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
             <button
               type="submit"
               disabled={updateMutation.isPending}
-              className="flex items-center justify-center gap-2 h-11 sm:h-10 px-6 rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
+              className="flex items-center justify-center gap-2 h-11 md:h-9 sm:h-10 px-6 rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
               style={{ background: "var(--cc-cta)" }}
             >
               {updateMutation.isPending ? (

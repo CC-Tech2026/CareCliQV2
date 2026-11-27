@@ -17,11 +17,11 @@ const focusRing =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cc-plum";
 
 /** Main action: a solid pill in the CTA colour. */
-export const ctaClass = `inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 bg-[var(--cc-cta)] ${focusRing}`;
+export const ctaClass = `inline-flex min-h-11 md:min-h-9 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 bg-[var(--cc-cta)] ${focusRing}`;
 /** Quiet header action: text only until hovered. */
-export const ghostClass = `inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium text-cc-text transition hover:bg-cc-soft disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
+export const ghostClass = `inline-flex min-h-11 md:min-h-9 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium text-cc-text transition hover:bg-cc-soft disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 /** Secondary action inside content: an outlined pill. */
-export const outlineClass = `inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text transition hover:bg-cc-soft disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
+export const outlineClass = `inline-flex min-h-10 md:min-h-8 items-center justify-center gap-2 rounded-full border border-cc-border px-4 text-sm font-medium text-cc-text transition hover:bg-cc-soft disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 /** Row inside a Surface list. */
 export const rowClass =
   "flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-cc-soft focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum sm:px-5";
@@ -49,7 +49,7 @@ export function PageHeader({
       <div className="min-w-0">
         {back && <div className="mb-1">{back}</div>}
         <p className="sr-only">{eyebrow}</p>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
+        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight" style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}>
           {title}
           {description && !ownInfo && <SectionInfo text={description} />}
         </h1>
@@ -98,7 +98,7 @@ export function SummaryStrip({ items, loading }: { items: SummaryItem[]; loading
             {item.hint && <span className="mt-0.5 block text-xs" style={{ color: MUTED }}>{item.hint}</span>}
           </span>
         );
-        const shape = `inline-flex min-h-10 items-center px-3.5 ${item.hint ? "rounded-2xl py-1.5" : "rounded-full"}`;
+        const shape = `inline-flex min-h-10 md:min-h-8 items-center px-3 ${item.hint ? "rounded-2xl py-1.5" : "rounded-full"}`;
         return item.onClick ? (
           <button
             key={item.label}
@@ -147,10 +147,10 @@ export function PillTabs<K extends string>({
   label: string;
 }) {
   return (
-    <nav aria-label={label} className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-1">
+    <nav aria-label={label} className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-0.5">
       {options.map(({ key, label: text, icon: Icon, count, href, title }) => {
         const on = key === value;
-        const className = `inline-flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-medium transition ${on ? "" : "hover:bg-cc-soft"} ${focusRing}`;
+        const className = `inline-flex min-h-10 md:min-h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-sm font-medium transition ${on ? "" : "hover:bg-cc-soft"} ${focusRing}`;
         const style = on
           ? { background: "var(--cc-text)", color: "var(--cc-bg)" }
           : { color: TEXT, boxShadow: `inset 0 0 0 1px ${BORDER}` };
@@ -199,7 +199,7 @@ export function SearchField({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-11 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
+        className="h-11 md:h-9 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
         style={{ borderColor: BORDER, color: TEXT }}
       />
     </div>

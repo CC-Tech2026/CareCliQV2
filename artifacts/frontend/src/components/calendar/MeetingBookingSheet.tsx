@@ -426,7 +426,7 @@ export function MeetingBookingSheet({
                     role="radio"
                     aria-checked={selected}
                     onClick={() => setMode(m)}
-                    className={`flex min-h-11 items-center justify-center gap-1.5 rounded-xl border px-2 text-sm font-medium transition-colors ${
+                    className={`flex min-h-11 md:min-h-9 items-center justify-center gap-1.5 rounded-xl border px-2 text-sm font-medium transition-colors ${
                       selected
                         ? "border-[var(--cc-brand-purple)] bg-[var(--cc-brand-purple-soft)] text-[var(--cc-brand-purple)]"
                         : "border-cc-border text-cc-text hover:bg-cc-soft"

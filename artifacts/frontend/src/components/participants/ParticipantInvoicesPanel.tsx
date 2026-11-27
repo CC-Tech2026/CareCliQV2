@@ -92,7 +92,7 @@ export function ParticipantInvoicesPanel({
               <Search className="absolute left-3 top-3 h-4 w-4 text-cc-muted" />
               <Input
                 aria-label="Search linked invoices"
-                className="min-h-11 pl-9"
+                className="min-h-11 md:min-h-9 pl-9"
                 placeholder="Search invoice number"
                 value={search}
                 onChange={(e) => {
@@ -105,7 +105,7 @@ export function ParticipantInvoicesPanel({
           <label className="text-sm">
             Status
             <select
-              className="mt-1 min-h-11 w-full rounded-md border border-cc-border bg-white px-3"
+              className="mt-1 min-h-11 md:min-h-9 w-full rounded-md border border-cc-border bg-white px-3"
               value={status}
               onChange={(e) => {
                 setStatus(e.target.value);
@@ -233,7 +233,7 @@ export function ParticipantInvoicesPanel({
               Clear
             </Button>
             <Button
-              className="min-h-11"
+              className="min-h-11 md:min-h-9"
               disabled={busy || tooMany}
               onClick={() =>
                 download({

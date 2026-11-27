@@ -851,7 +851,7 @@ function InlineSessionComposer({
                     type="button"
                     onClick={onTranslate}
                     disabled={!draft.trim() || isTranslating || isGenerating}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition disabled:opacity-50"
+                    className="inline-flex min-h-11 md:min-h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition disabled:opacity-50"
                     style={{ borderColor: PLUM, color: PLUM }}
                   >
                     {isTranslating ? <Loader2 size={15} className="animate-spin" /> : <Languages size={15} />}
@@ -861,7 +861,7 @@ function InlineSessionComposer({
                     type="button"
                     onClick={onGenerate}
                     disabled={!draft.trim() || isGenerating || isTranslating}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition disabled:opacity-50"
+                    className="inline-flex min-h-11 md:min-h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition disabled:opacity-50"
                     style={{ borderColor: PLUM, color: PLUM }}
                   >
                     {isGenerating ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
@@ -871,7 +871,7 @@ function InlineSessionComposer({
                     type="button"
                     onClick={onSave}
                     disabled={!canSave}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black text-white transition disabled:opacity-50"
+                    className="inline-flex min-h-11 md:min-h-9 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black text-white transition disabled:opacity-50"
                     style={{ background: PLUM }}
                   >
                     {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
@@ -901,7 +901,7 @@ function InlineSessionComposer({
                         onCommitInput();
                       }
                     }}
-                    className="min-h-11 flex-1 bg-transparent px-3 text-base font-medium outline-none"
+                    className="min-h-11 md:min-h-9 flex-1 bg-transparent px-3 text-base font-medium outline-none"
                     style={{ color: TEXT }}
                   />
                   <button

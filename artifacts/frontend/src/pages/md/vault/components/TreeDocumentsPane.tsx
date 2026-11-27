@@ -57,7 +57,7 @@ export function TreeDocumentsPane({
           type="button"
           onClick={() => setShareOpen(true)}
           disabled={documents.length === 0}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+          className="inline-flex min-h-11 md:min-h-9 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
           style={{ background: "var(--cc-brand-purple)" }}
         >
           <Share2 size={15} />

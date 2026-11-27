@@ -25,7 +25,7 @@ export function OnboardingAreaSwitcher({ active }: { active: "staff" | "particip
             key={area.key}
             href={area.href}
             aria-current={isActive ? "page" : undefined}
-            className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap border-b-2 px-3 text-sm font-semibold transition-colors ${
+            className={`inline-flex min-h-11 md:min-h-9 shrink-0 items-center whitespace-nowrap border-b-2 px-3 text-sm font-semibold transition-colors ${
               isActive
                 ? "border-[var(--cc-brand-purple)] text-[var(--cc-brand-purple)]"
                 : "border-transparent text-[var(--cc-muted)] hover:text-[var(--cc-text)]"

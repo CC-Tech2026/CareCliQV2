@@ -63,7 +63,7 @@ export function SettingsNavigation<T extends string>({
           id="settings-section-picker"
           value={active}
           onChange={(e) => onChange(e.target.value as T)}
-          className="h-11 w-full min-w-0 rounded-lg border border-cc-border bg-transparent px-3 text-sm font-medium text-cc-text"
+          className="h-11 md:h-9 w-full min-w-0 rounded-lg border border-cc-border bg-transparent px-3 text-sm font-medium text-cc-text"
         >
           {groups.map((group) => (
             <optgroup key={group.title} label={group.title}>
@@ -122,7 +122,7 @@ export function SettingsNavigation<T extends string>({
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="mt-2 block min-h-11 font-medium text-cc-plum"
+              className="mt-2 block min-h-11 md:min-h-9 font-medium text-cc-plum"
             >
               Clear search
             </button>

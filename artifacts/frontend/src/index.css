@@ -950,7 +950,7 @@
      browser's 16px, so breakpoints don't move. Phones keep 1 for touch. */
   @media (min-width: 768px) {
     :root {
-      --ui-density: 0.9;
+      --ui-density: 0.875;
     }
   }
 

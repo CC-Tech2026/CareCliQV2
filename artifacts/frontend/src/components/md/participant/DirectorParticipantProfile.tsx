@@ -443,7 +443,7 @@ export function DirectorParticipantProfile({
                   type="button"
                   onClick={() => setTab(t.id)}
                   aria-current={active ? "page" : undefined}
-                  className="relative min-h-11 whitespace-nowrap px-3 text-sm font-medium transition-colors hover:text-cc-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum"
+                  className="relative min-h-11 md:min-h-9 whitespace-nowrap px-3 text-sm font-medium transition-colors hover:text-cc-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cc-plum"
                   style={{ color: active ? TEXT : MUTED }}
                 >
                   {t.label}

@@ -723,7 +723,7 @@ export function ActiveParticipantsPage({
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search participants"
             placeholder="Name, NDIS number, date of birth, suburb or worker"
-            className="h-11 rounded-full border-cc-border bg-cc-surface pl-11 pr-11 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-cc-plum"
+            className="h-11 md:h-9 rounded-full border-cc-border bg-cc-surface pl-11 pr-11 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-cc-plum"
           />
           {search && (
             <button aria-label="Clear participant search" onClick={() => setSearch("")} className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full hover:bg-cc-soft">
@@ -734,7 +734,7 @@ export function ActiveParticipantsPage({
         <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center lg:ml-auto">
           {workerOptions.length > 0 && (
             <Select value={workerFilter} onValueChange={setWorkerFilter}>
-              <SelectTrigger aria-label="Support worker" className="h-11 w-full rounded-full border-cc-border bg-cc-surface px-4 text-sm shadow-none sm:w-[200px]" style={{ color: TEXT }}>
+              <SelectTrigger aria-label="Support worker" className="h-11 md:h-9 w-full rounded-full border-cc-border bg-cc-surface px-4 text-sm shadow-none sm:w-[200px]" style={{ color: TEXT }}>
                 <SelectValue placeholder="Any support worker" />
               </SelectTrigger>
               <SelectContent>
@@ -748,7 +748,7 @@ export function ActiveParticipantsPage({
           )}
           <LabelFilter target="participants" value={labelFilter} onChange={setLabelFilter} className="w-full sm:w-[180px] [&_button]:h-11 [&_button]:rounded-full [&_button]:px-4 [&_button]:text-sm" />
           <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as "all" | ServiceCategory)}>
-            <SelectTrigger aria-label="Service category" className="h-11 w-full rounded-full border-cc-border bg-cc-surface px-4 text-sm shadow-none sm:w-[170px]" style={{ color: TEXT }}>
+            <SelectTrigger aria-label="Service category" className="h-11 md:h-9 w-full rounded-full border-cc-border bg-cc-surface px-4 text-sm shadow-none sm:w-[170px]" style={{ color: TEXT }}>
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
@@ -757,7 +757,7 @@ export function ActiveParticipantsPage({
               <SelectItem value="aged_care">Aged Care</SelectItem>
             </SelectContent>
           </Select>
-          <div className={`flex h-11 min-w-0 items-center rounded-full border bg-cc-surface pl-4 focus-within:ring-2 focus-within:ring-cc-plum lg:hidden ${workerOptions.length > 0 ? "col-span-2 sm:col-span-1" : ""}`} style={{ borderColor: BORDER }}>
+          <div className={`flex h-11 md:h-9 min-w-0 items-center rounded-full border bg-cc-surface pl-4 focus-within:ring-2 focus-within:ring-cc-plum lg:hidden ${workerOptions.length > 0 ? "col-span-2 sm:col-span-1" : ""}`} style={{ borderColor: BORDER }}>
             <select
               aria-label="Sort participants"
               value={sortKey}
@@ -814,7 +814,7 @@ export function ActiveParticipantsPage({
           <h2 className="text-base font-semibold text-cc-text">We couldn't load your participants</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-cc-muted">Check your connection and try again. Nothing has been changed.</p>
           {onRetry && (
-            <button type="button" onClick={onRetry} className="mt-5 min-h-11 rounded-full border border-cc-border px-5 text-sm font-semibold text-cc-text">Try again</button>
+            <button type="button" onClick={onRetry} className="mt-5 min-h-11 md:min-h-9 rounded-full border border-cc-border px-5 text-sm font-semibold text-cc-text">Try again</button>
           )}
         </div>
       ) : rows.length === 0 ? (
@@ -822,7 +822,7 @@ export function ActiveParticipantsPage({
           <Users size={26} className="mx-auto mb-3 text-cc-muted" />
           <h2 className="text-base font-semibold text-cc-text">{total === 0 ? "Your participant directory starts here" : "No one matches that"}</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-cc-muted">{total === 0 ? "Complete participant onboarding to bring their details, care records and service status into this directory." : "Try a name, NDIS number, date of birth or suburb, or clear the filters to see everyone."}</p>
-          <button type="button" onClick={() => { if (total === 0) onBack(); else resetFilters(); }} className="mt-5 min-h-11 rounded-full border border-cc-border px-5 text-sm font-semibold text-cc-text">{total === 0 ? "Open participant onboarding" : "Clear filters"}</button>
+          <button type="button" onClick={() => { if (total === 0) onBack(); else resetFilters(); }} className="mt-5 min-h-11 md:min-h-9 rounded-full border border-cc-border px-5 text-sm font-semibold text-cc-text">{total === 0 ? "Open participant onboarding" : "Clear filters"}</button>
         </div>
       ) : (
         <div className="overflow-hidden rounded-3xl bg-cc-surface">
@@ -1705,7 +1705,7 @@ export default function ParticipantOnboardingBoard() {
             <>
               <button
                 onClick={copyReferralLink}
-                className="inline-flex min-h-11 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-5 text-sm font-medium transition hover:bg-cc-soft"
+                className="inline-flex min-h-11 md:min-h-9 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-5 text-sm font-medium transition hover:bg-cc-soft"
                 style={{ color: TEXT }}
               >
                 Copy referral link
@@ -1745,7 +1745,7 @@ export default function ParticipantOnboardingBoard() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Name, NDIS number, phone or date of birth"
               aria-label="Search participants"
-              className="h-11 rounded-full bg-cc-surface pl-11 pr-9 text-sm"
+              className="h-11 md:h-9 rounded-full bg-cc-surface pl-11 pr-9 text-sm"
             />
             {search && (
               <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-black/5">

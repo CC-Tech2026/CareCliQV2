@@ -218,7 +218,7 @@ export function ShiftVerificationCard({
           aria-controls={`shift-review-${item.shift_id}`}
           aria-label={`${expanded ? "Close" : "Review"} ${item.participant_name || "participant"}'s shift, ${safeDateTime(item.scheduled_start, item.timezone)}`}
           onClick={() => setExpanded((v) => !v)}
-          className="flex min-h-11 items-center gap-2 rounded-lg border px-3 transition hover:bg-gray-50 shrink-0"
+          className="flex min-h-11 md:min-h-9 items-center gap-2 rounded-lg border px-3 transition hover:bg-gray-50 shrink-0"
           style={{ borderColor: BORDER, color: T3 }}
         >
           <span className="text-sm">{expanded ? "Close" : "Review"}</span>
@@ -544,7 +544,7 @@ export function ShiftVerificationPanel({
     ).entries(),
   ];
   const field =
-    "min-h-11 min-w-0 w-full rounded-lg border border-cc-border bg-white px-3 text-sm";
+    "min-h-11 md:min-h-9 min-w-0 w-full rounded-lg border border-cc-border bg-white px-3 text-sm";
   return (
     <div className="space-y-4">
       <p className="text-sm text-cc-muted">
@@ -669,14 +669,14 @@ export function ShiftVerificationPanel({
           </span>
           <div className="flex gap-3">
             <button
-              className="min-h-11 rounded-lg border px-3 disabled:opacity-50"
+              className="min-h-11 md:min-h-9 rounded-lg border px-3 disabled:opacity-50"
               disabled={currentPage === 1}
               onClick={() => setPage(currentPage - 1)}
             >
               Previous
             </button>
             <button
-              className="min-h-11 rounded-lg border px-3 disabled:opacity-50"
+              className="min-h-11 md:min-h-9 rounded-lg border px-3 disabled:opacity-50"
               disabled={currentPage === pageCount}
               onClick={() => setPage(currentPage + 1)}
             >

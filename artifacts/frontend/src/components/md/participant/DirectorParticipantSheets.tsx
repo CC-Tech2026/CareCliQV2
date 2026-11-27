@@ -148,7 +148,7 @@ export function TeamSheet({
                 const option = staffOption(w);
                 return (
                   <li key={w.id} className="border-cc-border">
-                    <label className="flex min-h-11 cursor-pointer items-center gap-3 px-4 py-1.5">
+                    <label className="flex min-h-11 md:min-h-9 cursor-pointer items-center gap-3 px-4 py-1.5">
                       <Checkbox
                         checked={checked}
                         onCheckedChange={(v) => setBackups((b) => (v ? [...b, w.id] : b.filter((id) => id !== w.id)))}

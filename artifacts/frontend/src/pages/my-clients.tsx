@@ -271,7 +271,7 @@ export default function MyClients() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={translate("clients.searchPlaceholder")}
-            className="w-full h-11 pl-10 pr-4 rounded-xl text-[14px] outline-none transition-all"
+            className="w-full h-11 md:h-9 pl-10 pr-4 rounded-xl text-[14px] outline-none transition-all"
             style={{
               background: "var(--cc-soft)",
               border: `1px solid ${BORDER}`,

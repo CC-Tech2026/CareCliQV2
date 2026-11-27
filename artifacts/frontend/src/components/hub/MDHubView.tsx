@@ -277,7 +277,7 @@ export function DemandCapacityPanel({ data, loading, error, onRetry, onNavigate 
 }) {
   if (error) return <div role="alert" className="p-5 text-sm">
     <p>Enquiries and available hours could not be loaded.</p>
-    <button type="button" onClick={onRetry} className="mt-3 min-h-11 font-semibold text-cc-plum">Try again</button>
+    <button type="button" onClick={onRetry} className="mt-3 min-h-11 md:min-h-9 font-semibold text-cc-plum">Try again</button>
   </div>;
   if (loading || !data) return <div role="status" className="p-5 text-sm text-cc-muted">Loading enquiries and available hours...</div>;
   const reliable = Math.round(data.capacity.reliable_hours);
@@ -489,7 +489,7 @@ export function DocumentationInsights({ data, onNavigate }: { data: Pick<MDData,
       <div><h3 className="text-sm font-semibold text-cc-text">Most frequently recorded issues</h3><p className="mt-1 text-xs leading-relaxed text-cc-muted">Mentions in rule flags, recommendations and compliance notes. One session may contribute more than once; these are not confirmed root causes.</p>
         <div className="mt-4 space-y-4">{issues.map(issue => <div key={issue.issue}><div className="mb-1.5 flex justify-between gap-3 text-xs"><span className="text-cc-text">{issue.issue}</span><span className="shrink-0 font-semibold text-cc-muted">{issue.count} mentions</span></div><div className="h-2 rounded bg-cc-soft"><div className="h-full rounded bg-cc-plum" style={{ width: issue.count / maxCount * 100 + "%" }} /></div></div>)}</div>
         {!issues.length && <p className="mt-4 text-sm text-cc-muted">No recurring issues were returned. Review individual records before drawing conclusions.</p>}
-        <button type="button" onClick={() => onNavigate("/md/service-delivery")} className="mt-5 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-cc-plum">Open service delivery quality<ArrowRight size={14} /></button>
+        <button type="button" onClick={() => onNavigate("/md/service-delivery")} className="mt-5 inline-flex min-h-11 md:min-h-9 items-center gap-2 text-sm font-semibold text-cc-plum">Open service delivery quality<ArrowRight size={14} /></button>
       </div>
     </div>
   </section>;
@@ -939,7 +939,7 @@ export function MDHubView() {
         >
           {translate("hub.mdHub.retryHint")}
         </p>
-        <button type="button" disabled={overviewQuery.isFetching} onClick={() => void overviewQuery.refetch()} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--cc-cta)] px-4 text-sm font-semibold text-white disabled:opacity-60">
+        <button type="button" disabled={overviewQuery.isFetching} onClick={() => void overviewQuery.refetch()} className="mt-5 inline-flex min-h-11 md:min-h-9 items-center gap-2 rounded-lg bg-[var(--cc-cta)] px-4 text-sm font-semibold text-white disabled:opacity-60">
           <RefreshCw size={16} className={overviewQuery.isFetching ? "animate-spin motion-reduce:animate-none" : ""} aria-hidden="true" />
           {overviewQuery.isFetching ? "Retrying…" : "Try again"}
         </button>

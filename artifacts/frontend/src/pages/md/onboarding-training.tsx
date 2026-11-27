@@ -1873,7 +1873,7 @@ function ModulesTab({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search training modules"
-            className="h-11 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
+            className="h-11 md:h-9 w-full rounded-full border bg-cc-surface pl-11 pr-4 text-sm outline-none transition focus:ring-2 focus:ring-cc-plum"
             style={{ borderColor: BORDER, color: TEXT }}
           />
         </label>

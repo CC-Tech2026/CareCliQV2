@@ -425,7 +425,7 @@ export function ContactLink({
     <span className="group inline-flex max-w-full min-w-0 items-center gap-1">
       <a
         href={href}
-        className="inline-flex min-h-11 min-w-0 items-center gap-1.5 break-all hover:underline"
+        className="inline-flex min-h-11 md:min-h-9 min-w-0 items-center gap-1.5 break-all hover:underline"
         style={{ color: "inherit" }}
       >
         <Icon size={13} className="shrink-0" />{" "}
@@ -799,7 +799,7 @@ export function WorkerDetail({
         <button
           type="button"
           onClick={onBack}
-          className="-ml-3 flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors hover:bg-cc-soft"
+          className="-ml-3 flex min-h-11 md:min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors hover:bg-cc-soft"
           style={{ color: TEXT }}
         >
           <ArrowLeft size={15} /> {translate("team.detail.back")}
@@ -1018,7 +1018,7 @@ export function WorkerDetail({
               {index > 0 && (
                 <span aria-hidden className="mr-2 hidden h-6 w-px sm:block" style={{ background: BORDER }} />
               )}
-              <div className="flex min-h-11 items-baseline gap-2 px-2">
+              <div className="flex min-h-11 md:min-h-9 items-baseline gap-2 px-2">
                 <dd
                   className={`${fullScreen ? "text-2xl" : "text-xl"} font-semibold tabular-nums tracking-tight`}
                   style={{ color: cell.color ?? TEXT }}
@@ -2726,7 +2726,7 @@ function CredentialsTab({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-cc-text">
+        <label className="flex min-h-11 md:min-h-9 cursor-pointer items-center gap-2 text-sm text-cc-text">
           <input
             type="checkbox"
             checked={attentionOnly}
@@ -4016,7 +4016,7 @@ export function ShiftAuditPanel({
               setSection(key);
               contentRef.current?.scrollTo({ top: 0 });
             }}
-            className="min-h-11 rounded-lg px-1 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="min-h-11 md:min-h-9 rounded-lg px-1 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
               background: section === key ? SOFT : "transparent",
               color: section === key ? PLUM : MUTED,

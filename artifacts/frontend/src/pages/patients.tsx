@@ -2960,7 +2960,7 @@ export default function Patients() {
               </div>
             ))
           ) : participantsError ? (
-            <div role="alert" className="p-4 text-sm text-cc-text"><p>Participant records couldn’t be loaded.</p><button type="button" onClick={() => void refetch()} className="mt-3 min-h-11 rounded-lg border border-cc-border px-4 font-semibold">Try again</button></div>
+            <div role="alert" className="p-4 text-sm text-cc-text"><p>Participant records couldn’t be loaded.</p><button type="button" onClick={() => void refetch()} className="mt-3 min-h-11 md:min-h-9 rounded-lg border border-cc-border px-4 font-semibold">Try again</button></div>
           ) : filteredParticipants.length === 0 ? (
             <div className="flex flex-col items-center py-12 gap-3">
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "var(--cc-active-bg)" }}>
@@ -2972,7 +2972,7 @@ export default function Patients() {
                   ? translateParams("patients.empty.letterFilter", { letter: letterFilter })
                   : translate("patients.empty.adjustFilters")}
               </p>
-              {(search || statusFilter !== "all" || letterFilter || labelFilter) && <button type="button" onClick={() => { setSearch(""); setStatusFilter("all"); setLetterFilter(null); setLabelFilter(null); }} className="min-h-11 rounded-lg border border-cc-border px-4 text-sm font-semibold text-cc-text">Clear filters</button>}
+              {(search || statusFilter !== "all" || letterFilter || labelFilter) && <button type="button" onClick={() => { setSearch(""); setStatusFilter("all"); setLetterFilter(null); setLabelFilter(null); }} className="min-h-11 md:min-h-9 rounded-lg border border-cc-border px-4 text-sm font-semibold text-cc-text">Clear filters</button>}
             </div>
           ) : (
             filteredParticipants.map((p: any) => {

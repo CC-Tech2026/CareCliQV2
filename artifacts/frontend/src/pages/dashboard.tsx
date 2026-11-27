@@ -938,7 +938,7 @@ function WorkerDashboardView({
           <Link href="/my-clients">
             <button
               type="button"
-              className="flex h-11 items-center rounded-full px-4 text-xs font-black text-white shadow-sm transition hover:opacity-90"
+              className="flex h-11 md:h-9 items-center rounded-full px-4 text-xs font-black text-white shadow-sm transition hover:opacity-90"
               style={{ background: PLUM }}
             >
               {translate("dashboard.myClients")}

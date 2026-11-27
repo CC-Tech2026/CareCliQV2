@@ -352,7 +352,7 @@ function Checklist({
         </div>
       </div>
 
-      <div className="flex min-h-11 items-center justify-between gap-3">
+      <div className="flex min-h-11 md:min-h-9 items-center justify-between gap-3">
         <p className="text-sm" style={{ color: MUTED }}>
           {filtered.length} of {items.length} items
         </p>

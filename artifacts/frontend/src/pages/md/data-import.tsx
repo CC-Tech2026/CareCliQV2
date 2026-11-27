@@ -342,7 +342,7 @@ export function DataImportFlow({ target }: { target: ImportTarget }) {
                 <select
                   value={source}
                   onChange={(e) => setSource(e.target.value)}
-                  className="mt-1.5 h-11 w-full rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text"
+                  className="mt-1.5 h-11 md:h-9 w-full rounded-full border border-cc-border bg-cc-surface px-4 text-sm text-cc-text"
                 >
                   {SOURCES.map((s) => (
                     <option key={s.value} value={s.value}>{s.label}</option>
@@ -380,7 +380,7 @@ export function DataImportFlow({ target }: { target: ImportTarget }) {
               <button
                 type="button"
                 onClick={() => downloadCsv(`carecliq-${kind}-template.csv`, TEMPLATES[kind])}
-                className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-cc-plum"
+                className="inline-flex min-h-11 md:min-h-9 items-center gap-2 text-sm font-semibold text-cc-plum"
               >
                 <Download size={15} aria-hidden="true" />
                 No export? Download a template to fill in

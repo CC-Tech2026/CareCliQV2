@@ -1084,7 +1084,7 @@ export default function IncidentDetail({ id }: { id: string }) {
             {trainingMode === "existing" ? (
               <Field label={translate("incidents.detail.trainingModule")} htmlFor="incident-training-module">
                 <Select value={trainingModuleId} onValueChange={setTrainingModuleId}>
-                  <SelectTrigger id="incident-training-module" className="h-11 rounded-xl px-4 text-sm" style={{ borderColor: BORDER }}>
+                  <SelectTrigger id="incident-training-module" className="h-11 md:h-9 rounded-xl px-4 text-sm" style={{ borderColor: BORDER }}>
                     <SelectValue placeholder={translate("incidents.detail.trainingChooseModule")} />
                   </SelectTrigger>
                   <SelectContent>
