@@ -332,6 +332,8 @@
 
   /* Accessibility — scaled by AccessibilityContext on <html> */
   --font-scale: 1;
+  /* Density: phones keep full size for touch; desktop runs compact (see below). */
+  --ui-density: 1;
 
   /* Worker mobile spec v2 — light */
   --wm-pink: #E8457A;
@@ -935,12 +937,21 @@
   }
 
   html {
-    font-size: calc(16px * var(--font-scale, 1));
+    font-size: calc(16px * var(--font-scale, 1) * var(--ui-density, 1));
     color-scheme: light;
   }
 
   html.dark {
     color-scheme: dark;
+  }
+
+  /* Compact desktop: every rem-based size (text, padding, gaps, button and
+     input heights) shrinks together, like a 90% zoom. Media queries use the
+     browser's 16px, so breakpoints don't move. Phones keep 1 for touch. */
+  @media (min-width: 768px) {
+    :root {
+      --ui-density: 0.9;
+    }
   }
 
   body {
@@ -1326,40 +1337,40 @@ html .text-\[9\.5px\],
 html .text-\[10px\],
 html .text-\[10\.5px\],
 html .text-\[11px\],
-html .text-\[11\.5px\]  { font-size: calc(11.15px * var(--font-scale, 1)) !important; }
+html .text-\[11\.5px\]  { font-size: calc(11.15px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
 html .text-\[12px\],
 html .text-\[12\.5px\],
-html .text-\[13px\]     { font-size: calc(12.58px * var(--font-scale, 1)) !important; }
+html .text-\[13px\]     { font-size: calc(12.58px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
 html .text-\[13\.5px\],
 html .text-\[14px\],
 html .text-\[14\.5px\],
-html .text-\[15px\]     { font-size: calc(14.19px * var(--font-scale, 1)) !important; }
+html .text-\[15px\]     { font-size: calc(14.19px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
 html .text-\[15\.5px\],
 html .text-\[16px\],
-html .text-\[16\.5px\]  { font-size: calc(16px * var(--font-scale, 1)) !important; }
+html .text-\[16\.5px\]  { font-size: calc(16px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
 html .text-\[17px\],
 html .text-\[18px\],
-html .text-\[19px\]     { font-size: calc(18.05px * var(--font-scale, 1)) !important; }
+html .text-\[19px\]     { font-size: calc(18.05px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
 html .text-\[20px\],
-html .text-\[21px\]     { font-size: calc(20.35px * var(--font-scale, 1)) !important; }
-html .text-\[22px\]     { font-size: calc(22.95px * var(--font-scale, 1)) !important; }
+html .text-\[21px\]     { font-size: calc(20.35px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
+html .text-\[22px\]     { font-size: calc(22.95px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
 html .text-\[24px\],
 html .text-\[25px\],
-html .text-\[26px\]     { font-size: calc(25.89px * var(--font-scale, 1)) !important; }
+html .text-\[26px\]     { font-size: calc(25.89px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
 html .text-\[28px\],
-html .text-\[30px\]     { font-size: calc(29.2px * var(--font-scale, 1)) !important; }
+html .text-\[30px\]     { font-size: calc(29.2px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
 html .text-\[32px\],
-html .text-\[34px\]     { font-size: calc(32.93px * var(--font-scale, 1)) !important; }
+html .text-\[34px\]     { font-size: calc(32.93px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
 html .text-\[36px\],
-html .text-\[38px\]     { font-size: calc(37.14px * var(--font-scale, 1)) !important; }
+html .text-\[38px\]     { font-size: calc(37.14px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
 html .text-\[40px\],
 html .text-\[42px\],
-html .text-\[44px\]     { font-size: calc(41.89px * var(--font-scale, 1)) !important; }
-html .text-\[46px\]     { font-size: calc(46.98px * var(--font-scale, 1)) !important; }
+html .text-\[44px\]     { font-size: calc(41.89px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
+html .text-\[46px\]     { font-size: calc(46.98px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
 html .text-\[52px\],
-html .text-\[56px\]     { font-size: calc(53.27px * var(--font-scale, 1)) !important; }
-html .text-\[64px\]     { font-size: calc(67.78px * var(--font-scale, 1)) !important; }
-html .text-\[84px\]     { font-size: calc(85.3px * var(--font-scale, 1)) !important; }
+html .text-\[56px\]     { font-size: calc(53.27px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
+html .text-\[64px\]     { font-size: calc(67.78px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
+html .text-\[84px\]     { font-size: calc(85.3px * var(--font-scale, 1) * var(--ui-density, 1)) !important; }
 
 @media (prefers-reduced-motion: reduce) {
   html.high-contrast *,
