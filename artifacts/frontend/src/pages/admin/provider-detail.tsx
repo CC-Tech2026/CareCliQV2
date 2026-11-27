@@ -181,7 +181,7 @@ export default function AdminProviderDetailPage() {
           <>
             <Field label="Plan">
               <select value={plan} onChange={(e) => setPlan(e.target.value as typeof plan)} className={inputClass}>
-                {PLANS_ON_SALE.map((p) => <option key={p.tier} value={p.tier}>{p.label}: {p.detail}</option>)}
+                {PLANS_ON_SALE.map((p) => <option key={p.tier} value={p.tier}>{p.label}</option>)}
               </select>
             </Field>
             {reasonField}
