@@ -29,7 +29,7 @@ export const STEP_LABELS = [
 /** In-memory only for the /get-started session. Never sent anywhere until a
  * plan is actually chosen on PricingStep, and never persisted. */
 export type Answers = {
-  teamSize?: "1-4" | "5-10" | "11-25" | "25+" | "other";
+  teamSize?: "1-25" | "26-55" | "55+" | "other";
   teamSizeOther?: string;
   providerType?: "registered" | "unregistered" | "applying" | "sole-trader" | "other";
   providerTypeOther?: string;

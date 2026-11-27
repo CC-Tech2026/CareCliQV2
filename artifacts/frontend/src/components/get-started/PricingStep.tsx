@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowRight, Building2, Check, Loader2, User, Users } from "lucide-react";
+import { ArrowRight, Building2, Check, Loader2, Users } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
 import { SIGNATURE, INK, QUIET_INK, RULE, PAPER, DISPLAY_FONT, GetStartedShell, Reveal } from "./shared";
@@ -38,43 +38,43 @@ function useOrgAbbrev() {
   return { value, setValue, status, normalized: value.trim().toUpperCase() };
 }
 
+// "micro" is an older plan some organisations are still on; new sign-ups
+// choose from TIERS below.
 export type PlanTier = "micro" | "small" | "medium";
 
+/** The plans on sale. Prices are shown here only: what's charged is the
+ * Stripe price with the lookup key "<tier>_monthly", so change both. */
 export const TIERS: Array<{
   tier: PlanTier;
   name: string;
-  icon: typeof User;
+  icon: typeof Users;
   range: string;
   price: number;
   perPerson?: string;
   note: string;
 }> = [
   {
-    tier: "micro",
-    name: "Micro",
-    icon: User,
-    range: "1 to 4 people",
-    price: 125,
-    note: "For a solo operator or a small independent team getting started.",
-  },
-  {
     tier: "small",
     name: "Small",
     icon: Users,
-    range: "5 to 10 people",
-    price: 250,
-    perPerson: "$41.67 per person",
-    note: "For a growing coordination team managing more shifts and staff.",
+    range: "1 to 25 users",
+    price: 280,
+    perPerson: "$11.20 per user with 25 users",
+    note: "For a sole trader or a growing team managing its shifts, staff and participants.",
   },
   {
     tier: "medium",
     name: "Medium",
     icon: Building2,
-    range: "11 to 25 people",
-    price: 400,
-    note: "For an established, multi worker provider running at scale.",
+    range: "26 to 55 users",
+    price: 680,
+    perPerson: "$12.36 per user with 55 users",
+    note: "For an established provider with several coordinators and a larger workforce.",
   },
 ];
+
+/** More users than the largest plan. */
+export const LARGER_TEAMS_NOTE = "More than 55 users? Talk to us about a plan for your organisation.";
 
 export const SHARED_FEATURES = [
   "Unlimited participants and notes",
@@ -208,7 +208,7 @@ export function PricingStep({ recommendedTier }: Props) {
 
       <Reveal delay={300} className="mt-9 [@media(max-height:820px)]:mt-6">
         <div
-          className="grid grid-cols-1 md:grid-cols-3 rounded-[24px] overflow-hidden transition-opacity duration-500"
+          className="grid grid-cols-1 md:grid-cols-2 rounded-[24px] overflow-hidden transition-opacity duration-500"
           style={{ border: `1px solid ${RULE}`, opacity: abbrevReady ? 1 : 0.55 }}
         >
           {TIERS.map(({ tier, name, range, price, perPerson, note }, i) => {
@@ -264,6 +264,9 @@ export function PricingStep({ recommendedTier }: Props) {
             );
           })}
         </div>
+        <p className="mt-3 text-[13.5px]" style={{ color: QUIET_INK }}>
+          {LARGER_TEAMS_NOTE}
+        </p>
 
         <div className="mt-5 flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-10">
           <p className="text-[13.5px] leading-relaxed" style={{ color: QUIET_INK }}>

@@ -53,12 +53,17 @@ async def check_signup_org_abbrev(value: str):
     return {"available": is_org_abbrev_available(get_supabase_admin(), value)}
 
 
+# The plans on sale. "micro" stays in stripe_service.PLAN_TIERS so
+# organisations already on it keep working, but nobody can choose it now.
+ON_SALE_TIERS = ("small", "medium")
+
+
 @router.post("/signup/checkout")
 async def create_signup_checkout(body: SignupCheckoutBody):
     """Public — no account exists yet. The marketing site's plan buttons link
     to the /get-started page in this app, which calls this to start Checkout."""
-    if body.plan_tier not in stripe_service.PLAN_TIERS:
-        raise HTTPException(status_code=400, detail=f"Invalid plan_tier. Must be one of: {', '.join(stripe_service.PLAN_TIERS)}")
+    if body.plan_tier not in ON_SALE_TIERS:
+        raise HTTPException(status_code=400, detail=f"Invalid plan_tier. Must be one of: {', '.join(ON_SALE_TIERS)}")
     org_abbrev = normalize_org_abbrev(body.org_abbrev)
     if not is_org_abbrev_available(get_supabase_admin(), org_abbrev):
         raise HTTPException(status_code=409, detail=f'"{org_abbrev}" is already taken by another organisation.')
@@ -158,8 +163,8 @@ async def get_status(current_user: dict = Depends(get_current_user)):
 async def create_checkout(body: CheckoutBody, current_user: dict = Depends(get_current_user)):
     """Existing org starting or changing tier from the billing settings page."""
     org_id = _require_md(current_user)
-    if body.plan_tier not in stripe_service.PLAN_TIERS:
-        raise HTTPException(status_code=400, detail=f"Invalid plan_tier. Must be one of: {', '.join(stripe_service.PLAN_TIERS)}")
+    if body.plan_tier not in ON_SALE_TIERS:
+        raise HTTPException(status_code=400, detail=f"Invalid plan_tier. Must be one of: {', '.join(ON_SALE_TIERS)}")
     base = settings.frontend_base_url.rstrip("/")
     try:
         url = stripe_service.create_checkout_session(

@@ -13,9 +13,8 @@ const BORDER = "var(--cc-border)";
 type PlanTier = "micro" | "small" | "medium";
 
 const TIERS: Array<{ tier: PlanTier; name: string; seats: string; price: number }> = [
-  { tier: "micro", name: "Micro", seats: "1-4 users", price: 125 },
-  { tier: "small", name: "Small", seats: "5-10 users", price: 250 },
-  { tier: "medium", name: "Medium", seats: "11-25 users", price: 400 },
+  { tier: "small", name: "Small", seats: "1-25 users", price: 280 },
+  { tier: "medium", name: "Medium", seats: "26-55 users", price: 680 },
 ];
 
 type SubscriptionStatus = {
@@ -143,7 +142,7 @@ export default function PlatformBilling() {
               Current plan
             </p>
             <p className="text-lg font-black mt-1" style={{ color: TEXT }}>
-              {status?.plan_tier ? TIERS.find((t) => t.tier === status.plan_tier)?.name ?? status.plan_tier : "—"}
+              {status?.plan_tier ? (TIERS.find((t) => t.tier === status.plan_tier)?.name ?? (status.plan_tier === "micro" ? "Micro" : status.plan_tier)) : "—"}
               {statusInfo && (
                 <span className="ml-2 text-[12px] font-bold" style={{ color: statusInfo.color }}>
                   {statusInfo.label}
@@ -173,7 +172,7 @@ export default function PlatformBilling() {
         <p className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color: MUTED }}>
           {hasSubscription ? "Change plan" : "Choose a plan"}
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {TIERS.map(({ tier, name, seats, price }) => {
             const isCurrent = status?.plan_tier === tier;
             return (
