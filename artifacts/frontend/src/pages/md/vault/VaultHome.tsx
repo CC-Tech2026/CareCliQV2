@@ -420,8 +420,9 @@ function ShareHistorySheet({ open, onOpenChange }: { open: boolean; onOpenChange
           ) : events.length === 0 ? (
             <p className="text-sm" style={{ color: "var(--cc-muted)" }}>Nothing has been shared in the last 30 days.</p>
           ) : (
-            events.map((event) => (
-              <div key={event.id} className="rounded-xl border p-3.5" style={{ borderColor: "var(--cc-border)" }}>
+            <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
+            {events.map((event) => (
+              <div key={event.id} className="p-3.5">
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="text-sm font-bold" style={{ color: "var(--cc-text)" }}>
                     {event.document_count} document{event.document_count === 1 ? "" : "s"}
@@ -438,7 +439,8 @@ function ShareHistorySheet({ open, onOpenChange }: { open: boolean; onOpenChange
                   <p className="mt-1 text-[12px]" style={{ color: "var(--cc-text)" }}>{event.folders.join(", ")}</p>
                 )}
               </div>
-            ))
+            ))}
+            </div>
           )}
         </div>
     </SidePanel>

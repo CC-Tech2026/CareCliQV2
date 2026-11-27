@@ -78,13 +78,12 @@ export function AgreementCheckCard() {
 
   return (
     <div className="space-y-3">
-      <div role="radiogroup" aria-label="Shifts outside the service agreement" className="space-y-2">
+      <div role="radiogroup" aria-label="Shifts outside the service agreement" className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
         {LEVELS.map((option) => (
           <label
             key={option.value}
-            className="flex cursor-pointer items-start gap-3 rounded-lg border p-3"
+            className="flex cursor-pointer items-start gap-3 p-3"
             style={{
-              borderColor: level === option.value ? "var(--cc-plum)" : "var(--cc-border)",
               opacity: !canEdit && level !== option.value ? 0.6 : 1,
             }}
           >

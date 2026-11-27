@@ -253,7 +253,7 @@ export default function WorkerTravelExpenses() {
       </header>
 
       {rejected.length > 0 && (
-        <section className="rounded-2xl border border-amber-200 bg-amber-50/30 p-5 shadow-sm">
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/30 p-5">
           <h2 className="text-sm font-black text-cc-text">{translate("travel.rejectedTitle")}</h2>
           <p className="mt-1 text-xs text-cc-muted">{translate("travel.rejectedHint")}</p>
           <div className="mt-4 space-y-3">
@@ -264,7 +264,7 @@ export default function WorkerTravelExpenses() {
         </section>
       )}
 
-      <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-card p-5" style={{ borderColor: BORDER }}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-black" style={{ color: TEXT }}>
@@ -298,11 +298,11 @@ export default function WorkerTravelExpenses() {
             {translate("travel.noDrafts")}
           </p>
         ) : (
-          <ul className="mt-4 space-y-2">
+          <ul className="mt-4 divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
             {drafts.map((item) => (
               <li
                 key={item.id}
-                className="flex items-center justify-between rounded-xl border px-4 py-3"
+                className="flex items-center justify-between px-4 py-3"
                 style={{ borderColor: BORDER }}
               >
                 <div className="flex items-center gap-2">
@@ -328,7 +328,7 @@ export default function WorkerTravelExpenses() {
         )}
       </section>
 
-      <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-card p-5" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-black" style={{ color: TEXT }}>
             {translate("travel.monthly")}
@@ -348,11 +348,11 @@ export default function WorkerTravelExpenses() {
             {translate("travel.noSubmitted")}
           </p>
         ) : (
-          <div className="space-y-2">
+          <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
             {summaryData.months.map((month) => {
               const open = expandedMonth === month.month;
               return (
-                <div key={month.month} className="rounded-xl border" style={{ borderColor: BORDER }}>
+                <div key={month.month} className="" style={{ borderColor: BORDER }}>
                   <button
                     type="button"
                     className="flex w-full items-center gap-3 px-4 py-3 text-left"

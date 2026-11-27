@@ -21,7 +21,7 @@ export function PortalAuthLayout({ title, children }: { title: string; children:
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-10" style={{ background: "var(--cc-bg)" }}>
       <div
-        className="w-full max-w-md rounded-3xl border p-6 shadow-sm sm:p-8"
+        className="w-full max-w-md rounded-3xl border p-6 sm:p-8"
         style={{ borderColor: "var(--cc-border)", background: "var(--cc-surface)" }}
       >
         <div className="mb-2 flex justify-center">

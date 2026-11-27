@@ -275,9 +275,9 @@ export function PortalAccessCard({ participantId }: { participantId: string }) {
               {showHistory ? "Hide" : "Show"} revoked access ({revoked.length})
             </button>
             {showHistory && (
-              <div className="mt-2 space-y-2">
+              <div className="mt-2 divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                 {revoked.map((a) => (
-                  <div key={a.id} className="rounded-lg border p-3 text-xs" style={{ borderColor: BORDER, color: MUTED }}>
+                  <div key={a.id} className="p-3 text-xs" style={{ borderColor: BORDER, color: MUTED }}>
                     <p className="font-bold" style={{ color: TEXT }}>{a.full_name} · {a.relationship_label}</p>
                     <p>{accessStateLine(a).text}</p>
                   </div>

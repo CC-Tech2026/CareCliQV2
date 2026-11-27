@@ -26,7 +26,7 @@ export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisual
 
   return (
     <section
-      className="rounded-2xl border bg-white px-4 py-4 shadow-sm"
+      className="rounded-2xl border bg-white px-4 py-4"
       style={{ borderColor: "var(--cc-border)" }}
       data-tutorial="shift-progress"
     >

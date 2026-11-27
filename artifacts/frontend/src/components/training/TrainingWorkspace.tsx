@@ -48,7 +48,7 @@ export function TrainingWorkspace({
       </header>
       {children}
       {footer && (
-        <footer className="sticky bottom-0 z-10 rounded-2xl border bg-card p-4 shadow-sm sm:px-5">
+        <footer className="sticky bottom-0 z-10 rounded-2xl border bg-card p-4 sm:px-5">
           {footer}
         </footer>
       )}

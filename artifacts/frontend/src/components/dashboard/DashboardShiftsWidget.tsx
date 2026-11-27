@@ -19,7 +19,7 @@ export function DashboardShiftsWidget({ shifts }: { shifts: DashboardShiftSummar
   const { translate } = useAccessibility();
 
   return (
-    <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-cc-surface p-5" style={{ borderColor: BORDER }}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <CalendarDays size={18} style={{ color: PLUM }} />

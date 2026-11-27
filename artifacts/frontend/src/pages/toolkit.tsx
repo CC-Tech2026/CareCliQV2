@@ -211,7 +211,7 @@ export default function Toolkit() {
               [translate("toolkit.assigned"), summary.assigned],
             ]
         ).map(([label, value]) => (
-          <div key={label} className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
+          <div key={label} className="rounded-2xl border bg-white p-4" style={{ borderColor: BORDER }}>
             <p className="text-xs font-bold uppercase text-[#6A6A77]">{label}</p>
             <p className="mt-1 text-2xl font-black text-[#1A1A2E]">{value}</p>
           </div>
@@ -219,7 +219,7 @@ export default function Toolkit() {
       </div>
 
       {isCoordinator && (
-        <form onSubmit={addItem} className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <form onSubmit={addItem} className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
           <div className="mb-4 flex items-center gap-2">
             <PackagePlus className="h-5 w-5 text-[#E8457A]" />
             <h2 className="font-black text-[#1A1A2E]">Add stock item</h2>
@@ -251,7 +251,7 @@ export default function Toolkit() {
         </form>
       )}
 
-      <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
           <Wrench className="h-5 w-5 text-[#E8457A]" />
           <h2 className="font-black" style={{ color: TEXT }}>{isCoordinator ? "Organisation stock" : translate("toolkit.assignedKit")}</h2>
@@ -282,7 +282,7 @@ export default function Toolkit() {
       </section>
 
       {isCoordinator && (
-        <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <section className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
             <RotateCcw className="h-5 w-5 text-[#E8457A]" />
             <h2 className="font-black" style={{ color: TEXT }}>Restock requests</h2>
@@ -310,7 +310,7 @@ export default function Toolkit() {
         </section>
       )}
 
-      <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
           <RotateCcw className="h-5 w-5 text-[#E8457A]" />
           <h2 className="font-black" style={{ color: TEXT }}>

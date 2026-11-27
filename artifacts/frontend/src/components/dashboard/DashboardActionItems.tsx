@@ -15,7 +15,7 @@ export function DashboardActionItems({ items }: { items: DashboardActionItem[] }
   const { translate } = useAccessibility();
 
   return (
-    <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-cc-surface p-5" style={{ borderColor: BORDER }}>
       <div className="mb-4 flex items-center gap-2">
         <ClipboardList size={18} style={{ color: PLUM }} />
         <h2 className="text-lg font-black" style={{ color: TEXT }}>

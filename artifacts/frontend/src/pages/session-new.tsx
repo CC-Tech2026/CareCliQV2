@@ -312,16 +312,13 @@ export default function SessionNew() {
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                     {participantGoals.map(goal => (
                       <label
                         key={goal.id}
                         data-testid={`goal-checkbox-${goal.id}`}
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors duration-150"
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors duration-150"
                         style={{
-                          borderColor: selectedGoalIds.includes(goal.id)
-                            ? `${PLUM}30`
-                            : BORDER,
                           background: selectedGoalIds.includes(goal.id)
                             ? `${PLUM}06`
                             : "transparent",

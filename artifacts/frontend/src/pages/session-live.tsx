@@ -361,7 +361,7 @@ function MessageBubble({
   return (
     <div className="flex justify-end px-1 my-0.5">
       <div className="max-w-[82%] min-w-[60px]">
-        <div className="bg-white border border-[#E8E8EA] rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
+        <div className="bg-white border border-[#E8E8EA] rounded-2xl rounded-tr-sm overflow-hidden">
           {msg.type === "image" && msg.mediaUrl && (
             <div className="relative">
               <img src={msg.mediaUrl} className="w-full max-h-52 object-cover" alt="Evidence" />
@@ -1798,7 +1798,7 @@ export default function SessionLive() {
         {/* Live recording bubble */}
         {isRecording && (
           <div className="flex justify-end px-1 mt-1">
-            <div className="max-w-[82%] bg-white border border-[#F8C0CE] rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
+            <div className="max-w-[82%] bg-white border border-[#F8C0CE] rounded-2xl rounded-tr-sm px-4 py-3">
               <div className="flex items-center gap-2 mb-1.5 text-[#7C3AED]">
                 <Radio className="h-3 w-3 animate-pulse" />
                 <span className="text-[9px] font-bold uppercase tracking-wider">{translate("sessions.live.chat.listening")}</span>
@@ -2383,9 +2383,9 @@ export default function SessionLive() {
               The following restrictive practice language was detected in your notes. Please review
               carefully before saving.
             </p>
-            <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
+            <div className="mb-4 max-h-40 overflow-y-auto divide-y divide-cc-border rounded-2xl border border-cc-border bg-cc-surface">
               {rpFlags.map((f, i) => (
-                <div key={i} className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs">
+                <div key={i} className="bg-red-50 border-red-200 px-3 py-2 text-xs">
                   <span className="font-semibold text-red-800">
                     {RP_CATEGORY_LABELS[f.category] ?? f.category}
                   </span>

@@ -206,7 +206,7 @@ function ShiftTrendChart({
 }) {
   const { translate } = useAccessibility();
   return (
-    <section className="rounded-2xl border bg-card p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-card p-5" style={{ borderColor: BORDER }}>
       <div className="mb-4">
         <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("shiftHistory.trend")}</h2>
         <p className="text-xs font-medium" style={{ color: MUTED }}>
@@ -442,9 +442,9 @@ function ShiftDetailPanel({ shiftId, onClose }: { shiftId: string; onClose: () =
       {!!data.feedback?.length && (
         <section>
           <h4 className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>Coordinator feedback</h4>
-          <div className="mt-2 space-y-3">
+          <div className="mt-2 divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
             {data.feedback.map((fb) => (
-              <div key={fb.id} className="rounded-xl border p-4" style={{ borderColor: BORDER }}>
+              <div key={fb.id} className="p-4" style={{ borderColor: BORDER }}>
                 <p className="text-xs font-bold" style={{ color: MUTED }}>
                   {fb.coordinator_name} · {formatShiftDate(fb.submitted_at)}
                 </p>
@@ -608,7 +608,7 @@ export default function WorkerShiftHistoryPage() {
         onPointClick={(id) => setExpandedId(id)}
       />
 
-      <section className="rounded-2xl border bg-card shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-card" style={{ borderColor: BORDER }}>
         <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
             <FileText size={18} style={{ color: PLUM }} />

@@ -192,7 +192,7 @@ export function OrganizationCalendar() {
   }
 
   return (
-    <div className="rounded-2xl border bg-cc-surface shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-cc-surface overflow-hidden" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>{translate("hub.calendar.title")}</p>

@@ -119,7 +119,7 @@ export default function ParticipantInvitePage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-10" style={{ background: "var(--cc-bg)" }}>
-      <div className="w-full max-w-md rounded-3xl border p-6 shadow-sm sm:p-8" style={{ borderColor: BORDER, background: SURFACE }}>
+      <div className="w-full max-w-md rounded-3xl border p-6 sm:p-8" style={{ borderColor: BORDER, background: SURFACE }}>
         <div className="mb-6 flex justify-center">
           <CareCliQLogo size={64} />
         </div>

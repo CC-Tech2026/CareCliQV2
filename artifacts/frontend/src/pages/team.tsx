@@ -1087,13 +1087,13 @@ export default function Team() {
             ) : (pendingInvites.data ?? []).filter((inv) => !inv.accepted_at).length === 0 ? (
               <p className="text-xs" style={{ color: MUTED }}>{translate("team.invite.pendingEmpty")}</p>
             ) : (
-              <ul className="space-y-1.5">
+              <ul className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
                 {(pendingInvites.data ?? []).filter((inv) => !inv.accepted_at).map((inv) => {
                   const expired = new Date(inv.expires_at).getTime() < Date.now();
                   return (
                     <li
                       key={inv.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-2.5 py-2"
+                      className="flex flex-wrap items-center justify-between gap-2 px-2.5 py-2"
                       style={{ borderColor: BORDER, background: SOFT }}
                     >
                       <div className="min-w-0">

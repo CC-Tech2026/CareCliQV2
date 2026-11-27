@@ -154,7 +154,7 @@ function KpiCard({
       onClick={onClick}
       aria-pressed={active}
       aria-label={`${label}: ${value}`}
-      className="rounded-xl border bg-white p-4 shadow-sm text-left transition hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-plum)]"
+      className="rounded-xl border bg-white p-4 text-left transition hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-plum)]"
       style={{ borderColor: active ? PLUM : BORDER }}
     >
       <div className="flex items-center justify-between mb-3">
@@ -345,7 +345,7 @@ function OverviewTab() {
         );
         return (
         <section
-          className="rounded-2xl border bg-white p-5 shadow-sm"
+          className="rounded-2xl border bg-white p-5"
           style={{ borderColor: BORDER }}
         >
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -690,7 +690,7 @@ function SortableStageCard({
     <div
       ref={setNodeRef}
       style={{ ...style, borderColor: BORDER }}
-      className="flex items-center gap-3 rounded-xl border bg-white px-4 py-3 shadow-sm"
+      className="flex items-center gap-3 rounded-xl border bg-white px-4 py-3"
     >
       <button
         className="cursor-grab touch-none rounded p-1 hover:bg-gray-100"
@@ -996,7 +996,7 @@ function BuilderTab() {
 
       {selectedProgram && (
         <section
-          className="rounded-2xl border bg-white p-5 shadow-sm space-y-4"
+          className="rounded-2xl border bg-white p-5 space-y-4"
           style={{ borderColor: BORDER }}
         >
           <div className="flex items-center justify-between">
@@ -1378,7 +1378,7 @@ function ResourcesTab() {
           {resources.map((r) => (
             <div
               key={r.id}
-              className="rounded-xl border bg-white p-4 shadow-sm"
+              className="rounded-xl border bg-white p-4"
               style={{ borderColor: BORDER }}
             >
               <div className="flex items-start gap-3">
@@ -1581,11 +1581,11 @@ function ApprovalsTab() {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
           {items.map((item) => (
             <div
               key={item.progress_id}
-              className="rounded-xl border bg-white p-5 shadow-sm"
+              className="p-5"
               style={{ borderColor: BORDER }}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2250,11 +2250,11 @@ function InductionItemsTab() {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
           {items.map((item) => (
             <div
               key={item.id}
-              className="rounded-xl border bg-white p-4 shadow-sm"
+              className="p-4"
               style={{ borderColor: BORDER }}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">

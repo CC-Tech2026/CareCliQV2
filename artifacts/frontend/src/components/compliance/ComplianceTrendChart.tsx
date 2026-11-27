@@ -48,7 +48,7 @@ export function ComplianceTrendChart({
   }));
 
   return (
-    <section className="rounded-lg border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }} aria-label={translate("compliance.trend")}>
+    <section className="rounded-lg border bg-cc-surface p-5" style={{ borderColor: BORDER }} aria-label={translate("compliance.trend")}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-black" style={{ color: "var(--cc-text)" }}>{translate("compliance.trendChart.title")}</h3>

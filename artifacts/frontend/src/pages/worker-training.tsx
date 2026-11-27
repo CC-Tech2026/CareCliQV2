@@ -1080,7 +1080,7 @@ function TrainingModuleDetail({
                 return (
                   <li
                     key={res.id}
-                    className="grid grid-cols-[40px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 rounded-xl border border-border bg-card p-4 shadow-sm sm:grid-cols-[44px_minmax(0,1fr)_96px]"
+                    className="grid grid-cols-[40px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-[44px_minmax(0,1fr)_96px]"
                     style={{ borderColor: BORDER }}
                   >
                     <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-400 text-slate-800">

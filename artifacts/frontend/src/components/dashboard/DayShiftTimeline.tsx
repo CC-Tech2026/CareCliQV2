@@ -31,7 +31,7 @@ export function DayShiftTimeline({ shifts, nextShiftId }: Props) {
   const span = Math.max(dayEnd - dayStart, 60 * 60 * 1000);
 
   return (
-    <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-cc-surface p-5" style={{ borderColor: BORDER }}>
       <div className="mb-4 flex items-center gap-2">
         <Clock3 size={18} style={{ color: PLUM }} />
         <h2 className="text-lg font-black" style={{ color: TEXT }}>

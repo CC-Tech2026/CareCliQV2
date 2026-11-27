@@ -763,11 +763,11 @@ export function ShiftTaskEvidencePanel({
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
               {records.map((record) => (
                 <div
                   key={record.evidence_id}
-                  className="rounded-lg border border-cc-border bg-card/90 px-3 py-2 text-xs font-semibold"
+                  className="bg-card/90 px-3 py-2 text-xs font-semibold"
                   style={{ color: TEXT }}
                 >
                   {record.type === "photo" && (

@@ -92,7 +92,7 @@ export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
 
   return (
     <section
-      className="rounded-2xl border bg-card p-4 shadow-sm"
+      className="rounded-2xl border bg-card p-4"
       style={{ borderColor: BORDER }}
       data-tutorial="shift-travel-transit"
     >

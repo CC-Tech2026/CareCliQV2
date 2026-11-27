@@ -392,6 +392,17 @@
   --auth-drag-handle: #E8E8EA;
 }
 
+/* Compact desktop: every rem-based size (text, padding, gaps, button and
+   input heights) shrinks together, like an 87.5% zoom. Media queries use the
+   browser's 16px, so breakpoints don't move. Phones keep 1 for touch.
+   Unlayered on purpose: it must sit beside the :root default above, since a
+   rule inside @layer base always loses to unlayered CSS. */
+@media (min-width: 768px) {
+  :root {
+    --ui-density: 0.875;
+  }
+}
+
 .dark {
   /* Brand — lighter for legibility on dark */
   --cc-plum:       #F472B6;
@@ -943,15 +954,6 @@
 
   html.dark {
     color-scheme: dark;
-  }
-
-  /* Compact desktop: every rem-based size (text, padding, gaps, button and
-     input heights) shrinks together, like a 90% zoom. Media queries use the
-     browser's 16px, so breakpoints don't move. Phones keep 1 for touch. */
-  @media (min-width: 768px) {
-    :root {
-      --ui-density: 0.875;
-    }
   }
 
   body {

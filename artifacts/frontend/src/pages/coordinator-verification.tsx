@@ -557,7 +557,7 @@ function ShiftReview({
   ];
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface shadow-sm">
+    <article className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
       <header className="flex flex-wrap items-start gap-3 p-5">
         <WorkerAvatar name={item.worker_name} stage="completed" />
         <div className="min-w-0 flex-1">
@@ -1033,7 +1033,7 @@ function VerifiedShift({
   ];
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface shadow-sm">
+    <article className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
       <header className="flex flex-wrap items-start gap-3 p-5">
         <WorkerAvatar name={v.worker_name} stage="completed" />
         <div className="min-w-0 flex-1">

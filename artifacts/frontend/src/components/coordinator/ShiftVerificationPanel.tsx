@@ -177,10 +177,7 @@ export function ShiftVerificationCard({
   const { evidence, hours_sanity, force_ended, any_flagged } = item.checks;
 
   return (
-    <div
-      className="rounded-xl border bg-white shadow-sm transition-all"
-      style={{ borderColor: any_flagged ? "#F59E0B" : BORDER }}
-    >
+    <li className="bg-cc-surface transition-colors">
       <div className="flex flex-wrap items-start gap-3 px-4 py-3">
         <div className="flex-1 min-w-[180px]">
           <div className="flex flex-wrap items-center gap-2">
@@ -458,7 +455,7 @@ export function ShiftVerificationCard({
           </div>
         )}
       </div>
-    </div>
+    </li>
   );
 }
 
@@ -546,14 +543,14 @@ export function ShiftVerificationPanel({
   const field =
     "min-h-11 md:min-h-9 min-w-0 w-full rounded-lg border border-cc-border bg-white px-3 text-sm";
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <p className="text-sm text-cc-muted">
         Review completed shifts before invoicing. Oldest shifts appear first.
         Dates follow each participant's branch time zone.
       </p>
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-6">
-        <label className="col-span-2 space-y-1 text-xs font-medium">
-          Search shifts
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-6">
+        <label className="col-span-2 text-xs font-medium">
+          <span className="sr-only">Search shifts</span>
           <input
             className={field}
             value={search}
@@ -561,8 +558,8 @@ export function ShiftVerificationPanel({
             placeholder="Participant, worker or ID"
           />
         </label>
-        <label className="space-y-1 text-xs font-medium">
-          From
+        <label className="flex items-center gap-2 text-xs font-medium text-cc-muted">
+          <span className="shrink-0">From</span>
           <input
             type="date"
             className={field}
@@ -570,8 +567,8 @@ export function ShiftVerificationPanel({
             onChange={(e) => setFrom(e.target.value)}
           />
         </label>
-        <label className="space-y-1 text-xs font-medium">
-          To
+        <label className="flex items-center gap-2 text-xs font-medium text-cc-muted">
+          <span className="shrink-0">To</span>
           <input
             type="date"
             className={field}
@@ -580,8 +577,8 @@ export function ShiftVerificationPanel({
             onChange={(e) => setTo(e.target.value)}
           />
         </label>
-        <label className="space-y-1 text-xs font-medium">
-          Review status
+        <label className="text-xs font-medium">
+          <span className="sr-only">Review status</span>
           <select
             className={field}
             value={review}
@@ -591,8 +588,8 @@ export function ShiftVerificationPanel({
             <option value="review">Needs review</option>
           </select>
         </label>
-        <label className="space-y-1 text-xs font-medium">
-          Support worker
+        <label className="text-xs font-medium">
+          <span className="sr-only">Support worker</span>
           <select
             className={field}
             value={worker}
@@ -651,16 +648,18 @@ export function ShiftVerificationPanel({
             : "No completed shifts are waiting to be checked."}
         </p>
       ) : (
-        filtered.slice((currentPage - 1) * 10, currentPage * 10).map((item) => (
-          <ShiftVerificationCard
-            key={item.shift_id}
-            item={item}
-            onVerified={() => {
-              void refetch();
-              onVerified?.();
-            }}
-          />
-        ))
+        <ul className="divide-y divide-cc-border overflow-hidden rounded-2xl border border-cc-border bg-cc-surface">
+          {filtered.slice((currentPage - 1) * 10, currentPage * 10).map((item) => (
+            <ShiftVerificationCard
+              key={item.shift_id}
+              item={item}
+              onVerified={() => {
+                void refetch();
+                onVerified?.();
+              }}
+            />
+          ))}
+        </ul>
       )}
       {pageCount > 1 && (
         <div className="flex items-center justify-between gap-3 text-sm">

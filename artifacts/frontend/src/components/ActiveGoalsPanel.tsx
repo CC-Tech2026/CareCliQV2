@@ -19,7 +19,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-lg border bg-white p-5" style={{ borderColor: BORDER }}>
       <div className="mb-4 flex items-center gap-2">
         <Icon size={18} />
         <h2 className="text-lg font-black" style={{ color: TEXT }}>

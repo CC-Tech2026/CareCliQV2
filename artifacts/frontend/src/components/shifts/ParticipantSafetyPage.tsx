@@ -140,7 +140,7 @@ export function ParticipantSafetyPage({
           )}
 
           {(protocol?.scenarios ?? []).map((scenario, i) => (
-            <section key={i} className="rounded-xl border bg-card p-4 shadow-sm">
+            <section key={i} className="rounded-xl border bg-card p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{translate("safety.if")}</p>
               <p className="mt-1 text-sm font-semibold">{scenario.trigger}</p>
               <div className="my-2 flex items-center gap-1 text-violet-600">
@@ -152,7 +152,7 @@ export function ParticipantSafetyPage({
           ))}
 
           {(protocol?.deescalation_techniques ?? []).map((tech, i) => (
-            <section key={i} className="rounded-xl border bg-card p-4 shadow-sm">
+            <section key={i} className="rounded-xl border bg-card p-4">
               <h4 className="text-sm font-black">{tech.title}</h4>
               <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
                 {(tech.steps ?? []).map((step, si) => (

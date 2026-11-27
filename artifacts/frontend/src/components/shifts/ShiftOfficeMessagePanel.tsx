@@ -191,9 +191,9 @@ export function ShiftOfficeMessagePanel({
           <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-cc-muted">
             {translate("shift.during.officeMessages")}
           </p>
-          <ul className="max-h-40 space-y-2 overflow-y-auto">
+          <ul className="max-h-40 overflow-y-auto divide-y divide-cc-border rounded-2xl border border-cc-border bg-cc-surface">
             {messageHistory.map((msg) => (
-              <li key={msg.id} className="rounded-lg border border-cc-border/60 bg-card px-3 py-2.5">
+              <li key={msg.id} className="border-cc-border/60 px-3 py-2.5">
                 <div className="flex items-center gap-2 text-[11px] font-semibold text-cc-muted">
                   <span
                     className={cn(
