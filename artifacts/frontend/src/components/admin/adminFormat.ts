@@ -33,8 +33,8 @@ export const PLAN_LABEL: Record<string, string> = { micro: "Micro", small: "Smal
 /** Plans that can be chosen now (2026-11-27 pricing). Micro is no longer on
  *  sale; organisations already on it still show as Micro. */
 export const PLANS_ON_SALE = [
-  { tier: "small", label: "Small", detail: "1-25 users, $280 a month" },
-  { tier: "medium", label: "Medium", detail: "26-55 users, $680 a month" },
+  { tier: "small", label: "Small" },
+  { tier: "medium", label: "Medium" },
 ] as const;
 
 export function roleLabel(role: string) {
