@@ -765,12 +765,12 @@ export function RosterBoard({
         ) : (
         /* Worker × day grid: a row per person, so a team of 100 scrolls down
            with each name on the left and the days staying along the top. */
-        <div role="region" aria-label="Roster by person" className="isolate max-h-[72vh] overflow-auto rounded-2xl border bg-cc-surface" style={{ borderColor: BORDER }}>
+        <div role="region" aria-label="Roster by person" className="isolate max-h-[max(72vh,calc(100dvh-19rem))] overflow-auto rounded-xl border bg-cc-surface" style={{ borderColor: BORDER }}>
           <table className="w-full border-separate border-spacing-0">
             <thead>
               <tr>
                 <th
-                  className="sticky left-0 top-0 z-30 bg-cc-surface px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest min-w-[190px]"
+                  className="sticky left-0 top-0 z-30 bg-cc-surface px-3 py-2 text-left text-[10px] font-black uppercase tracking-widest min-w-[176px]"
                   style={{ color: MUTED, borderBottom: `1px solid ${BORDER}` }}
                 >
                   {translate("coordinator.rostering.worker")}
@@ -778,7 +778,7 @@ export function RosterBoard({
                 {days.map((d) => (
                   <th
                     key={d.toISOString()}
-                    className="sticky top-0 z-20 px-1.5 py-2.5 text-center"
+                    className="sticky top-0 z-20 px-1.5 py-1.5 text-center"
                     style={{ minWidth: colWidth, borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "var(--cc-today-header)" : "var(--cc-grid-header)" }}
                   >
                     <button
@@ -787,13 +787,13 @@ export function RosterBoard({
                       onClick={() => onOpenDay?.(format(d, "yyyy-MM-dd"))}
                       aria-label={onOpenDay ? `Open ${format(d, "EEEE d MMMM")} as a day calendar` : undefined}
                       title={onOpenDay ? "See this day hour by hour" : undefined}
-                      className="w-full rounded-lg py-0.5 transition-colors enabled:hover:bg-cc-soft disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg py-0.5 transition-colors enabled:hover:bg-cc-soft disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-cc-plum"
                     >
-                      <span className="block text-[10px] font-black uppercase tracking-wider" style={{ color: isToday(d) ? PLUM : MUTED }}>
+                      <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: isToday(d) ? PLUM : MUTED }}>
                         {format(d, "EEE")}
                       </span>
                       <span
-                        className="mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-black"
+                        className="flex h-6 w-6 items-center justify-center rounded-full text-[13px] font-black"
                         style={{ background: isToday(d) ? "var(--cc-text)" : "transparent", color: isToday(d) ? "var(--cc-bg)" : TEXT }}
                       >
                         {format(d, "d")}
@@ -806,10 +806,10 @@ export function RosterBoard({
             <tbody>
               {(allowCreate || unassigned.length > 0) && (
                 <tr>
-                  <td className="sticky left-0 z-10 bg-cc-surface px-3 py-2.5" style={{ borderBottom: `2px solid ${BORDER}` }}>
+                  <td className="sticky left-0 z-10 bg-cc-surface px-3 py-1.5" style={{ borderBottom: `2px solid ${BORDER}` }}>
                     <div className="flex items-center gap-2.5">
                       <span
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
                         style={{ background: "var(--cc-status-danger-bg)", color: "var(--cc-danger-text)" }}
                         aria-hidden="true"
                       >
@@ -854,7 +854,7 @@ export function RosterBoard({
                               type="button"
                               aria-label={`Add an open shift on ${format(d, "EEEE d MMMM")}`}
                               onClick={() => onOpenShiftCreate!(dayKey)}
-                              className={`group/open flex w-full items-center justify-center rounded-lg border-[1.5px] border-dashed border-transparent text-xs font-semibold transition-colors hover:border-cc-border hover:bg-cc-soft focus-visible:border-cc-plum focus-visible:outline-none ${dayOpen.length ? "h-7" : "min-h-12"}`}
+                              className={`group/open flex w-full items-center justify-center rounded-lg border-[1.5px] border-dashed border-transparent text-xs font-semibold transition-colors hover:border-cc-border hover:bg-cc-soft focus-visible:border-cc-plum focus-visible:outline-none ${dayOpen.length ? "h-7" : "min-h-10"}`}
                               style={{ color: MUTED }}
                             >
                               {/* Shown on hover and keyboard focus so the row stays calm; always shown on touch screens. */}
@@ -863,7 +863,7 @@ export function RosterBoard({
                               </span>
                             </button>
                           )}
-                          {!canCreateHere && !dayOpen.length && <div className="h-12" />}
+                          {!canCreateHere && !dayOpen.length && <div className="h-10" />}
                         </div>
                       </DayCell>
                     );
@@ -880,13 +880,13 @@ export function RosterBoard({
                 const overCap = capHrs != null && weekHrs > capHrs;
                 return (
                   <tr key={worker.id}>
-                    <td className="sticky left-0 z-10 bg-cc-surface px-3 py-2.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
+                    <td className="sticky left-0 z-10 bg-cc-surface px-3 py-1.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
                       <div className="flex items-center gap-2.5">
                         {worker.profile_photo_url ? (
-                          <PersonPhoto name={worker.full_name} photoUrl={worker.profile_photo_url} size={36} />
+                          <PersonPhoto name={worker.full_name} photoUrl={worker.profile_photo_url} size={30} />
                         ) : (
                           <div
-                            className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black shadow-sm"
+                            className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black shadow-sm"
                             style={{ background: avatar.bg, color: avatar.fg }}
                           >
                             {initials(worker.full_name)}
@@ -977,7 +977,7 @@ export function RosterBoard({
                             </div>
                           )}
                           {cellState === "unavailable" && !canCreateHere && (
-                            <div className="flex min-h-16 items-center justify-center rounded-lg text-xs text-cc-muted" style={{ background: "repeating-linear-gradient(135deg, transparent, transparent 5px, #88888810 5px, #88888810 7px), var(--cc-grid-header)" }}>{translate("schedule.unavailable")}</div>
+                            <div className="flex min-h-10 items-center justify-center rounded-lg text-xs text-cc-muted" style={{ background: "repeating-linear-gradient(135deg, transparent, transparent 5px, #88888810 5px, #88888810 7px), var(--cc-grid-header)" }}>{translate("schedule.unavailable")}</div>
                           )}
                           {cellState === "unavailable" && canCreateHere && (
                             // Outside the worker's usual days — still possible to roster
@@ -985,17 +985,17 @@ export function RosterBoard({
                             <button type="button"
                               aria-label={`${assignLabel} (outside usual availability)`}
                               onClick={() => onCellClick(worker, dayKey)}
-                              className="flex min-h-16 w-full items-center justify-center rounded-lg border border-dashed border-transparent text-xs text-cc-muted hover:border-cc-plum hover:text-cc-plum focus-visible:border-cc-plum focus-visible:outline-2 focus-visible:outline-cc-plum"
+                              className="flex min-h-10 w-full items-center justify-center rounded-lg border border-dashed border-transparent text-xs text-cc-muted hover:border-cc-plum hover:text-cc-plum focus-visible:border-cc-plum focus-visible:outline-2 focus-visible:outline-cc-plum"
                               style={{ background: "repeating-linear-gradient(135deg, transparent, transparent 5px, #88888810 5px, #88888810 7px), var(--cc-grid-header)" }}>
                               {translate("schedule.unavailable")}
                             </button>
                           )}
-                          {cellState === "available" && !canCreateHere && <div className="h-16" />}
+                          {cellState === "available" && !canCreateHere && <div className="h-10" />}
                           {cellState === "available" && canCreateHere && (
                             <button type="button"
                               aria-label={assignLabel}
                               onClick={() => onCellClick(worker, dayKey)}
-                              className="group/assign flex min-h-16 w-full items-center justify-center rounded-lg border-[1.5px] border-dashed border-transparent text-xs font-semibold text-[#E8457A] transition-colors hover:border-[#E8457A] hover:bg-[#E8457A]/5 focus-visible:border-[#E8457A] focus-visible:outline-none">
+                              className="group/assign flex min-h-10 w-full items-center justify-center rounded-lg border-[1.5px] border-dashed border-transparent text-xs font-semibold text-[#E8457A] transition-colors hover:border-[#E8457A] hover:bg-[#E8457A]/5 focus-visible:border-[#E8457A] focus-visible:outline-none">
                               {/* Shown on hover (and keyboard focus) so the grid stays calm; always shown on touch screens. */}
                               <span className="flex items-center gap-1 transition-opacity [@media(hover:hover)]:opacity-0 group-hover/assign:opacity-100 group-focus-visible/assign:opacity-100">
                                 <Plus size={14} /> {translate("schedule.assign")}
