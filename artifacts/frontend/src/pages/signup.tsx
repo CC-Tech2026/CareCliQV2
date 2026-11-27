@@ -13,7 +13,6 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
-  Quote,
   AlertTriangle,
   Camera,
   Upload,
@@ -30,9 +29,6 @@ const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
 const BORDER = "var(--auth-input-border)";
 const BG = "var(--auth-input-bg)";
-
-// Solid brand colors — no gradients.
-const LOGO_PURPLE = "#7C3AED";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface FormData {
@@ -878,7 +874,7 @@ export default function Signup() {
   const showFooter = isJoin ? step < 5 : step < 3;
 
   return (
-    <div className="relative h-screen supports-[height:100dvh]:h-[100dvh] w-full flex overflow-hidden md:gap-6 md:p-6 bg-[var(--auth-shell-bg)] md:bg-[#7C3AED] text-cc-text">
+    <div className="relative h-screen supports-[height:100dvh]:h-[100dvh] w-full flex overflow-hidden lg:gap-6 lg:p-6 bg-[var(--auth-shell-bg)] lg:bg-[#7C3AED] text-cc-text">
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -922,7 +918,10 @@ export default function Signup() {
         }}
       />
       {/* LEFT */}
-      <div className="hidden md:flex md:flex-1 relative h-full overflow-hidden flex-col justify-between p-12 [@media(max-height:760px)]:p-8 md:rounded-[28px]">
+      {/* Photo panel is desktop only (1024px+). Phones and tablets get the
+          form full width with a small logo row, so the steps start on the
+          first screen. */}
+      <div className="hidden lg:flex lg:flex-1 relative h-full overflow-hidden flex-col justify-between p-12 [@media(max-height:760px)]:p-8 lg:rounded-[28px]">
         {/* Hero photo fills the panel. Text sits on a flat (non-gradient) dark
             scrim, so colours here are hardcoded light values instead of the
             theme-conditional --auth-* vars — the backdrop is always a dark
@@ -955,33 +954,6 @@ export default function Signup() {
             <p className="mt-5 leading-relaxed max-w-[380px]" style={{ color: "rgba(255, 255, 255, 0.85)" }}>
               {t("auth.signup.marketing.description")}
             </p>
-
-            {/* Testimonial */}
-            <div
-              className="mt-8 max-w-[380px] rounded-2xl p-4 [@media(max-height:760px)]:hidden"
-              style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
-            >
-              <Quote size={16} style={{ color: LOGO_PURPLE }} />
-              <p className="mt-2.5 text-[13px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
-                {t("auth.signup.marketing.testimonialQuote")}
-              </p>
-              <div className="mt-3 flex items-center gap-2.5">
-                <div
-                  className="h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0"
-                  style={{ background: LOGO_PURPLE }}
-                >
-                  PN
-                </div>
-                <div>
-                  <p className="text-[12px] font-black" style={{ color: "var(--auth-headline)" }}>
-                    {t("auth.signup.marketing.testimonialName")}
-                  </p>
-                  <p className="text-[11px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>
-                    {t("auth.signup.marketing.testimonialRole")} · {t("auth.signup.marketing.testimonialOrg")}
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
 
           <div className="text-[11px] font-bold tracking-wider" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
@@ -991,14 +963,18 @@ export default function Signup() {
       </div>
 
       {/* RIGHT */}
-      <div className="relative w-full md:w-[min(600px,55vw)] md:shrink-0 flex items-start justify-center overflow-y-auto overscroll-contain p-4 sm:p-8 md:p-12 lg:px-16 [@media(max-height:760px)]:md:py-6 md:rounded-[28px] md:border md:bg-[var(--auth-form-bg)] md:[border-color:var(--auth-card-border)] md:shadow-[var(--cc-shadow-lg)]">
+      <div className="relative w-full lg:w-[min(600px,50vw)] lg:shrink-0 flex items-start justify-center overflow-y-auto overscroll-contain p-4 sm:p-8 md:p-12 lg:px-16 [@media(max-height:760px)]:lg:py-6 lg:rounded-[28px] lg:border lg:bg-[var(--auth-form-bg)] lg:[border-color:var(--auth-card-border)] lg:shadow-[var(--cc-shadow-lg)]">
         <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
           <AuthThemeToggle />
         </div>
         {/* my-auto rather than the parent's items-center: a step taller than
             the panel then scrolls from its top instead of sliding under the
             theme toggle; pt-12 keeps the progress strip clear of it. */}
-        <div className="w-full max-w-md my-auto pt-12">
+        {/* Logo for phones and tablets, level with the theme toggle. */}
+        <div className="lg:hidden absolute top-3 left-4 sm:top-4 sm:left-8 md:left-12 z-30">
+          <CareCliQLogo size={56} />
+        </div>
+        <div className="w-full max-w-md my-auto pt-16 lg:pt-12">
           <div className="flex items-center gap-2 justify-center mb-5 px-4 py-2.5 rounded-2xl border bg-[var(--auth-form-bg)]" style={{ borderColor: "var(--auth-card-border)" }}>
             {STEP_LABELS.map((l, i) => (
               <div key={`${l}-${i}`} className="flex-1 flex flex-col items-center gap-1">

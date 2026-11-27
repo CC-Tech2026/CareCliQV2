@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Loader2, ArrowRight, ShieldCheck, ArrowLeft, Quote } from "lucide-react";
+import { Loader2, ArrowRight, ShieldCheck, ArrowLeft, Check } from "lucide-react";
 import { PasswordNativeInput } from "@/components/PasswordInput";
 import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
 import { OtpInput } from "@/components/auth/OtpInput";
@@ -21,9 +21,6 @@ const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
 const BORDER = "var(--auth-input-border)";
 const INPUT_BG = "var(--auth-input-bg)";
-
-// Solid brand colors — no gradients.
-const LOGO_PURPLE = "#7C3AED";
 
 const LOGIN_NETWORK_MAX_ATTEMPTS = 3;
 
@@ -81,10 +78,10 @@ function Field({
         {children}
         {valid && !error && (
           <span
-            className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[11px] font-black"
+            className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex"
             style={{ color: "#22C55E" }}
           >
-            ?
+            <Check size={14} strokeWidth={3} aria-hidden="true" />
           </span>
         )}
       </div>
@@ -99,11 +96,6 @@ function Field({
     </div>
   );
 }
-
-const TRUST_AVATARS = [
-  { i: "SM", bg: "#E8457A" }, { i: "AK", bg: "#0D7C66" },
-  { i: "LP", bg: "#7B3F9E" }, { i: "JW", bg: "#C0392B" }, { i: "RN", bg: "#1A6FA8" },
-];
 
 export default function Login() {
   const { login, completeMfaLogin, completeMfaLoginNative } = useAuth();
@@ -210,10 +202,35 @@ export default function Login() {
         .auth-hero-photo { animation: authHeroZoom 22s ease-in-out infinite alternate; }
         .auth-scroll-hide { scrollbar-width: none; -ms-overflow-style: none; }
         .auth-scroll-hide::-webkit-scrollbar { display: none; }
+
+        /* Screen sizes:
+           - phones (and any short screen, e.g. a phone held sideways): no
+             photo; a small logo row, then the form straight away.
+           - tablets (768-1023px wide, at least 640px tall): a short photo
+             banner with the headline, the form panel tucked under it.
+           - desktop (1024px+): form on the left, photo panel on the right. */
+        .auth-banner { display: none; }
+        .auth-compact-logo { display: flex; }
+        @media (min-width: 768px) and (min-height: 640px) {
+          .auth-banner { display: block; }
+          .auth-compact-logo { display: none; }
+          .auth-panel-overlap {
+            margin-top: -20px;
+            border-top-left-radius: 28px;
+            border-top-right-radius: 28px;
+            border: 1px solid var(--auth-card-border);
+            box-shadow: var(--cc-shadow-lg);
+          }
+        }
+        @media (min-width: 1024px) {
+          .auth-banner { display: none; }
+          .auth-compact-logo { display: none; }
+          .auth-panel-overlap { margin-top: 0; }
+        }
       ` }} />
 
-      {/* -- Mobile-only brand header -------------------------------------- */}
-      <div className="lg:hidden relative overflow-hidden">
+      {/* -- Tablet banner (photo + headline) ------------------------------ */}
+      <div className="auth-banner relative overflow-hidden">
         <img
           src="/auth-hero-login.jpg"
           alt=""
@@ -221,78 +238,36 @@ export default function Login() {
           className="auth-hero-photo absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0" style={{ background: "rgba(26, 26, 46, 0.55)" }} />
-        <div className="relative z-10 px-6 pt-7 pb-9 md:pt-12">
-          {/* Logo row */}
-          <CareCliQLogo size={72} />
-          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
-            {t("auth.login.marketing.tagline")}
-          </p>
-
-          {/* Hero copy */}
-          <h2 className="mt-3 md:mt-5 text-[24px] md:text-[28px] font-black leading-[1.12] tracking-tight" style={{ color: "#FFFFFF" }}>
+        <div className="relative z-10 px-10 pt-10 pb-12">
+          <CareCliQLogo size={80} />
+          <h2 className="mt-4 text-[28px] font-black leading-[1.12] tracking-tight" style={{ color: "#FFFFFF" }}>
             <span className="auth-headline-line" style={{ animationDelay: "0ms" }}>{t("auth.login.marketing.headline1")}</span>
             <span className="auth-headline-line" style={{ animationDelay: "90ms", color: "#C4B5FD" }}>{t("auth.login.marketing.headline2")}</span>
           </h2>
-          {/* Phones skip the description, testimonial and trust strip so the
-              sign-in form starts on the first screen; tablets keep them. */}
-          <p className="hidden md:block mt-3 text-[13px] font-medium leading-relaxed" style={{ color: "rgba(255, 255, 255, 0.85)" }}>
-            {t("auth.login.marketing.description")}
-          </p>
-
-          {/* Testimonial */}
-          <div
-            className="hidden md:block mt-5 rounded-2xl p-4"
-            style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
-          >
-            <p className="text-[13px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
-              “{t("auth.login.marketing.testimonialQuote")}”
-            </p>
-            <p className="mt-2 text-[11px] font-bold" style={{ color: LOGO_PURPLE }}>
-              {t("auth.login.marketing.testimonialName")} · {t("auth.login.marketing.testimonialRole")}
-            </p>
-          </div>
-
-          {/* Trust strip */}
-          <div className="hidden md:flex mt-5 items-center gap-3">
-            <div className="flex -space-x-2">
-              {TRUST_AVATARS.slice(0, 4).map((a) => (
-                <div
-                  key={a.i}
-                  className="h-7 w-7 rounded-full border-2 flex items-center justify-center text-[9px] font-black text-white"
-                  style={{ background: a.bg, borderColor: "rgba(255, 255, 255, 0.9)" }}
-                >
-                  {a.i}
-                </div>
-              ))}
-            </div>
-            <p className="text-[12px] font-bold" style={{ color: "#FFFFFF" }}>
-              {t("auth.login.marketing.trustedBy")}
-            </p>
-          </div>
         </div>
       </div>
 
       {/* -- Form panel (left, desktop) ------------------------------------ */}
       <div
-        className="flex flex-col justify-between flex-1 lg:flex-none lg:w-[600px] lg:min-h-0 lg:shrink-0 rounded-t-[28px] lg:rounded-[28px] -mt-5 lg:mt-0 relative z-10 overflow-hidden bg-[var(--auth-form-bg)]"
-        style={{ border: "1px solid var(--auth-card-border)", boxShadow: "var(--cc-shadow-lg)", animation: "panelIn 0.38s ease-out" }}
+        className="auth-panel-overlap flex flex-col justify-between flex-1 lg:flex-none lg:w-[600px] lg:min-h-0 lg:shrink-0 lg:rounded-[28px] lg:border lg:[border-color:var(--auth-card-border)] lg:shadow-[var(--cc-shadow-lg)] relative z-10 overflow-hidden bg-[var(--auth-form-bg)]"
+        style={{ animation: "panelIn 0.38s ease-out" }}
       >
         <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
           <AuthThemeToggle />
         </div>
 
+        {/* Logo — phones and short screens (no banner above) */}
+        <div className="auth-compact-logo items-center px-4 sm:px-8 pt-4">
+          <CareCliQLogo size={72} />
+        </div>
+
         {/* Logo — desktop only */}
-        <div className="hidden lg:flex items-center px-12 pt-10">
+        <div className="hidden lg:flex items-center px-12 pt-10 [@media(max-height:720px)]:pt-6">
           <CareCliQLogo size={120} />
         </div>
 
-        {/* Mobile drag handle */}
-        <div className="lg:hidden flex justify-center pt-3 pb-1">
-          <div className="h-1 w-10 rounded-full" style={{ background: "var(--auth-drag-handle)" }} />
-        </div>
-
         {/* Form body */}
-        <div className="auth-scroll-hide flex flex-1 items-center justify-center overflow-y-auto px-4 sm:px-8 md:px-10 lg:px-12 py-8 lg:py-10">
+        <div className="auth-scroll-hide flex flex-1 items-start md:items-center justify-center overflow-y-auto px-4 sm:px-8 md:px-10 lg:px-12 pt-4 pb-6 md:py-8 lg:py-10 [@media(max-height:720px)]:lg:py-6">
           <div className="w-full max-w-[480px]">
 
             <div className="mb-7">
@@ -537,67 +512,19 @@ export default function Login() {
         <div className="absolute inset-0" style={{ background: "rgba(26, 26, 46, 0.55)" }} />
 
         <div className="relative z-10 flex max-w-[460px] flex-col justify-between h-full">
-        <p className="text-[11px] font-black uppercase tracking-[0.25em]" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
-          {t("auth.login.marketing.brandLine")}
-        </p>
-
-        <div>
-          <h2 className="text-[38px] xl:text-[44px] font-black leading-[1.1] tracking-tight" style={{ color: "#FFFFFF" }}>
-            <span className="auth-headline-line" style={{ animationDelay: "0ms" }}>{t("auth.login.marketing.headline1")}</span>
-            <span className="auth-headline-line" style={{ animationDelay: "90ms", color: "#C4B5FD" }}>{t("auth.login.marketing.headline2")}</span>
-          </h2>
-          <p className="mt-4 text-[14px] font-medium max-w-[400px] leading-relaxed" style={{ color: "rgba(255, 255, 255, 0.85)" }}>
-            {t("auth.login.marketing.description")}
+          <p className="text-[11px] font-black uppercase tracking-[0.25em]" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
+            {t("auth.login.marketing.brandLine")}
           </p>
 
-          <div className="mt-8 max-w-[420px]">
-            <div
-              className="rounded-2xl p-6"
-              style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
-            >
-              <Quote size={20} style={{ color: LOGO_PURPLE }} />
-              <p className="mt-3 text-[15px] font-medium leading-relaxed" style={{ color: "var(--auth-headline)" }}>
-                {t("auth.login.marketing.testimonialQuote")}
-              </p>
-              <div className="mt-4 flex items-center gap-3">
-                <div
-                  className="h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-black text-white shrink-0"
-                  style={{ background: LOGO_PURPLE }}
-                >
-                  {TRUST_AVATARS[0].i}
-                </div>
-                <div>
-                  <p className="text-[13px] font-black" style={{ color: "var(--auth-headline)" }}>
-                    {t("auth.login.marketing.testimonialName")}
-                  </p>
-                  <p className="text-[11px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>
-                    {t("auth.login.marketing.testimonialRole")} · {t("auth.login.marketing.testimonialOrg")}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="flex -space-x-2.5">
-            {TRUST_AVATARS.map((a) => (
-              <div
-                key={a.i}
-                className="h-9 w-9 rounded-full border-2 flex items-center justify-center text-[11px] font-black text-white"
-                style={{ background: a.bg, borderColor: "rgba(255, 255, 255, 0.9)" }}
-              >
-                {a.i}
-              </div>
-            ))}
-          </div>
           <div>
-            <p className="text-[14px] font-black" style={{ color: "#FFFFFF" }}>{t("auth.login.marketing.providersCount")}</p>
-            <p className="text-[12px] font-medium" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
-              {t("auth.login.marketing.trustAustralia")}
+            <h2 className="text-[38px] xl:text-[44px] [@media(max-height:720px)]:text-[32px] font-black leading-[1.1] tracking-tight" style={{ color: "#FFFFFF" }}>
+              <span className="auth-headline-line" style={{ animationDelay: "0ms" }}>{t("auth.login.marketing.headline1")}</span>
+              <span className="auth-headline-line" style={{ animationDelay: "90ms", color: "#C4B5FD" }}>{t("auth.login.marketing.headline2")}</span>
+            </h2>
+            <p className="mt-4 text-[14px] font-medium max-w-[400px] leading-relaxed" style={{ color: "rgba(255, 255, 255, 0.85)" }}>
+              {t("auth.login.marketing.description")}
             </p>
           </div>
-        </div>
         </div>
       </div>
     </div>
