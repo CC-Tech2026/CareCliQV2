@@ -384,6 +384,14 @@ def import_participants(
 # ---------------------------------------------------------------------------
 
 def _existing_staff_emails(organization_id: str) -> tuple[set[str], set[str]]:
+    """Team members' emails, and emails with an invitation waiting (sent, or
+    held for the MD)."""
+    members, pending = _members_and_sent_invites(organization_id)
+    pending |= {(h.get("email") or "").lower() for h in _held_rows(organization_id, "email")}
+    return members, pending - {""}
+
+
+def _members_and_sent_invites(organization_id: str) -> tuple[set[str], set[str]]:
     db = get_supabase_admin()
     members = db.table("organization_members").select("user_id").eq("organization_id", organization_id).execute().data or []
     user_ids = [m["user_id"] for m in members if m.get("user_id")]
@@ -399,6 +407,20 @@ def _existing_staff_emails(organization_id: str) -> tuple[set[str], set[str]]:
     )
     pending = {(i.get("email") or "").lower() for i in invites}
     return emails - {""}, pending - {""}
+
+
+def _held_rows(organization_id: str, columns: str = "*") -> list[dict[str, Any]]:
+    """Staff CareCliQ imported for this organisation, waiting for its MD to
+    send the invitations (migration 273). Empty until 273 is applied."""
+    try:
+        return (
+            get_supabase_admin().table("held_staff_invitations").select(columns)
+            .eq("organization_id", organization_id).order("created_at").execute().data or []
+        )
+    except Exception as exc:
+        if "held_staff_invitations" in str(exc):
+            return []
+        raise
 
 
 def preview_staff(organization_id: str, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -442,45 +464,123 @@ def preview_staff(organization_id: str, records: list[dict[str, Any]]) -> list[d
     return results
 
 
+def _send_invitation(
+    db: Any, organization_id: str, invited_by: Optional[str], email: str, role: str, branding: dict[str, Any],
+) -> None:
+    from ..api.invitations import _generate_short_code
+    from ..core.config import settings
+    from .email_service import queue_invitation_email
+
+    token = secrets.token_hex(32)
+    short_code = _generate_short_code(db)
+    db.table("invitations").insert({
+        "organization_id": organization_id,
+        "invited_by": invited_by,
+        "email": email,
+        "role": role,
+        "token": token,
+        "short_code": short_code,
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+    }).execute()
+    queue_invitation_email(
+        None,
+        to_email=email,
+        invite_url=f"{settings.frontend_base_url.rstrip('/')}/accept-invite?token={token}",
+        organization_name=branding.get("display_name"),
+        role=role,
+        short_code=short_code,
+        logo_url=branding.get("logo_url"),
+        brand_accent_color=branding.get("brand_accent_color"),
+    )
+
+
+def _branding(organization_id: str) -> dict[str, Any]:
+    from . import organization_branding_service
+
+    try:
+        return organization_branding_service.get_branding(organization_id) or {}
+    except Exception:
+        return {}
+
+
 def import_staff(
     organization_id: str, invited_by: Optional[str], records: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    from ..api.invitations import _generate_short_code
-    from ..core.config import settings
-    from . import organization_branding_service
-    from .email_service import queue_invitation_email
-
     results = preview_staff(organization_id, records)
     ready = [r for r in results if r["status"] == "ready"]
     db = get_supabase_admin()
-    try:
-        branding = organization_branding_service.get_branding(organization_id)
-    except Exception:
-        branding = {}
-
+    branding = _branding(organization_id)
     sent = 0
     for result in ready:
         record = result["record"]
-        token = secrets.token_hex(32)
-        short_code = _generate_short_code(db)
-        db.table("invitations").insert({
-            "organization_id": organization_id,
-            "invited_by": invited_by,
-            "email": record["email"],
-            "role": record["role"],
-            "token": token,
-            "short_code": short_code,
-            "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
-        }).execute()
-        queue_invitation_email(
-            None,
-            to_email=record["email"],
-            invite_url=f"{settings.frontend_base_url.rstrip('/')}/accept-invite?token={token}",
-            organization_name=branding.get("display_name"),
-            role=record["role"],
-            short_code=short_code,
-            logo_url=branding.get("logo_url"),
-            brand_accent_color=branding.get("brand_accent_color"),
-        )
+        _send_invitation(db, organization_id, invited_by, record["email"], record["role"], branding)
         sent += 1
     return {"imported": sent, "skipped": len(results) - sent, "results": results}
+
+
+# ---------------------------------------------------------------------------
+# Staff held for the managing director
+# ---------------------------------------------------------------------------
+# When CareCliQ imports a provider's staff for them, nobody is emailed yet:
+# the rows wait in held_staff_invitations until the provider's MD sends
+# them (or discards them) from their own Import or Team page.
+
+def hold_staff(
+    organization_id: str, prepared_by: Optional[str], records: list[dict[str, Any]], source_system: str,
+) -> dict[str, Any]:
+    results = preview_staff(organization_id, records)
+    ready = [r for r in results if r["status"] == "ready"]
+    if ready:
+        get_supabase_admin().table("held_staff_invitations").insert([
+            {
+                "organization_id": organization_id,
+                "email": r["record"]["email"],
+                "full_name": r["record"].get("full_name"),
+                "role": r["record"]["role"],
+                "source_system": source_system,
+                "prepared_by": prepared_by,
+            }
+            for r in ready
+        ]).execute()
+    return {"imported": len(ready), "skipped": len(results) - len(ready), "results": results}
+
+
+def list_held_staff(organization_id: str) -> list[dict[str, Any]]:
+    return _held_rows(organization_id, "id, email, full_name, role, source_system, created_at")
+
+
+def send_held_staff(organization_id: str, invited_by: Optional[str], ids: Optional[list[str]] = None) -> dict[str, Any]:
+    """Turns held rows into real invitations and emails them. Rows whose
+    person has since joined or been invited another way are dropped
+    without a second email."""
+    db = get_supabase_admin()
+    held = _held_rows(organization_id, "id, email, role")
+    if ids is not None:
+        wanted = set(ids)
+        held = [h for h in held if h["id"] in wanted]
+    if not held:
+        return {"sent": 0, "skipped": 0}
+    members, pending_invites = _members_and_sent_invites(organization_id)
+    branding = _branding(organization_id)
+    sent = skipped = 0
+    for row in held:
+        email = (row.get("email") or "").lower()
+        if email in members or email in pending_invites:
+            skipped += 1
+        else:
+            _send_invitation(db, organization_id, invited_by, email, row.get("role") or "support_worker", branding)
+            sent += 1
+        db.table("held_staff_invitations").delete().eq("id", row["id"]).eq("organization_id", organization_id).execute()
+    return {"sent": sent, "skipped": skipped}
+
+
+def discard_held_staff(organization_id: str, ids: Optional[list[str]] = None) -> int:
+    db = get_supabase_admin()
+    held = _held_rows(organization_id, "id")
+    if ids is not None:
+        wanted = set(ids)
+        held = [h for h in held if h["id"] in wanted]
+    for row in held:
+        db.table("held_staff_invitations").delete().eq("id", row["id"]).eq("organization_id", organization_id).execute()
+    return len(held)
+

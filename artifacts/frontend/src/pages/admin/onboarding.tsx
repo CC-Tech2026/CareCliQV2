@@ -35,7 +35,7 @@ export default function AdminOnboardingPage() {
   }
   return <AdminShell>
     <div className="space-y-5" style={{ color: "var(--cc-text)" }}>
-      <div><h1 className="text-xl font-black">Provider onboarding</h1>
+      <div><h1 className="text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>New provider</h1>
         <p className="text-sm" style={{ color: "var(--cc-muted)" }}>Prepare a client's provider account and email them a secure link to finish setup.</p></div>
       <form onSubmit={submit} className="space-y-4 rounded-2xl border p-5" style={{ background: "var(--cc-surface)", borderColor: "var(--cc-border)" }}>
         <h2 className="font-bold">Create a provider account</h2>

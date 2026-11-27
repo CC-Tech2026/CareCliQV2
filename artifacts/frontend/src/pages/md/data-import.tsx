@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, Download, FileUp, Loader2, Users, UserPlus } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { HeldStaffNotice } from "@/components/data-import/HeldStaffNotice";
 import { PageHeader, ctaClass, ghostClass, outlineClass } from "@/components/layout/PageKit";
 import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
@@ -67,7 +68,16 @@ const TEMPLATES: Record<Kind, string> = {
   staff: "First name,Last name,Email,Role,Phone\nAva,Lee,ava@example.com,Support worker,0412 000 000\n",
 };
 
-const COPY: Record<Kind, { noun: string; plural: string; lands: string; action: (n: number) => string; done: (n: number) => string; next: { label: string; href: string } }> = {
+/** Who the records are going to: the signed-in MD's own organisation, or
+ *  (from the CareCliQ admin portal) a provider we're bringing across for
+ *  them. Admin staff imports are held for the provider's MD to send. */
+export type ImportTarget =
+  | { kind: "self" }
+  | { kind: "admin"; organizationId: string; organizationName: string; onFinished?: () => void };
+
+type Copy = { noun: string; plural: string; lands: string; action: (n: number) => string; done: (n: number) => string; next: { label: string; href: string } | null };
+
+const COPY: Record<Kind, Copy> = {
   participants: {
     noun: "participant",
     plural: "participants",
@@ -87,6 +97,30 @@ const COPY: Record<Kind, { noun: string; plural: string; lands: string; action: 
     next: { label: "See your team and pending invitations", href: "/team" },
   },
 };
+
+function copyFor(kind: Kind, target: ImportTarget): Copy {
+  if (target.kind === "self") return COPY[kind];
+  const org = target.organizationName;
+  return kind === "participants"
+    ? {
+        ...COPY.participants,
+        lands: `Participants arrive on ${org}'s onboarding board with their plan and contact details filled in. ${org} then sends each one a service agreement and makes them active.`,
+        action: (n) => `Add ${n} ${n === 1 ? "participant" : "participants"} to ${org}`,
+        done: (n) => `${n} ${n === 1 ? "participant is" : "participants are"} on ${org}'s onboarding board`,
+        next: null,
+      }
+    : {
+        ...COPY.staff,
+        lands: `Nobody is emailed yet. The invitations wait for ${org}'s managing director, who sends them from Import records or their Team page when they're ready.`,
+        action: (n) => `Prepare ${n} ${n === 1 ? "invitation" : "invitations"}`,
+        done: (n) => `${n} ${n === 1 ? "invitation is" : "invitations are"} waiting for the managing director to send`,
+        next: null,
+      };
+}
+
+function apiBase(target: ImportTarget) {
+  return target.kind === "self" ? "/api/data-import" : `/api/admin/organizations/${target.organizationId}/import`;
+}
 
 function downloadCsv(name: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
@@ -120,6 +154,22 @@ function StatusChip({ status }: { status: RowStatus }) {
 }
 
 export default function DataImportPage() {
+  return (
+    <HubLayout>
+      <div className="space-y-4 pb-12">
+        <PageHeader
+          eyebrow="Move to CareCliQ"
+          title="Import records"
+          description="Upload a CSV export of your participants or staff from your previous system. Nothing is saved until you've reviewed every row."
+        />
+        <HeldStaffNotice />
+        <DataImportFlow target={{ kind: "self" }} />
+      </div>
+    </HubLayout>
+  );
+}
+
+export function DataImportFlow({ target }: { target: ImportTarget }) {
   const [, navigate] = useLocation();
   const search = useSearch();
   const { toast } = useToast();
@@ -139,7 +189,8 @@ export default function DataImportPage() {
   const [dragging, setDragging] = useState(false);
 
   const fields = FIELDS[kind];
-  const copy = COPY[kind];
+  const copy = copyFor(kind, target);
+  const base = apiBase(target);
 
   function reset(nextKind: Kind = kind) {
     setKind(nextKind);
@@ -159,7 +210,7 @@ export default function DataImportPage() {
       const form = new FormData();
       form.append("kind", kind);
       form.append("file", file);
-      const res = await apiFetch("/api/data-import/parse", { method: "POST", body: form });
+      const res = await apiFetch(`${base}/parse`, { method: "POST", body: form });
       if (!res.ok) throw new Error(await readError(res, "Couldn't read that file."));
       const data: Parsed = await res.json();
       setParsed(data);
@@ -194,7 +245,7 @@ export default function DataImportPage() {
     if (missingRequired.length || busy) return;
     setBusy(true);
     try {
-      const res = await apiFetch(`/api/data-import/${kind}/preview`, {
+      const res = await apiFetch(`${base}/${kind}/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ records, source_system: source }),
@@ -214,7 +265,7 @@ export default function DataImportPage() {
     if (busy) return;
     setBusy(true);
     const send = async () => {
-      const res = await apiFetch(`/api/data-import/${kind}`, {
+      const res = await apiFetch(`${base}/${kind}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ records, source_system: source }),
@@ -223,7 +274,9 @@ export default function DataImportPage() {
       return res.json() as Promise<{ imported: number; results: RowResult[] }>;
     };
     try {
-      const data = kind === "staff" ? await requireReAuth(send) : await send();
+      // Only the MD sending real invitations needs the recent-password check;
+      // an admin staff import emails nobody.
+      const data = kind === "staff" && target.kind === "self" ? await requireReAuth(send) : await send();
       if (!data) return;
       setImported(data.imported);
       setResults(data.results);
@@ -255,14 +308,8 @@ export default function DataImportPage() {
   const headerIndex = parsed ? Object.fromEntries(parsed.headers.map((h, i) => [h, i])) : {};
 
   return (
-    <HubLayout>
-      <div className="space-y-4 pb-12">
-        <PageHeader
-          eyebrow="Move to CareCliQ"
-          title="Import records"
-          description="Upload a CSV export of your participants or staff from your previous system. Nothing is saved until you've reviewed every row."
-        />
-
+    <>
+      <div className="space-y-4">
         {/* Same navy pill toggle as the Calendar's Month / Week / Day. */}
         <div role="tablist" aria-label="What are you importing?" className="inline-flex items-center gap-0.5 rounded-full border border-cc-border bg-cc-surface p-1">
           {([
@@ -291,7 +338,7 @@ export default function DataImportPage() {
               <p className="text-sm leading-relaxed text-cc-muted">{copy.lands}</p>
 
               <label className="block max-w-md">
-                <span className="text-sm font-medium text-cc-text">Where are your {copy.plural} now?</span>
+                <span className="text-sm font-medium text-cc-text">Where are {target.kind === "admin" ? "their" : "your"} {copy.plural} now?</span>
                 <select
                   value={source}
                   onChange={(e) => setSource(e.target.value)}
@@ -304,7 +351,7 @@ export default function DataImportPage() {
                 <span className="mt-1.5 block text-xs leading-snug text-cc-muted">
                   {source === "spreadsheet"
                     ? "Save it as CSV first: in Excel choose File, Save As, CSV."
-                    : `Export your ${kind === "participants" ? "client" : "staff"} list from ${SOURCES.find((s) => s.value === source)?.label ?? "it"} as a CSV file. Any column names work; you'll match them up next.`}
+                    : `Export ${target.kind === "admin" ? "their" : "your"} ${kind === "participants" ? "client" : "staff"} list from ${SOURCES.find((s) => s.value === source)?.label ?? "it"} as a CSV file. Any column names work; you'll match them up next.`}
                 </span>
               </label>
 
@@ -493,13 +540,19 @@ export default function DataImportPage() {
               {copy.lands}
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => navigate(copy.next.href)}
-                className={ctaClass}
-              >
-                {copy.next.label} <ArrowRight size={15} aria-hidden="true" />
-              </button>
+              {copy.next ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(copy.next!.href)}
+                  className={ctaClass}
+                >
+                  {copy.next.label} <ArrowRight size={15} aria-hidden="true" />
+                </button>
+              ) : target.kind === "admin" && target.onFinished ? (
+                <button type="button" onClick={target.onFinished} className={ctaClass}>
+                  Back to {target.organizationName} <ArrowRight size={15} aria-hidden="true" />
+                </button>
+              ) : null}
               <button type="button" onClick={() => reset()} className={outlineClass}>
                 Import another file
               </button>
@@ -508,6 +561,6 @@ export default function DataImportPage() {
         )}
       </div>
       {reauthModal}
-    </HubLayout>
+    </>
   );
 }

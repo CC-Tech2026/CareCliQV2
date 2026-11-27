@@ -41,7 +41,9 @@ def test_up_to_date_only_when_nothing_is_pending_and_the_api_sees_it_all():
     # Whichever column the newest migrations add (not a fixed one: newer
     # migrations keep moving older ones out of the window checked).
     assert s["visible"], "none of the newest migrations adds a column to check"
-    key = next(iter(s["visible"]))
+    # A column entry ("table.column"); a migration that adds a whole table
+    # is listed by table name alone.
+    key = next(k for k in s["visible"] if "." in k)
     hidden_column = key.split(".", 1)[1]
 
     with patch.object(ss, "_applied", return_value=set(files[:-1])), patch.object(ss, "_visible", return_value=True):

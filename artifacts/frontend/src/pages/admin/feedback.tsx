@@ -87,7 +87,7 @@ export default function AdminFeedbackPage() {
     <AdminShell>
       <div className="space-y-5">
         <div>
-          <h1 className="text-xl font-black" style={{ color: TEXT }}>Improvements & Feedback</h1>
+          <h1 className="text-2xl font-bold text-cc-text" style={{ fontFamily: "var(--app-font-display)" }}>Improvements & feedback</h1>
           <p className="text-[12px] font-medium" style={{ color: MUTED }}>Feature requests and feedback about CareCliQ, submitted by providers.</p>
         </div>
 

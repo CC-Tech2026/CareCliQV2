@@ -80,6 +80,7 @@ import MDCalendarPage, { LegacyScheduleRedirect } from "@/pages/md/md-calendar";
 import AdminDashboardPage from "@/pages/admin/dashboard";
 import AdminProvidersPage from "@/pages/admin/providers";
 import AdminProviderDetailPage from "@/pages/admin/provider-detail";
+import AdminProviderImportPage from "@/pages/admin/provider-import";
 import AdminOnboardingPage from "@/pages/admin/onboarding";
 import AdminFeedbackPage from "@/pages/admin/feedback";
 import AdminBugReportsPage from "@/pages/admin/bug-reports";
@@ -263,6 +264,12 @@ function Router() {
       <Route path="/admin/dashboard">
         <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
           <AdminDashboardPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/organizations/:organizationId/import">
+        <ProtectedRoute allowedRoles={[...ADMIN_ROLES]}>
+          <AdminProviderImportPage />
         </ProtectedRoute>
       </Route>
 

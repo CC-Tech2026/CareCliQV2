@@ -14,6 +14,11 @@ The lapse date is organizations.subscription_lapsed_at (migration 246, set
 by the Stripe webhook). Until that column exists it falls back to the trial
 end date, and if neither is known access stays full: billing trouble must
 never lock a provider out by accident.
+
+A CareCliQ super admin can also grant free access until a date
+(organizations.access_override_until, migration 273, set from the admin
+portal). While that date is in the future access is full, whatever Stripe
+says.
 """
 
 from __future__ import annotations
@@ -64,6 +69,9 @@ def _parse(value: Any) -> Optional[datetime]:
 def evaluate(org: dict[str, Any], now: Optional[datetime] = None) -> Access:
     now = now or datetime.now(timezone.utc)
     status = org.get("subscription_status")
+    override_until = _parse(org.get("access_override_until"))
+    if override_until and override_until > now:
+        return Access("full", status)
     if not (org.get("stripe_customer_id") or org.get("stripe_subscription_id")):
         return Access("full", status)
     if status not in LAPSED_STATUSES:
@@ -78,13 +86,17 @@ def evaluate(org: dict[str, Any], now: Optional[datetime] = None) -> Access:
 def _load_org(organization_id: str) -> Optional[dict[str, Any]]:
     base = "organization_id, stripe_customer_id, stripe_subscription_id, subscription_status, trial_ends_at"
     db = get_supabase_admin()
-    for columns in (f"{base}, subscription_lapsed_at", base):
+    for columns in (
+        f"{base}, subscription_lapsed_at, access_override_until",
+        f"{base}, subscription_lapsed_at",
+        base,
+    ):
         try:
             rows = db.table("organizations").select(columns).eq("organization_id", organization_id).limit(1).execute().data
             return rows[0] if rows else None
         except Exception as exc:
-            if "subscription_lapsed_at" in str(exc):
-                continue  # migration 246 not applied yet
+            if "subscription_lapsed_at" in str(exc) or "access_override_until" in str(exc):
+                continue  # migration 246 or 273 not applied yet
             raise
     return None
 

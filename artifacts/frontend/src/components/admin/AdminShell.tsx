@@ -1,69 +1,65 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  LayoutDashboard,
-  Building2,
-  UserPlus,
-  Lightbulb,
-  Bug,
-  LogOut,
-  ChevronDown,
-  ChevronUp,
-  Settings,
-  LayoutPanelLeft,
   Accessibility,
   ArrowLeft,
+  Bug,
+  Building2,
+  ChevronDown,
+  ChevronUp,
+  LayoutDashboard,
+  LayoutPanelLeft,
+  Lightbulb,
+  LogOut,
+  Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  Settings,
+  UserPlus,
+  type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { CareCliQLogo } from "@/components/CareCliQLogoSVG";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 
-const BORDER = "var(--cc-border)";
-const SURFACE = "var(--cc-surface)";
-const PLUM = "var(--cc-plum)";
-
-// Sidebar only — the reference had a dark nav rail against a light content
-// area, and --cc-sidebar-bg was already sitting in index.css unused,
-// added specifically for this ("Deep dark navy — matches reference
-// image"). The main content card stays CareCliQ's normal light surface —
-// this isn't a full dark-theme switch, just the nav rail.
+// The nav rail is dark (--cc-sidebar-bg); the content card is CareCliQ's
+// normal light surface. On phones and tablets the rail becomes a top bar
+// and a slide-out drawer, so content gets the whole width.
 const SIDEBAR_BG = "var(--cc-sidebar-bg)";
 const SIDEBAR_TEXT = "#F5F5F7";
-const SIDEBAR_MUTED = "rgba(245, 245, 247, 0.55)";
+const SIDEBAR_MUTED = "rgba(245, 245, 247, 0.62)";
 const SIDEBAR_BORDER = "rgba(245, 245, 247, 0.1)";
 const SIDEBAR_AVATAR_BG = "rgba(245, 245, 247, 0.12)";
+const ACTIVE_BG = "var(--cc-plum)";
 
-// One entry per real page — add to this list (not ad hoc links) as the
-// portal grows. `label: null` renders ungrouped, flush with the top —
-// everything else sits under its group's header + rail (see render below).
-const NAV_GROUPS = [
+type NavItem = { href: string; label: string; icon: LucideIcon };
+
+// One entry per real page: add to this list (not ad hoc links) as the
+// portal grows. `label: null` renders ungrouped at the top.
+const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
+  { label: null, items: [{ href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
   {
-    label: null,
-    items: [
-      { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/admin/onboarding", label: "Onboarding", icon: UserPlus },
-    ],
-  },
-  {
-    label: "Workforce & People",
+    label: "Customers",
     items: [
       { href: "/admin/organizations", label: "Providers", icon: Building2 },
+      { href: "/admin/onboarding", label: "New provider", icon: UserPlus },
     ],
   },
   {
-    label: "Oversight & Risk",
+    label: "Support",
     items: [
-      { href: "/admin/feedback", label: "Improvements & Feedback", icon: Lightbulb },
-      { href: "/admin/bug-reports", label: "Bug Reports", icon: Bug },
+      { href: "/admin/feedback", label: "Feedback", icon: Lightbulb },
+      { href: "/admin/bug-reports", label: "Bug reports", icon: Bug },
     ],
   },
-] as const;
+];
 
-const SETTINGS_ITEMS = [
+const SETTINGS_ITEMS: NavItem[] = [
   { href: "/admin/settings/layout", label: "Layout", icon: LayoutPanelLeft },
   { href: "/admin/settings/accessibility", label: "Accessibility", icon: Accessibility },
-] as const;
+];
+
+const FLAT_NAV = NAV_GROUPS.flatMap((g) => g.items);
 
 function getInitials(name: string) {
   return name.trim().split(/\s+/).map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
@@ -79,37 +75,161 @@ function getStoredCollapsed(): boolean {
   }
 }
 
+function NavLink({ item, active, iconOnly, onNavigate }: { item: NavItem; active: boolean; iconOnly?: boolean; onNavigate?: () => void }) {
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      title={iconOnly ? item.label : undefined}
+      aria-current={active ? "page" : undefined}
+      className={
+        iconOnly
+          ? "flex h-10 w-10 items-center justify-center rounded-xl transition-colors hover:bg-white/10"
+          : "flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors hover:bg-white/10"
+      }
+      style={{ background: active ? ACTIVE_BG : undefined, color: active ? "#FFFFFF" : SIDEBAR_MUTED }}
+    >
+      <Icon size={iconOnly ? 18 : 17} aria-hidden="true" />
+      {!iconOnly && <span className="truncate">{item.label}</span>}
+    </Link>
+  );
+}
+
+/** Page navigation, or the account panel in its place. Shared by the
+ *  desktop rail and the phone/tablet drawer. */
+function NavBody({
+  iconOnly,
+  accountPanel,
+  onCloseAccount,
+  onNavigate,
+}: {
+  iconOnly: boolean;
+  accountPanel: boolean;
+  onCloseAccount: () => void;
+  onNavigate?: () => void;
+}) {
+  const { logout } = useAuth();
+  const [location] = useLocation();
+  const onSettingsRoute = location.startsWith("/admin/settings");
+  const [settingsOpen, setSettingsOpen] = useState(onSettingsRoute);
+  const isActive = (href: string) => location === href || location.startsWith(`${href}/`);
+
+  if (accountPanel) {
+    return (
+      <div className="space-y-1">
+        <button
+          type="button"
+          onClick={onCloseAccount}
+          className="mb-2 flex min-h-9 w-full items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-colors hover:bg-white/10"
+          style={{ color: SIDEBAR_MUTED }}
+        >
+          <ArrowLeft size={14} /> Back to menu
+        </button>
+        <button
+          type="button"
+          onClick={() => setSettingsOpen((v) => !v)}
+          className="flex min-h-10 w-full items-center justify-between gap-3 rounded-xl px-3 text-sm font-semibold transition-colors hover:bg-white/10"
+          style={{ color: SIDEBAR_MUTED }}
+          aria-expanded={settingsOpen || onSettingsRoute}
+        >
+          <span className="flex items-center gap-3"><Settings size={17} /> Settings</span>
+          {settingsOpen || onSettingsRoute ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+        {(settingsOpen || onSettingsRoute) && (
+          <div className="ml-4 space-y-1 border-l pl-3" style={{ borderColor: SIDEBAR_BORDER }}>
+            {SETTINGS_ITEMS.map((item) => (
+              <NavLink key={item.href} item={item} active={isActive(item.href)} onNavigate={onNavigate} />
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={logout}
+          className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors hover:bg-white/10"
+          style={{ color: SIDEBAR_MUTED }}
+        >
+          <LogOut size={17} /> Log out
+        </button>
+      </div>
+    );
+  }
+
+  if (iconOnly) {
+    return (
+      <div className="flex flex-col items-center gap-1.5">
+        {FLAT_NAV.map((item) => (
+          <NavLink key={item.href} item={item} active={isActive(item.href)} iconOnly />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {NAV_GROUPS.map((group) => (
+        <div key={group.label ?? "top"} className="space-y-1">
+          {group.label && (
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: SIDEBAR_MUTED }}>
+              {group.label}
+            </p>
+          )}
+          {group.items.map((item) => (
+            <NavLink key={item.href} item={item} active={isActive(item.href)} onNavigate={onNavigate} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AccountButton({ iconOnly, open, onClick }: { iconOnly: boolean; open: boolean; onClick: () => void }) {
+  const { user } = useAuth();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={iconOnly ? (user?.full_name || "Account") : undefined}
+      aria-expanded={open}
+      className={`flex w-full items-center gap-3 rounded-xl py-2 text-left transition-colors hover:bg-white/10 ${iconOnly ? "justify-center px-0" : "px-2"}`}
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ background: SIDEBAR_AVATAR_BG, color: SIDEBAR_TEXT }}>
+        {getInitials(user?.full_name || user?.email || "A")}
+      </span>
+      {!iconOnly && (
+        <>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold" style={{ color: SIDEBAR_TEXT }}>{user?.full_name || "Admin"}</span>
+            <span className="block truncate text-xs" style={{ color: SIDEBAR_MUTED }}>{user?.email}</span>
+          </span>
+          {open ? <ChevronUp size={14} style={{ color: SIDEBAR_MUTED }} /> : <ChevronDown size={14} style={{ color: SIDEBAR_MUTED }} />}
+        </>
+      )}
+    </button>
+  );
+}
+
 /**
- * Deliberately separate from HubLayout — HubLayout is org-branded (a
- * provider's logo/nav/theming), and a super_admin isn't scoped to any one
- * org, so it gets its own minimal vendor-side shell instead. Sidebar, not a
- * top bar, so future sections (billing, system logs) have somewhere to go
- * without crowding a single row.
+ * The CareCliQ staff portal's frame. Separate from HubLayout on purpose:
+ * HubLayout carries a provider's own branding, and a super admin isn't
+ * scoped to any one provider.
+ *
+ *  - Desktop (1024px+): a dark rail on the left that stays put while the
+ *    page scrolls (collapsible to icons), and a rounded content card.
+ *  - Phones and tablets: a slim top bar with a menu button; the same
+ *    navigation slides in from the left. Content uses the full width.
  */
 export function AdminShell({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
   const [location, navigate] = useLocation();
   const [accountOpen, setAccountOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(getStoredCollapsed);
 
-  // Every /admin/settings/* page (e.g. Layout) renders its own fresh
-  // AdminShell instance, so local accountOpen/settingsOpen state can't
-  // survive the navigation — derive the expanded state from the route
-  // itself instead, same as how NAV_GROUPS below marks its own items
-  // active.
   const onSettingsRoute = location.startsWith("/admin/settings");
   const showAccountPanel = accountOpen || onSettingsRoute;
-  const showSettingsExpanded = settingsOpen || onSettingsRoute;
-  // The narrow icon-only rail has nowhere to put the Account panel's text
-  // rows, so showing that panel always wins over a collapsed preference —
-  // collapsing is just a width preference for the ordinary page nav.
   const iconOnly = collapsed && !showAccountPanel;
-  // NAV_GROUPS is `as const`, so each group's items tuple has its own
-  // narrow literal type — flatMap needs an explicit common type or TS
-  // can't unify them into one array.
-  type NavItem = { href: string; label: string; icon: typeof LayoutDashboard };
-  const flatNavItems = NAV_GROUPS.reduce<NavItem[]>((acc, group) => acc.concat(group.items as unknown as NavItem[]), []);
+
+  useEffect(() => setDrawerOpen(false), [location]);
 
   function closeAccountPanel() {
     if (onSettingsRoute) navigate("/admin/dashboard");
@@ -122,179 +242,88 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       try {
         localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
       } catch {
-        // best-effort only — a private window or blocked storage just
-        // means the preference won't survive a reload
+        // best-effort: the preference just won't survive a reload
       }
       return next;
     });
   }
 
+  const current = FLAT_NAV.find((i) => location === i.href || location.startsWith(`${i.href}/`));
+
   return (
-    // The sidebar is not a card — it has no border/rounding/shadow of its
-    // own, it's the same flat layer as the page background (both this
-    // exact color), so it reads as one continuous shape. Only the white
-    // content card is a distinct, elevated card floating on top of that
-    // shape — see its own margin/rounding/shadow below.
-    <div className="flex min-h-screen" style={{ background: SIDEBAR_BG }}>
-      <aside
-        className={`flex ${iconOnly ? "w-16" : "w-60"} shrink-0 flex-col transition-[width]`}
-      >
+    <div className="min-h-[100dvh] lg:flex" style={{ background: SIDEBAR_BG }}>
+      {/* Desktop rail */}
+      <aside className={`sticky top-0 hidden h-[100dvh] shrink-0 flex-col lg:flex ${iconOnly ? "w-[72px]" : "w-64"} transition-[width]`}>
         <div className={`flex items-center border-b py-4 ${iconOnly ? "flex-col gap-2 px-2" : "gap-2 px-5"}`} style={{ borderColor: SIDEBAR_BORDER }}>
-          <Link
-            href="/admin/dashboard"
-            className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg transition-colors hover:bg-white/10 ${iconOnly ? "flex-none px-1 py-1" : ""}`}
-          >
-            {/* Sized down when collapsed — the icon-only rail is only 64px
-                wide (w-16 minus its own padding), so the same size used
-                expanded would overflow it. */}
-            <CareCliQLogo size={iconOnly ? 36 : 64} className="shrink-0" />
+          <Link href="/admin/dashboard" className={`flex min-w-0 flex-1 items-center rounded-xl transition-colors hover:bg-white/10 ${iconOnly ? "flex-none justify-center p-1" : "py-1"}`}>
+            <CareCliQLogo size={iconOnly ? 36 : 56} className="shrink-0" />
           </Link>
           <button
+            type="button"
             onClick={toggleCollapsed}
-            className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-white/10"
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="shrink-0 rounded-xl p-2 transition-colors hover:bg-white/10"
+            aria-label={iconOnly ? "Expand menu" : "Collapse menu"}
+            title={iconOnly ? "Expand menu" : "Collapse menu"}
           >
-            {iconOnly ? <PanelLeftOpen size={16} style={{ color: SIDEBAR_MUTED }} /> : <PanelLeftClose size={16} style={{ color: SIDEBAR_MUTED }} />}
+            {iconOnly ? <PanelLeftOpen size={17} style={{ color: SIDEBAR_MUTED }} /> : <PanelLeftClose size={17} style={{ color: SIDEBAR_MUTED }} />}
           </button>
         </div>
-
-        {/* The account trigger swaps this whole area between the page nav
-            and the Account panel, rather than squeezing the panel into the
-            leftover space below the trigger — full-height like the nav it
-            replaces, not a cramped inline expansion. */}
-        <nav className="flex-1 space-y-6 overflow-y-auto p-3">
-          {showAccountPanel ? (
-            <div className="space-y-0.5">
-              <button
-                onClick={closeAccountPanel}
-                className="mb-2 flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase transition-colors hover:bg-white/10"
-                style={{ color: SIDEBAR_MUTED, letterSpacing: "0.16em" }}
-              >
-                <ArrowLeft size={13} /> Account
-              </button>
-
-              <button
-                onClick={() => setSettingsOpen((v) => !v)}
-                className="flex w-full items-center justify-between gap-2.5 rounded-lg px-3 py-2 text-[13px] font-bold transition-colors hover:bg-white/10"
-                style={{ color: SIDEBAR_MUTED }}
-              >
-                <span className="flex items-center gap-2.5">
-                  <Settings size={16} /> Settings
-                </span>
-                {showSettingsExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              </button>
-              {showSettingsExpanded && (
-                <div className="ml-3 space-y-0.5 border-l-2 pl-3" style={{ borderColor: SIDEBAR_BORDER }}>
-                  {SETTINGS_ITEMS.map((item) => {
-                    const Icon = item.icon;
-                    const active = location.startsWith(item.href);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-bold transition-colors"
-                        style={{ background: active ? PLUM : "transparent", color: active ? "#FFFFFF" : SIDEBAR_MUTED }}
-                      >
-                        <Icon size={16} /> {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-
-              <button
-                onClick={logout}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-bold transition-colors hover:bg-white/10"
-                style={{ color: SIDEBAR_MUTED }}
-              >
-                <LogOut size={16} /> Log out
-              </button>
-            </div>
-          ) : iconOnly ? (
-            <div className="flex flex-col items-center gap-1">
-              {flatNavItems.map((item) => {
-                const Icon = item.icon;
-                const active = location.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    title={item.label}
-                    className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors"
-                    style={{ background: active ? PLUM : "transparent", color: active ? "#FFFFFF" : SIDEBAR_MUTED }}
-                  >
-                    <Icon size={18} />
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            NAV_GROUPS.map((group) => (
-              <div key={group.label ?? "top"}>
-                {group.label && (
-                  <p className="mb-2 px-3 text-[10px] font-black uppercase" style={{ color: SIDEBAR_MUTED, letterSpacing: "0.16em" }}>
-                    {group.label}
-                  </p>
-                )}
-                {/* Grouped sections get a left rail + indent so sub-options
-                    read as "belonging to" their header, not as more top-level
-                    items — the header alone (small caps, same-ish size as
-                    before) wasn't enough of a visual break on its own. */}
-                <div className={group.label ? "ml-3 space-y-0.5 border-l-2 pl-3" : "space-y-0.5"} style={group.label ? { borderColor: SIDEBAR_BORDER } : undefined}>
-                  {group.items.map((item) => {
-                    const Icon = item.icon;
-                    const active = location.startsWith(item.href);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-bold transition-colors"
-                        style={{ background: active ? PLUM : "transparent", color: active ? "#FFFFFF" : SIDEBAR_MUTED }}
-                      >
-                        <Icon size={16} /> {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            ))
-          )}
+        <nav aria-label="Admin" className={`flex-1 overflow-y-auto py-4 ${iconOnly ? "px-2" : "px-3"}`}>
+          <NavBody iconOnly={iconOnly} accountPanel={showAccountPanel} onCloseAccount={closeAccountPanel} />
         </nav>
-
         <div className="border-t p-3" style={{ borderColor: SIDEBAR_BORDER }}>
-          <button
-            onClick={() => (showAccountPanel ? closeAccountPanel() : setAccountOpen(true))}
-            title={iconOnly ? (user?.full_name || "Admin") : undefined}
-            className={`flex w-full items-center gap-2.5 rounded-lg py-2 text-left transition-colors hover:bg-white/10 ${iconOnly ? "justify-center px-0" : "px-2"}`}
-          >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-black" style={{ background: SIDEBAR_AVATAR_BG, color: SIDEBAR_TEXT }}>
-              {getInitials(user?.full_name || user?.email || "A")}
-            </span>
-            {!iconOnly && (
-              <>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-bold" style={{ color: SIDEBAR_TEXT }}>{user?.full_name || "Admin"}</p>
-                  <p className="truncate text-[10px]" style={{ color: SIDEBAR_MUTED }}>{user?.email}</p>
-                </div>
-                {showAccountPanel ? <ChevronUp size={14} style={{ color: SIDEBAR_MUTED }} /> : <ChevronDown size={14} style={{ color: SIDEBAR_MUTED }} />}
-              </>
-            )}
-          </button>
+          <AccountButton iconOnly={iconOnly} open={showAccountPanel} onClick={() => (showAccountPanel ? closeAccountPanel() : setAccountOpen(true))} />
         </div>
       </aside>
 
-      {/* The one floating card — margin on every side (including the
-          left, for a visible gap off the flat sidebar/background layer)
-          plus its own rounding/border/shadow, so it reads as elevated
-          above that layer rather than sharing a frame with it. No
-          max-width cap — that was leaving most of the screen empty on
-          anything wider than a laptop; the sidebar already bounds one
-          edge, let content use the rest. */}
-      <main
-        className="m-4 flex-1 rounded-3xl border px-8 py-8 shadow-sm"
-        style={{ borderColor: BORDER, background: SURFACE }}
+      {/* Phone / tablet top bar */}
+      <header
+        className="sticky top-0 z-30 flex h-14 items-center gap-2 px-2 sm:px-4 lg:hidden"
+        style={{ background: SIDEBAR_BG, paddingTop: "env(safe-area-inset-top)" }}
       >
-        {children}
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          className="flex h-11 w-11 items-center justify-center rounded-xl transition-colors hover:bg-white/10"
+          aria-label="Open menu"
+        >
+          <Menu size={20} style={{ color: SIDEBAR_TEXT }} />
+        </button>
+        <Link href="/admin/dashboard" className="flex items-center" aria-label="Admin dashboard">
+          <CareCliQLogo size={40} />
+        </Link>
+        <span className="ml-1 min-w-0 truncate text-sm font-semibold" style={{ color: SIDEBAR_TEXT }}>
+          {current?.label ?? "Admin"}
+        </span>
+      </header>
+
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent side="left" className="flex w-[min(20rem,86vw)] flex-col gap-0 border-0 p-0" style={{ background: SIDEBAR_BG }}>
+          <SheetTitle className="sr-only">Admin menu</SheetTitle>
+          <SheetDescription className="sr-only">Pages in the CareCliQ admin portal</SheetDescription>
+          <div className="flex items-center border-b px-5 py-4" style={{ borderColor: SIDEBAR_BORDER }}>
+            <CareCliQLogo size={52} />
+          </div>
+          <nav aria-label="Admin" className="flex-1 overflow-y-auto px-3 py-4">
+            <NavBody
+              iconOnly={false}
+              accountPanel={showAccountPanel}
+              onCloseAccount={closeAccountPanel}
+              onNavigate={() => setDrawerOpen(false)}
+            />
+          </nav>
+          <div className="border-t p-3" style={{ borderColor: SIDEBAR_BORDER, paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+            <AccountButton iconOnly={false} open={showAccountPanel} onClick={() => (showAccountPanel ? closeAccountPanel() : setAccountOpen(true))} />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Content card: edge to edge on phones, a floating card from tablet up */}
+      <main
+        className="min-h-[calc(100dvh-3.5rem)] min-w-0 flex-1 sm:m-3 sm:rounded-3xl sm:shadow-sm lg:m-4 lg:min-h-0"
+        style={{ background: "var(--cc-bg)" }}
+      >
+        <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-7 lg:px-10 lg:py-9">{children}</div>
       </main>
     </div>
   );
